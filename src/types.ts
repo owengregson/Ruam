@@ -1,0 +1,121 @@
+/**
+ * Core type definitions for the Ruam VM obfuscator.
+ *
+ * All public interfaces and internal data structures are defined here
+ * so the rest of the codebase imports types from a single module.
+ */
+
+// ---------------------------------------------------------------------------
+// Public API options
+// ---------------------------------------------------------------------------
+
+/** Options accepted by {@link obfuscateCode} and the CLI. */
+export interface VmObfuscationOptions {
+  /**
+   * How to select which functions to compile to bytecode.
+   *
+   * - `"root"` (default) — every function that is **not** nested inside
+   *   another function.  Inner functions become child bytecode units.
+   * - `"comment"` — only functions preceded by a `/* ruam:vm *​/` comment.
+   */
+  targetMode?: "root" | "comment";
+
+  /**
+   * Probability (0–1) that an eligible function is actually compiled.
+   * Defaults to `1.0` (compile everything eligible).
+   */
+  threshold?: number;
+
+  /** Run the identifier preprocessor before compilation. */
+  preprocessIdentifiers?: boolean;
+
+  /** Encrypt bytecode with RC4 using an environment fingerprint key. */
+  encryptBytecode?: boolean;
+
+  /** Inject an anti-debugger timing loop into the runtime. */
+  debugProtection?: boolean;
+
+  /** Inject verbose trace logging into the VM interpreter. */
+  debugLogging?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Bytecode data structures
+// ---------------------------------------------------------------------------
+
+/**
+ * A single entry in a bytecode unit's constant pool.
+ *
+ * The `value` field is typed loosely because it carries heterogeneous data
+ * (strings, numbers, regex descriptors, etc.) that is only interpreted
+ * at runtime by the VM.
+ */
+export interface ConstantPoolEntry {
+  type: "null" | "undefined" | "boolean" | "number" | "string" | "bigint" | "regex";
+  value: unknown;
+}
+
+/** A single bytecode instruction (opcode + operand pair). */
+export interface Instruction {
+  opcode: number;
+  operand: number;
+}
+
+/** A try/catch/finally handler entry in the exception table. */
+export interface ExceptionEntry {
+  startIp: number;
+  endIp: number;
+  catchIp: number;
+  finallyIp: number;
+}
+
+/**
+ * A compiled bytecode unit — the output of compiling a single JS function.
+ *
+ * Each unit is self-contained: it carries its own constant pool, instruction
+ * stream, and metadata.  Nested functions are compiled into separate
+ * {@link childUnits} and referenced by ID at runtime.
+ */
+export interface BytecodeUnit {
+  /** Unique identifier (e.g. `"u_0000"`). */
+  id: string;
+
+  /** Constant pool — literals referenced by `PUSH_CONST`. */
+  constants: ConstantPoolEntry[];
+
+  /** Flat instruction stream. */
+  instructions: Instruction[];
+
+  /** Label → IP jump table (reserved for future use). */
+  jumpTable: Record<number, number>;
+
+  /** Exception handler table (reserved for future use). */
+  exceptionTable: ExceptionEntry[];
+
+  /** Number of declared parameters. */
+  paramCount: number;
+
+  /** Total registers allocated by the scope analyzer. */
+  registerCount: number;
+
+  /** Whether the source function had `"use strict"`. */
+  isStrict: boolean;
+
+  /** Whether the source function was a generator (`function*`). */
+  isGenerator: boolean;
+
+  /** Whether the source function was `async`. */
+  isAsync: boolean;
+
+  /** Whether the source function was an arrow function. */
+  isArrow: boolean;
+
+  /** Constant pool index for the function's name (`-1` if anonymous). */
+  nameConstIndex: number;
+
+  /** Names captured from outer scopes (informational). */
+  outerNames: string[];
+
+  /** Bytecode units for nested functions / closures. */
+  childUnits: BytecodeUnit[];
+}
