@@ -94,16 +94,13 @@ export const GLOBAL_IDENTIFIERS = new Set([
 ] as const);
 
 // ---------------------------------------------------------------------------
-// VM runtime internal names.  Reserved to avoid collisions when the
-// runtime is injected into user code.
+// VM runtime internal names.
+//
+// Runtime identifiers are randomized per build via
+// `generateRuntimeNames()` in `runtime/names.ts`.
 // ---------------------------------------------------------------------------
 
-export const VM_RUNTIME_RESERVED = [
-  "_BT", "_RM", "_vm", "_exec", "_execAsync",
-  "_load", "_cache", "_vmDepth", "_vmStack",
-  "_fingerprint", "_rc4", "_b64decode", "_deserialize",
-  "_dbg", "_dbgOp", "_vmDbg", "_dbgProt",
-] as const;
+export const VM_WATERMARK_NAME = "_ru4m";
 
 // ---------------------------------------------------------------------------
 // Bytecode unit ID generation.

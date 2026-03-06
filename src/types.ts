@@ -9,8 +9,20 @@
 // Public API options
 // ---------------------------------------------------------------------------
 
+/** Preset names that group multiple options. */
+export type PresetName = "low" | "medium" | "high";
+
 /** Options accepted by {@link obfuscateCode} and the CLI. */
 export interface VmObfuscationOptions {
+  /**
+   * Apply a preset configuration.  Explicit options override preset values.
+   *
+   * - `"low"` — VM compilation only.
+   * - `"medium"` — Adds identifier renaming, bytecode encryption, decoy opcodes.
+   * - `"high"` — Adds debug protection, dead code injection, stack encoding.
+   */
+  preset?: PresetName;
+
   /**
    * How to select which functions to compile to bytecode.
    *
@@ -37,6 +49,31 @@ export interface VmObfuscationOptions {
 
   /** Inject verbose trace logging into the VM interpreter. */
   debugLogging?: boolean;
+
+  /**
+   * Filter unused opcode handlers from the interpreter and shuffle
+   * case order.  Makes output smaller and unique per build.
+   */
+  dynamicOpcodes?: boolean;
+
+  /**
+   * Add fake opcode handlers to the VM dispatcher that are never called.
+   * Makes the interpreter appear more complex.
+   */
+  decoyOpcodes?: boolean;
+
+  /**
+   * Inject fake bytecode sequences that are never executed.
+   * Confuses static analysis tools.
+   */
+  deadCodeInjection?: boolean;
+
+  /**
+   * Encrypt values on the VM stack during execution.
+   * Values are encoded when pushed and decoded when popped.
+   * Impacts performance.
+   */
+  stackEncoding?: boolean;
 }
 
 // ---------------------------------------------------------------------------

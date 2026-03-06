@@ -17,8 +17,9 @@ import fs from "fs-extra";
 import path from "path";
 import { globby } from "globby";
 
-// Re-export types for consumers
-export { type VmObfuscationOptions } from "./types.js";
+// Re-export types and presets for consumers
+export { type VmObfuscationOptions, type PresetName } from "./types.js";
+export { PRESETS } from "./presets.js";
 
 // ---------------------------------------------------------------------------
 // Single-source obfuscation

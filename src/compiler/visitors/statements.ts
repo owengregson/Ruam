@@ -881,6 +881,16 @@ function patchBreaksAndContinues(
   const myIndex = loopStack.indexOf(loopCtx);
   if (myIndex < 0) return;
 
+  // Propagate continue label to a parent labeled context so that
+  // `continue <label>` targeting the label (one index below) resolves
+  // to the correct loop-back address.
+  if (myIndex > 0 && loopCtx.continueLabel >= 0) {
+    const parent = loopStack[myIndex - 1]!;
+    if (parent.labelName && parent.continueLabel < 0) {
+      parent.continueLabel = loopCtx.continueLabel;
+    }
+  }
+
   for (let i = 0; i < emitter.instructions.length; i++) {
     const instr = emitter.instructions[i]!;
     if (instr.opcode === Op.BREAK && instr.operand === myIndex) {

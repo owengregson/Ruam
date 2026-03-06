@@ -588,8 +588,7 @@ describe("comprehensive control flow – labeled break", () => {
 // ─── 10. continue with labels ───────────────────────────────────────────────
 
 describe("comprehensive control flow – labeled continue", () => {
-  // Known VM limitation: labeled continue is not yet supported
-  it.fails("continue outer loop with label", () => {
+  it("continue outer loop with label", () => {
     assertEquivalent(`
       function test() {
         var r = [];
@@ -605,8 +604,7 @@ describe("comprehensive control flow – labeled continue", () => {
     `);
   });
 
-  // Known VM limitation: labeled continue is not yet supported
-  it.fails("labeled continue skips rest of outer iteration", () => {
+  it("labeled continue skips rest of outer iteration", () => {
     assertEquivalent(`
       function test() {
         var r = [];

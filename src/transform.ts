@@ -2,12 +2,13 @@
  * Main transformation orchestrator.
  *
  * {@link obfuscateCode} is the core function that:
- *   1. Optionally preprocesses identifiers
- *   2. Parses the source with Babel
- *   3. Identifies target functions (root-level or comment-annotated)
- *   4. Compiles each target to bytecode
- *   5. Generates the VM runtime
- *   6. Assembles the final output (runtime IIFE + bytecode table + modified AST)
+ *   1. Resolves presets and options
+ *   2. Optionally preprocesses identifiers
+ *   3. Parses the source with Babel
+ *   4. Identifies target functions (root-level or comment-annotated)
+ *   5. Compiles each target to bytecode
+ *   6. Generates the VM runtime with randomized identifiers
+ *   7. Assembles the final output (runtime IIFE + bytecode table + modified AST)
  *
  * @module transform
  */
@@ -21,6 +22,9 @@ import { compileFunction, resetUnitCounter } from "./compiler/index.js";
 import { generateShuffleMap } from "./compiler/opcodes.js";
 import { serializeUnitToJson, encodeBytecodeUnit } from "./compiler/encode.js";
 import { generateVmRuntime } from "./runtime/vm.js";
+import { generateRuntimeNames } from "./runtime/names.js";
+import type { RuntimeNames } from "./runtime/names.js";
+import { resolveOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
 import { preprocessIdentifiers, resetHexCounter } from "./preprocess.js";
 import { BABEL_PARSER_PLUGINS } from "./constants.js";
@@ -42,6 +46,7 @@ const generate = (_generate as unknown as { default: typeof _generate }).default
  * @returns The obfuscated JavaScript source code.
  */
 export function obfuscateCode(source: string, options: VmObfuscationOptions = {}): string {
+  const resolved = resolveOptions(options);
   const {
     targetMode = "root",
     threshold = 1.0,
@@ -49,7 +54,7 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
     encryptBytecode = false,
     debugProtection = false,
     debugLogging = false,
-  } = options;
+  } = resolved;
 
   // -- Optional identifier preprocessing -----------------------------------
   let code = source;
@@ -64,6 +69,9 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
   const shuffleSeed = Date.now() ^ Math.floor(Math.random() * 0xFFFFFFFF);
   const shuffleMap = generateShuffleMap(shuffleSeed);
 
+  // -- Generate randomized runtime identifiers -----------------------------
+  const names = generateRuntimeNames(shuffleSeed);
+
   // -- Parse ---------------------------------------------------------------
   const ast = parse(code, {
     sourceType: "unambiguous",
@@ -74,15 +82,16 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
   const targetPaths = collectTargetFunctions(ast, targetMode, threshold);
 
   // -- Compile each target -------------------------------------------------
-  const compiledUnits = compileTargets(targetPaths, shuffleMap, encryptBytecode);
+  const compiledUnits = compileTargets(targetPaths, shuffleMap, encryptBytecode, names);
 
   if (compiledUnits.size === 0) return code;
 
   // -- Assemble output -----------------------------------------------------
-  return assembleOutput(ast, compiledUnits, shuffleMap, {
+  return assembleOutput(ast, compiledUnits, shuffleMap, names, {
     encrypt: encryptBytecode,
     debugProtection,
     debugLogging,
+    seed: shuffleSeed,
   });
 }
 
@@ -160,6 +169,7 @@ function compileTargets(
   targetPaths: NodePath<t.Function>[],
   shuffleMap: number[],
   encryptBytecode: boolean,
+  names: RuntimeNames,
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
   const compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }> = new Map();
 
@@ -174,7 +184,7 @@ function compileTargets(
         compiledUnits.set(child.id, { unit: child, encoded: childEncoded });
       }
 
-      replaceFunctionBody(fnPath, unit.id);
+      replaceFunctionBody(fnPath, unit.id, names);
     } catch (err) {
       // Skip functions that fail to compile — don't break the whole file
       console.warn(`[ruam] Failed to compile function: ${(err as Error).message}`);
@@ -203,27 +213,29 @@ function assembleOutput(
   ast: t.File,
   compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }>,
   shuffleMap: number[],
-  runtimeOptions: { encrypt: boolean; debugProtection: boolean; debugLogging: boolean },
+  names: RuntimeNames,
+  runtimeOptions: { encrypt: boolean; debugProtection: boolean; debugLogging: boolean; seed: number },
 ): string {
-  // Build bytecode table declaration
+  // Build bytecode table declaration (using randomized name)
   const btEntries: string[] = [];
   for (const [id, { encoded }] of compiledUnits) {
     const value = runtimeOptions.encrypt ? `"${encoded}"` : encoded;
     btEntries.push(`"${id}":${value}`);
   }
-  const btDecl = `var _BT={${btEntries.join(",")}};`;
+  const btDecl = `var ${names.bt}={${btEntries.join(",")}};`;
 
   // Generate runtime IIFE
   const runtime = generateVmRuntime({
     opcodeShuffleMap: shuffleMap,
+    names,
     encrypt: runtimeOptions.encrypt,
     debugProtection: runtimeOptions.debugProtection,
     debugLogging: runtimeOptions.debugLogging,
+    seed: runtimeOptions.seed,
   });
 
-  // Parse and inject _BT inside the runtime IIFE so each file gets its own
-  // local _BT.  Without this, multiple obfuscated scripts on the same page
-  // overwrite each other's global _BT.
+  // Parse and inject bytecode table inside the runtime IIFE so each file
+  // gets its own local table.
   const btNode = parse(btDecl, { sourceType: "script" }).program.body[0]!;
   const runtimeNode = parse(runtime, { sourceType: "script" }).program.body[0]!;
   const iifeCall = (runtimeNode as t.ExpressionStatement).expression as t.CallExpression;
@@ -242,18 +254,19 @@ function assembleOutput(
 /**
  * Replace a function's body with a VM dispatch call.
  *
- * - Arrow functions: converted to `(...__args) => _vm(id, __args)`
- * - Regular functions: `return _vm.call(this, id, Array.prototype.slice.call(arguments))`
+ * - Arrow functions: converted to `(...__args) => names.vm(id, __args)`
+ * - Regular functions: `return names.vm.call(this, id, Array.prototype.slice.call(arguments))`
  */
-function replaceFunctionBody(fnPath: NodePath<t.Function>, unitId: string): void {
+function replaceFunctionBody(fnPath: NodePath<t.Function>, unitId: string, names: RuntimeNames): void {
   const node = fnPath.node;
+  const vmId = t.identifier(names.vm);
 
   if (node.type === "ArrowFunctionExpression") {
     const restParam = t.restElement(t.identifier("__args"));
     node.params = [restParam];
     node.body = t.blockStatement([
       t.returnStatement(
-        t.callExpression(t.identifier("_vm"), [
+        t.callExpression(vmId, [
           t.stringLiteral(unitId),
           t.identifier("__args"),
         ]),
@@ -262,9 +275,9 @@ function replaceFunctionBody(fnPath: NodePath<t.Function>, unitId: string): void
     return;
   }
 
-  // Regular functions: preserve `this` via _vm.call
+  // Regular functions: preserve `this` via vm.call
   const vmCall = t.callExpression(
-    t.memberExpression(t.identifier("_vm"), t.identifier("call")),
+    t.memberExpression(vmId, t.identifier("call")),
     [
       t.thisExpression(),
       t.stringLiteral(unitId),

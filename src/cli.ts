@@ -11,7 +11,7 @@
  */
 
 import { obfuscateFile } from "./index.js";
-import type { VmObfuscationOptions } from "./types.js";
+import type { VmObfuscationOptions, PresetName } from "./types.js";
 import fs from "fs-extra";
 import path from "path";
 
@@ -41,6 +41,9 @@ Usage:
   ruam <input>              Obfuscate a file or directory
   ruam <input> -o <output>  Obfuscate to a specific output path
 
+Presets:
+  --preset <name>           Apply a preset: low, medium, high
+
 Options:
   -o, --output <path>       Output file or directory (default: overwrite input)
   -m, --mode <mode>         Target mode: "root" (default) or "comment"
@@ -48,17 +51,25 @@ Options:
   -p, --preprocess          Preprocess/rename identifiers
   -d, --debug-protection    Enable anti-debugger protection
   --debug-logging           Inject debug trace logging into VM runtime
+  --dynamic-opcodes         Filter unused opcodes and shuffle case order
+  --decoy-opcodes           Add fake opcode handlers
+  --dead-code               Inject dead bytecode sequences
+  --stack-encoding          Encrypt values on the VM stack
   --include <glob>          File glob for directory mode (default: "**/*.js")
   --exclude <glob>          Exclude glob for directory mode (default: "**/node_modules/**")
   -h, --help                Show this help
   -v, --version             Show version
 
+Preset details:
+  low      VM compilation only
+  medium   + identifier renaming, encryption, decoy opcodes, dynamic opcodes
+  high     + debug protection, dead code injection, stack encoding
+
 Examples:
-  ruam app.js                       Obfuscate app.js in-place
-  ruam app.js -o app.obf.js         Obfuscate to a new file
-  ruam dist/                        Obfuscate all JS in dist/
-  ruam dist/ -o build/              Obfuscate dist/ into build/
-  ruam src/bg.js -m comment -e      Only obfuscate /* ruam:vm */ functions, with encryption
+  ruam app.js                         Obfuscate app.js in-place
+  ruam app.js -o app.obf.js           Obfuscate to a new file
+  ruam dist/ --preset medium          Obfuscate all JS in dist/ with medium preset
+  ruam src/bg.js -m comment -e        Only obfuscate /* ruam:vm */ functions, with encryption
 `.trim());
 }
 
@@ -89,6 +100,8 @@ function parseArgs(argv: string[]): CliArgs {
         result.output = argv[++i]; break;
       case "-m": case "--mode":
         result.options.targetMode = argv[++i] as "root" | "comment"; break;
+      case "--preset":
+        result.options.preset = argv[++i] as PresetName; break;
       case "-e": case "--encrypt":
         result.options.encryptBytecode = true; break;
       case "-p": case "--preprocess":
@@ -97,6 +110,14 @@ function parseArgs(argv: string[]): CliArgs {
         result.options.debugProtection = true; break;
       case "--debug-logging":
         result.options.debugLogging = true; break;
+      case "--dynamic-opcodes":
+        result.options.dynamicOpcodes = true; break;
+      case "--decoy-opcodes":
+        result.options.decoyOpcodes = true; break;
+      case "--dead-code":
+        result.options.deadCodeInjection = true; break;
+      case "--stack-encoding":
+        result.options.stackEncoding = true; break;
       case "--include":
         result.include = [argv[++i]!]; break;
       case "--exclude":
