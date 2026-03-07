@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { obfuscateCode } from "../src/transform.js";
+import { obfuscateCode } from "../../src/transform.js";
 import vm from "node:vm";
 import fs from "node:fs";
 import path from "node:path";
 
 describe("RuamTester comprehensive", () => {
   const testerSource = fs.readFileSync(
-    path.join(import.meta.dirname, "RuamTester.js"),
+    path.join(import.meta.dirname, "..", "RuamTester.js"),
     "utf-8"
   );
 

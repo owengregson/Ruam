@@ -6,7 +6,7 @@ JS VM obfuscator — compiles JavaScript functions into custom bytecode executed
 
 - **Build**: `npm run build` (tsup, ESM-only)
 - **Typecheck**: `npm run typecheck` (tsc --noEmit)
-- **Test**: `npm run test` (vitest, 603 tests)
+- **Test**: `npm run test` (vitest, 1046 tests)
 - **Test watch**: `npm run test:watch`
 - **Node**: >= 18, **Module**: ESM (`"type": "module"`)
 
@@ -27,7 +27,7 @@ src/
     opcodes.ts              Opcode enum (~279 opcodes in 24 categories) + per-file shuffle map
     emitter.ts              Bytecode emitter + constant pool
     scope.ts                Compile-time scope analysis + register allocation
-    encode.ts               Bytecode serialization (JSON + binary + RC4)
+    encode.ts               Bytecode serialization (JSON + binary + RC4) + string constant encoding
     visitors/
       index.ts              Barrel exports
       statements.ts         Statement compilation (if, for, while, switch, try, etc.)
@@ -39,7 +39,8 @@ src/
     vm.ts                   VM runtime orchestrator (~100 lines, assembles IIFE from templates)
     names.ts                RuntimeNames interface + per-build randomized name generation (LCG PRNG)
     fingerprint.ts          Environment fingerprinting for encryption
-    decoder.ts              RC4 + base64 codec
+    decoder.ts              RC4 + base64 codec + string constant XOR decoder
+    rolling-cipher.ts       Rolling cipher: position-dependent instruction encryption + implicit key derivation
     templates/
       interpreter.ts        Main interpreter core (sync + async exec, opcode switch)
       loader.ts             Bytecode loader, cache, depth tracking, _ru4m watermark
@@ -51,7 +52,10 @@ src/
 
 test/
   helpers.ts                Test utility (wraps obfuscateCode + eval)
-  *.test.ts                 Vitest test files
+  core/                     Core JS language feature tests (arithmetic, strings, arrays, objects, etc.)
+  stress/                   Stress tests, VM-breaker patterns, randomized fuzz tests
+  security/                 Anti-reversing, string encoding, rolling cipher tests
+  integration/              Real-world patterns (Chrome extension, RuamTester)
 
 docs/
   v1-transformations.md     Archived v1 pipeline documentation
@@ -60,14 +64,19 @@ docs/
 ## Architecture Notes
 
 - **Compilation pipeline**: Source JS -> Babel parse -> identify target functions -> compile each to BytecodeUnit -> serialize -> replace function body with VM dispatch call -> generate VM runtime IIFE -> assemble output
+- **Direct physical dispatch**: The interpreter switch uses physical (shuffled) opcode numbers as case labels directly — no reverse opcode map is emitted in the output. Each build has unique case label assignments.
 - **Per-file opcode shuffle**: Seeded Fisher-Yates (LCG) produces different instruction encodings per build. Seed + shuffle constants live in `constants.ts`.
+- **Constant pool string encoding**: All string constants in the JSON bytecode format are XOR-encoded with an LCG key stream derived from the build seed. Decoded at load time by the `strDec` runtime function. Hides variable names, property names, and string literals.
 - **Per-build identifier randomization**: All internal VM identifiers (`_vm`, `_BT`, `stack`, etc.) are replaced with random 2-3 char names generated via LCG PRNG (same seed as opcode shuffle). Managed by `RuntimeNames` interface in `runtime/names.ts`.
 - **Watermark**: Every output contains `var _ru4m=!0;` — looks random but encodes "ruam" with a `4` for `a`.
-- **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, decoy/dynamic opcodes), `high` (+debug protection, dead code, stack encoding). Defined in `presets.ts`.
+- **Rolling cipher** (`rollingCipher` option): Position-dependent XOR encryption on every instruction. The master key is derived implicitly from bytecode metadata (instruction count, register count, param count, constant count) via FNV-1a — no plaintext seed appears in the output. Each instruction is encrypted with `mixState(baseKey, index, index ^ 0x9E3779B9)`. Implemented in `runtime/rolling-cipher.ts`. When enabled, string encoding also uses the implicit key instead of a plaintext literal.
+- **Integrity binding** (`integrityBinding` option): A per-build hash (FNV-1a of the interpreter template source) is folded into the rolling cipher's base key (`baseKey = masterKey XOR integrityHash`). The hash is embedded as a numeric literal in the IIFE. If an attacker modifies the hash value, all instruction decryption produces garbage. Requires `rollingCipher`.
+- **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `high` (+debug protection, integrity binding, dead code, stack encoding). Defined in `presets.ts`.
 - **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
 - `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
 - Many opcodes have VM runtime handlers but are not yet emitted by the compiler — they're ready for future compiler work
 - Some preset options (`dynamicOpcodes`, `decoyOpcodes`, `deadCodeInjection`, `stackEncoding`) are defined in types but not yet implemented in runtime generation
+- `rollingCipher` and `integrityBinding` are fully implemented
 
 ## Code Conventions
 

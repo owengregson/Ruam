@@ -21,6 +21,7 @@ import * as t from "@babel/types";
 import { compileFunction, resetUnitCounter } from "./compiler/index.js";
 import { generateShuffleMap } from "./compiler/opcodes.js";
 import { serializeUnitToJson, encodeBytecodeUnit } from "./compiler/encode.js";
+import type { JsonSerializeOptions } from "./compiler/encode.js";
 import { generateVmRuntime } from "./runtime/vm.js";
 import { generateRuntimeNames } from "./runtime/names.js";
 import type { RuntimeNames } from "./runtime/names.js";
@@ -28,6 +29,7 @@ import { resolveOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
 import { preprocessIdentifiers, resetHexCounter } from "./preprocess.js";
 import { BABEL_PARSER_PLUGINS } from "./constants.js";
+import { generateInterpreterCore } from "./runtime/templates/interpreter.js";
 
 // Work around ESM / CJS dual-export weirdness in Babel packages
 const traverse = (_traverse as unknown as { default: typeof _traverse }).default ?? _traverse;
@@ -54,6 +56,8 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
     encryptBytecode = false,
     debugProtection = false,
     debugLogging = false,
+    rollingCipher = false,
+    integrityBinding = false,
   } = resolved;
 
   // -- Optional identifier preprocessing -----------------------------------
@@ -81,8 +85,21 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
   // -- Collect target functions --------------------------------------------
   const targetPaths = collectTargetFunctions(ast, targetMode, threshold);
 
+  // -- Compute integrity hash if needed ------------------------------------
+  // Integrity binding hashes the interpreter template source and embeds
+  // the hash in the IIFE.  The same hash is used as part of the rolling
+  // cipher key derivation.  Modifying the interpreter changes the hash
+  // at the source level, but since we embed a precomputed value, the
+  // attacker must locate and preserve it — the value is woven into the
+  // key derivation so removing or changing it breaks all decryption.
+  let integrityHash: number | undefined;
+  if (integrityBinding) {
+    const interpSource = generateInterpreterCore(debugLogging, names, shuffleSeed, shuffleMap, true, true);
+    integrityHash = fnv1a(interpSource);
+  }
+
   // -- Compile each target -------------------------------------------------
-  const compiledUnits = compileTargets(targetPaths, shuffleMap, encryptBytecode, names);
+  const compiledUnits = compileTargets(targetPaths, shuffleMap, encryptBytecode, names, shuffleSeed, rollingCipher, integrityHash);
 
   if (compiledUnits.size === 0) return code;
 
@@ -92,7 +109,24 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
     debugProtection,
     debugLogging,
     seed: shuffleSeed,
+    stringKey: encryptBytecode ? undefined : shuffleSeed,
+    rollingCipher,
+    integrityBinding,
+    integrityHash,
   });
+}
+
+// ---------------------------------------------------------------------------
+// FNV-1a hash (build-time, matches runtime ihashFn)
+// ---------------------------------------------------------------------------
+
+function fnv1a(s: string): number {
+  let h = 0x811C9DC5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,17 +204,20 @@ function compileTargets(
   shuffleMap: number[],
   encryptBytecode: boolean,
   names: RuntimeNames,
+  stringKey: number,
+  rollingCipher: boolean = false,
+  integrityHash?: number,
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
   const compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }> = new Map();
 
   for (const fnPath of targetPaths) {
     try {
       const unit = compileFunction(fnPath);
-      const encoded = encodeUnit(unit, shuffleMap, encryptBytecode);
+      const encoded = encodeUnit(unit, shuffleMap, encryptBytecode, stringKey, rollingCipher, integrityHash);
       compiledUnits.set(unit.id, { unit, encoded });
 
       for (const child of unit.childUnits) {
-        const childEncoded = encodeUnit(child, shuffleMap, encryptBytecode);
+        const childEncoded = encodeUnit(child, shuffleMap, encryptBytecode, stringKey, rollingCipher, integrityHash);
         compiledUnits.set(child.id, { unit: child, encoded: childEncoded });
       }
 
@@ -195,10 +232,23 @@ function compileTargets(
 }
 
 /** Encode a single bytecode unit in the configured format. */
-function encodeUnit(unit: BytecodeUnit, shuffleMap: number[], encrypt: boolean): string {
-  return encrypt
-    ? encodeBytecodeUnit(unit, { shuffleMap, encrypt: true })
-    : serializeUnitToJson(unit, shuffleMap);
+function encodeUnit(
+  unit: BytecodeUnit,
+  shuffleMap: number[],
+  encrypt: boolean,
+  stringKey: number,
+  rollingCipher: boolean = false,
+  integrityHash?: number,
+): string {
+  if (encrypt) {
+    return encodeBytecodeUnit(unit, { shuffleMap, encrypt: true });
+  }
+  return serializeUnitToJson(unit, {
+    shuffleMap,
+    stringKey,
+    rollingCipher,
+    integrityHash,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +264,16 @@ function assembleOutput(
   compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }>,
   shuffleMap: number[],
   names: RuntimeNames,
-  runtimeOptions: { encrypt: boolean; debugProtection: boolean; debugLogging: boolean; seed: number },
+  runtimeOptions: {
+    encrypt: boolean;
+    debugProtection: boolean;
+    debugLogging: boolean;
+    seed: number;
+    stringKey?: number;
+    rollingCipher?: boolean;
+    integrityBinding?: boolean;
+    integrityHash?: number;
+  },
 ): string {
   // Build bytecode table declaration (using randomized name)
   const btEntries: string[] = [];
@@ -232,6 +291,10 @@ function assembleOutput(
     debugProtection: runtimeOptions.debugProtection,
     debugLogging: runtimeOptions.debugLogging,
     seed: runtimeOptions.seed,
+    stringKey: runtimeOptions.stringKey,
+    rollingCipher: runtimeOptions.rollingCipher,
+    integrityBinding: runtimeOptions.integrityBinding,
+    integrityHash: runtimeOptions.integrityHash,
   });
 
   // Parse and inject bytecode table inside the runtime IIFE so each file

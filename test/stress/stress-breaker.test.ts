@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assertEquivalent, evalOriginal, evalObfuscated } from "./helpers.js";
+import { assertEquivalent, evalOriginal, evalObfuscated } from "../helpers.js";
 
 /**
  * Stress tests designed to break the VM obfuscator.

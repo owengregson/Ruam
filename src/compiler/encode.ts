@@ -14,6 +14,8 @@
 import type { BytecodeUnit, ConstantPoolEntry } from "../types.js";
 import { computeFingerprint } from "../runtime/fingerprint.js";
 import { rc4, b64encode } from "../runtime/decoder.js";
+import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import { deriveImplicitKey, rollingEncrypt } from "../runtime/rolling-cipher.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -43,19 +45,93 @@ export function encodeBytecodeUnit(unit: BytecodeUnit, options: EncodeOptions): 
 }
 
 /**
+ * XOR-encode a string's char codes using an LCG key stream.
+ *
+ * Each string gets a unique key stream derived from the master key and
+ * the constant pool index, so identical strings at different positions
+ * produce different encodings.
+ */
+export function encodeStringChars(str: string, key: number, index: number): number[] {
+  const encoded: number[] = [];
+  let k = (key ^ (index * 0x9E3779B9)) >>> 0;
+  for (let i = 0; i < str.length; i++) {
+    k = (k * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+    encoded.push(str.charCodeAt(i) ^ (k & 0xFFFF));
+  }
+  return encoded;
+}
+
+/** Options controlling JSON serialization behavior. */
+export interface JsonSerializeOptions {
+  /** Logical → physical opcode shuffle map. */
+  shuffleMap: number[];
+  /** XOR string encoding key (omit to leave strings as plaintext). */
+  stringKey?: number;
+  /** Apply rolling cipher encryption to the instruction stream. */
+  rollingCipher?: boolean;
+  /** Integrity hash to fold into the rolling cipher key. */
+  integrityHash?: number;
+}
+
+/**
  * Serialize a bytecode unit to a JSON string.
  *
  * The output uses short property names (`c`, `i`, `r`, `p`, …) to reduce
  * size.  Special constant types (regex, bigint) are encoded as tagged objects
  * that the runtime decoder can recognise.
+ *
+ * When `stringKey` is provided, string constants are XOR-encoded and
+ * stored as number arrays instead of plaintext strings.
  */
-export function serializeUnitToJson(unit: BytecodeUnit, shuffleMap: number[]): string {
-  const constants: unknown[] = unit.constants.map(c => {
+export function serializeUnitToJson(unit: BytecodeUnit, opts: JsonSerializeOptions): string;
+export function serializeUnitToJson(unit: BytecodeUnit, shuffleMap: number[], stringKey?: number): string;
+export function serializeUnitToJson(
+  unit: BytecodeUnit,
+  optsOrMap: JsonSerializeOptions | number[],
+  stringKeyLegacy?: number,
+): string {
+  // Normalise overloaded arguments
+  let shuffleMap: number[];
+  let stringKey: number | undefined;
+  let rollingCipher = false;
+  let integrityHash: number | undefined;
+
+  if (Array.isArray(optsOrMap)) {
+    shuffleMap = optsOrMap;
+    stringKey = stringKeyLegacy;
+  } else {
+    shuffleMap = optsOrMap.shuffleMap;
+    stringKey = optsOrMap.stringKey;
+    rollingCipher = optsOrMap.rollingCipher ?? false;
+    integrityHash = optsOrMap.integrityHash;
+  }
+
+  // When rolling cipher is on, use the implicit key for string encoding
+  // so no plaintext seed appears in the output.
+  // Must match what rcDeriveKey() produces at runtime.
+  let effectiveStringKey = stringKey;
+  if (rollingCipher && stringKey !== undefined) {
+    let k = deriveImplicitKey(
+      unit.instructions.length,
+      unit.registerCount,
+      unit.paramCount,
+      unit.constants.length,
+    );
+    if (integrityHash !== undefined) {
+      k = (k ^ integrityHash) >>> 0;
+    }
+    effectiveStringKey = k;
+  }
+
+  const constants: unknown[] = unit.constants.map((c, idx) => {
     if (c.type === "regex") {
       const v = c.value as { pattern: string; flags: string };
       return { __regex__: true, p: v.pattern, f: v.flags };
     }
     if (c.type === "bigint") return { __bigint__: true, v: String(c.value) };
+    if (c.type === "string" && effectiveStringKey !== undefined) {
+      return encodeStringChars(c.value as string, effectiveStringKey, idx);
+    }
     return c.value;
   });
 
@@ -63,6 +139,17 @@ export function serializeUnitToJson(unit: BytecodeUnit, shuffleMap: number[]): s
   for (const instr of unit.instructions) {
     instrs.push(shuffleMap[instr.opcode]!);
     instrs.push(instr.operand);
+  }
+
+  // Apply rolling cipher if enabled (must happen after shuffle but before serialization)
+  if (rollingCipher) {
+    const masterKey = deriveImplicitKey(
+      unit.instructions.length,
+      unit.registerCount,
+      unit.paramCount,
+      unit.constants.length,
+    );
+    rollingEncrypt(instrs, masterKey, integrityHash);
   }
 
   return JSON.stringify({

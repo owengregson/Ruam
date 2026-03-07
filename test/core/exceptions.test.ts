@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { assertEquivalent } from "./helpers.js";
+import { assertEquivalent } from "../helpers.js";
 
 describe("exceptions", () => {
   it("try/catch basic", () => {

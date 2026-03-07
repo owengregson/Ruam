@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { evalOriginal, evalObfuscated } from "./helpers.js";
+import { evalOriginal, evalObfuscated } from "../helpers.js";
 
 describe("async/await support", () => {
   it("basic async function returns a thenable", () => {

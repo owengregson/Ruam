@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { assertEquivalent } from "./helpers.js";
+import { assertEquivalent } from "../helpers.js";
 
 // ─── 1. Lexical scoping ────────────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ describe("closures & scope – closure over loop variable", () => {
     `);
   });
 
-  // Known VM limitation: let in for loop does not create per-iteration bindings
+  // Not yet implemented: let in for loop per-iteration bindings (needs scope-per-iteration in compiler)
   it.fails("let in loop – each closure captures its own value", () => {
     assertEquivalent(`
       function test() {

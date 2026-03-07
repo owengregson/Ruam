@@ -74,6 +74,30 @@ export interface VmObfuscationOptions {
    * Impacts performance.
    */
   stackEncoding?: boolean;
+
+  /**
+   * Enable rolling cipher encryption on bytecode instructions.
+   *
+   * Each instruction's opcode and operand are XOR-encrypted with a
+   * rolling state that evolves as instructions are decrypted.  The
+   * master key is derived implicitly from bytecode metadata — no
+   * plaintext seed appears in the output.
+   *
+   * Prevents static extraction of the opcode shuffle map and
+   * eliminates the single-seed vulnerability.
+   */
+  rollingCipher?: boolean;
+
+  /**
+   * Bind bytecode decryption to the interpreter's own source integrity.
+   *
+   * A hash of the interpreter function is woven into the rolling
+   * cipher's key derivation.  If the interpreter is modified (e.g.
+   * to add logging), the hash changes and all decryption breaks.
+   *
+   * Requires {@link rollingCipher} to be enabled (auto-enabled).
+   */
+  integrityBinding?: boolean;
 }
 
 // ---------------------------------------------------------------------------

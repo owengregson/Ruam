@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { assertEquivalent } from "./helpers.js";
+import { assertEquivalent } from "../helpers.js";
 
 describe("comprehensive advanced patterns", () => {
   // ── 1. Type coercion edge cases ──────────────────────────────────

@@ -55,6 +55,8 @@ Options:
   --decoy-opcodes           Add fake opcode handlers
   --dead-code               Inject dead bytecode sequences
   --stack-encoding          Encrypt values on the VM stack
+  --rolling-cipher          Rolling cipher on bytecode instructions
+  --integrity-binding       Bind decryption to interpreter integrity
   --include <glob>          File glob for directory mode (default: "**/*.js")
   --exclude <glob>          Exclude glob for directory mode (default: "**/node_modules/**")
   -h, --help                Show this help
@@ -118,6 +120,10 @@ function parseArgs(argv: string[]): CliArgs {
         result.options.deadCodeInjection = true; break;
       case "--stack-encoding":
         result.options.stackEncoding = true; break;
+      case "--rolling-cipher":
+        result.options.rollingCipher = true; break;
+      case "--integrity-binding":
+        result.options.integrityBinding = true; break;
       case "--include":
         result.include = [argv[++i]!]; break;
       case "--exclude":

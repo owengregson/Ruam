@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { obfuscateCode } from "../src/transform.js";
+import { obfuscateCode } from "../../src/transform.js";
 import vm from "node:vm";
 
 /**

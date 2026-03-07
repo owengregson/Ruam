@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { assertEquivalent } from "./helpers.js";
+import { assertEquivalent } from "../helpers.js";
 
 // ─── 1. if/else ───────────────────────────────────────────────────────────────
 
@@ -820,7 +820,7 @@ describe("comprehensive control flow – try/catch/finally", () => {
     `);
   });
 
-  // Known VM limitation: finally block does not run after return in try
+  // Not yet implemented: finally execution after return (needs completion-type tracking in VM)
   it.fails("finally runs even after return in try", () => {
     assertEquivalent(`
       function test() {
@@ -840,7 +840,7 @@ describe("comprehensive control flow – try/catch/finally", () => {
     `);
   });
 
-  // Known VM limitation: finally block does not run after return in catch
+  // Not yet implemented: finally execution after return in catch (same as above)
   it.fails("finally runs even after return in catch", () => {
     assertEquivalent(`
       function test() {
@@ -936,7 +936,7 @@ describe("comprehensive control flow – try/catch/finally", () => {
     `);
   });
 
-  // Known VM limitation: finally return does not override try/catch return
+  // Not yet implemented: finally return overriding try/catch return (needs completion-type tracking)
   it.fails("finally overrides return value when it also returns", () => {
     assertEquivalent(`
       function test() {
