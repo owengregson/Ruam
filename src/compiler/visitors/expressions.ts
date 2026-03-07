@@ -88,14 +88,14 @@ export function compileExpression(
     }
 
     case "StringLiteral": {
+      if (node.value === "") { emitter.emit(Op.PUSH_EMPTY_STRING, 0); break; }
       const idx = emitter.addStringConstant(node.value);
       emitter.emit(Op.PUSH_CONST, idx);
       break;
     }
 
     case "BooleanLiteral": {
-      const idx = emitter.addBooleanConstant(node.value);
-      emitter.emit(Op.PUSH_CONST, idx);
+      emitter.emit(node.value ? Op.PUSH_TRUE : Op.PUSH_FALSE, 0);
       break;
     }
 

@@ -47,6 +47,7 @@ function peepholePass(emitter: Emitter): boolean {
   const instrs = emitter.instructions;
   const consts = emitter.constants;
   let changed = false;
+  const jumpTargets = computeJumpTargets(instrs);
 
   for (let i = 0; i < instrs.length; i++) {
     const cur = instrs[i]!;
@@ -55,7 +56,7 @@ function peepholePass(emitter: Emitter): boolean {
 
     // DUP + POP → NOP + NOP
     if (cur.opcode === Op.DUP && i + 1 < instrs.length && instrs[i + 1]!.opcode === Op.POP) {
-      if (!isJumpTarget(instrs, i + 1)) {
+      if (!jumpTargets.has(i + 1)) {
         cur.opcode = Op.NOP; cur.operand = 0;
         instrs[i + 1]!.opcode = Op.NOP; instrs[i + 1]!.operand = 0;
         changed = true; continue;
@@ -64,7 +65,7 @@ function peepholePass(emitter: Emitter): boolean {
 
     // PUSH_X + POP → NOP + NOP (for side-effect-free pushes)
     if (isPurePush(cur.opcode) && i + 1 < instrs.length && instrs[i + 1]!.opcode === Op.POP) {
-      if (!isJumpTarget(instrs, i + 1)) {
+      if (!jumpTargets.has(i + 1)) {
         cur.opcode = Op.NOP; cur.operand = 0;
         instrs[i + 1]!.opcode = Op.NOP; instrs[i + 1]!.operand = 0;
         changed = true; continue;
@@ -79,7 +80,7 @@ function peepholePass(emitter: Emitter): boolean {
       if (next.opcode === Op.PUSH_CONST && isFoldableBinop(binop.opcode)) {
         const a = getNumericConst(consts, cur.operand);
         const b = getNumericConst(consts, next.operand);
-        if (a !== null && b !== null && !isJumpTarget(instrs, i + 1) && !isJumpTarget(instrs, i + 2)) {
+        if (a !== null && b !== null && !jumpTargets.has(i + 1) && !jumpTargets.has(i + 2)) {
           const result = foldBinop(binop.opcode, a, b);
           if (result !== null && isFinite(result)) {
             const idx = emitter.addNumberConstant(result);
@@ -100,7 +101,7 @@ function peepholePass(emitter: Emitter): boolean {
     if (cur.opcode === Op.PUSH_CONST && i + 1 < instrs.length) {
       const next = instrs[i + 1]!;
       const val = getNumericConst(consts, cur.operand);
-      if (val === 1 && next.opcode === Op.SUB && !isJumpTarget(instrs, i + 1)) {
+      if (val === 1 && next.opcode === Op.SUB && !jumpTargets.has(i + 1)) {
         cur.opcode = Op.NOP; cur.operand = 0;
         next.opcode = Op.DEC; next.operand = 0;
         changed = true; continue;
@@ -124,7 +125,7 @@ function peepholePass(emitter: Emitter): boolean {
     // STORE_REG(r) + LOAD_REG(r) → DUP + STORE_REG(r)
     if (cur.opcode === Op.STORE_REG && i + 1 < instrs.length) {
       const next = instrs[i + 1]!;
-      if (next.opcode === Op.LOAD_REG && next.operand === cur.operand && !isJumpTarget(instrs, i + 1)) {
+      if (next.opcode === Op.LOAD_REG && next.operand === cur.operand && !jumpTargets.has(i + 1)) {
         // Reorder: DUP then STORE_REG (saves one instruction's worth of dispatch)
         next.opcode = Op.STORE_REG; next.operand = cur.operand;
         cur.opcode = Op.DUP; cur.operand = 0;
@@ -150,13 +151,14 @@ function superinstructionPass(emitter: Emitter): boolean {
   const instrs = emitter.instructions;
   const consts = emitter.constants;
   let changed = false;
+  const jumpTargets = computeJumpTargets(instrs);
 
   for (let i = 0; i < instrs.length - 1; i++) {
     const a = instrs[i]!;
     const b = instrs[i + 1]!;
 
     // Guard: don't fuse across jump targets
-    if (isJumpTarget(instrs, i + 1)) continue;
+    if (jumpTargets.has(i + 1)) continue;
 
     // --- Two-instruction fusions ---
 
@@ -173,7 +175,7 @@ function superinstructionPass(emitter: Emitter): boolean {
 
     if (i + 2 >= instrs.length) continue;
     const c = instrs[i + 2]!;
-    if (isJumpTarget(instrs, i + 2)) continue;
+    if (jumpTargets.has(i + 2)) continue;
 
     // --- Three-instruction fusions ---
 
@@ -192,9 +194,24 @@ function superinstructionPass(emitter: Emitter): boolean {
       }
     }
 
+    // LOAD_REG(r) + PUSH_CONST(c) + <binop> → REG_CONST_<binop>(r | c<<16)
+    if (a.opcode === Op.LOAD_REG && b.opcode === Op.PUSH_CONST) {
+      const r = a.operand;
+      const ci = b.operand;
+      if (r <= 0xFFFF && ci <= 0xFFFF) {
+        const superOp = regConstBinopMap(c.opcode);
+        if (superOp !== null) {
+          a.opcode = superOp; a.operand = (r & 0xFFFF) | ((ci & 0xFFFF) << 16);
+          b.opcode = Op.NOP; b.operand = 0;
+          c.opcode = Op.NOP; c.operand = 0;
+          changed = true; continue;
+        }
+      }
+    }
+
     if (i + 3 >= instrs.length) continue;
     const d = instrs[i + 3]!;
-    if (isJumpTarget(instrs, i + 3)) continue;
+    if (jumpTargets.has(i + 3)) continue;
 
     // --- Four-instruction fusions ---
 
@@ -206,6 +223,21 @@ function superinstructionPass(emitter: Emitter): boolean {
       const target = d.operand;
       if (r <= 0xFF && constIdx <= 0xFF) {
         a.opcode = Op.REG_LT_CONST_JF; a.operand = (r & 0xFF) | ((constIdx & 0xFF) << 8) | ((target & 0xFFFF) << 16);
+        b.opcode = Op.NOP; b.operand = 0;
+        c.opcode = Op.NOP; c.operand = 0;
+        d.opcode = Op.NOP; d.operand = 0;
+        changed = true; continue;
+      }
+    }
+
+    // LOAD_REG(a) + LOAD_REG(b) + LT + JMP_FALSE(target) → REG_LT_REG_JF
+    if (a.opcode === Op.LOAD_REG && b.opcode === Op.LOAD_REG &&
+        c.opcode === Op.LT && d.opcode === Op.JMP_FALSE) {
+      const ra = a.operand;
+      const rb = b.operand;
+      const target = d.operand;
+      if (ra <= 0xFF && rb <= 0xFF) {
+        a.opcode = Op.REG_LT_REG_JF; a.operand = (ra & 0xFF) | ((rb & 0xFF) << 8) | ((target & 0xFFFF) << 16);
         b.opcode = Op.NOP; b.operand = 0;
         c.opcode = Op.NOP; c.operand = 0;
         d.opcode = Op.NOP; d.operand = 0;
@@ -261,8 +293,8 @@ function removeNops(emitter: Emitter): void {
       if (finallyIp !== 0xFFFF && finallyIp < instrs.length) finallyIp = indexMap[finallyIp]!;
       instr.operand = ((catchIp & 0xFFFF) << 16) | (finallyIp & 0xFFFF);
     }
-    // Handle REG_LT_CONST_JF which encodes a jump target in bits 16-31
-    if (instr.opcode === Op.REG_LT_CONST_JF) {
+    // Handle REG_LT_CONST_JF / REG_LT_REG_JF which encode a jump target in bits 16-31
+    if (instr.opcode === Op.REG_LT_CONST_JF || instr.opcode === Op.REG_LT_REG_JF) {
       const low = instr.operand & 0xFFFF;
       let target = (instr.operand >>> 16) & 0xFFFF;
       if (target < instrs.length) target = indexMap[target]!;
@@ -346,25 +378,44 @@ function regBinopMap(op: number): Op | null {
     case Op.LT: return Op.REG_LT;
     case Op.LTE: return Op.REG_LTE;
     case Op.GT: return Op.REG_GT;
+    case Op.GTE: return Op.REG_GTE;
     case Op.SEQ: return Op.REG_SEQ;
     case Op.SNEQ: return Op.REG_SNEQ;
+    case Op.DIV: return Op.REG_DIV;
+    case Op.MOD: return Op.REG_MOD;
+    default: return null;
+  }
+}
+
+function regConstBinopMap(op: number): Op | null {
+  switch (op) {
+    case Op.SUB: return Op.REG_CONST_SUB;
+    case Op.MUL: return Op.REG_CONST_MUL;
+    case Op.MOD: return Op.REG_CONST_MOD;
     default: return null;
   }
 }
 
 /**
- * Check if instruction index `i` is the target of any jump.
+ * Pre-compute the set of all instruction indices that are jump targets.
+ * This replaces the O(n) per-query isJumpTarget scan with O(1) lookups.
  */
-function isJumpTarget(instrs: Instruction[], i: number): boolean {
+function computeJumpTargets(instrs: Instruction[]): Set<number> {
+  const targets = new Set<number>();
   for (const instr of instrs) {
-    if (isJump(instr.opcode) && instr.operand === i) return true;
+    if (isJump(instr.opcode) && instr.operand >= 0) targets.add(instr.operand);
     if (instr.opcode === Op.TRY_PUSH) {
       const catchIp = (instr.operand >> 16) & 0xFFFF;
       const finallyIp = instr.operand & 0xFFFF;
-      if (catchIp === i || finallyIp === i) return true;
+      if (catchIp !== 0xFFFF) targets.add(catchIp);
+      if (finallyIp !== 0xFFFF) targets.add(finallyIp);
     }
-    if ((instr.opcode === Op.LOGICAL_AND || instr.opcode === Op.LOGICAL_OR || instr.opcode === Op.NULLISH_COALESCE) && instr.operand === i) return true;
-    if ((instr.opcode === Op.TABLE_SWITCH || instr.opcode === Op.LOOKUP_SWITCH) && instr.operand === i) return true;
+    if (instr.opcode === Op.LOGICAL_AND || instr.opcode === Op.LOGICAL_OR || instr.opcode === Op.NULLISH_COALESCE) {
+      if (instr.operand >= 0) targets.add(instr.operand);
+    }
+    if (instr.opcode === Op.TABLE_SWITCH || instr.opcode === Op.LOOKUP_SWITCH) {
+      if (instr.operand >= 0) targets.add(instr.operand);
+    }
   }
-  return false;
+  return targets;
 }

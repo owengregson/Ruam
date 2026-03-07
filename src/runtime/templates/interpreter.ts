@@ -108,8 +108,10 @@ function obfuscateLocals(source: string, seed: number): string {
   while ((m = paramPattern.exec(source)) !== null) {
     const params = m[1]!.split(",").map(p => p.trim());
     for (const p of params) {
-      if (p.length >= 3 && !KEEP.has(p) && !p.startsWith("_")) {
-        toRename.add(p);
+      // Strip rest param prefix `...` before checking
+      const clean = p.replace(/^\.\.\./, '');
+      if (clean.length >= 3 && !KEEP.has(clean) && !clean.startsWith("_")) {
+        toRename.add(clean);
       }
     }
   }
@@ -261,58 +263,69 @@ function generateExecBody(
     : `case ${Op.AWAIT}:${S}[${P}]=void 0;break;`;
 
   // Closure handler (debug vs non-debug)
+  // Optimization: closures call exec/execAsync directly with pre-loaded unit,
+  // bypassing vm.call → load() chain (eliminates cache lookup + extra call frame).
+  // This-boxing is inlined for non-arrow closures.
   const closureHandler = debug ? `
     case ${Op.NEW_CLOSURE}:{
-      var _cuid=${C}[${O}];var _cu=${n.load}(_cuid);
+      var _cuid=${C}[${O}];var _cu=${n.load}(_cuid);_cu._dbgId=_cuid;
       ${n.dbg}('NEW_CLOSURE','uid='+_cuid,'async='+!!_cu.s,'params='+_cu.p,'arrow='+!!_cu.a);
-      if(_cu.a){if(_cu.s){${W}((function(uid,cs,ct){return async function(){
-        ${n.dbg}('CALL_CLOSURE','async arrow uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(ct,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC},${TV}));}else{${W}((function(uid,cs,ct){return function(){
-        ${n.dbg}('CALL_CLOSURE','arrow uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(ct,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC},${TV}));}}
-      else{if(_cu.s){${W}((function(uid,cs){var fn=async function(){
-        ${n.dbg}('CALL_CLOSURE','async uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
-      };return fn;})(${C}[${O}],${SC}));}else{${W}((function(uid,cs){var fn=function(){
-        ${n.dbg}('CALL_CLOSURE','uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
-      };return fn;})(${C}[${O}],${SC}));}}
+      if(_cu.a){if(_cu.s){${W}((function(u,uid,cs,ct){return async function(..._a){
+        ${n.dbg}('CALL_CLOSURE','async arrow uid='+uid,'args='+_a.length);
+        return ${n.execAsync}(u,_a,cs,ct);
+      };})(_cu,_cuid,${SC},${TV}));}else{${W}((function(u,uid,cs,ct){return function(..._a){
+        ${n.dbg}('CALL_CLOSURE','arrow uid='+uid,'args='+_a.length);
+        return ${n.exec}(u,_a,cs,ct);
+      };})(_cu,_cuid,${SC},${TV}));}}
+      else{if(_cu.s){${W}((function(u,uid,cs){var fn=async function(..._a){
+        ${n.dbg}('CALL_CLOSURE','async uid='+uid,'args='+_a.length);
+        var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+        return ${n.execAsync}(u,_a,cs,_tv,void 0,fn._ho);
+      };return fn;})(_cu,_cuid,${SC}));}else{${W}((function(u,uid,cs){var fn=function(..._a){
+        ${n.dbg}('CALL_CLOSURE','uid='+uid,'args='+_a.length);
+        var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+        return ${n.exec}(u,_a,cs,_tv,void 0,fn._ho);
+      };return fn;})(_cu,_cuid,${SC}));}}
       break;
     }
     case ${Op.NEW_FUNCTION}:{
-      var _fuid=${C}[${O}];var _fu=${n.load}(_fuid);
+      var _fuid=${C}[${O}];var _fu=${n.load}(_fuid);_fu._dbgId=_fuid;
       ${n.dbg}('NEW_FUNCTION','uid='+_fuid,'async='+!!_fu.s,'params='+_fu.p);
-      if(_fu.s){${W}((function(uid,cs){var fn=async function(){
-        ${n.dbg}('CALL_FUNCTION','async uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
-      };return fn;})(${C}[${O}],${SC}));}else{${W}((function(uid,cs){var fn=function(){
-        ${n.dbg}('CALL_FUNCTION','uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
-      };return fn;})(${C}[${O}],${SC}));}
+      if(_fu.s){${W}((function(u,uid,cs){var fn=async function(..._a){
+        ${n.dbg}('CALL_FUNCTION','async uid='+uid,'args='+_a.length);
+        var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+        return ${n.execAsync}(u,_a,cs,_tv,void 0,fn._ho);
+      };return fn;})(_fu,_fuid,${SC}));}else{${W}((function(u,uid,cs){var fn=function(..._a){
+        ${n.dbg}('CALL_FUNCTION','uid='+uid,'args='+_a.length);
+        var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+        return ${n.exec}(u,_a,cs,_tv,void 0,fn._ho);
+      };return fn;})(_fu,_fuid,${SC}));}
       break;
     }` : `
     case ${Op.NEW_CLOSURE}:{
-      var _cuid=${C}[${O}];var _cu=${n.load}(_cuid);
-      if(_cu.a){${W}((function(uid,cs,ct){if(_cu.s){return async function(){
-        return ${n.vm}.call(ct,uid,Array.prototype.slice.call(arguments),cs);
-      };}return function(){
-        return ${n.vm}.call(ct,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC},${TV}));}
-      else{${W}((function(uid,cs){if(_cu.s){var fn=async function(){
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
-      };return fn;}var fn=function(){
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
-      };return fn;})(${C}[${O}],${SC}));}
+      var _cu=${n.load}(${C}[${O}]);
+      if(_cu.a){${W}((function(u,cs,ct){if(u.s){return async function(..._a){
+        return ${n.execAsync}(u,_a,cs,ct);
+      };}return function(..._a){
+        return ${n.exec}(u,_a,cs,ct);
+      };})(_cu,${SC},${TV}));}
+      else{${W}((function(u,cs){if(u.s){var fn=async function(..._a){
+        var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+        return ${n.execAsync}(u,_a,cs,_tv,void 0,fn._ho);
+      };return fn;}var fn=function(..._a){
+        var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+        return ${n.exec}(u,_a,cs,_tv,void 0,fn._ho);
+      };return fn;})(_cu,${SC}));}
       break;
     }
     case ${Op.NEW_FUNCTION}:{
-      ${W}((function(uid,cs){var u=${n.load}(uid);if(u.s){var fn=async function(){
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
-      };return fn;}var fn=function(){
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
-      };return fn;})(${C}[${O}],${SC}));
+      ${W}((function(u,cs){if(u.s){var fn=async function(..._a){
+        var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+        return ${n.execAsync}(u,_a,cs,_tv,void 0,fn._ho);
+      };return fn;}var fn=function(..._a){
+        var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+        return ${n.exec}(u,_a,cs,_tv,void 0,fn._ho);
+      };return fn;})(${n.load}(${C}[${O}]),${SC}));
       break;
     }`;
 
@@ -343,12 +356,12 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
   var ${IP}=0;
   var ${C}=${U}.c;
   var ${I}=${U}.i;
-  var ${EX}=[];
+  var ${EX}=null;
   var ${PE}=null;
   var ${HPE}=false;
   var ${CT}=0;
   var ${CV}=void 0;
-  var ${SC}={${sPar}:${OS},${sV}:{},${sCV}:{},${sTdz}:{}};
+  var ${SC}={${sPar}:${OS},${sV}:{}};
   var ${P}=-1;
   var _g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};
   ${debug ? `var _uid=${U}._dbgId||'?';${n.dbg}('ENTER','${fnLabel}','unit='+_uid,'params='+${U}.p,'args='+${A}.length,'async='+!!${U}.s,'regs='+${U}.r,'depth='+${n.depth});` : ''}
@@ -358,9 +371,10 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
   function ${X}(){return ${S}[${P}--];}
   function ${Y}(){return ${S}[${P}];}
 
+  var _il=${I}.length;
   for(;;){
   try{
-  while(${IP}<${I}.length){
+  while(${IP}<_il){
     var ${PH}=${I}[${IP}];
     var ${O}=${I}[${IP}+1];
     ${IP}+=2;${rcDecrypt}
@@ -436,8 +450,8 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
     case ${Op.JMP_TRUE_KEEP}:if(${S}[${P}])${IP}=${O}*2;break;
     case ${Op.JMP_FALSE_KEEP}:if(!${S}[${P}])${IP}=${O}*2;break;
     case ${Op.JMP_NULLISH_KEEP}:{var v=${S}[${P}];if(v===null||v===void 0)${IP}=${O}*2;break;}
-    case ${Op.RETURN}:{var _rv=${S}[${P}--];${debug ? `${n.dbg}('RETURN','value=',_rv);` : ''}if(${EX}.length>0){var _h=${EX}[${EX}.length-1];if(_h.finallyIp>=0){${CT}=1;${CV}=_rv;${EX}.pop();${P}=_h.sp;${IP}=_h.finallyIp*2;break;}}return _rv;}
-    case ${Op.RETURN_VOID}:{${debug ? `${n.dbg}('RETURN_VOID');` : ''}if(${EX}.length>0){var _h=${EX}[${EX}.length-1];if(_h.finallyIp>=0){${CT}=1;${CV}=void 0;${EX}.pop();${P}=_h.sp;${IP}=_h.finallyIp*2;break;}}return void 0;}
+    case ${Op.RETURN}:{var _rv=${S}[${P}--];${debug ? `${n.dbg}('RETURN','value=',_rv);` : ''}if(${EX}&&${EX}.length>0){var _h=${EX}[${EX}.length-1];if(_h.finallyIp>=0){${CT}=1;${CV}=_rv;${EX}.pop();${P}=_h.sp;${IP}=_h.finallyIp*2;break;}}return _rv;}
+    case ${Op.RETURN_VOID}:{${debug ? `${n.dbg}('RETURN_VOID');` : ''}if(${EX}&&${EX}.length>0){var _h=${EX}[${EX}.length-1];if(_h.finallyIp>=0){${CT}=1;${CV}=void 0;${EX}.pop();${P}=_h.sp;${IP}=_h.finallyIp*2;break;}}return void 0;}
     case ${Op.THROW}:{var _te=${S}[${P}--];${debug ? `${n.dbg}('THROW','error=',_te);` : ''}throw _te;}
     case ${Op.RETHROW}:{if(${HPE}){var ex=${PE};${PE}=null;${HPE}=false;throw ex;}break;}
     case ${Op.NOP}:break;
@@ -489,11 +503,11 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
       break;
     }
 
-    case ${Op.PUSH_SCOPE}:case ${Op.PUSH_BLOCK_SCOPE}:case ${Op.PUSH_CATCH_SCOPE}:${SC}={${sPar}:${SC},${sV}:{},${sCV}:{},${sTdz}:{}};break;
+    case ${Op.PUSH_SCOPE}:case ${Op.PUSH_BLOCK_SCOPE}:case ${Op.PUSH_CATCH_SCOPE}:${SC}={${sPar}:${SC},${sV}:{}};break;
     case ${Op.POP_SCOPE}:${SC}=${SC}.${sPar}||${SC};break;
     case ${Op.TDZ_CHECK}:{var name=${C}[${O}];if(${SC}.${sTdz}&&${SC}.${sTdz}[name])throw new ReferenceError("Cannot access '"+name+"' before initialization");break;}
     case ${Op.TDZ_MARK}:{var name=${C}[${O}];if(${SC}.${sTdz})delete ${SC}.${sTdz}[name];break;}
-    case ${Op.PUSH_WITH_SCOPE}:{var wObj=${X}();${SC}={${sPar}:${SC},${sV}:wObj,${sCV}:{},${sTdz}:{}};break;}
+    case ${Op.PUSH_WITH_SCOPE}:{var wObj=${X}();${SC}={${sPar}:${SC},${sV}:wObj};break;}
     case ${Op.DELETE_SCOPED}:{var name=${C}[${O}];var s=${SC};while(s){if(name in s.${sV}){${W}(delete s.${sV}[name]);break;}s=s.${sPar};}break;}
 
     case ${Op.LOAD_GLOBAL}:{
@@ -509,8 +523,8 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
       var argc=${O};
       var hasSpread=argc<0;
       if(hasSpread)argc=-argc;
-      var callArgs=[];
-      for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
+      var callArgs=new Array(argc);
+      for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${X}();
       if(hasSpread){
         var flat=[];
         for(var ai=0;ai<callArgs.length;ai++){
@@ -529,8 +543,8 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
       var argc=${O};
       var hasSpread=argc<0;
       if(hasSpread)argc=-argc;
-      var callArgs=[];
-      for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
+      var callArgs=new Array(argc);
+      for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${X}();
       if(hasSpread){
         var flat=[];
         for(var ai=0;ai<callArgs.length;ai++){
@@ -548,16 +562,16 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
     }
     case ${Op.CALL_NEW}:{
       var argc=${O};
-      var callArgs=[];
-      for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
+      var callArgs=new Array(argc);
+      for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${X}();
       var Ctor=${X}();
       ${W}(new (Ctor.bind.apply(Ctor,[null].concat(callArgs)))());
       break;
     }
     case ${Op.SUPER_CALL}:{
       var argc=${O};
-      var callArgs=[];
-      for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
+      var callArgs=new Array(argc);
+      for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${X}();
       var superProto=${HO}?Object.getPrototypeOf(${HO}):Object.getPrototypeOf(Object.getPrototypeOf(${TV}));
       ${debug ? `${n.dbg}('SUPER_CALL','argc='+argc,'superProto=',!!superProto,'superCtor=',superProto&&typeof superProto.constructor);` : ''}
       if(superProto&&superProto.constructor){
@@ -570,24 +584,24 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
     case ${Op.SPREAD_ARGS}:${S}[${P}]={__spread__:true,items:Array.from(${S}[${P}])};break;
     case ${Op.CALL_OPTIONAL}:{
       var argc=${O};var hasSpread=argc<0;if(hasSpread)argc=-argc;
-      var callArgs=[];for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
+      var callArgs=new Array(argc);for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${X}();
       if(hasSpread){var flat=[];for(var ai=0;ai<callArgs.length;ai++){if(callArgs[ai]&&callArgs[ai].__spread__){for(var si=0;si<callArgs[ai].items.length;si++)flat.push(callArgs[ai].items[si]);}else flat.push(callArgs[ai]);}callArgs=flat;}
       var fn=${X}();${W}(fn==null?void 0:fn.apply(void 0,callArgs));break;
     }
     case ${Op.CALL_METHOD_OPTIONAL}:{
       var argc=${O};var hasSpread=argc<0;if(hasSpread)argc=-argc;
-      var callArgs=[];for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
+      var callArgs=new Array(argc);for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${X}();
       if(hasSpread){var flat=[];for(var ai=0;ai<callArgs.length;ai++){if(callArgs[ai]&&callArgs[ai].__spread__){for(var si=0;si<callArgs[ai].items.length;si++)flat.push(callArgs[ai].items[si]);}else flat.push(callArgs[ai]);}callArgs=flat;}
       var recv=${X}();var fn=${X}();${W}(fn==null?void 0:fn.apply(recv,callArgs));break;
     }
     case ${Op.DIRECT_EVAL}:{var code=${X}();${W}(eval(code));break;}
     case ${Op.CALL_TAGGED_TEMPLATE}:{
-      var argc=${O};var callArgs=[];for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
+      var argc=${O};var callArgs=new Array(argc);for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${X}();
       var fn=${X}();${W}(fn.apply(void 0,callArgs));break;
     }
     case ${Op.CALL_SUPER_METHOD}:{
       var argc=${O}&0xFFFF;var nameIdx=(${O}>>16)&0xFFFF;
-      var callArgs=[];for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
+      var callArgs=new Array(argc);for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${X}();
       var sp2=${HO}?Object.getPrototypeOf(${HO}):Object.getPrototypeOf(Object.getPrototypeOf(${TV}));
       var fn=sp2?sp2[${C}[nameIdx]]:void 0;${W}(fn?fn.apply(${TV},callArgs):void 0);break;
     }
@@ -685,14 +699,18 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
     ${closureHandler}
 
     case ${Op.NEW_ARROW}:{
-      ${W}((function(uid,cs,ct){var u=${n.load}(uid);if(u.s){return async function(){return ${n.vm}.call(ct,uid,Array.prototype.slice.call(arguments),cs);};}
-      return function(){return ${n.vm}.call(ct,uid,Array.prototype.slice.call(arguments),cs);};})(${C}[${O}],${SC},${TV}));break;
+      ${W}((function(u,cs,ct){if(u.s){return async function(..._a){return ${n.execAsync}(u,_a,cs,ct);};}
+      return function(..._a){return ${n.exec}(u,_a,cs,ct);};})(${n.load}(${C}[${O}]),${SC},${TV}));break;
     }
     case ${Op.NEW_ASYNC}:{
-      ${W}((function(uid,cs){return async function(){return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);};})(${C}[${O}],${SC}));break;
+      ${W}((function(u,cs){return async function(..._a){
+      var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+      return ${n.execAsync}(u,_a,cs,_tv);};})(${n.load}(${C}[${O}]),${SC}));break;
     }
     case ${Op.NEW_GENERATOR}:case ${Op.NEW_ASYNC_GENERATOR}:{
-      ${W}((function(uid,cs){return function(){return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);};})(${C}[${O}],${SC}));break;
+      ${W}((function(u,cs){return function(..._a){
+      var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!=="object"&&_tt!=="function")_tv=Object(_tv);}}
+      return ${n.exec}(u,_a,cs,_tv);};})(${n.load}(${C}[${O}]),${SC}));break;
     }
     case ${Op.SET_FUNC_NAME}:{var fn=${Y}();try{Object.defineProperty(fn,'name',{value:${C}[${O}],configurable:true});}catch(e){}break;}
     case ${Op.SET_FUNC_LENGTH}:{var fn=${Y}();try{Object.defineProperty(fn,'length',{value:${O},configurable:true});}catch(e){}break;}
@@ -716,6 +734,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
       var finallyIp=${O}&0xFFFF;
       if(catchIp===0xFFFF)catchIp=-1;
       if(finallyIp===0xFFFF)finallyIp=-1;
+      if(!${EX})${EX}=[];
       ${EX}.push({catchIp:catchIp,finallyIp:finallyIp,sp:${P}});
       break;
     }
@@ -909,6 +928,13 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
     case ${Op.REG_LT_CONST_JF}:{var r=${O}&0xFF;var ci=(${O}>>>8)&0xFF;var tgt=(${O}>>>16)&0xFFFF;if(!(${R}[r]<${C}[ci]))${IP}=tgt*2;break;}
     case ${Op.REG_GET_PROP}:{var r=${O}&0xFFFF;var ni=(${O}>>>16)&0xFFFF;${W}(${R}[r][${C}[ni]]);break;}
     case ${Op.REG_ADD_CONST}:{var r=${O}&0xFFFF;var ci=(${O}>>>16)&0xFFFF;${R}[r]=${R}[r]+${C}[ci];break;}
+    case ${Op.REG_GTE}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]>=${R}[rb]);break;}
+    case ${Op.REG_DIV}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]/${R}[rb]);break;}
+    case ${Op.REG_MOD}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]%${R}[rb]);break;}
+    case ${Op.REG_CONST_SUB}:{var r=${O}&0xFFFF;var ci=(${O}>>>16)&0xFFFF;${W}(${R}[r]-${C}[ci]);break;}
+    case ${Op.REG_CONST_MUL}:{var r=${O}&0xFFFF;var ci=(${O}>>>16)&0xFFFF;${W}(${R}[r]*${C}[ci]);break;}
+    case ${Op.REG_CONST_MOD}:{var r=${O}&0xFFFF;var ci=(${O}>>>16)&0xFFFF;${W}(${R}[r]%${C}[ci]);break;}
+    case ${Op.REG_LT_REG_JF}:{var ra=${O}&0xFF;var rb=(${O}>>>8)&0xFF;var tgt=(${O}>>>16)&0xFFFF;if(!(${R}[ra]<${R}[rb]))${IP}=tgt*2;break;}
 
     // --- Indexed Scope (reserved, not emitted) ---
 
@@ -919,7 +945,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
   }catch(e){
     ${debug ? `${n.dbg}('EXCEPTION','error=',e&&e.message?e.message:e,'${EX}='+${EX}.length);` : ''}
     ${HPE}=false;${PE}=null;${CT}=0;${CV}=void 0;
-    if(${EX}.length>0){
+    if(${EX}&&${EX}.length>0){
       var handler=${EX}.pop();
       if(handler.catchIp>=0){
         ${debug ? `${n.dbg}('CATCH','ip='+handler.catchIp,'sp='+handler.sp);` : ''}

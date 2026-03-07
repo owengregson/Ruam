@@ -736,6 +736,21 @@ export enum Op {
   /** LOAD_REG(r) + PUSH_CONST(c) + ADD + STORE_REG(r) — fused add-const-to-reg. Operand: r | (c << 16). */
   REG_ADD_CONST,
 
+  /** LOAD_REG(a) + LOAD_REG(b) + GTE → push R[a]>=R[b]. */
+  REG_GTE,
+  /** LOAD_REG(a) + LOAD_REG(b) + DIV → push R[a]/R[b]. */
+  REG_DIV,
+  /** LOAD_REG(a) + LOAD_REG(b) + MOD → push R[a]%R[b]. */
+  REG_MOD,
+  /** LOAD_REG(r) + PUSH_CONST(c) + SUB → push R[r]-C[c]. Operand: r | (c << 16). */
+  REG_CONST_SUB,
+  /** LOAD_REG(r) + PUSH_CONST(c) + MUL → push R[r]*C[c]. Operand: r | (c << 16). */
+  REG_CONST_MUL,
+  /** LOAD_REG(r) + PUSH_CONST(c) + MOD → push R[r]%C[c]. Operand: r | (c << 16). */
+  REG_CONST_MOD,
+  /** LOAD_REG(a) + LOAD_REG(b) + LT + JMP_FALSE(t) → 4-instruction loop guard. Operand: a | (b << 8) | (t << 16). */
+  REG_LT_REG_JF,
+
   // --- Indexed Scope Opcodes (Tier 4) ---
 
   /** Load from indexed scope slot. Operand: slot index. */
