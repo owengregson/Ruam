@@ -6,6 +6,9 @@ dist/
 .next/
 out/
 
+# Turborepo
+.turbo/
+
 # TypeScript
 *.tsbuildinfo
 
@@ -36,6 +39,9 @@ yarn-error.log*
 
 # Coverage
 coverage/
+
+# Vitest JSON output (consumed by stats script)
+test-results.json
 
 # Screenshots (dev only)
 screenshots/

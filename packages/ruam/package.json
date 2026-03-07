@@ -22,7 +22,9 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsup --watch",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "stats": "node scripts/collect-stats.mjs",
+    "stats:test": "node scripts/collect-stats.mjs --test"
   },
   "engines": {
     "node": ">=18"
