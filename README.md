@@ -479,4 +479,4 @@ function publicHelper() {
 
 <h2 id="license">License</h2>
 
-<p>MIT</p>
+<p>LGPL-2.1</p>

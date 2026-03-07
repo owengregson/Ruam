@@ -13,14 +13,17 @@ If you discover a security vulnerability in Ruam, please report it responsibly.
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, email **owen@owen.lol** with:
+Instead, use [GitHub's private vulnerability reporting](https://github.com/owengregson/ruam/security/advisories/new):
 
-- A description of the vulnerability
-- Steps to reproduce it
-- The potential impact
-- Any suggested fix (optional)
+1. Go to the [Security Advisories](https://github.com/owengregson/ruam/security/advisories) page
+2. Click **"New draft security advisory"**
+3. Fill in the details:
+   - A description of the vulnerability
+   - Steps to reproduce it
+   - The potential impact
+   - Any suggested fix (optional)
 
-You should receive an acknowledgment within 48 hours. Once the issue is confirmed, a fix will be developed privately and released as a patch before public disclosure.
+This creates a private channel visible only to repository maintainers. You should receive an acknowledgment within 48 hours. Once the issue is confirmed, a fix will be developed privately and released as a patch before public disclosure.
 
 ## Scope
 

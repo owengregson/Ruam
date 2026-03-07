@@ -27,7 +27,7 @@
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT",
+  "license": "LGPL-2.1-only",
   "dependencies": {
     "@babel/generator": "^7.25.0",
     "@babel/parser": "^7.25.0",

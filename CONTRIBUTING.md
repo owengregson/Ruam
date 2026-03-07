@@ -94,4 +94,4 @@ Keep PRs focused — one feature or fix per PR.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](packages/ruam/LICENSE).
+By contributing, you agree that your contributions will be licensed under the [GNU Lesser General Public License v2.1](packages/ruam/LICENSE).
