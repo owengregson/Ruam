@@ -3,6 +3,8 @@ node_modules/
 
 # Build output
 dist/
+.next/
+out/
 
 # TypeScript
 *.tsbuildinfo
@@ -25,6 +27,7 @@ TestOutputExt/
 # Environment / secrets
 .env
 .env.*
+.env.local
 
 # Debug logs
 npm-debug.log*
@@ -33,3 +36,7 @@ yarn-error.log*
 
 # Coverage
 coverage/
+
+# Screenshots (dev only)
+screenshots/
+obfuscator-io-full.png
