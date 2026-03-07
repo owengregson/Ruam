@@ -118,6 +118,10 @@ export interface RuntimeNames {
   /** String decoder function (XOR-decodes encoded constant pool strings). */
   strDec: string;
 
+  // Indexed scope slots
+  /** Function slots array (captured vars stored as indexed array). */
+  fSlots: string;
+
   // Rolling cipher runtime names
   /** Rolling cipher state variable. */
   rcState: string;
@@ -225,6 +229,7 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
     sCVars: genName(),
     sTdz: genName(),
     strDec: genName(),
+    fSlots: genName(),
     rcState: genName(),
     rcDeriveKey: genName(),
     rcMix: genName(),

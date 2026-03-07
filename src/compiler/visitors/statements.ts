@@ -176,12 +176,33 @@ function compileVariableDeclaration(
 
     if (id.isIdentifier()) {
       scope.declare(id.node.name, kind);
-      const nameIdx = emitter.addStringConstant(id.node.name);
-      emitter.emit(Op.DECLARE_VAR, nameIdx);
+      const varName = id.node.name;
+      const reg = ctx.registerMap.get(varName);
+      const slot = ctx.slotMap.get(varName);
 
-      if (init.node) {
-        compileExpression(init as NodePath<t.Expression>, emitter, scope, ctx);
-        emitter.emit(Op.STORE_SCOPED, nameIdx);
+      if (reg !== undefined) {
+        // Register-promoted variable
+        if (init.node) {
+          compileExpression(init as NodePath<t.Expression>, emitter, scope, ctx);
+          emitter.emit(Op.STORE_REG, reg);
+        }
+        // No DECLARE_VAR needed for register vars — they live in R[]
+      } else if (slot !== undefined) {
+        // Indexed scope slot (captured variable)
+        const nameIdx = emitter.addStringConstant(varName);
+        emitter.emit(Op.DECLARE_SLOT, (slot & 0xFFFF) | ((nameIdx & 0xFFFF) << 16));
+        if (init.node) {
+          compileExpression(init as NodePath<t.Expression>, emitter, scope, ctx);
+          emitter.emit(Op.STORE_SLOT, slot);
+        }
+      } else {
+        // Fallback: scope chain
+        const nameIdx = emitter.addStringConstant(varName);
+        emitter.emit(Op.DECLARE_VAR, nameIdx);
+        if (init.node) {
+          compileExpression(init as NodePath<t.Expression>, emitter, scope, ctx);
+          emitter.emit(Op.STORE_SCOPED, nameIdx);
+        }
       }
     } else if (id.isArrayPattern() || id.isObjectPattern()) {
       if (init.node) {
@@ -208,12 +229,27 @@ export function compileDestructuringPattern(
   } else if (pattern.isAssignmentPattern()) {
     compileAssignmentPattern(pattern, emitter, scope, ctx, declKind);
   } else if (pattern.isIdentifier()) {
-    const nameIdx = emitter.addStringConstant(pattern.node.name);
-    if (declKind) {
-      scope.declare(pattern.node.name, declKind);
-      emitter.emit(Op.DECLARE_VAR, nameIdx);
+    const varName = pattern.node.name;
+    const reg = ctx.registerMap.get(varName);
+    const slot = ctx.slotMap.get(varName);
+    if (reg !== undefined) {
+      if (declKind) scope.declare(varName, declKind);
+      emitter.emit(Op.STORE_REG, reg);
+    } else if (slot !== undefined) {
+      if (declKind) {
+        scope.declare(varName, declKind);
+        const nameIdx = emitter.addStringConstant(varName);
+        emitter.emit(Op.DECLARE_SLOT, (slot & 0xFFFF) | ((nameIdx & 0xFFFF) << 16));
+      }
+      emitter.emit(Op.STORE_SLOT, slot);
+    } else {
+      const nameIdx = emitter.addStringConstant(varName);
+      if (declKind) {
+        scope.declare(varName, declKind);
+        emitter.emit(Op.DECLARE_VAR, nameIdx);
+      }
+      emitter.emit(Op.STORE_SCOPED, nameIdx);
     }
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
   } else if (pattern.isRestElement()) {
     compileDestructuringPattern(pattern.get("argument") as NodePath<t.LVal>, emitter, scope, ctx, declKind);
   } else if (pattern.isMemberExpression()) {
@@ -412,9 +448,14 @@ function compileBlockStatement(
   ctx: CompileContext,
   loopStack: LoopContext[],
 ): void {
+  // Check if block contains let/const — needs a runtime scope boundary
+  const needsScope = blockHasLetConst(path);
+
   scope.pushScope(true);
+  if (needsScope) emitter.emit(Op.PUSH_SCOPE, 0);
   const stmts = path.get("body");
   compileBody(stmts, emitter, scope, ctx, loopStack);
+  if (needsScope) emitter.emit(Op.POP_SCOPE, 0);
   scope.popScope();
 }
 
@@ -440,8 +481,9 @@ function compileForStatement(
       const id = declarator.get("id");
       if (id.isIdentifier()) {
         iterVarNames.push(id.node.name);
+      } else {
+        collectPatternVarNames(id.node as t.LVal, iterVarNames);
       }
-      // Note: destructuring in for-loop init is rare and not handled here
     }
   }
 
@@ -605,13 +647,14 @@ function compileForInStatement(
     if (id.isIdentifier()) {
       const kind = left.node.kind as "var" | "let" | "const";
       scope.declare(id.node.name, kind);
-      const nameIdx = emitter.addStringConstant(id.node.name);
-      emitter.emit(Op.DECLARE_VAR, nameIdx);
-      emitter.emit(Op.STORE_SCOPED, nameIdx);
+      emitStore(id.node.name, emitter, ctx, true);
+    } else {
+      compileDestructuringPattern(id as NodePath<t.LVal>, emitter, scope, ctx, left.node.kind as "var" | "let" | "const");
     }
   } else if (left.isIdentifier()) {
-    const nameIdx = emitter.addStringConstant(left.node.name);
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
+    emitStore(left.node.name, emitter, ctx, false);
+  } else {
+    compileDestructuringPattern(left as NodePath<t.LVal>, emitter, scope, ctx);
   }
 
   const loopCtx: LoopContext = { breakLabel: -1, continueLabel: testIp };
@@ -629,6 +672,18 @@ function compileForInStatement(
   patchBreaksAndContinues(emitter, loopCtx, loopStack);
   loopStack.pop();
   scope.popScope();
+}
+
+/** Helper: emit a store to a variable, checking registerMap first. */
+function emitStore(name: string, emitter: Emitter, ctx: CompileContext, declare: boolean): void {
+  const reg = ctx.registerMap.get(name);
+  if (reg !== undefined) {
+    emitter.emit(Op.STORE_REG, reg);
+  } else {
+    const nameIdx = emitter.addStringConstant(name);
+    if (declare) emitter.emit(Op.DECLARE_VAR, nameIdx);
+    emitter.emit(Op.STORE_SCOPED, nameIdx);
+  }
 }
 
 function compileForOfStatement(
@@ -663,15 +718,12 @@ function compileForOfStatement(
     if (id.isIdentifier()) {
       const kind = left.node.kind as "var" | "let" | "const";
       scope.declare(id.node.name, kind);
-      const nameIdx = emitter.addStringConstant(id.node.name);
-      emitter.emit(Op.DECLARE_VAR, nameIdx);
-      emitter.emit(Op.STORE_SCOPED, nameIdx);
+      emitStore(id.node.name, emitter, ctx, true);
     } else {
       compileDestructuringPattern(id as NodePath<t.LVal>, emitter, scope, ctx, left.node.kind as "var" | "let" | "const");
     }
   } else if (left.isIdentifier()) {
-    const nameIdx = emitter.addStringConstant(left.node.name);
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
+    emitStore(left.node.name, emitter, ctx, false);
   } else {
     compileDestructuringPattern(left as NodePath<t.LVal>, emitter, scope, ctx);
   }
@@ -701,6 +753,13 @@ function compileSwitchStatement(
   loopStack: LoopContext[],
 ): void {
   compileExpression(path.get("discriminant"), emitter, scope, ctx);
+
+  // Check if any case body has let/const — needs a runtime scope boundary
+  const needsScope = switchHasLetConst(path);
+  if (needsScope) {
+    scope.pushScope(true);
+    emitter.emit(Op.PUSH_SCOPE, 0);
+  }
 
   const cases = path.get("cases");
   const caseJumps: number[] = [];
@@ -747,10 +806,12 @@ function compileSwitchStatement(
   }
 
   loopCtx.breakLabel = emitter.ip;
+  if (needsScope) emitter.emit(Op.POP_SCOPE, 0);
   emitter.emit(Op.POP, 0);
 
   patchBreaksAndContinues(emitter, loopCtx, loopStack);
   loopStack.pop();
+  if (needsScope) scope.popScope();
 }
 
 function compileTryStatement(
@@ -777,15 +838,24 @@ function compileTryStatement(
   if (hasCatch) {
     catchIp = emitter.ip;
     scope.pushScope(true);
+    emitter.emit(Op.PUSH_SCOPE, 0);
 
     const handler = path.get("handler") as NodePath<t.CatchClause>;
+    let savedReg: number | undefined;
+    let catchParamName: string | null = null;
+
     if (handler.node.param) {
       const param = handler.get("param") as NodePath<t.LVal>;
       if (param.isIdentifier()) {
-        scope.declare(param.node.name, "let");
-        const nameIdx = emitter.addStringConstant(param.node.name);
+        catchParamName = param.node.name;
+        scope.declare(catchParamName, "let");
+        const nameIdx = emitter.addStringConstant(catchParamName);
         emitter.emit(Op.DECLARE_VAR, nameIdx);
         emitter.emit(Op.CATCH_BIND, nameIdx);
+        // Temporarily hide register promotion so references inside the
+        // catch body resolve to the catch-scoped variable, not the outer register.
+        savedReg = ctx.registerMap.get(catchParamName);
+        if (savedReg !== undefined) ctx.registerMap.delete(catchParamName);
       } else {
         emitter.emit(Op.CATCH_BIND, -1);
         compileDestructuringPattern(param, emitter, scope, ctx, "let");
@@ -801,11 +871,18 @@ function compileTryStatement(
     }
 
     compileStatement(handler.get("body"), emitter, scope, ctx, loopStack);
-    scope.popScope();
+
+    // Restore register promotion for the catch parameter name
+    if (catchParamName !== null && savedReg !== undefined) {
+      ctx.registerMap.set(catchParamName, savedReg);
+    }
 
     if (hasFinally) {
       emitter.emit(Op.TRY_POP, 0);
     }
+
+    emitter.emit(Op.POP_SCOPE, 0);
+    scope.popScope();
   }
 
   const afterCatchJump = emitter.emit(Op.JMP, 0);
@@ -905,10 +982,22 @@ function compileFunctionDeclaration(
   if (!name) return;
 
   scope.declare(name, "function");
-  const nameIdx = emitter.addStringConstant(name);
-  emitter.emit(Op.DECLARE_VAR, nameIdx);
-  ctx.compileNestedFunction(path as unknown as NodePath<t.Function>, emitter, scope);
-  emitter.emit(Op.STORE_SCOPED, nameIdx);
+  const reg = ctx.registerMap.get(name);
+  const slot = ctx.slotMap.get(name);
+  if (reg !== undefined) {
+    ctx.compileNestedFunction(path as unknown as NodePath<t.Function>, emitter, scope);
+    emitter.emit(Op.STORE_REG, reg);
+  } else if (slot !== undefined) {
+    const nameIdx = emitter.addStringConstant(name);
+    emitter.emit(Op.DECLARE_SLOT, (slot & 0xFFFF) | ((nameIdx & 0xFFFF) << 16));
+    ctx.compileNestedFunction(path as unknown as NodePath<t.Function>, emitter, scope);
+    emitter.emit(Op.STORE_SLOT, slot);
+  } else {
+    const nameIdx = emitter.addStringConstant(name);
+    emitter.emit(Op.DECLARE_VAR, nameIdx);
+    ctx.compileNestedFunction(path as unknown as NodePath<t.Function>, emitter, scope);
+    emitter.emit(Op.STORE_SCOPED, nameIdx);
+  }
 }
 
 function compileClassDeclaration(
@@ -921,10 +1010,22 @@ function compileClassDeclaration(
   if (!name) return;
 
   scope.declare(name, "let");
-  const nameIdx = emitter.addStringConstant(name);
-  emitter.emit(Op.DECLARE_VAR, nameIdx);
-  ctx.compileClassExpression(path as unknown as NodePath<t.ClassExpression>, emitter, scope);
-  emitter.emit(Op.STORE_SCOPED, nameIdx);
+  const reg = ctx.registerMap.get(name);
+  const slot = ctx.slotMap.get(name);
+  if (reg !== undefined) {
+    ctx.compileClassExpression(path as unknown as NodePath<t.ClassExpression>, emitter, scope);
+    emitter.emit(Op.STORE_REG, reg);
+  } else if (slot !== undefined) {
+    const nameIdx = emitter.addStringConstant(name);
+    emitter.emit(Op.DECLARE_SLOT, (slot & 0xFFFF) | ((nameIdx & 0xFFFF) << 16));
+    ctx.compileClassExpression(path as unknown as NodePath<t.ClassExpression>, emitter, scope);
+    emitter.emit(Op.STORE_SLOT, slot);
+  } else {
+    const nameIdx = emitter.addStringConstant(name);
+    emitter.emit(Op.DECLARE_VAR, nameIdx);
+    ctx.compileClassExpression(path as unknown as NodePath<t.ClassExpression>, emitter, scope);
+    emitter.emit(Op.STORE_SCOPED, nameIdx);
+  }
 }
 
 function patchBreaksAndContinues(
@@ -955,4 +1056,56 @@ function patchBreaksAndContinues(
       instr.operand = loopCtx.continueLabel;
     }
   }
+}
+
+/**
+ * Check whether any switch case contains a `let` or `const` declaration
+ * at its direct consequent level.
+ */
+function switchHasLetConst(path: NodePath<t.SwitchStatement>): boolean {
+  for (const c of path.node.cases) {
+    for (const stmt of c.consequent) {
+      if (stmt.type === "VariableDeclaration" && stmt.kind !== "var") return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Recursively collect identifier names from a destructuring pattern node.
+ */
+function collectPatternVarNames(node: t.LVal, out: string[]): void {
+  if (node.type === "Identifier") {
+    out.push(node.name);
+  } else if (node.type === "ArrayPattern") {
+    for (const elem of node.elements) {
+      if (elem) collectPatternVarNames(elem as t.LVal, out);
+    }
+  } else if (node.type === "ObjectPattern") {
+    for (const prop of node.properties) {
+      if (prop.type === "ObjectProperty") {
+        collectPatternVarNames(prop.value as t.LVal, out);
+      } else if (prop.type === "RestElement") {
+        collectPatternVarNames(prop.argument as t.LVal, out);
+      }
+    }
+  } else if (node.type === "AssignmentPattern") {
+    collectPatternVarNames(node.left as t.LVal, out);
+  } else if (node.type === "RestElement") {
+    collectPatternVarNames(node.argument as t.LVal, out);
+  }
+}
+
+/**
+ * Check whether a block statement contains any `let` or `const`
+ * declarations at its direct statement level (not nested inside
+ * inner functions or sub-blocks).
+ */
+function blockHasLetConst(path: NodePath<t.BlockStatement>): boolean {
+  for (const stmt of path.node.body) {
+    if (stmt.type === "VariableDeclaration" && stmt.kind !== "var") return true;
+    // function declarations in blocks are block-scoped in strict mode,
+    // but we use var semantics for them (matches sloppy mode behavior)
+  }
+  return false;
 }

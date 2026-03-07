@@ -159,6 +159,9 @@ export interface BytecodeUnit {
   /** Total registers allocated by the scope analyzer. */
   registerCount: number;
 
+  /** Number of indexed scope slots for captured variables. */
+  slotCount: number;
+
   /** Whether the source function had `"use strict"`. */
   isStrict: boolean;
 

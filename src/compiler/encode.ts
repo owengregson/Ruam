@@ -156,6 +156,7 @@ export function serializeUnitToJson(
     c: constants,
     i: instrs,
     r: unit.registerCount,
+    sl: unit.slotCount || 0,
     p: unit.paramCount,
     g: unit.isGenerator,
     s: unit.isAsync,

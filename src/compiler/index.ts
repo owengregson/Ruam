@@ -18,6 +18,8 @@ import { compileBody, compileDestructuringPattern, type LoopContext } from "./vi
 import { compileClassExpr } from "./visitors/classes.js";
 import type { BytecodeUnit } from "../types.js";
 import { UNIT_ID_PREFIX, UNIT_ID_PAD_LENGTH } from "../constants.js";
+import { analyzeCapturedVars, type CaptureAnalysisResult } from "./capture-analysis.js";
+import { optimizeInstructions } from "./optimizer.js";
 
 // ---------------------------------------------------------------------------
 // Unit ID generation
@@ -49,6 +51,12 @@ export interface CompileContext {
   compileNestedFunction(fnPath: NodePath<t.Function>, emitter: Emitter, parentScope: ScopeAnalyzer): void;
   compileClassExpression(classPath: NodePath<t.ClassExpression>, emitter: Emitter, parentScope: ScopeAnalyzer): void;
   compileDestructuring(pattern: NodePath<t.LVal>, emitter: Emitter, scope: ScopeAnalyzer): void;
+  /** Register promotion map: variable name → register index. Only set for non-captured locals. */
+  registerMap: Map<string, number>;
+  /** Captured variable → indexed scope slot index. Only set for captured locals. */
+  slotMap: Map<string, number>;
+  /** Block nesting depth (0 = function body top level). Used to prevent let/const shadowing bugs. */
+  blockDepth: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,24 +107,57 @@ function compileFunctionInner(fnPath: NodePath<t.Function>, allUnits: BytecodeUn
     }
   }
 
+  // -- Capture analysis (Tier 1) ------------------------------------------
+  const captureResult = analyzeCapturedVars(fnPath);
+  const registerMap = new Map<string, number>();
+  const slotMap = new Map<string, number>();
+
+  // Assign registers to promotable (non-captured) variables
+  for (const name of captureResult.promotableNames) {
+    registerMap.set(name, scope.registerAllocator.alloc());
+  }
+
+  // Note: Tier 4 (indexed scope slots) was evaluated and reverted — the
+  // slotMap is kept empty.  Captured variables use the normal scope chain
+  // (LOAD_SCOPED / STORE_SCOPED) which inner closures also walk, so indexed
+  // slots provided no net performance benefit while adding complexity.
+
   // -- Declare simple parameters -------------------------------------------
   for (let i = 0; i < params.length; i++) {
     const param = params[i]!;
     if (param.isIdentifier()) {
-      declareAndStoreParam(param.node.name, i, emitter, scope);
+      declareAndStoreParam(param.node.name, i, emitter, scope, registerMap, slotMap, captureResult);
     } else if (param.isAssignmentPattern()) {
       const left = param.get("left");
       if (left.isIdentifier()) {
         scope.declare(left.node.name, "param");
-        const nameIdx = emitter.addStringConstant(left.node.name);
-        emitter.emit(Op.DECLARE_VAR, nameIdx);
+        const pName = left.node.name;
+        if (registerMap.has(pName)) {
+          // Will be stored via register in compileComplexParams
+        } else if (slotMap.has(pName)) {
+          const slotIdx = slotMap.get(pName)!;
+          const nameIdx = emitter.addStringConstant(pName);
+          emitter.emit(Op.DECLARE_SLOT, (slotIdx & 0xFFFF) | ((nameIdx & 0xFFFF) << 16));
+        } else {
+          const nameIdx = emitter.addStringConstant(pName);
+          emitter.emit(Op.DECLARE_VAR, nameIdx);
+        }
       }
     } else if (param.isRestElement()) {
       const arg = param.get("argument");
       if (arg.isIdentifier()) {
         scope.declare(arg.node.name, "param");
-        const nameIdx = emitter.addStringConstant(arg.node.name);
-        emitter.emit(Op.DECLARE_VAR, nameIdx);
+        const pName = arg.node.name;
+        if (registerMap.has(pName)) {
+          // Will be stored via register in compileComplexParams
+        } else if (slotMap.has(pName)) {
+          const slotIdx = slotMap.get(pName)!;
+          const nameIdx = emitter.addStringConstant(pName);
+          emitter.emit(Op.DECLARE_SLOT, (slotIdx & 0xFFFF) | ((nameIdx & 0xFFFF) << 16));
+        } else {
+          const nameIdx = emitter.addStringConstant(pName);
+          emitter.emit(Op.DECLARE_VAR, nameIdx);
+        }
       }
     }
     // Destructuring params are handled in the second pass below.
@@ -124,6 +165,10 @@ function compileFunctionInner(fnPath: NodePath<t.Function>, allUnits: BytecodeUn
 
   // -- Build CompileContext ------------------------------------------------
   const ctx: CompileContext = {
+    registerMap,
+    slotMap,
+    blockDepth: 0,
+
     compileNestedFunction(innerFnPath, parentEmitter, _parentScope) {
       const childUnit = compileFunctionInner(innerFnPath, allUnits);
       allUnits.push(childUnit);
@@ -156,6 +201,9 @@ function compileFunctionInner(fnPath: NodePath<t.Function>, allUnits: BytecodeUn
   // Ensure every code path ends with a return
   ensureTrailingReturn(emitter);
 
+  // -- Optimization passes (Tiers 2 & 3) ----------------------------------
+  optimizeInstructions(emitter);
+
   return {
     id: genUnitId(),
     constants: emitter.constants,
@@ -164,6 +212,7 @@ function compileFunctionInner(fnPath: NodePath<t.Function>, allUnits: BytecodeUn
     exceptionTable: [],
     paramCount,
     registerCount: scope.totalRegisters,
+    slotCount: slotMap.size,
     isStrict,
     isGenerator,
     isAsync,
@@ -179,12 +228,35 @@ function compileFunctionInner(fnPath: NodePath<t.Function>, allUnits: BytecodeUn
 // ---------------------------------------------------------------------------
 
 /** Declare a simple identifier parameter and store the argument value. */
-function declareAndStoreParam(name: string, argIndex: number, emitter: Emitter, scope: ScopeAnalyzer): void {
+function declareAndStoreParam(
+  name: string,
+  argIndex: number,
+  emitter: Emitter,
+  scope: ScopeAnalyzer,
+  registerMap: Map<string, number>,
+  slotMap: Map<string, number>,
+  _captureResult: CaptureAnalysisResult,
+): void {
   scope.declare(name, "param");
-  const nameIdx = emitter.addStringConstant(name);
-  emitter.emit(Op.DECLARE_VAR, nameIdx);
-  emitter.emit(Op.LOAD_ARG, argIndex);
-  emitter.emit(Op.STORE_SCOPED, nameIdx);
+  const reg = registerMap.get(name);
+  const slot = slotMap.get(name);
+  if (reg !== undefined) {
+    // Register-promoted: store arg directly into register
+    emitter.emit(Op.LOAD_ARG, argIndex);
+    emitter.emit(Op.STORE_REG, reg);
+  } else if (slot !== undefined) {
+    // Indexed scope slot (captured variable)
+    const nameIdx = emitter.addStringConstant(name);
+    emitter.emit(Op.DECLARE_SLOT, (slot & 0xFFFF) | ((nameIdx & 0xFFFF) << 16));
+    emitter.emit(Op.LOAD_ARG, argIndex);
+    emitter.emit(Op.STORE_SLOT, slot);
+  } else {
+    // Fallback: use scope chain (outer names, etc.)
+    const nameIdx = emitter.addStringConstant(name);
+    emitter.emit(Op.DECLARE_VAR, nameIdx);
+    emitter.emit(Op.LOAD_ARG, argIndex);
+    emitter.emit(Op.STORE_SCOPED, nameIdx);
+  }
 }
 
 /**
@@ -234,8 +306,16 @@ function compileDefaultParam(
   emitter.patchJump(skipDefault, emitter.ip);
 
   if (paramName) {
-    const nameIdx = emitter.addStringConstant(paramName);
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
+    const reg = ctx.registerMap.get(paramName);
+    const slot = ctx.slotMap.get(paramName);
+    if (reg !== undefined) {
+      emitter.emit(Op.STORE_REG, reg);
+    } else if (slot !== undefined) {
+      emitter.emit(Op.STORE_SLOT, slot);
+    } else {
+      const nameIdx = emitter.addStringConstant(paramName);
+      emitter.emit(Op.STORE_SCOPED, nameIdx);
+    }
   } else if (left.isArrayPattern() || left.isObjectPattern()) {
     compileDestructuringPattern(left as NodePath<t.LVal>, emitter, scope, ctx);
   }
@@ -263,8 +343,16 @@ function compileRestParam(
   emitter.emit(Op.CALL_METHOD, 1);
 
   if (restName) {
-    const nameIdx = emitter.addStringConstant(restName);
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
+    const reg = ctx.registerMap.get(restName);
+    const slot = ctx.slotMap.get(restName);
+    if (reg !== undefined) {
+      emitter.emit(Op.STORE_REG, reg);
+    } else if (slot !== undefined) {
+      emitter.emit(Op.STORE_SLOT, slot);
+    } else {
+      const nameIdx = emitter.addStringConstant(restName);
+      emitter.emit(Op.STORE_SCOPED, nameIdx);
+    }
   } else if (arg.isArrayPattern() || arg.isObjectPattern()) {
     compileDestructuringPattern(arg as NodePath<t.LVal>, emitter, scope, ctx);
   }

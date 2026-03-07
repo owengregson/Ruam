@@ -689,22 +689,79 @@ export enum Op {
   // 24. Reserved for future use
   // ═════════════════════════════════════════════════════════════════════════
 
-  RESERVED_0,
-  RESERVED_1,
-  RESERVED_2,
-  RESERVED_3,
-  RESERVED_4,
-  RESERVED_5,
-  RESERVED_6,
-  RESERVED_7,
-  RESERVED_8,
-  RESERVED_9,
-  RESERVED_10,
-  RESERVED_11,
-  RESERVED_12,
-  RESERVED_13,
-  RESERVED_14,
-  RESERVED_15,
+  // ═════════════════════════════════════════════════════════════════════════
+  // 24. Register-based Fast Paths (Tier 1 & 3 optimizations)
+  //
+  //     These use registers instead of scope chain for non-captured locals.
+  //     Superinstructions fuse common multi-op patterns into single dispatch.
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /** `register++` — post-increment register (pushes old value). */
+  POST_INC_REG,
+  /** `register--` — post-decrement register (pushes old value). */
+  POST_DEC_REG,
+  /** `register += TOS` (operand = register index). */
+  ADD_ASSIGN_REG,
+  /** `register -= TOS`. */
+  SUB_ASSIGN_REG,
+  /** `register *= TOS`. */
+  MUL_ASSIGN_REG,
+  /** `register /= TOS`. */
+  DIV_ASSIGN_REG,
+  /** `register %= TOS`. */
+  MOD_ASSIGN_REG,
+
+  // --- Superinstructions (Tier 3) ---
+
+  /** LOAD_REG(a) + LOAD_REG(b) + ADD → push R[a]+R[b]. Operand: a | (b << 16). */
+  REG_ADD,
+  /** LOAD_REG(a) + LOAD_REG(b) + SUB → push R[a]-R[b]. */
+  REG_SUB,
+  /** LOAD_REG(a) + LOAD_REG(b) + MUL → push R[a]*R[b]. */
+  REG_MUL,
+  /** LOAD_REG(a) + LOAD_REG(b) + LT → push R[a]<R[b]. */
+  REG_LT,
+  /** LOAD_REG(a) + LOAD_REG(b) + LTE → push R[a]<=R[b]. */
+  REG_LTE,
+  /** LOAD_REG(a) + LOAD_REG(b) + GT → push R[a]>R[b]. */
+  REG_GT,
+  /** LOAD_REG(a) + LOAD_REG(b) + SEQ → push R[a]===R[b]. */
+  REG_SEQ,
+  /** LOAD_REG(a) + LOAD_REG(b) + SNEQ → push R[a]!==R[b]. */
+  REG_SNEQ,
+  /** LOAD_REG(r) + PUSH_CONST(c) + LT + JMP_FALSE(t). Operand: r | (c << 8). Target in next instruction slot. */
+  REG_LT_CONST_JF,
+  /** LOAD_REG(r) + GET_PROP_STATIC(name) → push R[r][C[name]]. Operand: r | (name << 16). */
+  REG_GET_PROP,
+  /** LOAD_REG(r) + PUSH_CONST(c) + ADD + STORE_REG(r) — fused add-const-to-reg. Operand: r | (c << 16). */
+  REG_ADD_CONST,
+
+  // --- Indexed Scope Opcodes (Tier 4) ---
+
+  /** Load from indexed scope slot. Operand: slot index. */
+  LOAD_SLOT,
+  /** Store TOS to indexed scope slot. Operand: slot index. */
+  STORE_SLOT,
+  /** Declare indexed scope slot. Operand: slot index. */
+  DECLARE_SLOT,
+  /** `++slot` — pre-increment indexed scope slot. */
+  INC_SLOT,
+  /** `--slot` — pre-decrement indexed scope slot. */
+  DEC_SLOT,
+  /** `slot++` — post-increment indexed scope slot (pushes old value). */
+  POST_INC_SLOT,
+  /** `slot--` — post-decrement indexed scope slot (pushes old value). */
+  POST_DEC_SLOT,
+  /** `slot += TOS`. */
+  ADD_ASSIGN_SLOT,
+  /** `slot -= TOS`. */
+  SUB_ASSIGN_SLOT,
+  /** `slot *= TOS`. */
+  MUL_ASSIGN_SLOT,
+  /** Push new indexed scope frame. Operand: number of slots. */
+  PUSH_INDEXED_SCOPE,
+  /** Pop indexed scope frame. */
+  POP_INDEXED_SCOPE,
 
   // ─────────────────────────────────────────────────────────────────────────
 

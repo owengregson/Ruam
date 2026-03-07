@@ -36,6 +36,22 @@ const UNARY_OP_MAP: Record<string, Op> = {
   "!": Op.NOT,
 };
 
+/** Mapping from compound assignment base operator to register-based fused opcode. */
+const COMPOUND_REG_OP_MAP: Record<string, Op> = {
+  "+": Op.ADD_ASSIGN_REG,
+  "-": Op.SUB_ASSIGN_REG,
+  "*": Op.MUL_ASSIGN_REG,
+  "/": Op.DIV_ASSIGN_REG,
+  "%": Op.MOD_ASSIGN_REG,
+};
+
+/** Mapping from compound assignment base operator to indexed-slot fused opcode. */
+const COMPOUND_SLOT_OP_MAP: Record<string, Op> = {
+  "+": Op.ADD_ASSIGN_SLOT,
+  "-": Op.SUB_ASSIGN_SLOT,
+  "*": Op.MUL_ASSIGN_SLOT,
+};
+
 /** Mapping from compound assignment base operator to its fused SCOPED opcode. */
 const COMPOUND_SCOPED_OP_MAP: Record<string, Op> = {
   "+": Op.ADD_ASSIGN_SCOPED,
@@ -111,7 +127,7 @@ export function compileExpression(
     }
 
     case "Identifier": {
-      compileIdentifier(node, emitter, scope);
+      compileIdentifier(node, emitter, scope, ctx);
       break;
     }
 
@@ -252,7 +268,7 @@ export function compileExpression(
   }
 }
 
-function compileIdentifier(node: t.Identifier, emitter: Emitter, _scope: ScopeAnalyzer): void {
+function compileIdentifier(node: t.Identifier, emitter: Emitter, _scope: ScopeAnalyzer, ctx?: CompileContext): void {
   if (node.name === "undefined") {
     emitter.emit(Op.PUSH_UNDEFINED, 0);
     return;
@@ -260,6 +276,21 @@ function compileIdentifier(node: t.Identifier, emitter: Emitter, _scope: ScopeAn
   if (node.name === "arguments") {
     emitter.emit(Op.PUSH_ARGUMENTS, 0);
     return;
+  }
+
+  // Tier 1: Register promotion — use LOAD_REG for non-captured locals
+  if (ctx) {
+    const reg = ctx.registerMap.get(node.name);
+    if (reg !== undefined) {
+      emitter.emit(Op.LOAD_REG, reg);
+      return;
+    }
+    // Tier 4: Indexed scope slot for captured locals
+    const slot = ctx.slotMap.get(node.name);
+    if (slot !== undefined) {
+      emitter.emit(Op.LOAD_SLOT, slot);
+      return;
+    }
   }
 
   const nameIdx = emitter.addStringConstant(node.name);
@@ -393,16 +424,46 @@ function compileUpdateExpression(
   const arg = path.get("argument");
 
   if (arg.isIdentifier()) {
-    const nameIdx = emitter.addStringConstant(arg.node.name);
-    // Use compound scoped opcodes to reduce dispatch count
-    if (node.prefix && node.operator === "++") {
-      emitter.emit(Op.INC_SCOPED, nameIdx);
-    } else if (node.prefix && node.operator === "--") {
-      emitter.emit(Op.DEC_SCOPED, nameIdx);
-    } else if (!node.prefix && node.operator === "++") {
-      emitter.emit(Op.POST_INC_SCOPED, nameIdx);
+    // Tier 1: Register promotion for update expressions
+    const reg = ctx.registerMap.get(arg.node.name);
+    if (reg !== undefined) {
+      if (node.prefix && node.operator === "++") {
+        emitter.emit(Op.INC_REG, reg);
+        emitter.emit(Op.LOAD_REG, reg);
+      } else if (node.prefix && node.operator === "--") {
+        emitter.emit(Op.DEC_REG, reg);
+        emitter.emit(Op.LOAD_REG, reg);
+      } else if (!node.prefix && node.operator === "++") {
+        emitter.emit(Op.POST_INC_REG, reg);
+      } else {
+        emitter.emit(Op.POST_DEC_REG, reg);
+      }
     } else {
-      emitter.emit(Op.POST_DEC_SCOPED, nameIdx);
+      // Tier 4: Indexed scope slot
+      const slot = ctx.slotMap.get(arg.node.name);
+      if (slot !== undefined) {
+        if (node.prefix && node.operator === "++") {
+          emitter.emit(Op.INC_SLOT, slot);
+        } else if (node.prefix && node.operator === "--") {
+          emitter.emit(Op.DEC_SLOT, slot);
+        } else if (!node.prefix && node.operator === "++") {
+          emitter.emit(Op.POST_INC_SLOT, slot);
+        } else {
+          emitter.emit(Op.POST_DEC_SLOT, slot);
+        }
+      } else {
+        // Fallback: scope chain
+        const nameIdx = emitter.addStringConstant(arg.node.name);
+        if (node.prefix && node.operator === "++") {
+          emitter.emit(Op.INC_SCOPED, nameIdx);
+        } else if (node.prefix && node.operator === "--") {
+          emitter.emit(Op.DEC_SCOPED, nameIdx);
+        } else if (!node.prefix && node.operator === "++") {
+          emitter.emit(Op.POST_INC_SCOPED, nameIdx);
+        } else {
+          emitter.emit(Op.POST_DEC_SCOPED, nameIdx);
+        }
+      }
     }
   } else if (arg.isMemberExpression()) {
     compileMemberExpressionForUpdate(arg, emitter, scope, ctx, node.operator, node.prefix);
@@ -519,8 +580,18 @@ function compileAssignmentExpression(
   if (left.isIdentifier()) {
     compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
     emitter.emit(Op.DUP, 0);
-    const nameIdx = emitter.addStringConstant(left.node.name);
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
+    const reg = ctx.registerMap.get(left.node.name);
+    if (reg !== undefined) {
+      emitter.emit(Op.STORE_REG, reg);
+    } else {
+      const slot = ctx.slotMap.get(left.node.name);
+      if (slot !== undefined) {
+        emitter.emit(Op.STORE_SLOT, slot);
+      } else {
+        const nameIdx = emitter.addStringConstant(left.node.name);
+        emitter.emit(Op.STORE_SCOPED, nameIdx);
+      }
+    }
   } else if (left.isMemberExpression() && left.get("object").isSuper()) {
     // super.prop = val / super[expr] = val
     compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
@@ -587,19 +658,49 @@ function compileCompoundAssignment(
   if (arithmeticOp === undefined) throw new Error(`Unsupported compound assignment: ${node.operator}`);
 
   if (left.isIdentifier()) {
-    const nameIdx = emitter.addStringConstant(left.node.name);
-    const compoundOp = COMPOUND_SCOPED_OP_MAP[baseOp];
-    if (compoundOp !== undefined) {
-      // Fused opcode: compile RHS, then do load+op+store in one dispatch
-      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(compoundOp, nameIdx);
+    const reg = ctx.registerMap.get(left.node.name);
+    if (reg !== undefined) {
+      // Register-promoted compound assignment
+      const regCompoundOp = COMPOUND_REG_OP_MAP[baseOp];
+      if (regCompoundOp !== undefined) {
+        compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+        emitter.emit(regCompoundOp, reg);
+      } else {
+        emitter.emit(Op.LOAD_REG, reg);
+        compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+        emitter.emit(arithmeticOp, 0);
+        emitter.emit(Op.DUP, 0);
+        emitter.emit(Op.STORE_REG, reg);
+      }
     } else {
-      // Fallback for unsupported operators
-      emitter.emit(Op.LOAD_SCOPED, nameIdx);
-      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(arithmeticOp, 0);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.STORE_SCOPED, nameIdx);
+      const slot = ctx.slotMap.get(left.node.name);
+      if (slot !== undefined) {
+        // Indexed scope slot compound assignment
+        const slotCompoundOp = COMPOUND_SLOT_OP_MAP[baseOp];
+        if (slotCompoundOp !== undefined) {
+          compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+          emitter.emit(slotCompoundOp, slot);
+        } else {
+          emitter.emit(Op.LOAD_SLOT, slot);
+          compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+          emitter.emit(arithmeticOp, 0);
+          emitter.emit(Op.DUP, 0);
+          emitter.emit(Op.STORE_SLOT, slot);
+        }
+      } else {
+        const nameIdx = emitter.addStringConstant(left.node.name);
+        const compoundOp = COMPOUND_SCOPED_OP_MAP[baseOp];
+        if (compoundOp !== undefined) {
+          compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+          emitter.emit(compoundOp, nameIdx);
+        } else {
+          emitter.emit(Op.LOAD_SCOPED, nameIdx);
+          compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+          emitter.emit(arithmeticOp, 0);
+          emitter.emit(Op.DUP, 0);
+          emitter.emit(Op.STORE_SCOPED, nameIdx);
+        }
+      }
     }
   } else if (left.isMemberExpression() && left.get("object").isSuper()) {
     // super.prop += val / super[expr] += val
@@ -681,8 +782,19 @@ function compileLogicalAssignment(
 
   if (!left.isIdentifier()) throw new Error("Logical assignment only supported for identifiers");
 
-  const nameIdx = emitter.addStringConstant(left.node.name);
-  emitter.emit(Op.LOAD_SCOPED, nameIdx);
+  const varName = left.node.name;
+  const reg = ctx.registerMap.get(varName);
+  const slot = ctx.slotMap.get(varName);
+
+  // Load current value
+  if (reg !== undefined) {
+    emitter.emit(Op.LOAD_REG, reg);
+  } else if (slot !== undefined) {
+    emitter.emit(Op.LOAD_SLOT, slot);
+  } else {
+    const nameIdx = emitter.addStringConstant(varName);
+    emitter.emit(Op.LOAD_SCOPED, nameIdx);
+  }
   emitter.emit(Op.DUP, 0);
 
   let jumpIdx: number;
@@ -699,7 +811,16 @@ function compileLogicalAssignment(
   emitter.emit(Op.POP, 0);
   compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
   emitter.emit(Op.DUP, 0);
-  emitter.emit(Op.STORE_SCOPED, nameIdx);
+
+  // Store new value
+  if (reg !== undefined) {
+    emitter.emit(Op.STORE_REG, reg);
+  } else if (slot !== undefined) {
+    emitter.emit(Op.STORE_SLOT, slot);
+  } else {
+    const nameIdx = emitter.addStringConstant(varName);
+    emitter.emit(Op.STORE_SCOPED, nameIdx);
+  }
 
   emitter.patchJump(jumpIdx!, emitter.ip);
 }

@@ -703,8 +703,9 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
     case ${Op.TYPEOF}:${S}[${P}]=typeof ${S}[${P}];break;
     case ${Op.TYPEOF_GLOBAL}:{
       var name=${C}[${O}];
-      var g=_g;
-      ${W}(typeof g[name]);
+      var s=${SC};var _tf=false;
+      while(s){if(name in s.${sV}){${W}(typeof s.${sV}[name]);_tf=true;break;}s=s.${sPar};}
+      if(!_tf){${W}(typeof _g[name]);}
       break;
     }
     case ${Op.VOID}:${S}[${P}]=void 0;break;
@@ -848,8 +849,15 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
     case ${Op.OR_ASSIGN_SCOPED}:{var val=${X}();var name=${C}[${O}];var s=${SC};while(s){if(name in s.${sV}){s.${sV}[name]=s.${sV}[name]||val;${W}(s.${sV}[name]);break;}s=s.${sPar};}break;}
     case ${Op.NULLISH_ASSIGN_SCOPED}:{var val=${X}();var name=${C}[${O}];var s=${SC};while(s){if(name in s.${sV}){if(s.${sV}[name]==null)s.${sV}[name]=val;${W}(s.${sV}[name]);break;}s=s.${sPar};}break;}
     case ${Op.ASSIGN_OP}:break;
-    case ${Op.INC_REG}:${R}[${O}]=(${R}[${O}]||0)+1;break;
-    case ${Op.DEC_REG}:${R}[${O}]=(${R}[${O}]||0)-1;break;
+    case ${Op.INC_REG}:${R}[${O}]=+${R}[${O}]+1;break;
+    case ${Op.DEC_REG}:${R}[${O}]=+${R}[${O}]-1;break;
+    case ${Op.POST_INC_REG}:{var old=${R}[${O}];${R}[${O}]=+old+1;${W}(+old);break;}
+    case ${Op.POST_DEC_REG}:{var old=${R}[${O}];${R}[${O}]=+old-1;${W}(+old);break;}
+    case ${Op.ADD_ASSIGN_REG}:{var val=${S}[${P}--];${R}[${O}]=${R}[${O}]+val;${W}(${R}[${O}]);break;}
+    case ${Op.SUB_ASSIGN_REG}:{var val=${S}[${P}--];${R}[${O}]=${R}[${O}]-val;${W}(${R}[${O}]);break;}
+    case ${Op.MUL_ASSIGN_REG}:{var val=${S}[${P}--];${R}[${O}]=${R}[${O}]*val;${W}(${R}[${O}]);break;}
+    case ${Op.DIV_ASSIGN_REG}:{var val=${S}[${P}--];${R}[${O}]=${R}[${O}]/val;${W}(${R}[${O}]);break;}
+    case ${Op.MOD_ASSIGN_REG}:{var val=${S}[${P}--];${R}[${O}]=${R}[${O}]%val;${W}(${R}[${O}]);break;}
     case ${Op.FAST_ADD_CONST}:${S}[${P}]=+${S}[${P}]+${O};break;
     case ${Op.FAST_SUB_CONST}:${S}[${P}]=+${S}[${P}]-${O};break;
     case ${Op.FAST_GET_PROP}:{var name=${C}[${O}&0xFFFF];var varName=${C}[(${O}>>16)&0xFFFF];var s=${SC};while(s){if(varName in s.${sV}){${W}(s.${sV}[varName][name]);break;}s=s.${sPar};}break;}
@@ -888,6 +896,21 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
 
     case ${Op.CREATE_UNMAPPED_ARGS}:case ${Op.CREATE_MAPPED_ARGS}:${W}(Array.prototype.slice.call(${A}));break;
     case ${Op.CREATE_REST_ARGS}:${W}(Array.prototype.slice.call(${A},${O}));break;
+
+    // --- Superinstructions (Tier 3) ---
+    case ${Op.REG_ADD}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]+${R}[rb]);break;}
+    case ${Op.REG_SUB}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]-${R}[rb]);break;}
+    case ${Op.REG_MUL}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]*${R}[rb]);break;}
+    case ${Op.REG_LT}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]<${R}[rb]);break;}
+    case ${Op.REG_LTE}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]<=${R}[rb]);break;}
+    case ${Op.REG_GT}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]>${R}[rb]);break;}
+    case ${Op.REG_SEQ}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]===${R}[rb]);break;}
+    case ${Op.REG_SNEQ}:{var ra=${O}&0xFFFF;var rb=(${O}>>>16)&0xFFFF;${W}(${R}[ra]!==${R}[rb]);break;}
+    case ${Op.REG_LT_CONST_JF}:{var r=${O}&0xFF;var ci=(${O}>>>8)&0xFF;var tgt=(${O}>>>16)&0xFFFF;if(!(${R}[r]<${C}[ci]))${IP}=tgt*2;break;}
+    case ${Op.REG_GET_PROP}:{var r=${O}&0xFFFF;var ni=(${O}>>>16)&0xFFFF;${W}(${R}[r][${C}[ni]]);break;}
+    case ${Op.REG_ADD_CONST}:{var r=${O}&0xFFFF;var ci=(${O}>>>16)&0xFFFF;${R}[r]=${R}[r]+${C}[ci];break;}
+
+    // --- Indexed Scope (reserved, not emitted) ---
 
     default:break;
     }

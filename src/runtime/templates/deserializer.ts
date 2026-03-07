@@ -62,7 +62,7 @@ function ${names.deser}(bytes){
   var isStrict=!!(flags&4);
   var isArrow=!!(flags&8);
 
-  return {c:constants,i:instrs,r:rCount,p:pCount,g:isGen,s:isAsync,st:isStrict,a:isArrow};
+  return {c:constants,i:instrs,r:rCount,sl:0,p:pCount,g:isGen,s:isAsync,st:isStrict,a:isArrow};
 }
 `;
 }
