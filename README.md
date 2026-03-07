@@ -5,8 +5,7 @@
  [[[,/[[['  [['     [[[ ,[[ '[[,  [[[[, ,[[[[,
  $$$$$$c    $$      $$$c$$$cc$$$c $$$$$$$$"$$$
  888b "88bo,88    .d888 888   888,888 Y88" 888o
- MMMM   "W"  "YmmMMMM"" YMM   ""` MMM  M'  "MMM
-    </pre>
+ MMMM   "W"  "YmmMMMM"" YMM   ""` MMM  M'  "MMM</pre>
 </div>
 
 <p align="center">
