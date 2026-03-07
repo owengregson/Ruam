@@ -41,6 +41,7 @@ function makeContext(): vm.Context {
     queueMicrotask,
     Uint8Array,
     Int8Array,
+    Int32Array,
     Float64Array,
     ArrayBuffer,
     DataView,

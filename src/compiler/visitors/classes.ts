@@ -48,7 +48,7 @@ export function compileClassExpr(
   const body = classPath.get("body").get("body");
   for (const member of body) {
     if (member.isClassMethod()) {
-      compileClassMethod(member, emitter, scope, allUnits, compileFunctionInner);
+      compileClassMethod(member, emitter, scope, ctx, allUnits, compileFunctionInner);
     } else if (member.isClassProperty() && member.node.static) {
       compileStaticProperty(member, emitter, scope, ctx);
     }
@@ -144,11 +144,80 @@ function injectInstanceProperties(classNode: t.ClassExpression): void {
 function compileClassMethod(
   member: NodePath<t.ClassMethod>,
   emitter: Emitter,
-  _scope: ScopeAnalyzer,
+  scope: ScopeAnalyzer,
+  ctx: CompileContext,
   allUnits: BytecodeUnit[],
   compileFunctionInner: (fnPath: NodePath<t.Function>, allUnits: BytecodeUnit[]) => BytecodeUnit,
 ): void {
   emitter.emit(Op.DUP, 0);
+
+  if (member.node.computed) {
+    // Computed method name: [expr]() { ... }
+    // Stack after DUP: [class, class]
+    const isStatic = member.node.static;
+    const isAccessor = member.node.kind === "get" || member.node.kind === "set";
+
+    // For instance methods, resolve prototype as the assignment target
+    if (!isStatic) {
+      const protoIdx = emitter.addStringConstant("prototype");
+      emitter.emit(Op.GET_PROP_STATIC, protoIdx); // [class, proto]
+    }
+    // Stack: [class, target]
+
+    // Save target to register for home object stamping
+    const rTarget = scope.registerAllocator.alloc();
+    emitter.emit(Op.DUP, 0);              // [class, target, target]
+    emitter.emit(Op.STORE_REG, rTarget);   // [class, target]
+
+    // Compile key expression onto the stack
+    compileExpression(member.get("key") as NodePath<t.Expression>, emitter, scope, ctx);
+    // Stack: [class, target, key]
+
+    // Compile method body as a closure
+    const childUnit = compileFunctionInner(member as unknown as NodePath<t.Function>, allUnits);
+    allUnits.push(childUnit);
+    const idIdx = emitter.addStringConstant(childUnit.id);
+    emitter.emit(Op.NEW_CLOSURE, idIdx);
+    // Stack: [class, target, key, fn]
+
+    // Stamp fn._ho = target (home object for super resolution)
+    const hoIdx = emitter.addStringConstant("_ho");
+    emitter.emit(Op.DUP, 0);              // [class, target, key, fn, fn]
+    emitter.emit(Op.LOAD_REG, rTarget);    // [class, target, key, fn, fn, target]
+    emitter.emit(Op.SET_PROP_STATIC, hoIdx); // [class, target, key, fn, fn]
+    emitter.emit(Op.POP, 0);              // [class, target, key, fn]
+
+    if (isAccessor) {
+      // Build a property descriptor: {get/set: fn, configurable: true, enumerable: false}
+      emitter.emit(Op.NEW_OBJECT, 0);    // [class, target, key, fn, {}]
+      emitter.emit(Op.SWAP, 0);          // [class, target, key, {}, fn]
+      const descKeyIdx = emitter.addStringConstant(member.node.kind); // "get" or "set"
+      emitter.emit(Op.SET_PROP_STATIC, descKeyIdx); // [class, target, key, {get/set: fn}]
+
+      // Add configurable: true
+      emitter.emit(Op.DUP, 0);           // [class, target, key, desc, desc]
+      emitter.emit(Op.PUSH_TRUE, 0);     // [class, target, key, desc, desc, true]
+      const confIdx = emitter.addStringConstant("configurable");
+      emitter.emit(Op.SET_PROP_STATIC, confIdx); // [class, target, key, desc, desc']
+      emitter.emit(Op.POP, 0);           // [class, target, key, desc]
+
+      // Add enumerable: false
+      emitter.emit(Op.DUP, 0);           // [class, target, key, desc, desc]
+      emitter.emit(Op.PUSH_FALSE, 0);    // [class, target, key, desc, desc, false]
+      const enumIdx = emitter.addStringConstant("enumerable");
+      emitter.emit(Op.SET_PROP_STATIC, enumIdx); // [class, target, key, desc, desc']
+      emitter.emit(Op.POP, 0);           // [class, target, key, desc]
+
+      // Object.defineProperty(target, key, desc) -> pushes target
+      emitter.emit(Op.DEFINE_OWN_PROPERTY, 0); // [class, target]
+      emitter.emit(Op.POP, 0);           // [class]
+    } else {
+      // Simple assignment: target[key] = fn -> pushes target
+      emitter.emit(Op.SET_PROP_DYNAMIC, 0); // [class, target]
+      emitter.emit(Op.POP, 0);              // [class]
+    }
+    return;
+  }
 
   const childUnit = compileFunctionInner(member as unknown as NodePath<t.Function>, allUnits);
   allUnits.push(childUnit);

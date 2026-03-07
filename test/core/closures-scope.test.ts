@@ -63,8 +63,7 @@ describe("closures & scope – closure over loop variable", () => {
     `);
   });
 
-  // Not yet implemented: let in for loop per-iteration bindings (needs scope-per-iteration in compiler)
-  it.fails("let in loop – each closure captures its own value", () => {
+  it("let in loop – each closure captures its own value", () => {
     assertEquivalent(`
       function test() {
         var fns = [];

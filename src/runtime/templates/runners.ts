@@ -21,18 +21,20 @@ export function generateRunners(
   const dbgEntry = debug
     ? `${names.dbg}('VM_DISPATCH','id='+id,'async='+!!${U}.s,'params='+${U}.p);${U}._dbgId=id;`
     : '';
+  const HO = names.ho;
   return `
-function ${names.vm}(id,${A},${OS},${TV},${NT}){
+function ${names.vm}(id,${A},${OS},${TV},${NT},${HO}){
   var ${U}=${names.load}(id);
   ${dbgEntry}
-  if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},${NT});
-  return ${names.exec}(${U},${A}||[],${OS}||null,${TV},${NT});
+  if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},${NT},${HO});
+  return ${names.exec}(${U},${A}||[],${OS}||null,${TV},${NT},${HO});
 }
-${names.vm}.call=function(${TV},id,${A},${OS}){
+${names.vm}.call=function(${TV},id,${A},${OS},${HO}){
   var ${U}=${names.load}(id);
   ${dbgEntry}
-  if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},void 0);
-  return ${names.exec}(${U},${A}||[],${OS}||null,${TV},void 0);
+  if(!${U}.a&&!${U}.st){if(${TV}==null)${TV}=globalThis;else{var _t=typeof ${TV};if(_t!=="object"&&_t!=="function")${TV}=Object(${TV});}}
+  if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},void 0,${HO});
+  return ${names.exec}(${U},${A}||[],${OS}||null,${TV},void 0,${HO});
 };
 `;
 }

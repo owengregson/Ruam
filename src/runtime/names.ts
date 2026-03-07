@@ -81,6 +81,10 @@ export interface RuntimeNames {
   pEx: string;
   /** hasPendingEx variable */
   hPEx: string;
+  /** Completion type (0=none, 1=return). */
+  cType: string;
+  /** Completion value (saved return). */
+  cVal: string;
   /** unit parameter */
   unit: string;
   /** args parameter */
@@ -91,6 +95,8 @@ export interface RuntimeNames {
   tVal: string;
   /** newTarget parameter */
   nTgt: string;
+  /** homeObject parameter (for [[HomeObject]] / super resolution). */
+  ho: string;
   /** phys (physical opcode) variable */
   phys: string;
   /** op (logical opcode) variable */
@@ -138,7 +144,7 @@ const ALNUM = "abcdefghijklmnopqrstuvwxyz0123456789";
 // Names used as temporaries in generated interpreter case bodies — avoid collisions.
 const BLACKLIST = new Set([
   "_a", "_b", "_rv", "_te", "_cuid", "_cu", "_fuid", "_fu", "_uid_",
-  "_dbgId", "_last20",
+  "_dbgId", "_last20", "_ho",
 ]);
 
 /**
@@ -203,11 +209,14 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
     exStk: genName(),
     pEx: genName(),
     hPEx: genName(),
+    cType: genName(),
+    cVal: genName(),
     unit: genName(),
     args: genName(),
     outer: genName(),
     tVal: genName(),
     nTgt: genName(),
+    ho: genName(),
     phys: genName(),
     opVar: genName(),
     thresh: genName(),

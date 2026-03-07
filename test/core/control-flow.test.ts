@@ -820,8 +820,7 @@ describe("comprehensive control flow – try/catch/finally", () => {
     `);
   });
 
-  // Not yet implemented: finally execution after return (needs completion-type tracking in VM)
-  it.fails("finally runs even after return in try", () => {
+  it("finally runs even after return in try", () => {
     assertEquivalent(`
       function test() {
         var log = [];
@@ -840,8 +839,7 @@ describe("comprehensive control flow – try/catch/finally", () => {
     `);
   });
 
-  // Not yet implemented: finally execution after return in catch (same as above)
-  it.fails("finally runs even after return in catch", () => {
+  it("finally runs even after return in catch", () => {
     assertEquivalent(`
       function test() {
         var log = [];
@@ -936,8 +934,7 @@ describe("comprehensive control flow – try/catch/finally", () => {
     `);
   });
 
-  // Not yet implemented: finally return overriding try/catch return (needs completion-type tracking)
-  it.fails("finally overrides return value when it also returns", () => {
+  it("finally overrides return value when it also returns", () => {
     assertEquivalent(`
       function test() {
         function inner() {

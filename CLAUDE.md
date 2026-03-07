@@ -6,7 +6,7 @@ JS VM obfuscator — compiles JavaScript functions into custom bytecode executed
 
 - **Build**: `npm run build` (tsup, ESM-only)
 - **Typecheck**: `npm run typecheck` (tsc --noEmit)
-- **Test**: `npm run test` (vitest, 1046 tests)
+- **Test**: `npm run test` (vitest, 1605 tests)
 - **Test watch**: `npm run test:watch`
 - **Node**: >= 18, **Module**: ESM (`"type": "module"`)
 
@@ -74,7 +74,7 @@ docs/
 - **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `high` (+debug protection, integrity binding, dead code, stack encoding). Defined in `presets.ts`.
 - **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
 - `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
-- Many opcodes have VM runtime handlers but are not yet emitted by the compiler — they're ready for future compiler work
+- **Home object (`[[HomeObject]]`)**: Class methods get `fn._ho = target` stamped at define-time. The home object is passed through the VM dispatch chain (`_vm.call` → `exec`) so `super` resolves correctly in multi-level inheritance. `GET_SUPER_PROP`, `SET_SUPER_PROP`, `CALL_SUPER_METHOD`, `SUPER_CALL` all use `Object.getPrototypeOf(homeObject)` when available.
 - Some preset options (`dynamicOpcodes`, `decoyOpcodes`, `deadCodeInjection`, `stackEncoding`) are defined in types but not yet implemented in runtime generation
 - `rollingCipher` and `integrityBinding` are fully implemented
 
@@ -93,6 +93,12 @@ docs/
 - **Switch break**: `breakLabel` set before POP so break cleans discriminant off the stack
 - **DEFINE_GETTER/SETTER**: `enumerable: false` to match native class behavior
 - **Labeled continue**: `patchBreaksAndContinues` propagates inner loop's `continueLabel` to parent labeled context
+- **Super expressions**: All `super.prop`, `super.method()`, `super.prop = val`, `super.prop++` patterns compile via dedicated `GET_SUPER_PROP`/`SET_SUPER_PROP`/`CALL_SUPER_METHOD` opcodes instead of trying to compile `Super` as a regular expression
+- **Home object for super**: Multi-level inheritance works correctly via `fn._ho` property stamped by `DEFINE_METHOD`/`DEFINE_GETTER`/`DEFINE_SETTER`, forwarded through closure wrappers
+- **Finally after return**: `cType`/`cVal` completion tracking defers `return` until `finally` executes
+- **Per-iteration `let` bindings**: `for (let ...)` loops emit `PUSH_SCOPE`/`POP_SCOPE` per iteration with variable copying
+- **Sparse array holes**: `[1,,3]` emits `ARRAY_HOLE` (not `PUSH_UNDEFINED + ARRAY_PUSH`)
+- **Computed class methods**: Compile key expression at runtime, use `SET_PROP_DYNAMIC` with home object stamping
 
 ## Directories to Ignore
 

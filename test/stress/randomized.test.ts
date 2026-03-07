@@ -8,7 +8,13 @@ import { assertEquivalent, evalOriginal, evalObfuscated } from "../helpers.js";
  * the VM produces identical results to native JS execution, regardless
  * of the specific values involved. This prevents the VM from being
  * "accidentally correct" only for hardcoded test constants.
+ *
+ * Each trial loop runs 3x more than the minimum to increase the
+ * probability of catching non-deterministic edge cases.
  */
+
+/** Multiplier for all trial loop counts — increase to catch rare edge cases. */
+const FUZZ_MULTIPLIER = 3;
 
 // ---------------------------------------------------------------------------
 // Helpers: random value generators
@@ -47,7 +53,7 @@ function randIdent(): string {
 // ---------------------------------------------------------------------------
 
 describe("randomized: arithmetic", () => {
-  for (let trial = 0; trial < 10; trial++) {
+  for (let trial = 0; trial < 10 * FUZZ_MULTIPLIER; trial++) {
     const a = randInt(-1000, 1000);
     const b = randInt(-1000, 1000);
     const bNonZero = b === 0 ? 1 : b;
@@ -88,7 +94,7 @@ describe("randomized: arithmetic", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const base = randInt(0, 10);
     const exp = randInt(0, 6);
     it(`exponentiation: ${base} ** ${exp}`, () => {
@@ -105,7 +111,7 @@ describe("randomized: arithmetic", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: bitwise", () => {
-  for (let trial = 0; trial < 10; trial++) {
+  for (let trial = 0; trial < 10 * FUZZ_MULTIPLIER; trial++) {
     const a = randInt(0, 0xFFFF);
     const b = randInt(0, 0xFFFF);
     const shift = randInt(0, 15);
@@ -126,7 +132,7 @@ describe("randomized: bitwise", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: comparisons", () => {
-  for (let trial = 0; trial < 10; trial++) {
+  for (let trial = 0; trial < 10 * FUZZ_MULTIPLIER; trial++) {
     const a = randInt(-100, 100);
     const b = randInt(-100, 100);
 
@@ -146,7 +152,7 @@ describe("randomized: comparisons", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: string operations", () => {
-  for (let trial = 0; trial < 8; trial++) {
+  for (let trial = 0; trial < 8 * FUZZ_MULTIPLIER; trial++) {
     const s = randString(randInt(5, 20));
     const needle = s.substring(randInt(0, 3), randInt(3, Math.min(6, s.length)));
 
@@ -167,7 +173,7 @@ describe("randomized: string operations", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const parts = randArray(randInt(2, 6), () => randInt(0, 100));
     const sep = [",", " ", "-", "|", "::"][randInt(0, 4)]!;
 
@@ -183,7 +189,7 @@ describe("randomized: string operations", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const str = randString(randInt(10, 30));
     const start = randInt(0, 5);
     const end = randInt(start + 1, Math.min(start + 10, str.length));
@@ -204,7 +210,7 @@ describe("randomized: string operations", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: array operations", () => {
-  for (let trial = 0; trial < 8; trial++) {
+  for (let trial = 0; trial < 8 * FUZZ_MULTIPLIER; trial++) {
     const arr = randArray(randInt(5, 15), () => randInt(-50, 50));
 
     it(`sort ${arr.length} elements`, () => {
@@ -246,7 +252,7 @@ describe("randomized: array operations", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const arr = randArray(randInt(3, 8), () => randInt(0, 20));
     const spliceStart = randInt(0, Math.max(0, arr.length - 2));
     const spliceDelete = randInt(0, 2);
@@ -270,7 +276,7 @@ describe("randomized: array operations", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: recursive algorithms", () => {
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const n = randInt(1, 12);
     it(`factorial(${n})`, () => {
       assertEquivalent(`
@@ -283,7 +289,7 @@ describe("randomized: recursive algorithms", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const n = randInt(1, 15);
     it(`fibonacci(${n})`, () => {
       assertEquivalent(`
@@ -296,7 +302,7 @@ describe("randomized: recursive algorithms", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const arr = randArray(randInt(5, 12), () => randInt(-100, 100));
     it(`merge sort of ${arr.length} elements`, () => {
       assertEquivalent(`
@@ -319,7 +325,7 @@ describe("randomized: recursive algorithms", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const a = randInt(10, 200);
     const b = randInt(10, 200);
     it(`gcd(${a}, ${b})`, () => {
@@ -337,7 +343,7 @@ describe("randomized: recursive algorithms", () => {
     });
   }
 
-  for (let trial = 0; trial < 3; trial++) {
+  for (let trial = 0; trial < 3 * FUZZ_MULTIPLIER; trial++) {
     const n = randInt(2, 5);
     it(`tower of hanoi moves for n=${n}`, () => {
       assertEquivalent(`
@@ -356,7 +362,7 @@ describe("randomized: recursive algorithms", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: object operations", () => {
-  for (let trial = 0; trial < 8; trial++) {
+  for (let trial = 0; trial < 8 * FUZZ_MULTIPLIER; trial++) {
     const numKeys = randInt(3, 8);
     const keys: string[] = [];
     for (let i = 0; i < numKeys; i++) keys.push("k" + randString(randInt(2, 5)));
@@ -379,7 +385,7 @@ describe("randomized: object operations", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const count = randInt(3, 8);
     it(`dynamic property assignment (${count} props)`, () => {
       const indices = randArray(count, () => randInt(0, 100));
@@ -403,7 +409,7 @@ describe("randomized: object operations", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: closures", () => {
-  for (let trial = 0; trial < 8; trial++) {
+  for (let trial = 0; trial < 8 * FUZZ_MULTIPLIER; trial++) {
     const base = randInt(-50, 50);
 
     it(`adder factory with base ${base}`, () => {
@@ -418,7 +424,7 @@ describe("randomized: closures", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const multiplier = randInt(2, 10);
     const offset = randInt(-20, 20);
 
@@ -437,7 +443,7 @@ describe("randomized: closures", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const increments = randArray(randInt(3, 8), () => randInt(1, 10));
     it(`counter with ${increments.length} increments`, () => {
       assertEquivalent(`
@@ -461,7 +467,7 @@ describe("randomized: closures", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: control flow", () => {
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const n = randInt(5, 30);
     it(`sum of 1..${n}`, () => {
       assertEquivalent(`
@@ -475,7 +481,7 @@ describe("randomized: control flow", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const values = randArray(randInt(5, 10), () => randInt(-50, 50));
     const threshold = randInt(-20, 20);
     it(`count values > ${threshold} in ${values.length} items`, () => {
@@ -492,7 +498,7 @@ describe("randomized: control flow", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const items = randArray(randInt(4, 8), () => randInt(0, 100));
     const target = items[randInt(0, items.length - 1)]!;
     it(`linear search for ${target} in ${items.length} items`, () => {
@@ -508,7 +514,7 @@ describe("randomized: control flow", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const n = randInt(5, 20);
     it(`collatz steps for ${n}`, () => {
       assertEquivalent(`
@@ -531,7 +537,7 @@ describe("randomized: control flow", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: switch", () => {
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const numCases = randInt(3, 7);
     const caseValues = randArray(numCases, () => randInt(0, 20));
     const testValue = randBool() ? caseValues[randInt(0, numCases - 1)]! : randInt(0, 20);
@@ -557,7 +563,7 @@ describe("randomized: switch", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: complex expressions", () => {
-  for (let trial = 0; trial < 8; trial++) {
+  for (let trial = 0; trial < 8 * FUZZ_MULTIPLIER; trial++) {
     const a = randInt(-50, 50);
     const b = randInt(-50, 50);
     const c = randInt(-50, 50);
@@ -577,7 +583,7 @@ describe("randomized: complex expressions", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const vals = randArray(5, () => randInt(-20, 20));
     it(`ternary chains with random values`, () => {
       assertEquivalent(`
@@ -595,7 +601,7 @@ describe("randomized: complex expressions", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: classes", () => {
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const x = randInt(-100, 100);
     const y = randInt(-100, 100);
     const dx = randInt(-50, 50);
@@ -618,7 +624,7 @@ describe("randomized: classes", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const items = randArray(randInt(3, 6), () => randInt(1, 100));
     it(`Stack with ${items.length} random pushes`, () => {
       assertEquivalent(`
@@ -647,7 +653,7 @@ describe("randomized: classes", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: exceptions", () => {
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const values = randArray(randInt(3, 8), () => randInt(-50, 50));
     const throwIdx = randInt(0, values.length - 1);
 
@@ -679,7 +685,7 @@ describe("randomized: exceptions", () => {
 describe("randomized: rolling cipher correctness", () => {
   const rcOpts = { rollingCipher: true };
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const a = randInt(-500, 500);
     const b = randInt(-500, 500);
     it(`rolling cipher: ${a} + ${b}`, () => {
@@ -690,7 +696,7 @@ describe("randomized: rolling cipher correctness", () => {
     });
   }
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const arr = randArray(randInt(5, 10), () => randInt(-100, 100));
     it(`rolling cipher: sort ${arr.length} elements`, () => {
       assertEquivalent(`
@@ -702,7 +708,7 @@ describe("randomized: rolling cipher correctness", () => {
     });
   }
 
-  for (let trial = 0; trial < 3; trial++) {
+  for (let trial = 0; trial < 3 * FUZZ_MULTIPLIER; trial++) {
     const n = randInt(5, 12);
     it(`rolling cipher: fibonacci(${n})`, () => {
       assertEquivalent(`
@@ -723,7 +729,7 @@ describe("randomized: rolling cipher correctness", () => {
 describe("randomized: integrity binding correctness", () => {
   const ibOpts = { rollingCipher: true, integrityBinding: true };
 
-  for (let trial = 0; trial < 5; trial++) {
+  for (let trial = 0; trial < 5 * FUZZ_MULTIPLIER; trial++) {
     const a = randInt(-500, 500);
     const b = randInt(-500, 500);
     it(`integrity binding: ${a} * ${b}`, () => {
@@ -734,7 +740,7 @@ describe("randomized: integrity binding correctness", () => {
     });
   }
 
-  for (let trial = 0; trial < 3; trial++) {
+  for (let trial = 0; trial < 3 * FUZZ_MULTIPLIER; trial++) {
     const arr = randArray(randInt(4, 8), () => randInt(0, 50));
     it(`integrity binding: reduce sum of ${arr.length} items`, () => {
       assertEquivalent(`
@@ -746,7 +752,7 @@ describe("randomized: integrity binding correctness", () => {
     });
   }
 
-  for (let trial = 0; trial < 3; trial++) {
+  for (let trial = 0; trial < 3 * FUZZ_MULTIPLIER; trial++) {
     const s = randString(randInt(5, 15));
     it(`integrity binding: string ops on "${s.substring(0, 8)}..."`, () => {
       assertEquivalent(`
@@ -767,7 +773,7 @@ describe("randomized: presets", () => {
   const presets = ["low", "medium", "high"] as const;
 
   for (const preset of presets) {
-    for (let trial = 0; trial < 3; trial++) {
+    for (let trial = 0; trial < 3 * FUZZ_MULTIPLIER; trial++) {
       const a = randInt(-100, 100);
       const b = randInt(-100, 100);
       it(`preset "${preset}": add(${a}, ${b})`, () => {
@@ -778,7 +784,7 @@ describe("randomized: presets", () => {
       });
     }
 
-    for (let trial = 0; trial < 2; trial++) {
+    for (let trial = 0; trial < 2 * FUZZ_MULTIPLIER; trial++) {
       const arr = randArray(randInt(3, 6), () => randInt(0, 50));
       it(`preset "${preset}": sum of ${arr.length} items`, () => {
         assertEquivalent(`
@@ -799,7 +805,7 @@ describe("randomized: presets", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: deep nesting", () => {
-  for (let trial = 0; trial < 3; trial++) {
+  for (let trial = 0; trial < 3 * FUZZ_MULTIPLIER; trial++) {
     const depth = randInt(3, 7);
     const values = randArray(depth, () => randInt(1, 10));
 
@@ -824,7 +830,7 @@ describe("randomized: deep nesting", () => {
     });
   }
 
-  for (let trial = 0; trial < 3; trial++) {
+  for (let trial = 0; trial < 3 * FUZZ_MULTIPLIER; trial++) {
     const depth = randInt(3, 6);
     const values = randArray(depth, () => randInt(1, 20));
 

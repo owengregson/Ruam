@@ -89,8 +89,7 @@ describe("vm-breaker: this binding", () => {
     `);
   });
 
-  // Not yet implemented: sloppy-mode this-boxing (null/undefined → globalThis, primitives → wrapper)
-  it.fails("call/apply with null/undefined this in sloppy mode", () => {
+  it("call/apply with null/undefined this in sloppy mode", () => {
     assertEquivalent(`
       function test() {
         function getThis() { return typeof this; }
@@ -284,8 +283,7 @@ describe("vm-breaker: exception flow", () => {
     `);
   });
 
-  // Not yet implemented: finally execution after return in try (needs completion-type tracking)
-  it.fails("try/catch/finally with return in try and finally side-effect", () => {
+  it("try/catch/finally with return in try and finally side-effect", () => {
     assertEquivalent(`
       function test() {
         var sideEffect = [];
@@ -421,8 +419,7 @@ describe("vm-breaker: class patterns", () => {
     `);
   });
 
-  // Not yet implemented: computed method names in class bodies (compiler needs to eval expression as key)
-  it.fails("class with computed method names", () => {
+  it("class with computed method names", () => {
     assertEquivalent(`
       function test() {
         var methodName = "greet";
@@ -885,8 +882,7 @@ describe("vm-breaker: complex assignments", () => {
     `);
   });
 
-  // Not yet implemented: holes in array destructuring patterns (skip elements with ,,)
-  it.fails("array destructuring with rest and skip", () => {
+  it("array destructuring with rest and skip", () => {
     assertEquivalent(`
       function test() {
         var arr = [1, 2, 3, 4, 5, 6, 7];
@@ -1444,8 +1440,7 @@ describe("vm-breaker: value edge cases", () => {
     `);
   });
 
-  // Not yet implemented: sparse arrays (holes vs explicit undefined — affects forEach/filter/map skip behavior)
-  it.fails("sparse array behavior", () => {
+  it("sparse array behavior", () => {
     assertEquivalent(`
       function test() {
         var arr = [1, , , 4, , 6];

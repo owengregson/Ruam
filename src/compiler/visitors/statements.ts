@@ -261,24 +261,21 @@ function compileArrayPattern(
       // collect remaining into an array
       emitter.emit(Op.DUP, 0);
       emitter.emit(Op.NEW_ARRAY, 0);
+      // Loop invariant at loopStart: stack = [..., iter, array]
       const loopStart = emitter.ip;
-      emitter.emit(Op.SWAP, 0);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.ITER_DONE, 0);
-      const exitJump = emitter.emit(Op.JMP_TRUE, 0);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.ITER_NEXT, 0);
-      emitter.emit(Op.ROT3, 0);
-      emitter.emit(Op.SWAP, 0);
-      emitter.emit(Op.ARRAY_PUSH, 0);
-      emitter.emit(Op.SWAP, 0);
+      emitter.emit(Op.SWAP, 0);        // [..., array, iter]
+      // ITER_DONE peeks (Y) the iterator — no DUP needed
+      emitter.emit(Op.ITER_DONE, 0);   // [..., array, iter, done?]
+      const exitJump = emitter.emit(Op.JMP_TRUE, 0); // [..., array, iter]
+      emitter.emit(Op.DUP, 0);         // [..., array, iter, iter]
+      emitter.emit(Op.ITER_NEXT, 0);   // [..., array, iter, value]
+      emitter.emit(Op.SWAP, 0);        // [..., array, value, iter]
+      emitter.emit(Op.ROT3, 0);        // [..., iter, array, value]
+      emitter.emit(Op.ARRAY_PUSH, 0);  // [..., iter, array]
       emitter.emit(Op.JMP, loopStart);
       emitter.patchJump(exitJump, emitter.ip);
-      emitter.emit(Op.POP, 0);
-      // Now stack has: [..., iterator, array]
-      // Swap to put array on top, pop iterator
-      emitter.emit(Op.SWAP, 0);
-      emitter.emit(Op.POP, 0);
+      // Stack at exit: [..., array, iter]
+      emitter.emit(Op.POP, 0);         // pop iter, leaving [..., array]
       compileDestructuringPattern(elem.get("argument") as NodePath<t.LVal>, emitter, scope, ctx, declKind);
       continue;
     }
@@ -430,13 +427,38 @@ function compileForStatement(
 ): void {
   scope.pushScope(true);
 
-  if (path.node.init) {
-    const init = path.get("init");
+  // Detect per-iteration let/const bindings
+  const init = path.node.init ? path.get("init") : null;
+  const needsIterScope =
+    init !== null && init.isVariableDeclaration() && init.node.kind !== "var";
+
+  // Collect declared variable names for per-iteration copying
+  const iterVarNames: string[] = [];
+  const iterVarNameIdxs: number[] = [];
+  if (needsIterScope && init.isVariableDeclaration()) {
+    for (const declarator of init.get("declarations")) {
+      const id = declarator.get("id");
+      if (id.isIdentifier()) {
+        iterVarNames.push(id.node.name);
+      }
+      // Note: destructuring in for-loop init is rare and not handled here
+    }
+  }
+
+  if (init !== null) {
     if (init.isVariableDeclaration()) {
       compileVariableDeclaration(init, emitter, scope, ctx);
     } else if (init.isExpression()) {
       compileExpression(init, emitter, scope, ctx);
       emitter.emit(Op.POP, 0);
+    }
+  }
+
+  // Pre-compute string constant indices for iter vars (after init is compiled
+  // so the names are already in the constant pool)
+  if (needsIterScope) {
+    for (const name of iterVarNames) {
+      iterVarNameIdxs.push(emitter.addStringConstant(name));
     }
   }
 
@@ -448,6 +470,23 @@ function compileForStatement(
     exitJump = emitter.emit(Op.JMP_FALSE, 0);
   }
 
+  // Per-iteration scope: load vars from outer, push scope, declare+store in inner
+  if (needsIterScope) {
+    // Load current values from outer scope onto the stack
+    for (const nameIdx of iterVarNameIdxs) {
+      emitter.emit(Op.LOAD_SCOPED, nameIdx);
+    }
+    // Push a new inner scope
+    emitter.emit(Op.PUSH_SCOPE, 0);
+    // Declare and store each variable in the inner scope (reverse order since stack is LIFO)
+    for (let i = iterVarNameIdxs.length - 1; i >= 0; i--) {
+      const nameIdx = iterVarNameIdxs[i]!;
+      scope.declare(iterVarNames[i]!, "let");
+      emitter.emit(Op.DECLARE_VAR, nameIdx);
+      emitter.emit(Op.STORE_SCOPED, nameIdx);
+    }
+  }
+
   const breakTarget = -1;
   const continueTarget = -1;
   const loopCtx: LoopContext = { breakLabel: breakTarget, continueLabel: continueTarget };
@@ -456,6 +495,20 @@ function compileForStatement(
   compileStatement(path.get("body"), emitter, scope, ctx, loopStack);
 
   loopCtx.continueLabel = emitter.ip;
+
+  // Per-iteration scope: load vars from inner, pop scope, store back to outer
+  if (needsIterScope) {
+    // Load (potentially mutated) values from inner scope
+    for (const nameIdx of iterVarNameIdxs) {
+      emitter.emit(Op.LOAD_SCOPED, nameIdx);
+    }
+    // Pop the inner scope
+    emitter.emit(Op.POP_SCOPE, 0);
+    // Store values back to outer scope (reverse order since stack is LIFO)
+    for (let i = iterVarNameIdxs.length - 1; i >= 0; i--) {
+      emitter.emit(Op.STORE_SCOPED, iterVarNameIdxs[i]!);
+    }
+  }
 
   if (path.node.update) {
     compileExpression(path.get("update") as NodePath<t.Expression>, emitter, scope, ctx);
@@ -768,8 +821,9 @@ function compileTryStatement(
   emitter.patchJump(afterCatchJump, hasFinally ? finallyIp : emitter.ip);
 
   if (hasCatch && hasFinally) {
-    // Try body: only catch handler (finally handled by catch body's own TRY_PUSH)
-    emitter.patchOperand(tryPushIdx, encodeTryTarget(catchIp, -1));
+    // Try body: both catch and finally — exceptions route to catch (checked first),
+    // but RETURN/RETURN_VOID use finallyIp to ensure finally runs after return.
+    emitter.patchOperand(tryPushIdx, encodeTryTarget(catchIp, finallyIp));
     // Catch body: only finally handler
     emitter.patchOperand(catchFinallyPushIdx, encodeTryTarget(-1, finallyIp));
   } else {

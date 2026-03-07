@@ -133,6 +133,62 @@ function obfuscateLocals(source: string, seed: number): string {
 }
 
 /**
+ * Inline stack operations: replace W(expr)->S[++P]=expr, X()->S[P--], Y()->S[P].
+ * This eliminates function call overhead on every single opcode dispatch.
+ */
+function inlineStackOps(source: string, S: string, P: string, W: string, X: string, Y: string): string {
+  // Remove the push/pop/peek function definitions
+  const defPattern = new RegExp(
+    `function ${W}\\(v\\)\\{${S}\\[\\+\\+${P}\\]=v;\\}\\s*` +
+    `function ${X}\\(\\)\\{return ${S}\\[${P}--\\];\\}\\s*` +
+    `function ${Y}\\(\\)\\{return ${S}\\[${P}\\];\\}`,
+    'g'
+  );
+  let result = source.replace(defPattern, '');
+
+  // Replace X() -> S[P--]  (simple token, no args)
+  result = result.replace(new RegExp(`${X}\\(\\)`, 'g'), `${S}[${P}--]`);
+
+  // Replace Y() -> S[P]   (simple token, no args)
+  result = result.replace(new RegExp(`${Y}\\(\\)`, 'g'), `${S}[${P}]`);
+
+  // Replace W(expr) with inline stack push.
+  // If expr contains S[P--] (a pop), the evaluation order matters.
+  // Safe form: var _v=(expr);S[++P]=_v  — but we optimize simple cases.
+  const popToken = `${S}[${P}--]`;
+  const wCall = `${W}(`;
+  let out = '';
+  let i = 0;
+  while (i < result.length) {
+    const idx = result.indexOf(wCall, i);
+    if (idx < 0) {
+      out += result.slice(i);
+      break;
+    }
+    out += result.slice(i, idx);
+    // Find the matching closing paren
+    let depth = 1;
+    let j = idx + wCall.length;
+    while (j < result.length && depth > 0) {
+      if (result[j] === '(') depth++;
+      else if (result[j] === ')') depth--;
+      j++;
+    }
+    const expr = result.slice(idx + wCall.length, j - 1);
+    if (!expr.includes(popToken) && !expr.includes(`${S}[${P}]`)) {
+      // No stack reads in expr — safe to use S[++P]=expr directly
+      out += `${S}[++${P}]=${expr}`;
+    } else {
+      // Expr reads from stack — evaluate first, then push
+      out += `${S}[++${P}]=((${expr}))`;
+    }
+    i = j;
+  }
+
+  return out;
+}
+
+/**
  * Generate both sync and async interpreter bodies.
  */
 export function generateInterpreterCore(
@@ -144,7 +200,8 @@ export function generateInterpreterCore(
   integrityBinding: boolean = false,
 ): string {
   const raw = generateExecBody(false, debug, names, shuffleMap, rollingCipher, integrityBinding) + '\n' + generateExecBody(true, debug, names, shuffleMap, rollingCipher, integrityBinding);
-  return obfuscateLocals(raw, seed);
+  const inlined = inlineStackOps(raw, names.stk, names.stp, names.sPush, names.sPop, names.sPeek);
+  return obfuscateLocals(inlined, seed);
 }
 
 /**
@@ -179,11 +236,14 @@ function generateExecBody(
   const EX = n.exStk;   // exception handler stack
   const PE = n.pEx;     // pending exception
   const HPE = n.hPEx;   // has pending exception
+  const CT = n.cType;   // completion type
+  const CV = n.cVal;    // completion value
   const U = n.unit;     // unit parameter
   const A = n.args;     // args parameter
   const OS = n.outer;   // outerScope parameter
   const TV = n.tVal;    // thisVal parameter
   const NT = n.nTgt;    // newTarget parameter
+  const HO = n.ho;      // homeObject parameter
   const PH = n.phys;    // physical opcode
   const OP = n.opVar;   // logical opcode
 
@@ -197,8 +257,8 @@ function generateExecBody(
   const WM = n.wm;
 
   const awaitHandler = isAsync
-    ? `case ${Op.AWAIT}:{${debug ? `${n.dbg}('AWAIT','awaiting:',typeof ${Y}()==='object'?'[Promise]':${Y}());` : ''}${W}(await ${X}());break;}`
-    : `case ${Op.AWAIT}:${W}(void 0);break;`;
+    ? `case ${Op.AWAIT}:{${debug ? `${n.dbg}('AWAIT','awaiting:',typeof ${S}[${P}]==='object'?'[Promise]':${S}[${P}]);` : ''}${S}[${P}]=await ${S}[${P}];break;}`
+    : `case ${Op.AWAIT}:${S}[${P}]=void 0;break;`;
 
   // Closure handler (debug vs non-debug)
   const closureHandler = debug ? `
@@ -212,25 +272,25 @@ function generateExecBody(
         ${n.dbg}('CALL_CLOSURE','arrow uid='+uid,'args='+arguments.length);
         return ${n.vm}.call(ct,uid,Array.prototype.slice.call(arguments),cs);
       };})(${C}[${O}],${SC},${TV}));}}
-      else{if(_cu.s){${W}((function(uid,cs){return async function(){
+      else{if(_cu.s){${W}((function(uid,cs){var fn=async function(){
         ${n.dbg}('CALL_CLOSURE','async uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC}));}else{${W}((function(uid,cs){return function(){
+        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
+      };return fn;})(${C}[${O}],${SC}));}else{${W}((function(uid,cs){var fn=function(){
         ${n.dbg}('CALL_CLOSURE','uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC}));}}
+        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
+      };return fn;})(${C}[${O}],${SC}));}}
       break;
     }
     case ${Op.NEW_FUNCTION}:{
       var _fuid=${C}[${O}];var _fu=${n.load}(_fuid);
       ${n.dbg}('NEW_FUNCTION','uid='+_fuid,'async='+!!_fu.s,'params='+_fu.p);
-      if(_fu.s){${W}((function(uid,cs){return async function(){
+      if(_fu.s){${W}((function(uid,cs){var fn=async function(){
         ${n.dbg}('CALL_FUNCTION','async uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC}));}else{${W}((function(uid,cs){return function(){
+        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
+      };return fn;})(${C}[${O}],${SC}));}else{${W}((function(uid,cs){var fn=function(){
         ${n.dbg}('CALL_FUNCTION','uid='+uid,'args='+arguments.length);
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC}));}
+        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
+      };return fn;})(${C}[${O}],${SC}));}
       break;
     }` : `
     case ${Op.NEW_CLOSURE}:{
@@ -240,19 +300,19 @@ function generateExecBody(
       };}return function(){
         return ${n.vm}.call(ct,uid,Array.prototype.slice.call(arguments),cs);
       };})(${C}[${O}],${SC},${TV}));}
-      else{${W}((function(uid,cs){if(_cu.s){return async function(){
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);
-      };}return function(){
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC}));}
+      else{${W}((function(uid,cs){if(_cu.s){var fn=async function(){
+        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
+      };return fn;}var fn=function(){
+        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
+      };return fn;})(${C}[${O}],${SC}));}
       break;
     }
     case ${Op.NEW_FUNCTION}:{
-      ${W}((function(uid,cs){var u=${n.load}(uid);if(u.s){return async function(){
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);
-      };}return function(){
-        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs);
-      };})(${C}[${O}],${SC}));
+      ${W}((function(uid,cs){var u=${n.load}(uid);if(u.s){var fn=async function(){
+        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
+      };return fn;}var fn=function(){
+        return ${n.vm}.call(this,uid,Array.prototype.slice.call(arguments),cs,fn._ho);
+      };return fn;})(${C}[${O}],${SC}));
       break;
     }`;
 
@@ -272,7 +332,7 @@ function generateExecBody(
     ${O}=(${O}^_ks)|0;` : '';
 
   const template = `
-${fnDecl}(${U},${A},${OS},${TV},${NT}){
+${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
   ${n.depth}++;
   var _uid_=(${U}._dbgId||'?');
   ${n.callStack}.push(_uid_);
@@ -286,8 +346,11 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
   var ${EX}=[];
   var ${PE}=null;
   var ${HPE}=false;
+  var ${CT}=0;
+  var ${CV}=void 0;
   var ${SC}={${sPar}:${OS},${sV}:{},${sCV}:{},${sTdz}:{}};
   var ${P}=-1;
+  var _g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};
   ${debug ? `var _uid=${U}._dbgId||'?';${n.dbg}('ENTER','${fnLabel}','unit='+_uid,'params='+${U}.p,'args='+${A}.length,'async='+!!${U}.s,'regs='+${U}.r,'depth='+${n.depth});` : ''}
   ${rcInit}
 
@@ -318,80 +381,80 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
     case ${Op.PUSH_NEG_INFINITY}:${W}(-Infinity);break;
     case ${Op.POP}:${P}--;break;
     case ${Op.POP_N}:${P}-=${O};break;
-    case ${Op.DUP}:${W}(${Y}());break;
-    case ${Op.DUP2}:{var _a=${S}[${P}-1];var _b=${S}[${P}];${W}(_a);${W}(_b);break;}
-    case ${Op.SWAP}:{var a=${X}();var b=${X}();${W}(a);${W}(b);break;}
-    case ${Op.ROT3}:{var c=${X}();var b=${X}();var a=${X}();${W}(c);${W}(a);${W}(b);break;}
-    case ${Op.ROT4}:{var d=${X}();var c=${X}();var b=${X}();var a=${X}();${W}(d);${W}(a);${W}(b);${W}(c);break;}
-    case ${Op.PICK}:{${W}(${S}[${P}-${O}]);break;}
+    case ${Op.DUP}:{${S}[${P}+1]=${S}[${P}];${P}++;break;}
+    case ${Op.DUP2}:{var _a=${S}[${P}-1];var _b=${S}[${P}];${S}[++${P}]=_a;${S}[++${P}]=_b;break;}
+    case ${Op.SWAP}:{var a=${S}[${P}--];var b=${S}[${P}--];${S}[++${P}]=a;${S}[++${P}]=b;break;}
+    case ${Op.ROT3}:{var c=${S}[${P}--];var b=${S}[${P}--];var a=${S}[${P}--];${S}[++${P}]=c;${S}[++${P}]=a;${S}[++${P}]=b;break;}
+    case ${Op.ROT4}:{var d=${S}[${P}--];var c=${S}[${P}--];var b=${S}[${P}--];var a=${S}[${P}--];${S}[++${P}]=d;${S}[++${P}]=a;${S}[++${P}]=b;${S}[++${P}]=c;break;}
+    case ${Op.PICK}:{${S}[${P}+1]=${S}[${P}-${O}];${P}++;break;}
 
     case ${Op.LOAD_REG}:${W}(${R}[${O}]);break;
-    case ${Op.STORE_REG}:${R}[${O}]=${X}();break;
+    case ${Op.STORE_REG}:${R}[${O}]=${S}[${P}--];break;
     case ${Op.LOAD_ARG}:${W}(${O}<${A}.length?${A}[${O}]:void 0);break;
-    case ${Op.STORE_ARG}:${A}[${O}]=${X}();break;
+    case ${Op.STORE_ARG}:${A}[${O}]=${S}[${P}--];break;
     case ${Op.LOAD_ARG_OR_DEFAULT}:${W}(${O}<${A}.length&&${A}[${O}]!==void 0?${A}[${O}]:void 0);break;
     case ${Op.GET_ARG_COUNT}:${W}(${A}.length);break;
 
-    case ${Op.ADD}:{var b=${X}();var a=${X}();${W}(a+b);break;}
-    case ${Op.SUB}:{var b=${X}();var a=${X}();${W}(a-b);break;}
-    case ${Op.MUL}:{var b=${X}();var a=${X}();${W}(a*b);break;}
-    case ${Op.DIV}:{var b=${X}();var a=${X}();${W}(a/b);break;}
-    case ${Op.MOD}:{var b=${X}();var a=${X}();${W}(a%b);break;}
-    case ${Op.POW}:{var b=${X}();var a=${X}();${W}(a**b);break;}
-    case ${Op.NEG}:${W}(-${X}());break;
-    case ${Op.UNARY_PLUS}:${W}(+${X}());break;
-    case ${Op.INC}:${W}(${X}()+1);break;
-    case ${Op.DEC}:${W}(${X}()-1);break;
+    case ${Op.ADD}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]+b;break;}
+    case ${Op.SUB}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]-b;break;}
+    case ${Op.MUL}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]*b;break;}
+    case ${Op.DIV}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]/b;break;}
+    case ${Op.MOD}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]%b;break;}
+    case ${Op.POW}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]**b;break;}
+    case ${Op.NEG}:${S}[${P}]=-${S}[${P}];break;
+    case ${Op.UNARY_PLUS}:${S}[${P}]=+${S}[${P}];break;
+    case ${Op.INC}:${S}[${P}]=+${S}[${P}]+1;break;
+    case ${Op.DEC}:${S}[${P}]=+${S}[${P}]-1;break;
 
-    case ${Op.BIT_AND}:{var b=${X}();var a=${X}();${W}(a&b);break;}
-    case ${Op.BIT_OR}:{var b=${X}();var a=${X}();${W}(a|b);break;}
-    case ${Op.BIT_XOR}:{var b=${X}();var a=${X}();${W}(a^b);break;}
-    case ${Op.BIT_NOT}:${W}(~${X}());break;
-    case ${Op.SHL}:{var b=${X}();var a=${X}();${W}(a<<b);break;}
-    case ${Op.SHR}:{var b=${X}();var a=${X}();${W}(a>>b);break;}
-    case ${Op.USHR}:{var b=${X}();var a=${X}();${W}(a>>>b);break;}
+    case ${Op.BIT_AND}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]&b;break;}
+    case ${Op.BIT_OR}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]|b;break;}
+    case ${Op.BIT_XOR}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]^b;break;}
+    case ${Op.BIT_NOT}:${S}[${P}]=~${S}[${P}];break;
+    case ${Op.SHL}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]<<b;break;}
+    case ${Op.SHR}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]>>b;break;}
+    case ${Op.USHR}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]>>>b;break;}
 
-    case ${Op.NOT}:${W}(!${X}());break;
-    case ${Op.LOGICAL_AND}:{var v=${Y}();if(!v){${IP}=${O}*2;}else{${P}--;}break;}
-    case ${Op.LOGICAL_OR}:{var v=${Y}();if(v){${IP}=${O}*2;}else{${P}--;}break;}
-    case ${Op.NULLISH_COALESCE}:{var v=${Y}();if(v!==null&&v!==void 0){${IP}=${O}*2;}else{${P}--;}break;}
+    case ${Op.NOT}:${S}[${P}]=!${S}[${P}];break;
+    case ${Op.LOGICAL_AND}:{var v=${S}[${P}];if(!v){${IP}=${O}*2;}else{${P}--;}break;}
+    case ${Op.LOGICAL_OR}:{var v=${S}[${P}];if(v){${IP}=${O}*2;}else{${P}--;}break;}
+    case ${Op.NULLISH_COALESCE}:{var v=${S}[${P}];if(v!==null&&v!==void 0){${IP}=${O}*2;}else{${P}--;}break;}
 
-    case ${Op.EQ}:{var b=${X}();var a=${X}();${W}(a==b);break;}
-    case ${Op.NEQ}:{var b=${X}();var a=${X}();${W}(a!=b);break;}
-    case ${Op.SEQ}:{var b=${X}();var a=${X}();${W}(a===b);break;}
-    case ${Op.SNEQ}:{var b=${X}();var a=${X}();${W}(a!==b);break;}
-    case ${Op.LT}:{var b=${X}();var a=${X}();${W}(a<b);break;}
-    case ${Op.LTE}:{var b=${X}();var a=${X}();${W}(a<=b);break;}
-    case ${Op.GT}:{var b=${X}();var a=${X}();${W}(a>b);break;}
-    case ${Op.GTE}:{var b=${X}();var a=${X}();${W}(a>=b);break;}
+    case ${Op.EQ}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]==b;break;}
+    case ${Op.NEQ}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]!=b;break;}
+    case ${Op.SEQ}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]===b;break;}
+    case ${Op.SNEQ}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]!==b;break;}
+    case ${Op.LT}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]<b;break;}
+    case ${Op.LTE}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]<=b;break;}
+    case ${Op.GT}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]>b;break;}
+    case ${Op.GTE}:{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]>=b;break;}
 
     case ${Op.JMP}:${IP}=${O}*2;break;
-    case ${Op.JMP_TRUE}:if(${X}())${IP}=${O}*2;break;
-    case ${Op.JMP_FALSE}:if(!${X}())${IP}=${O}*2;break;
-    case ${Op.JMP_NULLISH}:{var v=${X}();if(v===null||v===void 0)${IP}=${O}*2;break;}
-    case ${Op.JMP_UNDEFINED}:{var v=${X}();if(v===void 0)${IP}=${O}*2;break;}
-    case ${Op.JMP_TRUE_KEEP}:if(${Y}())${IP}=${O}*2;break;
-    case ${Op.JMP_FALSE_KEEP}:if(!${Y}())${IP}=${O}*2;break;
-    case ${Op.JMP_NULLISH_KEEP}:{var v=${Y}();if(v===null||v===void 0)${IP}=${O}*2;break;}
-    case ${Op.RETURN}:{var _rv=${X}();${debug ? `${n.dbg}('RETURN','value=',_rv);` : ''}return _rv;}
-    case ${Op.RETURN_VOID}:${debug ? `${n.dbg}('RETURN_VOID');` : ''}return void 0;
-    case ${Op.THROW}:{var _te=${X}();${debug ? `${n.dbg}('THROW','error=',_te);` : ''}throw _te;}
+    case ${Op.JMP_TRUE}:if(${S}[${P}--])${IP}=${O}*2;break;
+    case ${Op.JMP_FALSE}:if(!${S}[${P}--])${IP}=${O}*2;break;
+    case ${Op.JMP_NULLISH}:{var v=${S}[${P}--];if(v===null||v===void 0)${IP}=${O}*2;break;}
+    case ${Op.JMP_UNDEFINED}:{var v=${S}[${P}--];if(v===void 0)${IP}=${O}*2;break;}
+    case ${Op.JMP_TRUE_KEEP}:if(${S}[${P}])${IP}=${O}*2;break;
+    case ${Op.JMP_FALSE_KEEP}:if(!${S}[${P}])${IP}=${O}*2;break;
+    case ${Op.JMP_NULLISH_KEEP}:{var v=${S}[${P}];if(v===null||v===void 0)${IP}=${O}*2;break;}
+    case ${Op.RETURN}:{var _rv=${S}[${P}--];${debug ? `${n.dbg}('RETURN','value=',_rv);` : ''}if(${EX}.length>0){var _h=${EX}[${EX}.length-1];if(_h.finallyIp>=0){${CT}=1;${CV}=_rv;${EX}.pop();${P}=_h.sp;${IP}=_h.finallyIp*2;break;}}return _rv;}
+    case ${Op.RETURN_VOID}:{${debug ? `${n.dbg}('RETURN_VOID');` : ''}if(${EX}.length>0){var _h=${EX}[${EX}.length-1];if(_h.finallyIp>=0){${CT}=1;${CV}=void 0;${EX}.pop();${P}=_h.sp;${IP}=_h.finallyIp*2;break;}}return void 0;}
+    case ${Op.THROW}:{var _te=${S}[${P}--];${debug ? `${n.dbg}('THROW','error=',_te);` : ''}throw _te;}
     case ${Op.RETHROW}:{if(${HPE}){var ex=${PE};${PE}=null;${HPE}=false;throw ex;}break;}
     case ${Op.NOP}:break;
     case ${Op.TABLE_SWITCH}:case ${Op.LOOKUP_SWITCH}:{${IP}=${O}*2;break;}
 
-    case ${Op.GET_PROP_STATIC}:{var obj=${X}();${W}(obj[${C}[${O}]]);break;}
-    case ${Op.SET_PROP_STATIC}:{var val=${X}();var obj=${X}();var k=${C}[${O}];try{obj[k]=val;}catch(_){Object.defineProperty(obj,k,{value:val,writable:true,configurable:true});}${W}(obj);break;}
-    case ${Op.GET_PROP_DYNAMIC}:{var key=${X}();var obj=${X}();${W}(obj[key]);break;}
-    case ${Op.SET_PROP_DYNAMIC}:{var val=${X}();var key=${X}();var obj=${X}();obj[key]=val;${W}(obj);break;}
-    case ${Op.DELETE_PROP_STATIC}:{var obj=${X}();${W}(delete obj[${C}[${O}]]);break;}
-    case ${Op.DELETE_PROP_DYNAMIC}:{var key=${X}();var obj=${X}();${W}(delete obj[key]);break;}
-    case ${Op.OPT_CHAIN_GET}:{var key=${C}[${O}];var obj=${X}();${W}(obj==null?void 0:obj[key]);break;}
-    case ${Op.OPT_CHAIN_DYNAMIC}:{var key=${X}();var obj=${X}();${W}(obj==null?void 0:obj[key]);break;}
-    case ${Op.IN_OP}:{var obj=${X}();var key=${X}();${W}(key in obj);break;}
-    case ${Op.INSTANCEOF}:{var ctor=${X}();var obj=${X}();${W}(obj instanceof ctor);break;}
-    case ${Op.GET_SUPER_PROP}:{var sp2=Object.getPrototypeOf(Object.getPrototypeOf(${TV}));var key=${O}>=0?${C}[${O}]:${X}();${W}(sp2?sp2[key]:void 0);break;}
-    case ${Op.SET_SUPER_PROP}:{var val=${X}();var sp2=Object.getPrototypeOf(Object.getPrototypeOf(${TV}));var key=${O}>=0?${C}[${O}]:${X}();if(sp2)sp2[key]=val;${W}(val);break;}
+    case ${Op.GET_PROP_STATIC}:${S}[${P}]=${S}[${P}][${C}[${O}]];break;
+    case ${Op.SET_PROP_STATIC}:{var val=${S}[${P}--];var obj=${S}[${P}];var k=${C}[${O}];try{obj[k]=val;}catch(_){Object.defineProperty(obj,k,{value:val,writable:true,configurable:true});}break;}
+    case ${Op.GET_PROP_DYNAMIC}:{var key=${S}[${P}--];${S}[${P}]=${S}[${P}][key];break;}
+    case ${Op.SET_PROP_DYNAMIC}:{var val=${S}[${P}--];var key=${S}[${P}--];var obj=${S}[${P}];obj[key]=val;break;}
+    case ${Op.DELETE_PROP_STATIC}:${S}[${P}]=delete ${S}[${P}][${C}[${O}]];break;
+    case ${Op.DELETE_PROP_DYNAMIC}:{var key=${S}[${P}--];${S}[${P}]=delete ${S}[${P}][key];break;}
+    case ${Op.OPT_CHAIN_GET}:{var key=${C}[${O}];var obj=${S}[${P}];${S}[${P}]=obj==null?void 0:obj[key];break;}
+    case ${Op.OPT_CHAIN_DYNAMIC}:{var key=${S}[${P}--];var obj=${S}[${P}];${S}[${P}]=obj==null?void 0:obj[key];break;}
+    case ${Op.IN_OP}:{var obj=${S}[${P}--];${S}[${P}]=${S}[${P}] in obj;break;}
+    case ${Op.INSTANCEOF}:{var ctor=${S}[${P}--];${S}[${P}]=${S}[${P}] instanceof ctor;break;}
+    case ${Op.GET_SUPER_PROP}:{var sp2=${HO}?Object.getPrototypeOf(${HO}):Object.getPrototypeOf(Object.getPrototypeOf(${TV}));var key=${O}>=0?${C}[${O}]:${X}();${W}(sp2?sp2[key]:void 0);break;}
+    case ${Op.SET_SUPER_PROP}:{var val=${X}();var sp2=${HO}?Object.getPrototypeOf(${HO}):Object.getPrototypeOf(Object.getPrototypeOf(${TV}));var key=${O}>=0?${C}[${O}]:${X}();if(sp2)sp2[key]=val;${W}(val);break;}
     case ${Op.GET_PRIVATE_FIELD}:{var obj=${X}();var name=${C}[${O}];${W}(obj[name]);break;}
     case ${Op.SET_PRIVATE_FIELD}:{var val=${X}();var obj=${X}();var name=${C}[${O}];obj[name]=val;${W}(val);break;}
     case ${Op.HAS_PRIVATE_FIELD}:{var obj=${X}();var name=${C}[${O}];${W}(name in obj);break;}
@@ -399,31 +462,25 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
 
     case ${Op.LOAD_SCOPED}:{
       var name=${C}[${O}];
-      var s=${SC};
-      var found=false;
+      if(name in ${SC}.${sV}){${W}(${SC}.${sV}[name]);break;}
+      var s=${SC}.${sPar};var found=false;
       while(s){
         if(name in s.${sV}){${W}(s.${sV}[name]);found=true;break;}
         s=s.${sPar};
       }
-      if(!found){
-        var g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};
-        ${W}(g[name]);
-      }
+      if(!found){${W}(_g[name]);}
       break;
     }
     case ${Op.STORE_SCOPED}:{
       var name=${C}[${O}];
-      var val=${X}();
-      var s=${SC};
-      var found=false;
+      var val=${S}[${P}--];
+      if(name in ${SC}.${sV}){${SC}.${sV}[name]=val;break;}
+      var s=${SC}.${sPar};var found=false;
       while(s){
         if(name in s.${sV}){s.${sV}[name]=val;found=true;break;}
         s=s.${sPar};
       }
-      if(!found){
-        var g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};
-        g[name]=val;
-      }
+      if(!found){_g[name]=val;}
       break;
     }
     case ${Op.DECLARE_VAR}:case ${Op.DECLARE_LET}:case ${Op.DECLARE_CONST}:{
@@ -440,11 +497,11 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
     case ${Op.DELETE_SCOPED}:{var name=${C}[${O}];var s=${SC};while(s){if(name in s.${sV}){${W}(delete s.${sV}[name]);break;}s=s.${sPar};}break;}
 
     case ${Op.LOAD_GLOBAL}:{
-      var g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};
+      var g=_g;
       ${W}(g[${C}[${O}]]);break;
     }
     case ${Op.STORE_GLOBAL}:{
-      var g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};
+      var g=_g;
       g[${C}[${O}]]=${X}();break;
     }
 
@@ -501,7 +558,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
       var argc=${O};
       var callArgs=[];
       for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
-      var superProto=Object.getPrototypeOf(Object.getPrototypeOf(${TV}));
+      var superProto=${HO}?Object.getPrototypeOf(${HO}):Object.getPrototypeOf(Object.getPrototypeOf(${TV}));
       ${debug ? `${n.dbg}('SUPER_CALL','argc='+argc,'superProto=',!!superProto,'superCtor=',superProto&&typeof superProto.constructor);` : ''}
       if(superProto&&superProto.constructor){
         superProto.constructor.apply(${TV},callArgs);
@@ -510,7 +567,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
       break;
     }
 
-    case ${Op.SPREAD_ARGS}:{var v=${X}();${W}({__spread__:true,items:Array.from(v)});break;}
+    case ${Op.SPREAD_ARGS}:${S}[${P}]={__spread__:true,items:Array.from(${S}[${P}])};break;
     case ${Op.CALL_OPTIONAL}:{
       var argc=${O};var hasSpread=argc<0;if(hasSpread)argc=-argc;
       var callArgs=[];for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
@@ -531,7 +588,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
     case ${Op.CALL_SUPER_METHOD}:{
       var argc=${O}&0xFFFF;var nameIdx=(${O}>>16)&0xFFFF;
       var callArgs=[];for(var ai=0;ai<argc;ai++)callArgs.unshift(${X}());
-      var sp2=Object.getPrototypeOf(Object.getPrototypeOf(${TV}));
+      var sp2=${HO}?Object.getPrototypeOf(${HO}):Object.getPrototypeOf(Object.getPrototypeOf(${TV}));
       var fn=sp2?sp2[${C}[nameIdx]]:void 0;${W}(fn?fn.apply(${TV},callArgs):void 0);break;
     }
     case ${Op.CALL_0}:{var fn=${X}();${W}(fn());break;}
@@ -574,23 +631,23 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
     case ${Op.DEFINE_METHOD}:{
       var fn=${X}();var cls=${Y}();var name=${C}[${O}&0xFFFF];var isStatic=(${O}>>16)&1;
       ${debug ? `${n.dbg}('DEFINE_METHOD','name='+name,'static='+!!isStatic,'isCtor='+(name==='constructor'));` : ''}
-      if(name==='constructor'){if(cls.__setCtor)cls.__setCtor(fn);cls.prototype.constructor=fn;}
-      else if(isStatic){cls[name]=fn;}else{(cls.prototype||cls)[name]=fn;}
+      if(name==='constructor'){if(cls.__setCtor)cls.__setCtor(fn);fn._ho=cls.prototype;cls.prototype.constructor=fn;}
+      else if(isStatic){fn._ho=cls;cls[name]=fn;}else{var _tgt=(cls.prototype||cls);fn._ho=_tgt;_tgt[name]=fn;}
       break;
     }
-    case ${Op.DEFINE_STATIC_METHOD}:{var fn=${X}();var cls=${Y}();cls[${C}[${O}]]=fn;break;}
+    case ${Op.DEFINE_STATIC_METHOD}:{var fn=${X}();var cls=${Y}();fn._ho=cls;cls[${C}[${O}]]=fn;break;}
     case ${Op.DEFINE_GETTER}:{
       var fn=${X}();var cls=${Y}();var name=${C}[${O}&0xFFFF];var isStatic=(${O}>>16)&1;
-      var target=isStatic?cls:(cls.prototype||cls);
+      var target=isStatic?cls:(cls.prototype||cls);fn._ho=target;
       Object.defineProperty(target,name,{get:fn,configurable:true,enumerable:false});break;
     }
-    case ${Op.DEFINE_STATIC_GETTER}:{var fn=${X}();var cls=${Y}();Object.defineProperty(cls,${C}[${O}],{get:fn,configurable:true,enumerable:false});break;}
+    case ${Op.DEFINE_STATIC_GETTER}:{var fn=${X}();var cls=${Y}();fn._ho=cls;Object.defineProperty(cls,${C}[${O}],{get:fn,configurable:true,enumerable:false});break;}
     case ${Op.DEFINE_SETTER}:{
       var fn=${X}();var cls=${Y}();var name=${C}[${O}&0xFFFF];var isStatic=(${O}>>16)&1;
-      var target=isStatic?cls:(cls.prototype||cls);
+      var target=isStatic?cls:(cls.prototype||cls);fn._ho=target;
       Object.defineProperty(target,name,{set:fn,configurable:true,enumerable:false});break;
     }
-    case ${Op.DEFINE_STATIC_SETTER}:{var fn=${X}();var cls=${Y}();Object.defineProperty(cls,${C}[${O}],{set:fn,configurable:true,enumerable:false});break;}
+    case ${Op.DEFINE_STATIC_SETTER}:{var fn=${X}();var cls=${Y}();fn._ho=cls;Object.defineProperty(cls,${C}[${O}],{set:fn,configurable:true,enumerable:false});break;}
     case ${Op.DEFINE_FIELD}:{var val=${X}();var name=${C}[${O}];var obj=${Y}();obj[name]=val;break;}
     case ${Op.DEFINE_STATIC_FIELD}:{var val=${X}();var cls=${Y}();cls[${C}[${O}]]=val;break;}
     case ${Op.DEFINE_PRIVATE_METHOD}:{var fn=${X}();var cls=${Y}();(cls.prototype||cls)[${C}[${O}]]=fn;break;}
@@ -643,14 +700,14 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
     case ${Op.PUSH_CLOSURE_VAR}:{var name=${C}[${O}];var s=${SC};while(s){if(name in s.${sV}){${W}(s.${sV}[name]);break;}s=s.${sPar};}break;}
     case ${Op.STORE_CLOSURE_VAR}:{var name=${C}[${O}];var val=${X}();var s=${SC};while(s){if(name in s.${sV}){s.${sV}[name]=val;break;}s=s.${sPar};}break;}
 
-    case ${Op.TYPEOF}:${W}(typeof ${X}());break;
+    case ${Op.TYPEOF}:${S}[${P}]=typeof ${S}[${P}];break;
     case ${Op.TYPEOF_GLOBAL}:{
       var name=${C}[${O}];
-      var g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};
+      var g=_g;
       ${W}(typeof g[name]);
       break;
     }
-    case ${Op.VOID}:${X}();${W}(void 0);break;
+    case ${Op.VOID}:${S}[${P}]=void 0;break;
     case ${Op.DEBUGGER_STMT}:break;
 
     case ${Op.TRY_PUSH}:{
@@ -676,6 +733,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
     case ${Op.FINALLY_MARK}:break;
     case ${Op.END_FINALLY}:{
       if(${HPE}){var ex=${PE};${PE}=null;${HPE}=false;throw ex;}
+      if(${CT}===1){var _rv2=${CV};${CT}=0;${CV}=void 0;return _rv2;}
       break;
     }
 
@@ -748,12 +806,12 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
     case ${Op.ASYNC_ITER_CLOSE}:{var iterObj=${X}();if(iterObj._iter.return)${isAsync ? 'await iterObj._iter.return()' : 'iterObj._iter.return()'};break;}
     case ${Op.FOR_AWAIT_NEXT}:{var iterObj=${Y}();var result=${isAsync ? 'await iterObj._iter.next()' : 'iterObj._iter.next()'};iterObj._done=!!result.done;iterObj._value=result.value;${W}(result.value);break;}
 
-    case ${Op.TO_NUMBER}:${W}(Number(${X}()));break;
-    case ${Op.TO_STRING}:${W}(String(${X}()));break;
-    case ${Op.TO_BOOLEAN}:${W}(Boolean(${X}()));break;
-    case ${Op.TO_OBJECT}:${W}(Object(${X}()));break;
-    case ${Op.TO_PROPERTY_KEY}:{var v=${X}();${W}(typeof v==='symbol'?v:String(v));break;}
-    case ${Op.TO_NUMERIC}:{var v=${X}();${W}(typeof v==='bigint'?v:Number(v));break;}
+    case ${Op.TO_NUMBER}:${S}[${P}]=Number(${S}[${P}]);break;
+    case ${Op.TO_STRING}:${S}[${P}]=String(${S}[${P}]);break;
+    case ${Op.TO_BOOLEAN}:${S}[${P}]=Boolean(${S}[${P}]);break;
+    case ${Op.TO_OBJECT}:${S}[${P}]=Object(${S}[${P}]);break;
+    case ${Op.TO_PROPERTY_KEY}:{var v=${S}[${P}];${S}[${P}]=typeof v==='symbol'?v:String(v);break;}
+    case ${Op.TO_NUMERIC}:{var v=${S}[${P}];${S}[${P}]=typeof v==='bigint'?v:Number(v);break;}
 
     case ${Op.TEMPLATE_LITERAL}:{
       var exprCount=${O};var parts=[];
@@ -792,15 +850,15 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
     case ${Op.ASSIGN_OP}:break;
     case ${Op.INC_REG}:${R}[${O}]=(${R}[${O}]||0)+1;break;
     case ${Op.DEC_REG}:${R}[${O}]=(${R}[${O}]||0)-1;break;
-    case ${Op.FAST_ADD_CONST}:${W}(${X}()+${O});break;
-    case ${Op.FAST_SUB_CONST}:${W}(${X}()-${O});break;
+    case ${Op.FAST_ADD_CONST}:${S}[${P}]=+${S}[${P}]+${O};break;
+    case ${Op.FAST_SUB_CONST}:${S}[${P}]=+${S}[${P}]-${O};break;
     case ${Op.FAST_GET_PROP}:{var name=${C}[${O}&0xFFFF];var varName=${C}[(${O}>>16)&0xFFFF];var s=${SC};while(s){if(varName in s.${sV}){${W}(s.${sV}[varName][name]);break;}s=s.${sPar};}break;}
-    case ${Op.LOAD_GLOBAL_FAST}:{var g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};${W}(g[${C}[${O}]]);break;}
+    case ${Op.LOAD_GLOBAL_FAST}:{var g=_g;${W}(g[${C}[${O}]]);break;}
 
     case ${Op.PUSH_THIS}:${W}(${TV});break;
     case ${Op.PUSH_ARGUMENTS}:${W}(${A});break;
     case ${Op.PUSH_NEW_TARGET}:${W}(${NT});break;
-    case ${Op.PUSH_GLOBAL_THIS}:{var g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{};${W}(g);break;}
+    case ${Op.PUSH_GLOBAL_THIS}:{var g=_g;${W}(g);break;}
     case ${Op.PUSH_WELL_KNOWN_SYMBOL}:{var syms=[Symbol.iterator,Symbol.asyncIterator,Symbol.hasInstance,Symbol.toPrimitive,Symbol.toStringTag,Symbol.species,Symbol.isConcatSpreadable,Symbol.match,Symbol.replace,Symbol.search,Symbol.split,Symbol.unscopables];${W}(syms[${O}]||Symbol.iterator);break;}
     case ${Op.IMPORT_META}:${W}({});break;
     case ${Op.DYNAMIC_IMPORT}:{var spec=${X}();${W}(import(spec));break;}
@@ -837,7 +895,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT}){
   return void 0;
   }catch(e){
     ${debug ? `${n.dbg}('EXCEPTION','error=',e&&e.message?e.message:e,'${EX}='+${EX}.length);` : ''}
-    ${HPE}=false;${PE}=null;
+    ${HPE}=false;${PE}=null;${CT}=0;${CV}=void 0;
     if(${EX}.length>0){
       var handler=${EX}.pop();
       if(handler.catchIp>=0){

@@ -36,6 +36,22 @@ const UNARY_OP_MAP: Record<string, Op> = {
   "!": Op.NOT,
 };
 
+/** Mapping from compound assignment base operator to its fused SCOPED opcode. */
+const COMPOUND_SCOPED_OP_MAP: Record<string, Op> = {
+  "+": Op.ADD_ASSIGN_SCOPED,
+  "-": Op.SUB_ASSIGN_SCOPED,
+  "*": Op.MUL_ASSIGN_SCOPED,
+  "/": Op.DIV_ASSIGN_SCOPED,
+  "%": Op.MOD_ASSIGN_SCOPED,
+  "**": Op.POW_ASSIGN_SCOPED,
+  "&": Op.BIT_AND_ASSIGN_SCOPED,
+  "|": Op.BIT_OR_ASSIGN_SCOPED,
+  "^": Op.BIT_XOR_ASSIGN_SCOPED,
+  "<<": Op.SHL_ASSIGN_SCOPED,
+  ">>": Op.SHR_ASSIGN_SCOPED,
+  ">>>": Op.USHR_ASSIGN_SCOPED,
+};
+
 // ---------------------------------------------------------------------------
 // Top-level expression dispatcher
 // ---------------------------------------------------------------------------
@@ -378,14 +394,16 @@ function compileUpdateExpression(
 
   if (arg.isIdentifier()) {
     const nameIdx = emitter.addStringConstant(arg.node.name);
-    emitter.emit(Op.LOAD_SCOPED, nameIdx);
-    if (!node.prefix) emitter.emit(Op.DUP, 0);
-    emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
-    emitter.emit(node.operator === "++" ? Op.ADD : Op.SUB, 0);
-    if (node.prefix) emitter.emit(Op.DUP, 0);
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
-    // For postfix: old value is under the new value on stack, STORE_SCOPED consumed new value
-    // For prefix: DUP'd the new value, STORE_SCOPED consumed one copy, the other remains
+    // Use compound scoped opcodes to reduce dispatch count
+    if (node.prefix && node.operator === "++") {
+      emitter.emit(Op.INC_SCOPED, nameIdx);
+    } else if (node.prefix && node.operator === "--") {
+      emitter.emit(Op.DEC_SCOPED, nameIdx);
+    } else if (!node.prefix && node.operator === "++") {
+      emitter.emit(Op.POST_INC_SCOPED, nameIdx);
+    } else {
+      emitter.emit(Op.POST_DEC_SCOPED, nameIdx);
+    }
   } else if (arg.isMemberExpression()) {
     compileMemberExpressionForUpdate(arg, emitter, scope, ctx, node.operator, node.prefix);
   }
@@ -399,6 +417,35 @@ function compileMemberExpressionForUpdate(
   operator: "++" | "--",
   prefix: boolean,
 ): void {
+  // super.prop++ / super[expr]++ — use dedicated super opcodes
+  if (path.get("object").isSuper()) {
+    if (path.node.computed) {
+      const rKey = scope.registerAllocator.alloc();
+      compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
+      emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.STORE_REG, rKey);
+      emitter.emit(Op.GET_SUPER_PROP, -1);
+      if (!prefix) emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
+      emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
+      if (prefix) emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.LOAD_REG, rKey);
+      emitter.emit(Op.SWAP, 0);
+      emitter.emit(Op.SET_SUPER_PROP, -1);
+      emitter.emit(Op.POP, 0);
+    } else {
+      const nameIdx = emitter.addStringConstant((path.node.property as t.Identifier).name);
+      emitter.emit(Op.GET_SUPER_PROP, nameIdx);
+      if (!prefix) emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
+      emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
+      if (prefix) emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.SET_SUPER_PROP, nameIdx);
+      emitter.emit(Op.POP, 0);
+    }
+    return;
+  }
+
   // Save obj to register to avoid deep-stack issues with SET_PROP
   const rObj = scope.registerAllocator.alloc();
   compileExpression(path.get("object"), emitter, scope, ctx);
@@ -474,6 +521,24 @@ function compileAssignmentExpression(
     emitter.emit(Op.DUP, 0);
     const nameIdx = emitter.addStringConstant(left.node.name);
     emitter.emit(Op.STORE_SCOPED, nameIdx);
+  } else if (left.isMemberExpression() && left.get("object").isSuper()) {
+    // super.prop = val / super[expr] = val
+    compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+    emitter.emit(Op.DUP, 0); // expression result stays on stack
+    if (left.node.computed) {
+      const rKey = scope.registerAllocator.alloc();
+      const rVal = scope.registerAllocator.alloc();
+      compileExpression(left.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
+      emitter.emit(Op.STORE_REG, rKey);
+      emitter.emit(Op.STORE_REG, rVal);
+      emitter.emit(Op.LOAD_REG, rKey);
+      emitter.emit(Op.LOAD_REG, rVal);
+      emitter.emit(Op.SET_SUPER_PROP, -1);
+    } else {
+      const nameIdx = emitter.addStringConstant((left.node.property as t.Identifier).name);
+      emitter.emit(Op.SET_SUPER_PROP, nameIdx);
+    }
+    emitter.emit(Op.POP, 0);
   } else if (left.isMemberExpression()) {
     if (left.node.computed) {
       // Use registers for computed member to avoid deep-stack ROT3 issues
@@ -523,11 +588,45 @@ function compileCompoundAssignment(
 
   if (left.isIdentifier()) {
     const nameIdx = emitter.addStringConstant(left.node.name);
-    emitter.emit(Op.LOAD_SCOPED, nameIdx);
-    compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-    emitter.emit(arithmeticOp, 0);
-    emitter.emit(Op.DUP, 0);
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
+    const compoundOp = COMPOUND_SCOPED_OP_MAP[baseOp];
+    if (compoundOp !== undefined) {
+      // Fused opcode: compile RHS, then do load+op+store in one dispatch
+      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+      emitter.emit(compoundOp, nameIdx);
+    } else {
+      // Fallback for unsupported operators
+      emitter.emit(Op.LOAD_SCOPED, nameIdx);
+      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+      emitter.emit(arithmeticOp, 0);
+      emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.STORE_SCOPED, nameIdx);
+    }
+  } else if (left.isMemberExpression() && left.get("object").isSuper()) {
+    // super.prop += val / super[expr] += val
+    if (left.node.computed) {
+      const rKey = scope.registerAllocator.alloc();
+      const rNewVal = scope.registerAllocator.alloc();
+      compileExpression(left.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
+      emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.STORE_REG, rKey);
+      emitter.emit(Op.GET_SUPER_PROP, -1);
+      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+      emitter.emit(arithmeticOp, 0);
+      emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.STORE_REG, rNewVal);
+      emitter.emit(Op.LOAD_REG, rKey);
+      emitter.emit(Op.LOAD_REG, rNewVal);
+      emitter.emit(Op.SET_SUPER_PROP, -1);
+      emitter.emit(Op.POP, 0);
+    } else {
+      const nameIdx = emitter.addStringConstant((left.node.property as t.Identifier).name);
+      emitter.emit(Op.GET_SUPER_PROP, nameIdx);
+      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+      emitter.emit(arithmeticOp, 0);
+      emitter.emit(Op.DUP, 0);
+      emitter.emit(Op.SET_SUPER_PROP, nameIdx);
+      emitter.emit(Op.POP, 0);
+    }
   } else if (left.isMemberExpression()) {
     if (left.node.computed) {
       // Use registers for computed member to avoid deep-stack ROT3 issues
@@ -614,7 +713,40 @@ function compileCallExpression(
   const callee = path.get("callee");
   const args = path.get("arguments");
 
-  if (callee.isMemberExpression()) {
+  if (callee.isMemberExpression() && callee.get("object").isSuper()) {
+    // super.method(args) / super[expr](args)
+    const hasSpread = args.some(a => a.isSpreadElement());
+
+    if (!callee.node.computed && !hasSpread) {
+      // Optimised path: static name, no spread → CALL_SUPER_METHOD
+      const nameIdx = emitter.addStringConstant((callee.node.property as t.Identifier).name);
+      for (const arg of args) {
+        compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
+      }
+      emitter.emit(Op.CALL_SUPER_METHOD, (nameIdx << 16) | args.length);
+    } else {
+      // Fallback: push this as receiver, get super method, then CALL_METHOD
+      emitter.emit(Op.PUSH_THIS, 0);
+      if (callee.node.computed) {
+        compileExpression(callee.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
+        emitter.emit(Op.GET_SUPER_PROP, -1);
+      } else {
+        const nameIdx = emitter.addStringConstant((callee.node.property as t.Identifier).name);
+        emitter.emit(Op.GET_SUPER_PROP, nameIdx);
+      }
+      emitter.emit(Op.SWAP, 0);
+
+      for (const arg of args) {
+        if (arg.isSpreadElement()) {
+          compileExpression(arg.get("argument"), emitter, scope, ctx);
+          emitter.emit(Op.SPREAD_ARGS, 0);
+        } else {
+          compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
+        }
+      }
+      emitter.emit(Op.CALL_METHOD, hasSpread ? -(args.length) : args.length);
+    }
+  } else if (callee.isMemberExpression()) {
     compileExpression(callee.get("object"), emitter, scope, ctx);
     emitter.emit(Op.DUP, 0);
 
@@ -825,6 +957,18 @@ export function compileMemberExpression(
   scope: ScopeAnalyzer,
   ctx: CompileContext,
 ): void {
+  // super.prop / super[expr] — use dedicated GET_SUPER_PROP opcode
+  if (path.get("object").isSuper()) {
+    if (path.node.computed) {
+      compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
+      emitter.emit(Op.GET_SUPER_PROP, -1);
+    } else {
+      const nameIdx = emitter.addStringConstant((path.node.property as t.Identifier).name);
+      emitter.emit(Op.GET_SUPER_PROP, nameIdx);
+    }
+    return;
+  }
+
   compileExpression(path.get("object"), emitter, scope, ctx);
 
   if (path.node.computed) {
@@ -957,8 +1101,7 @@ function compileArrayExpression(
 
   for (const elem of path.get("elements")) {
     if (elem.node === null) {
-      emitter.emit(Op.PUSH_UNDEFINED, 0);
-      emitter.emit(Op.ARRAY_PUSH, 0);
+      emitter.emit(Op.ARRAY_HOLE, 0);
     } else if (elem.isSpreadElement()) {
       compileExpression(elem.get("argument"), emitter, scope, ctx);
       emitter.emit(Op.SPREAD_ARRAY, 0);
