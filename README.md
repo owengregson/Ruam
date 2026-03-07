@@ -19,7 +19,7 @@
   <a href="#installation">Installation</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#how-it-works">How It Works</a> &middot;
-  <a href="#security-model">Security Model</a> &middot;
+  <a href="#layers">Layers</a> &middot;
   <a href="#api-reference">API</a>
 </p>
 
@@ -165,12 +165,12 @@ Source JavaScript
   └────┬───────────────────────────────────────────┘
        │
        ▼
-  Obfuscated JavaScript
+Obfuscated JavaScript
 </pre>
 
 <hr>
 
-<h2 id="security-model">Security Model</h2>
+<h2 id="layers">Layers</h2>
 
 <p>Ruam's protection is has with multiple independent layers that compound the difficulty of reverse engineering.</p>
 
@@ -448,12 +448,12 @@ src/
 <ul>
   <li><strong>Register promotion</strong>: Non-captured locals bypass the scope chain entirely via O(1) register access</li>
   <li><strong>Superinstructions</strong>: ~22 fused opcodes (e.g., <code>REG_ADD</code>, <code>REG_LT_CONST_JF</code>) reduce interpreter dispatch count</li>
-  <li><strong>Inline stack operations</strong>: Push/pop/peek are inlined directly (<code>S[++P]=val</code>, <code>S[P--]</code>) — no function call overhead</li>
-  <li><strong>Direct closure dispatch</strong>: Closures call <code>exec()</code> directly with pre-loaded bytecode units, bypassing the load chain</li>
+  <li><strong>Inline stack operations</strong>: Push/pop/peek are inlined directly (<code>S[++P]=val</code>, <code>S[P--]</code>) so there is no function call overhead</li>
+  <li><strong>Direct closure dispatch</strong>: Closures call <code>exec()</code> directly with pre-loaded bytecode units and bypass the load chain</li>
   <li><strong>Int32Array instruction storage</strong>: Bytecode is loaded into typed arrays for fast indexed access</li>
 </ul>
 
-<p>Typical overhead is <strong>~38-45x</strong> native speed on compute-heavy benchmarks, which is competitive for a pure JS-in-JS interpreter. The theoretical floor for this approach is ~25-35x; further gains would require native code.</p>
+<p>Typical overhead is <strong>~38-45x</strong> native speed on compute-heavy benchmarks, which is competitive for a pure JS-in-JS interpreter. The theoretical floor for this approach is ~25x vanilla JS runtimes.</p>
 
 <h2 id="selective-obfuscation">Selective Obfuscation</h2>
 
