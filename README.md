@@ -8,19 +8,21 @@
  MMMM   "W"  "YmmMMMM"" YMM   ""` MMM  M'  "MMM</pre>
 
 <strong>Virtualization-Based JavaScript Obfuscation</strong><br>
-<sub>Compiles JavaScript functions into custom bytecode executed by an embedded virtual machine.<br>
-No deobfuscator exists for RuamVM bytecode.</sub>
+
+<p>Compiles JavaScript functions into custom bytecode executed by an embedded virtual machine.<br>
+No deobfuscator exists for RuamVM bytecode.</p>
 
 <a href="https://nodejs.org/en/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 18"></a>
 <img src="https://img.shields.io/badge/license-LGPL--2.1-yellow?style=flat-square&logo=googledocs&logoColor=white" alt="LGPL-2.1">
 <img src="https://img.shields.io/badge/typescript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript Strict">
 
 <!-- Dynamic badges — auto-update from packages/ruam/stats.json on main -->
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.testsPassing&label=tests&color=4CAF50&style=flat-square&logo=vitest&logoColor=white" alt="Tests Passing">
+<!--<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.testsPassing&label=tests&color=4CAF50&style=flat-square&logo=vitest&logoColor=white" alt="Tests Passing">
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.opcodes&label=opcodes&color=5C6BC0&style=flat-square" alt="Opcodes">
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.loc&label=source&suffix=%20LoC&color=607D8B&style=flat-square" alt="Lines of Code">
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.overhead&label=VM%20overhead&color=FF9800&style=flat-square" alt="VM Overhead">
-<br><br>
+
+<br><br>-->
 
 <a href="#installation">Installation</a>&ensp;&middot;&ensp;
 <a href="#quick-start">Quick Start</a>&ensp;&middot;&ensp;
@@ -190,26 +192,26 @@ function publicHelper() {
           +---------------------+---------------------+
                                 |
                                 v
-            +--------------------------------------+
+            +---------------------------------------+
             |         4  Serialize + Encrypt        |
             |  |-- JSON or binary format            |
             |  |-- String constant XOR encoding     |
             |  |-- Rolling cipher (per-instruction) |
             |  +-- RC4 encryption (optional)        |
-            +------------------+-------------------+
+            +------------------+--------------------+
                                |
                                v
-          +--------------------------------------------+
-          |           5  Assemble Output               |
-          |  |-- Generate VM runtime IIFE              |
-          |  |    |-- Interpreter (shuffled switch)     |
+          +---------------------------------------------+
+          |           5  Assemble Output                |
+          |  |-- Generate VM runtime IIFE               |
+          |  |    |-- Interpreter (shuffled switch)      |
           |  |    |-- Scope chain + exception handling  |
           |  |    |-- Bytecode loader + deserializer    |
           |  |    +-- Rolling cipher decoder            |
           |  |-- Embed bytecode table                   |
           |  |-- Replace original function bodies       |
-          |  +-- Randomize all internal identifiers     |
-          +--------------------+-----------------------+
+          |  +-- Randomize all internal identifiers      |
+          +--------------------+------------------------+
                                |
                                v
                      Obfuscated JavaScript
