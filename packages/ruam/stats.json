@@ -1,0 +1,136 @@
+{
+  "version": "2.0.0",
+  "collectedAt": "2026-03-07T22:46:16.987Z",
+  "opcodes": {
+    "count": 300,
+    "categories": 24,
+    "superinstructions": 18,
+    "compounds": 33,
+    "slotOpcodes": 10
+  },
+  "source": {
+    "files": 31,
+    "lines": 8349,
+    "testFiles": 26,
+    "testLines": 12767,
+    "totalFiles": 57,
+    "totalLines": 21116,
+    "templateFiles": 7,
+    "visitorFiles": 5
+  },
+  "tests": {
+    "total": 1657,
+    "passed": 1657,
+    "failed": 0,
+    "suites": 168,
+    "categories": [
+      "core",
+      "integration",
+      "security",
+      "stress"
+    ],
+    "durationMs": 715810
+  },
+  "performance": {
+    "weightedAvg": 39.5,
+    "median": 39.9,
+    "fastest": {
+      "name": "try/catch",
+      "multiplier": 24.7
+    },
+    "slowest": {
+      "name": "fibonacci (n=20)",
+      "multiplier": 85.9
+    },
+    "workloadCount": 10,
+    "workloads": [
+      {
+        "name": "arithmetic loop (10k)",
+        "multiplier": 42,
+        "nativeMs": 0.051,
+        "vmMs": 2.127
+      },
+      {
+        "name": "fibonacci (n=20)",
+        "multiplier": 85.9,
+        "nativeMs": 0.062,
+        "vmMs": 5.304
+      },
+      {
+        "name": "array ops",
+        "multiplier": 26.5,
+        "nativeMs": 0.057,
+        "vmMs": 1.498
+      },
+      {
+        "name": "string ops",
+        "multiplier": 38,
+        "nativeMs": 0.009,
+        "vmMs": 0.331
+      },
+      {
+        "name": "object creation",
+        "multiplier": 34.9,
+        "nativeMs": 0.014,
+        "vmMs": 0.483
+      },
+      {
+        "name": "closures + HOF",
+        "multiplier": 45.4,
+        "nativeMs": 0.007,
+        "vmMs": 0.304
+      },
+      {
+        "name": "class + methods",
+        "multiplier": 39.9,
+        "nativeMs": 0.013,
+        "vmMs": 0.518
+      },
+      {
+        "name": "nested loops",
+        "multiplier": 37.5,
+        "nativeMs": 0.096,
+        "vmMs": 3.598
+      },
+      {
+        "name": "switch dispatch",
+        "multiplier": 46.2,
+        "nativeMs": 0.027,
+        "vmMs": 1.261
+      },
+      {
+        "name": "try/catch",
+        "multiplier": 24.7,
+        "nativeMs": 0.149,
+        "vmMs": 3.685
+      }
+    ]
+  },
+  "size": {
+    "sampleInputBytes": 110,
+    "low": {
+      "bytes": 146109,
+      "ratio": 1328.3
+    },
+    "medium": {
+      "bytes": 147639,
+      "ratio": 1342.2
+    },
+    "high": {
+      "bytes": 147925,
+      "ratio": 1344.8
+    }
+  },
+  "badges": {
+    "tests": "1,657",
+    "testsPassing": "1,657 passing",
+    "opcodes": "300",
+    "categories": "24",
+    "loc": "8.3k",
+    "totalLoc": "21.1k",
+    "overhead": "~39.5x",
+    "overheadMedian": "~39.9x",
+    "sizeRatioLow": "1328.3x",
+    "sizeRatioHigh": "1344.8x"
+  }
+}

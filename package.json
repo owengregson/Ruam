@@ -1,0 +1,21 @@
+{
+  "name": "ruam-monorepo",
+  "private": true,
+  "packageManager": "npm@11.9.0",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "stats": "turbo run stats",
+    "lint": "turbo run lint",
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=web"
+  },
+  "devDependencies": {
+    "turbo": "^2.8.14"
+  }
+}
