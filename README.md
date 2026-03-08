@@ -162,63 +162,6 @@ function publicHelper() {
 
 <hr>
 
-<h2 id="how-it-works">How It Works</h2>
-
-<p>Ruam's compilation pipeline transforms JavaScript source into VM-executed bytecode in five stages:</p>
-
-<pre>
-                        Source JavaScript
-                               |
-                               v
-                       +--------------+
-                    1  |    Parse     |   Babel parser → AST
-                       +------+-------+
-                              |
-                              v
-                    +-------------------+
-                 2  | Identify Targets  |   All root-level functions, or
-                    |                   |   only /* ruam:vm */ annotated
-                    +---------+---------+
-                              |
-                              v
-          +-------------------------------------------+
-          |           3  Compile → BytecodeUnit       |
-          |  |-- Emit opcodes for statements & exprs  |
-          |  |-- Build constant pool                  |
-          |  |-- Scope analysis + register allocation |
-          |  |-- Capture analysis → register promotion|
-          |  |-- Peephole optimization + fusion       |
-          |  +-- Recurse into nested functions        |
-          +---------------------+---------------------+
-                                |
-                                v
-            +---------------------------------------+
-            |         4  Serialize + Encrypt        |
-            |  |-- JSON or binary format            |
-            |  |-- String constant XOR encoding     |
-            |  |-- Rolling cipher (per-instruction) |
-            |  +-- RC4 encryption (optional)        |
-            +------------------+--------------------+
-                               |
-                               v
-          +---------------------------------------------+
-          |           5  Assemble Output                |
-          |  |-- Generate VM runtime IIFE               |
-          |  |    |-- Interpreter (shuffled switch)     |
-          |  |    |-- Scope chain + exception handling  |
-          |  |    |-- Bytecode loader + deserializer    |
-          |  |    +-- Rolling cipher decoder            |
-          |  |-- Embed bytecode table                   |
-          |  |-- Replace original function bodies       |
-          |  +-- Randomize all internal identifiers     |
-          +--------------------+------------------------+
-                               |
-                               v
-                     Obfuscated JavaScript
-</pre>
-
-<hr>
-
 <h2 id="protection-layers">Protection Layers</h2>
 
 <p>Ruam applies six independent layers that compound the difficulty of reverse engineering. Each layer forces an attacker to solve a distinct problem.</p>
