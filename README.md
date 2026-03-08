@@ -38,11 +38,11 @@ No deobfuscator exists for RuamVM bytecode.</p>
 <h2 id="why-ruam">Why Ruam?</h2>
 
 <p>
-  Most JavaScript obfuscators apply surface-level <i>transformations</i> &mdash; renaming variables, encoding strings, inserting dead code. A motivated attacker can undo all of it with off-the-shelf tools or by patching functions at runtime.
+  Most JavaScript obfuscators apply surface-level <i>transformations</i> &mdash; renaming variables, encoding strings, inserting dead code. A motivated attacker can understand your code with off-the-shelf tools, logic analysis, or by patching functions at runtime.
 </p>
 
 <p>
-  <strong>Ruam takes a fundamentally different approach.</strong> It <i>compiles</i> your JavaScript into a custom bytecode instruction set and replaces the original source with a compact virtual machine that executes an unintelligible instruction stream. The original code is gone.
+  <strong>Ruam takes a fundamentally different approach.</strong> It <i>compiles</i> your JavaScript into a custom bytecode instruction set and replaces the original source with a compact virtual machine that executes an unintelligible instruction stream.
 </p>
 
 <table>
@@ -55,7 +55,6 @@ No deobfuscator exists for RuamVM bytecode.</p>
         <li>Same language, same semantics</li>
         <li>AST-reversible transformations</li>
         <li>Automated deobfuscation tools exist</li>
-        <li>One pass to undo</li>
       </ul>
     </td>
     <td width="50%">
@@ -64,9 +63,8 @@ No deobfuscator exists for RuamVM bytecode.</p>
              + Embedded VM</pre>
       <ul>
         <li>Original source is destroyed</li>
-        <li>Per-build unique encoding</li>
-        <li>No deobfuscator exists</li>
         <li>Must reverse-engineer the VM itself</li>
+		<li>No deobfuscator exists</li>
       </ul>
     </td>
   </tr>
@@ -78,7 +76,7 @@ No deobfuscator exists for RuamVM bytecode.</p>
   <tbody>
     <tr>
       <td><strong>300+ opcode custom ISA</strong></td>
-      <td>A full-coverage instruction set across 26 categories &mdash; stack, arithmetic, bitwise, comparison, control flow, property access, scoping, calls, classes, iterators, destructuring, async/await, generators, and more.</td>
+      <td>A nearly full-coverage instruction set across 26 categories &mdash; stack, arithmetic, bitwise, comparison, control flow, property access, scoping, calls, classes, iterators, destructuring, async/await, generators, and more.</td>
     </tr>
     <tr>
       <td><strong>Per-build polymorphism</strong></td>
@@ -97,8 +95,8 @@ No deobfuscator exists for RuamVM bytecode.</p>
       <td>Register promotion, superinstruction fusion, peephole optimization, and inline stack ops minimize the performance cost of virtualization.</td>
     </tr>
     <tr>
-      <td><strong>1,657 tests passing</strong></td>
-      <td>Comprehensive coverage of core JS semantics, stress/edge cases, security properties, and integration scenarios &mdash; including 822 randomized fuzz tests.</td>
+      <td><strong>Thousands of tests passing</strong></td>
+      <td>Comprehensive coverage of core JS semantics, stress/edge cases, security properties, and integration scenarios &mdash; including randomized fuzz tests.</td>
     </tr>
   </tbody>
 </table>
