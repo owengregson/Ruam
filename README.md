@@ -470,7 +470,7 @@ await runVmObfuscation("dist/", {
 <h2 id="architecture">Architecture</h2>
 
 <details>
-<summary><strong>Project structure</strong> &mdash; 31 source files, ~8,300 lines of TypeScript</summary>
+<summary><strong>Project structure</strong> &mdash; ~30 source files, ~8,300 lines of TypeScript</summary>
 
 <br>
 
@@ -517,7 +517,7 @@ src/
 </details>
 
 <details>
-<summary><strong>Test suite</strong> &mdash; 1,657 tests across 25 files</summary>
+<summary><strong>Test suite</strong> &mdash; 1,500+ tests across ~25 files</summary>
 
 <br>
 
