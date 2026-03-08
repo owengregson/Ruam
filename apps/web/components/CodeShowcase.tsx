@@ -147,8 +147,8 @@ function IrreversibleCard() {
 						{"function _0x1a(a,b){ return a*b }"}
 					</code>
 					<p className="mt-1 font-mono text-[10px] text-ash">
-						While control flow, names, and strings can be heavily
-						hidden, JS logic is inevitably traceable.
+						Flow, variables, and strings can be heavily hidden, but
+						the logic is inevitably traceable.
 					</p>
 				</div>
 				<div className="rounded-lg border border-accent/15 bg-accent/[0.03] p-3">
@@ -167,7 +167,8 @@ function IrreversibleCard() {
 
 			<p className="text-[12px] leading-relaxed text-smoke">
 				Your code is compiled away, and the produced RuamVM bytecode
-				executes the same as your JS, but in an entirely different way.
+				executes the same result as your JS, but in an entirely
+				different way.
 			</p>
 		</div>
 	);
@@ -232,8 +233,8 @@ function InstantCard() {
 			</div>
 
 			<p className="text-[12px] leading-relaxed text-smoke">
-				One command protects your entire project. No config files, no
-				plugins, no build step changes.
+				One command protects your entire project. No code changes are
+				necessary to build with Ruam.
 			</p>
 		</div>
 	);

@@ -203,14 +203,14 @@ function publicHelper() {
                                v
           +---------------------------------------------+
           |           5  Assemble Output                |
-          |  |-- Generate VM runtime IIFE               |
+          |  |-- Generate VM runtime IIFE              |
           |  |    |-- Interpreter (shuffled switch)      |
           |  |    |-- Scope chain + exception handling  |
           |  |    |-- Bytecode loader + deserializer    |
           |  |    +-- Rolling cipher decoder            |
           |  |-- Embed bytecode table                   |
           |  |-- Replace original function bodies       |
-          |  +-- Randomize all internal identifiers      |
+          |  +-- Randomize all internal identifiers     |
           +--------------------+------------------------+
                                |
                                v

@@ -7,8 +7,7 @@ import { faArrowDown } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
 
 /* ── Constants ── */
-const SCRAMBLE_CHARS =
-	"0123456789abcdefABCDEF{}[]();:=!+*/&|<>^~_$x";
+const SCRAMBLE_CHARS = "0123456789abcdefABCDEF{}[]();:=!+*/&|<>^~_$x";
 const scrambleChar = () =>
 	SCRAMBLE_CHARS[Math.floor(Math.random() * SCRAMBLE_CHARS.length)];
 
@@ -34,10 +33,41 @@ function line(...parts: Cell[][]): Cell[] {
 
 /* ── Source code character map (syntax-colored) ── */
 const beforeMap: Cell[][] = [
-	line(seg("function", K), seg(" ", D), seg("fibonacci", F), seg("(", D), seg("n", P), seg(") {", D)),
-	line(seg("  ", D), seg("if", K), seg(" (n <= ", D), seg("1", N), seg(") ", D), seg("return", K), seg(" n;", D)),
-	line(seg("  ", D), seg("let", K), seg(" a = ", D), seg("0", N), seg(", b = ", D), seg("1", N), seg(";", D)),
-	line(seg("  ", D), seg("for", K), seg(" (", D), seg("let", K), seg(" i = ", D), seg("2", N), seg("; i <= n; i++) {", D)),
+	line(
+		seg("function", K),
+		seg(" ", D),
+		seg("fibonacci", F),
+		seg("(", D),
+		seg("n", P),
+		seg(") {", D)
+	),
+	line(
+		seg("  ", D),
+		seg("if", K),
+		seg(" (n <= ", D),
+		seg("1", N),
+		seg(") ", D),
+		seg("return", K),
+		seg(" n;", D)
+	),
+	line(
+		seg("  ", D),
+		seg("let", K),
+		seg(" a = ", D),
+		seg("0", N),
+		seg(", b = ", D),
+		seg("1", N),
+		seg(";", D)
+	),
+	line(
+		seg("  ", D),
+		seg("for", K),
+		seg(" (", D),
+		seg("let", K),
+		seg(" i = ", D),
+		seg("2", N),
+		seg("; i <= n; i++) {", D)
+	),
 	line(seg("    [a, b] = [b, a + b];", D)),
 	line(seg("  }", D)),
 	line(seg("  ", D), seg("return", K), seg(" b;", D)),
@@ -46,14 +76,78 @@ const beforeMap: Cell[][] = [
 
 /* ── Obfuscated code character map (based on real Ruam output) ── */
 const afterMap: Cell[][] = [
-	line(seg("var", K), seg(" _ru4m=!", D), seg("0", N), seg(";", D), seg("var", K), seg(" _khs={", D)),
-	line(seg("  ", D), seg("\"u_0000\"", S), seg(":{", D), seg("\"c\"", S), seg(":[", D)),
-	line(seg("    [", D), seg("3187", N), seg(",", D), seg("60953", N), seg(",", D), seg("44909", N), seg(",", D), seg("53581", N), seg("],", D)),
-	line(seg("    ", D), seg("\"i\"", S), seg(":[", D), seg("250", N), seg(",", D), seg("0", N), seg(",", D), seg("78", N), seg(",", D), seg("0", N), seg(",", D), seg("209", N), seg(",", D), seg("0", N), seg("],", D)),
-	line(seg("    ", D), seg("\"r\"", S), seg(":", D), seg("9", N), seg(",", D), seg("\"p\"", S), seg(":", D), seg("1", N), seg(",", D), seg("\"a\"", S), seg(":", D), seg("false", K), seg("}};", D)),
+	line(
+		seg("var", K),
+		seg(" _ru4m=!", D),
+		seg("0", N),
+		seg(";", D),
+		seg("var", K),
+		seg(" _khs={", D)
+	),
+	line(
+		seg("  ", D),
+		seg('"u_0000"', S),
+		seg(":{", D),
+		seg('"c"', S),
+		seg(":[", D)
+	),
+	line(
+		seg("    [", D),
+		seg("3187", N),
+		seg(",", D),
+		seg("60953", N),
+		seg(",", D),
+		seg("44909", N),
+		seg(",", D),
+		seg("53581", N),
+		seg("],", D)
+	),
+	line(
+		seg("    ", D),
+		seg('"i"', S),
+		seg(":[", D),
+		seg("250", N),
+		seg(",", D),
+		seg("0", N),
+		seg(",", D),
+		seg("78", N),
+		seg(",", D),
+		seg("0", N),
+		seg(",", D),
+		seg("209", N),
+		seg(",", D),
+		seg("0", N),
+		seg("],", D)
+	),
+	line(
+		seg("    ", D),
+		seg('"r"', S),
+		seg(":", D),
+		seg("9", N),
+		seg(",", D),
+		seg('"p"', S),
+		seg(":", D),
+		seg("1", N),
+		seg(",", D),
+		seg('"a"', S),
+		seg(":", D),
+		seg("false", K),
+		seg("}};", D)
+	),
 	line(seg("  ", D), seg("// ... 4500+ lines of VM runtime", D)),
 	line(seg("function", K), seg(" ", D), seg("fibonacci", F), seg("(n){", D)),
-	line(seg("  ", D), seg("return", K), seg(" _mds.", D), seg("call", F), seg("(", D), seg("this", K), seg(",", D), seg("\"u_0000\"", S), seg(",", D), seg("[n])}", D)),
+	line(
+		seg("  ", D),
+		seg("return", K),
+		seg(" _mds.", D),
+		seg("call", F),
+		seg("(", D),
+		seg("this", K),
+		seg(",", D),
+		seg('"u_0000"', S),
+		seg(",", D),
+		seg("[n])}", D)
+	),
 ];
 
 /* ── Normalize line lengths for stable layout ── */
@@ -203,9 +297,7 @@ function useTerminalAnimation() {
 		const cycle = async () => {
 			while (!cancelledRef.current) {
 				// Show source code
-				setCells(
-					beforePadded.map((row) => row.map((c) => ({ ...c })))
-				);
+				setCells(beforePadded.map((row) => row.map((c) => ({ ...c }))));
 				setBarState({
 					label: "fibonacci.js",
 					badge: "exposed",
@@ -246,9 +338,7 @@ function useTerminalAnimation() {
 				if (cancelledRef.current) return;
 
 				// Switch content while invisible
-				setCells(
-					beforePadded.map((row) => row.map((c) => ({ ...c })))
-				);
+				setCells(beforePadded.map((row) => row.map((c) => ({ ...c }))));
 				setBarState({
 					label: "fibonacci.js",
 					badge: "exposed",
@@ -272,8 +362,7 @@ function useTerminalAnimation() {
 
 /* ── Component ── */
 export default function Hero() {
-	const { cells, barState, glowing, contentOpacity } =
-		useTerminalAnimation();
+	const { cells, barState, glowing, contentOpacity } = useTerminalAnimation();
 	const [tilt, setTilt] = useState({ x: 0, y: 0 });
 	const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -306,13 +395,13 @@ export default function Hero() {
 					>
 						<h1 className="font-display text-5xl leading-[1.05] tracking-tight sm:text-7xl">
 							<span className="text-snow">
-								Ruam won&apos;t
+								Don&apos;t just
 								<br />
-								hide your code.
+								obfuscate code.
 							</span>
 							<br />
 							<span className="glow-text text-accent italic">
-								It'll destroy it.
+								Destroy it.
 							</span>
 						</h1>
 						<p className="mt-8 max-w-md text-lg leading-relaxed text-smoke">

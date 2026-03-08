@@ -49,8 +49,7 @@ export default function PipelineFlow() {
 					Built for real projects
 				</h2>
 				<p className="mx-auto mt-4 max-w-lg text-base text-smoke">
-					Wherever JavaScript ships to untrusted environments, Ruam
-					can help you keep it safe.
+					You build what matters, and let us handle security.
 				</p>
 			</motion.div>
 
