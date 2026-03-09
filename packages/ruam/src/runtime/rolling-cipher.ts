@@ -119,11 +119,3 @@ function ${names.rcMix}(s,a,b){var h=s;h=Math.imul(h^a,0x85EBCA6B)>>>0;h=Math.im
 `;
 }
 
-/**
- * Generate the runtime integrity hash function (FNV-1a over a string).
- */
-export function generateIntegrityHashSource(names: RuntimeNames): string {
-  return `
-function ${names.ihashFn}(s){var h=0x811C9DC5;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193);}return h>>>0;}
-`;
-}
