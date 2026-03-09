@@ -278,30 +278,6 @@ function collectNestedFreeVars(
   });
 }
 
-function collectIdentifierNames(path: NodePath<t.LVal | t.Pattern>, names: Set<string>): void {
-  if (path.isIdentifier()) {
-    names.add(path.node.name);
-  } else if (path.isArrayPattern()) {
-    for (const elem of path.get("elements")) {
-      if (elem.node !== null) {
-        collectIdentifierNames(elem as NodePath<t.LVal>, names);
-      }
-    }
-  } else if (path.isObjectPattern()) {
-    for (const prop of path.get("properties")) {
-      if (prop.isObjectProperty()) {
-        collectIdentifierNames(prop.get("value") as NodePath<t.LVal>, names);
-      } else if (prop.isRestElement()) {
-        collectIdentifierNames(prop.get("argument") as NodePath<t.LVal>, names);
-      }
-    }
-  } else if (path.isAssignmentPattern()) {
-    collectIdentifierNames(path.get("left") as NodePath<t.LVal>, names);
-  } else if (path.isRestElement()) {
-    collectIdentifierNames(path.get("argument") as NodePath<t.LVal>, names);
-  }
-}
-
 function collectNodeNames(node: t.Node, names: Set<string>): void {
   if (node.type === "Identifier") {
     names.add((node as t.Identifier).name);
