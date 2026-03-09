@@ -19,7 +19,7 @@ import type { NodePath } from "@babel/traverse";
 import _generate from "@babel/generator";
 import * as t from "@babel/types";
 import { compileFunction, resetUnitCounter } from "./compiler/index.js";
-import { generateShuffleMap, OPCODE_COUNT } from "./compiler/opcodes.js";
+import { generateShuffleMap, OPCODE_COUNT, Op } from "./compiler/opcodes.js";
 import { serializeUnitToJson, encodeBytecodeUnit } from "./compiler/encode.js";
 import type { JsonSerializeOptions } from "./compiler/encode.js";
 import { generateVmRuntime } from "./runtime/vm.js";
@@ -103,7 +103,7 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
   }
 
   // -- Compile each target -------------------------------------------------
-  const compiledUnits = compileTargets(targetPaths, shuffleMap, encryptBytecode, names, shuffleSeed, rollingCipher, integrityHash);
+  const compiledUnits = compileTargets(targetPaths, shuffleMap, encryptBytecode, names, shuffleSeed, rollingCipher, integrityHash, deadCodeInjection);
 
   if (compiledUnits.size === 0) return code;
 
@@ -222,12 +222,21 @@ function compileTargets(
   stringKey: number,
   rollingCipher: boolean = false,
   integrityHash?: number,
+  deadCodeInjection: boolean = false,
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
   const compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }> = new Map();
 
   for (const fnPath of targetPaths) {
     try {
       const unit = compileFunction(fnPath);
+
+      if (deadCodeInjection) {
+        injectDeadCode(unit, stringKey);
+        for (const child of unit.childUnits) {
+          injectDeadCode(child, stringKey);
+        }
+      }
+
       const encoded = encodeUnit(unit, shuffleMap, encryptBytecode, stringKey, rollingCipher, integrityHash);
       compiledUnits.set(unit.id, { unit, encoded });
 
@@ -244,6 +253,99 @@ function compileTargets(
   }
 
   return compiledUnits;
+}
+
+// ---------------------------------------------------------------------------
+// Dead code injection
+// ---------------------------------------------------------------------------
+
+/**
+ * Inject unreachable bytecode sequences into a compiled unit.
+ *
+ * Finds positions after RETURN opcodes where the next instruction is not a
+ * jump target, and inserts fake instruction sequences that look like real
+ * code but are never executed. This confuses static analysis tools and
+ * makes the bytecode harder to reverse-engineer.
+ */
+function injectDeadCode(unit: BytecodeUnit, seed: number): void {
+  const instrs = unit.instructions;
+  if (instrs.length < 4) return;
+
+  // Collect all jump targets so we don't inject dead code where something jumps to
+  const jumpTargets = new Set<number>();
+  for (const instr of instrs) {
+    if (isJumpOpcode(instr.opcode)) {
+      jumpTargets.add(instr.operand);
+    }
+  }
+
+  // Use seed for deterministic dead code patterns
+  let s = (seed ^ instrs.length) >>> 0;
+  function lcg(): number {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s;
+  }
+
+  // Build dead code blocks to insert — work backwards to preserve indices
+  const insertions: { after: number; block: { opcode: number; operand: number }[] }[] = [];
+
+  for (let i = 0; i < instrs.length; i++) {
+    const instr = instrs[i]!;
+    if (instr.opcode !== Op.RETURN) continue;
+    if (i + 1 >= instrs.length) continue;
+    if (jumpTargets.has(i + 1)) continue;
+
+    // ~40% chance to inject at each eligible site
+    if ((lcg() % 100) >= 40) continue;
+
+    // Generate a fake sequence of 3-6 instructions
+    const blockLen = 3 + (lcg() % 4);
+    const block: { opcode: number; operand: number }[] = [];
+
+    for (let j = 0; j < blockLen; j++) {
+      const pattern = lcg() % 8;
+      switch (pattern) {
+        case 0: block.push({ opcode: Op.PUSH_CONST, operand: lcg() % Math.max(1, unit.constants.length) }); break;
+        case 1: block.push({ opcode: Op.ADD, operand: 0 }); break;
+        case 2: block.push({ opcode: Op.SUB, operand: 0 }); break;
+        case 3: block.push({ opcode: Op.POP, operand: 0 }); break;
+        case 4: block.push({ opcode: Op.DUP, operand: 0 }); break;
+        case 5: block.push({ opcode: Op.NOT, operand: 0 }); break;
+        case 6: block.push({ opcode: Op.PUSH_UNDEFINED, operand: 0 }); break;
+        case 7: block.push({ opcode: Op.PUSH_NULL, operand: 0 }); break;
+      }
+    }
+
+    insertions.push({ after: i, block });
+  }
+
+  // Apply insertions in reverse order so indices stay valid
+  for (let k = insertions.length - 1; k >= 0; k--) {
+    const { after, block } = insertions[k]!;
+
+    // Patch all jump targets that point past the insertion site
+    for (const instr of instrs) {
+      if (isJumpOpcode(instr.opcode) && instr.operand > after) {
+        instr.operand += block.length;
+      }
+    }
+
+    // Insert the dead code block
+    instrs.splice(after + 1, 0, ...block);
+  }
+}
+
+/** Check if an opcode is a jump instruction whose operand is an IP target. */
+function isJumpOpcode(opcode: number): boolean {
+  return opcode === Op.JMP ||
+    opcode === Op.JMP_TRUE ||
+    opcode === Op.JMP_FALSE ||
+    opcode === Op.JMP_NULLISH ||
+    opcode === Op.JMP_UNDEFINED ||
+    opcode === Op.JMP_TRUE_KEEP ||
+    opcode === Op.LOGICAL_AND ||
+    opcode === Op.LOGICAL_OR ||
+    opcode === Op.NULLISH_COALESCE;
 }
 
 /**
