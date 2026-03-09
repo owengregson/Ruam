@@ -218,6 +218,6 @@ async function obfuscateSingleFile(inputPath: string, args: CliArgs): Promise<vo
 }
 
 main().catch((err) => {
-  console.error(err.message);
+  console.error(err instanceof Error ? err.message : String(err));
   process.exit(1);
 });

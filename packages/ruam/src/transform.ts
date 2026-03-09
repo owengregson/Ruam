@@ -259,8 +259,13 @@ function compileTargets(
 
       replaceFunctionBody(fnPath, unit.id, names);
     } catch (err) {
-      // Skip functions that fail to compile — don't break the whole file
-      console.warn(`[ruam] Failed to compile function: ${(err as Error).message}`);
+      // Skip functions that fail to compile — don't break the whole file.
+      // Extract source location from the Babel path for debugging.
+      const loc = fnPath.node.loc?.start;
+      const locStr = loc ? ` at ${loc.line}:${loc.column}` : '';
+      const fnName = ('id' in fnPath.node && fnPath.node.id?.name) || '<anonymous>';
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[ruam] Failed to compile ${fnName}${locStr}: ${message}`);
     }
   }
 
