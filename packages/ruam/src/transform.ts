@@ -14,10 +14,9 @@
  */
 
 import { parse } from "@babel/parser";
-import _traverse from "@babel/traverse";
 import type { NodePath } from "@babel/traverse";
-import _generate from "@babel/generator";
 import * as t from "@babel/types";
+import { traverse, generate } from "./babel-compat.js";
 import { compileFunction, resetUnitCounter } from "./compiler/index.js";
 import { generateShuffleMap, OPCODE_COUNT, Op } from "./compiler/opcodes.js";
 import { serializeUnitToJson, encodeBytecodeUnit } from "./compiler/encode.js";
@@ -32,10 +31,6 @@ import { BABEL_PARSER_PLUGINS } from "./constants.js";
 import { generateInterpreterCore } from "./runtime/templates/interpreter.js";
 
 import { randomBytes } from "node:crypto";
-
-// Work around ESM / CJS dual-export weirdness in Babel packages
-const traverse = (_traverse as unknown as { default: typeof _traverse }).default ?? _traverse;
-const generate = (_generate as unknown as { default: typeof _generate }).default ?? _generate;
 
 /**
  * Generate a cryptographically strong 32-bit seed.

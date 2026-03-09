@@ -9,12 +9,8 @@
  */
 
 import { parse } from "@babel/parser";
-import _traverse from "@babel/traverse";
-import _generate from "@babel/generator";
 import { BABEL_PARSER_PLUGINS, GLOBAL_IDENTIFIERS } from "./constants.js";
-
-const traverse = (_traverse as unknown as { default: typeof _traverse }).default ?? _traverse;
-const generate = (_generate as unknown as { default: typeof _generate }).default ?? _generate;
+import { traverse, generate } from "./babel-compat.js";
 
 // ---------------------------------------------------------------------------
 // Hex counter
