@@ -31,9 +31,21 @@ import { preprocessIdentifiers, resetHexCounter } from "./preprocess.js";
 import { BABEL_PARSER_PLUGINS } from "./constants.js";
 import { generateInterpreterCore } from "./runtime/templates/interpreter.js";
 
+import { randomBytes } from "node:crypto";
+
 // Work around ESM / CJS dual-export weirdness in Babel packages
 const traverse = (_traverse as unknown as { default: typeof _traverse }).default ?? _traverse;
 const generate = (_generate as unknown as { default: typeof _generate }).default ?? _generate;
+
+/**
+ * Generate a cryptographically strong 32-bit seed.
+ *
+ * Uses Node.js `crypto.randomBytes` for proper entropy instead of
+ * `Date.now() ^ Math.random()` which is predictable.
+ */
+function generateCryptoSeed(): number {
+  return randomBytes(4).readUInt32LE(0);
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -74,7 +86,7 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
   resetUnitCounter();
 
   // -- Generate per-file opcode shuffle ------------------------------------
-  const shuffleSeed = Date.now() ^ Math.floor(Math.random() * 0xFFFFFFFF);
+  const shuffleSeed = generateCryptoSeed();
   const shuffleMap = generateShuffleMap(shuffleSeed);
 
   // -- Generate randomized runtime identifiers -----------------------------
