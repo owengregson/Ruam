@@ -9,15 +9,14 @@
  */
 
 import type { RuntimeNames } from "./names.js";
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/** Mixing prime for the rolling state update. */
-const MIX_PRIME1 = 0x85EBCA6B;
-/** Mixing prime for operand contribution. */
-const MIX_PRIME2 = 0xC2B2AE35;
+import {
+  FNV_OFFSET_BASIS,
+  FNV_PRIME,
+  GOLDEN_RATIO_PRIME,
+  MIX_PRIME1,
+  MIX_PRIME2,
+  AVALANCHE_CONSTANT,
+} from "../constants.js";
 
 // ---------------------------------------------------------------------------
 // Build-time: derive master key from bytecode metadata
@@ -34,14 +33,13 @@ export function deriveImplicitKey(
   paramCount: number,
   constantCount: number,
 ): number {
-  let h = 0x811C9DC5; // FNV offset basis
-  h = Math.imul(h ^ instrCount, 0x01000193);
-  h = Math.imul(h ^ registerCount, 0x01000193);
-  h = Math.imul(h ^ paramCount, 0x01000193);
-  h = Math.imul(h ^ constantCount, 0x01000193);
-  // Avalanche
+  let h = FNV_OFFSET_BASIS;
+  h = Math.imul(h ^ instrCount, FNV_PRIME);
+  h = Math.imul(h ^ registerCount, FNV_PRIME);
+  h = Math.imul(h ^ paramCount, FNV_PRIME);
+  h = Math.imul(h ^ constantCount, FNV_PRIME);
   h ^= h >>> 16;
-  h = Math.imul(h, 0x45D9F3B);
+  h = Math.imul(h, AVALANCHE_CONSTANT);
   h ^= h >>> 13;
   return h >>> 0;
 }
@@ -85,7 +83,7 @@ export function rollingEncrypt(
   for (let i = 0; i < instrs.length; i += 2) {
     const idx = i >>> 1;
     // Position-dependent key stream: mix base key with instruction index
-    const keyStream = mixState(baseKey, idx, idx ^ 0x9E3779B9);
+    const keyStream = mixState(baseKey, idx, idx ^ GOLDEN_RATIO_PRIME);
     instrs[i] = (instrs[i]! ^ (keyStream & 0xFFFF)) & 0xFFFF;
     instrs[i + 1] = (instrs[i + 1]! ^ keyStream) | 0;
   }

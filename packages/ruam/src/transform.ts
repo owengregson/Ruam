@@ -27,7 +27,7 @@ import type { RuntimeNames } from "./runtime/names.js";
 import { resolveOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
 import { preprocessIdentifiers, resetHexCounter } from "./preprocess.js";
-import { BABEL_PARSER_PLUGINS } from "./constants.js";
+import { BABEL_PARSER_PLUGINS, FNV_OFFSET_BASIS, FNV_PRIME } from "./constants.js";
 import { generateInterpreterCore } from "./runtime/templates/interpreter.js";
 
 import { randomBytes } from "node:crypto";
@@ -143,10 +143,10 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
 // ---------------------------------------------------------------------------
 
 function fnv1a(s: string): number {
-  let h = 0x811C9DC5;
+  let h = FNV_OFFSET_BASIS;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
+    h = Math.imul(h, FNV_PRIME);
   }
   return h >>> 0;
 }

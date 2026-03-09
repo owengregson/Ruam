@@ -127,3 +127,42 @@ export const VM_MAX_RECURSION_DEPTH = 500;
  */
 export const LCG_MULTIPLIER = 1664525;
 export const LCG_INCREMENT = 1013904223;
+
+// ---------------------------------------------------------------------------
+// Hash and mixing constants.
+// ---------------------------------------------------------------------------
+
+/** FNV-1a offset basis (32-bit). */
+export const FNV_OFFSET_BASIS = 0x811C9DC5;
+
+/** FNV-1a prime (32-bit). */
+export const FNV_PRIME = 0x01000193;
+
+/** Fibonacci / golden ratio hash constant (2^32 / phi). */
+export const GOLDEN_RATIO_PRIME = 0x9E3779B9;
+
+/** Murmur3 mixing prime 1. */
+export const MIX_PRIME1 = 0x85EBCA6B;
+
+/** Murmur3 mixing prime 2. */
+export const MIX_PRIME2 = 0xC2B2AE35;
+
+/** Murmur3 avalanche constant. */
+export const AVALANCHE_CONSTANT = 0x45D9F3B;
+
+// ---------------------------------------------------------------------------
+// Binary format type tags for constant pool serialization.
+// Shared between encode.ts (build-time) and deserializer.ts (runtime).
+// ---------------------------------------------------------------------------
+
+export const BINARY_TAG_NULL = 0;
+export const BINARY_TAG_UNDEFINED = 1;
+export const BINARY_TAG_FALSE = 2;
+export const BINARY_TAG_TRUE = 3;
+export const BINARY_TAG_INT8 = 4;
+export const BINARY_TAG_INT16 = 5;
+export const BINARY_TAG_INT32 = 6;
+export const BINARY_TAG_FLOAT64 = 7;
+export const BINARY_TAG_BIGINT = 8;
+export const BINARY_TAG_REGEX = 9;
+export const BINARY_TAG_STRING = 10;

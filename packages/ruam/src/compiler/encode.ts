@@ -14,7 +14,22 @@
 import type { BytecodeUnit, ConstantPoolEntry } from "../types.js";
 import { computeFingerprint } from "../runtime/fingerprint.js";
 import { rc4, b64encode } from "../runtime/decoder.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import {
+  LCG_MULTIPLIER,
+  LCG_INCREMENT,
+  GOLDEN_RATIO_PRIME,
+  BINARY_TAG_NULL,
+  BINARY_TAG_UNDEFINED,
+  BINARY_TAG_FALSE,
+  BINARY_TAG_TRUE,
+  BINARY_TAG_INT8,
+  BINARY_TAG_INT16,
+  BINARY_TAG_INT32,
+  BINARY_TAG_FLOAT64,
+  BINARY_TAG_BIGINT,
+  BINARY_TAG_REGEX,
+  BINARY_TAG_STRING,
+} from "../constants.js";
 import { deriveImplicitKey, rollingEncrypt } from "../runtime/rolling-cipher.js";
 
 // ---------------------------------------------------------------------------
@@ -53,7 +68,7 @@ export function encodeBytecodeUnit(unit: BytecodeUnit, options: EncodeOptions): 
  */
 export function encodeStringChars(str: string, key: number, index: number): number[] {
   const encoded: number[] = [];
-  let k = (key ^ (index * 0x9E3779B9)) >>> 0;
+  let k = (key ^ (index * GOLDEN_RATIO_PRIME)) >>> 0;
   for (let i = 0; i < str.length; i++) {
     k = (k * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
     encoded.push(str.charCodeAt(i) ^ (k & 0xFFFF));
@@ -242,37 +257,37 @@ function writeConstant(
   writeStr: (s: string) => void,
 ): void {
   switch (c.type) {
-    case "null": writeU8(0); break;
-    case "undefined": writeU8(1); break;
-    case "boolean": writeU8(c.value ? 3 : 2); break;
+    case "null": writeU8(BINARY_TAG_NULL); break;
+    case "undefined": writeU8(BINARY_TAG_UNDEFINED); break;
+    case "boolean": writeU8(c.value ? BINARY_TAG_TRUE : BINARY_TAG_FALSE); break;
     case "number": {
       const n = c.value as number;
       if (Number.isInteger(n)) {
         if (n >= -128 && n <= 127) {
-          writeU8(4);
+          writeU8(BINARY_TAG_INT8);
           writeU8(n & 0xFF);
         } else if (n >= -32768 && n <= 32767) {
-          writeU8(5);
+          writeU8(BINARY_TAG_INT16);
           writeU8(n & 0xFF);
           writeU8((n >> 8) & 0xFF);
         } else if (n >= -2147483648 && n <= 2147483647) {
-          writeU8(6);
+          writeU8(BINARY_TAG_INT32);
           writeI32(n);
         } else {
-          writeU8(7);
+          writeU8(BINARY_TAG_FLOAT64);
           writeF64(n);
         }
       } else {
-        writeU8(7);
+        writeU8(BINARY_TAG_FLOAT64);
         writeF64(n);
       }
       break;
     }
-    case "string": writeU8(10); writeStr(c.value as string); break;
-    case "bigint": writeU8(8); writeStr(String(c.value)); break;
+    case "string": writeU8(BINARY_TAG_STRING); writeStr(c.value as string); break;
+    case "bigint": writeU8(BINARY_TAG_BIGINT); writeStr(String(c.value)); break;
     case "regex": {
       const v = c.value as { pattern: string; flags: string };
-      writeU8(9);
+      writeU8(BINARY_TAG_REGEX);
       writeStr(v.pattern);
       writeStr(v.flags);
       break;
