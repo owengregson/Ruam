@@ -10,16 +10,23 @@ import Image from "next/image";
 
 const links = [
 	{
-		label: "docs",
-		href: "https://github.com/owengregson/ruam#readme",
+		label: "features",
+		href: "#features",
+		target: "",
 		icon: faBook,
 	},
 	{
 		label: "github",
 		href: "https://github.com/owengregson/ruam",
+		target: "_blank",
 		icon: faGithub,
 	},
-	{ label: "npm", href: "https://www.npmjs.com/package/ruam", icon: faNpm },
+	{
+		label: "npm",
+		href: "https://www.npmjs.com/package/ruam",
+		target: "_blank",
+		icon: faNpm,
+	},
 ];
 
 export default function Navbar() {
@@ -50,7 +57,7 @@ export default function Navbar() {
 							)}
 							<a
 								href={l.href}
-								target="_blank"
+								target={l.target}
 								rel="noopener noreferrer"
 								className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-xs text-smoke transition-colors hover:bg-panel hover:text-cloud"
 							>

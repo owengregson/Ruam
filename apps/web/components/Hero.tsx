@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowDown } from "@fortawesome/free-solid-svg-icons";
 import { faGithub } from "@fortawesome/free-brands-svg-icons";
+import MatrixRain from "./MatrixRain";
 
 /* ── Constants ── */
 const SCRAMBLE_CHARS = "0123456789abcdefABCDEF{}[]();:=!+*/&|<>^~_$x";
@@ -381,8 +382,12 @@ export default function Hero() {
 	}, []);
 
 	return (
-		<section className="grid-bg relative min-h-screen pt-14">
+		<section className="grid-bg relative min-h-screen pb-48 pt-14">
+			<MatrixRain />
 			<div className="pointer-events-none absolute top-1/3 left-1/2 h-[600px] w-[900px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/[0.03] blur-[150px]" />
+
+			{/* Bottom fade — grid-bg into void */}
+			<div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-b from-transparent to-void" />
 
 			<div className="relative mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl items-center px-6 py-20">
 				<div className="grid w-full grid-cols-1 gap-12 lg:grid-cols-12">

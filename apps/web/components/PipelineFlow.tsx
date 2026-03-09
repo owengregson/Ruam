@@ -38,7 +38,7 @@ const useCases = [
 
 export default function PipelineFlow() {
 	return (
-		<section className="mx-auto max-w-6xl px-6 pb-12">
+		<section id="uses" className="mx-auto max-w-6xl px-6 pb-12">
 			<motion.div
 				initial={{ opacity: 0 }}
 				whileInView={{ opacity: 1 }}

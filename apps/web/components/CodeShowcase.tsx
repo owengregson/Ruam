@@ -10,7 +10,9 @@ import {
 	faCheck,
 	faTerminal,
 	faPlay,
+	faArrowRight,
 } from "@fortawesome/free-solid-svg-icons";
+import { faGithub } from "@fortawesome/free-brands-svg-icons";
 
 /* ── Compile-again mini-terminal ── */
 function generateLines(): string[] {
@@ -254,8 +256,9 @@ export default function CodeShowcase() {
 					Not another name mangler.
 				</h2>
 				<p className="mx-auto mt-4 max-w-lg text-base text-smoke">
-					Ruam replaces your JavaScript with encrypted bytecode that
-					runs inside the RuamVM, an embedded virtual machine.
+					RuamVM's encrypted bytecode is indistinguishable even to
+					experienced attackers. To piece together the original logic,
+					an intruder must first reverse-engineer the RuamVM.
 				</p>
 			</motion.div>
 
@@ -285,6 +288,34 @@ export default function CodeShowcase() {
 					<InstantCard />
 				</motion.div>
 			</div>
+
+			{/* GitHub deep-dive prompt */}
+			<motion.div
+				initial={{ opacity: 0 }}
+				whileInView={{ opacity: 1 }}
+				viewport={{ once: true }}
+				transition={{ delay: 0.24 }}
+				className="mt-12 flex items-center justify-center"
+			>
+				<a
+					href="https://github.com/owengregson/ruam"
+					target="_blank"
+					rel="noopener noreferrer"
+					className="group flex items-center gap-3 rounded-full border border-edge/50 bg-ink/50 px-5 py-2.5 transition hover:border-accent/20 hover:bg-accent/[0.04]"
+				>
+					<FontAwesomeIcon
+						icon={faGithub}
+						className="h-4 w-4 text-ash transition group-hover:text-accent/70"
+					/>
+					<span className="font-mono text-[12px] text-smoke transition group-hover:text-cloud">
+						view full explanation
+					</span>
+					<FontAwesomeIcon
+						icon={faArrowRight}
+						className="h-2.5 w-2.5 text-ash transition group-hover:translate-x-0.5 group-hover:text-accent"
+					/>
+				</a>
+			</motion.div>
 		</section>
 	);
 }
