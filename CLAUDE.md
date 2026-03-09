@@ -6,7 +6,7 @@ JS VM obfuscator — compiles JavaScript functions into custom bytecode executed
 
 - **Build**: `npm run build` (tsup, ESM-only)
 - **Typecheck**: `npm run typecheck` (tsc --noEmit)
-- **Test**: `npm run test` (vitest, 1605 tests)
+- **Test**: `npm run test` (vitest, 1657 tests)
 - **Test watch**: `npm run test:watch`
 - **Node**: >= 18, **Module**: ESM (`"type": "module"`)
 
@@ -18,13 +18,16 @@ src/
   cli.ts                    CLI entry point (bin: ruam)
   transform.ts              Main orchestrator: parse -> compile -> assemble
   types.ts                  TypeScript interfaces (VmObfuscationOptions, PresetName, BytecodeUnit, etc.)
-  constants.ts              Shared constants (parser plugins, globals list, limits, watermark)
+  constants.ts              Shared constants (parser plugins, globals list, limits, hash/mixing constants, binary tags)
+  babel-compat.ts           Babel ESM/CJS compatibility layer (normalized traverse/generate exports)
   presets.ts                Preset definitions (low/medium/high) + resolveOptions()
   preprocess.ts             Optional identifier renaming
 
   compiler/
     index.ts                Function compilation entry point
-    opcodes.ts              Opcode enum (~279 opcodes in 24 categories) + per-file shuffle map
+    opcodes.ts              Opcode enum (~316 opcodes in 26 categories) + per-file shuffle map
+    capture-analysis.ts     Capture analysis for register promotion (Tier 1)
+    optimizer.ts            Peephole optimizer (Tier 2) + superinstruction fusion (Tier 3)
     emitter.ts              Bytecode emitter + constant pool
     scope.ts                Compile-time scope analysis + register allocation
     encode.ts               Bytecode serialization (JSON + binary + RC4) + string constant encoding
@@ -33,7 +36,6 @@ src/
       statements.ts         Statement compilation (if, for, while, switch, try, etc.)
       expressions.ts        Expression compilation (calls, members, operators, etc.)
       classes.ts            Class compilation (methods, properties, inheritance)
-      patterns.ts           Destructuring pattern compilation
 
   runtime/
     vm.ts                   VM runtime orchestrator (~100 lines, assembles IIFE from templates)
@@ -75,8 +77,13 @@ docs/
 - **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
 - `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
 - **Home object (`[[HomeObject]]`)**: Class methods get `fn._ho = target` stamped at define-time. The home object is passed through the VM dispatch chain (`_vm.call` → `exec`) so `super` resolves correctly in multi-level inheritance. `GET_SUPER_PROP`, `SET_SUPER_PROP`, `CALL_SUPER_METHOD`, `SUPER_CALL` all use `Object.getPrototypeOf(homeObject)` when available.
-- Some preset options (`dynamicOpcodes`, `decoyOpcodes`, `deadCodeInjection`, `stackEncoding`) are defined in types but not yet implemented in runtime generation
-- `rollingCipher` and `integrityBinding` are fully implemented
+- **Dynamic opcodes** (`dynamicOpcodes` option): Filters unused opcode case handlers from the interpreter switch, reducing the attack surface for static analysis. Implemented in `runtime/templates/interpreter.ts` via `filterUnusedOpcodeHandlers()`.
+- **Decoy opcodes** (`decoyOpcodes` option): Injects 8-16 realistic-looking fake opcode handlers (arithmetic, stack, register, scope operations) into the interpreter switch for unused opcode slots. Implemented in `runtime/templates/interpreter.ts` via `injectDecoyHandlers()`.
+- **Dead code injection** (`deadCodeInjection` option): Inserts unreachable bytecode sequences after RETURN opcodes in compiled units. Jump targets are patched to maintain correctness. Implemented in `transform.ts` via `injectDeadCode()`.
+- **Stack encoding** (`stackEncoding` option): Wraps the VM stack array in a Proxy that XOR-encodes numeric values with position-dependent keys on set and decodes on get. Non-numeric values are tagged and stored transparently. Implemented in `runtime/templates/interpreter.ts` via `generateStackEncodingProxy()`.
+- **CSPRNG seed**: Per-file opcode shuffle seed uses `crypto.randomBytes(4)` instead of `Date.now() ^ Math.random()`.
+- **Babel compat layer**: Shared `babel-compat.ts` normalizes ESM/CJS dual-export shapes for `@babel/traverse` and `@babel/generator`.
+- **Auto-enable rollingCipher**: `resolveOptions()` automatically enables `rollingCipher` when `integrityBinding` is set.
 
 ## Code Conventions
 
@@ -85,6 +92,7 @@ docs/
 - Tests use vitest globals (`describe`, `it`, `expect` — no imports needed)
 - Test helper in `test/helpers.ts` wraps `obfuscateCode` + `eval` for round-trip verification
 - No linter/formatter configured — follow existing style
+- JSDoc: every module has `@module` tag, sections use `// --- Name ---` dividers, exported functions have `@param`/`@returns`
 - Runtime templates: each file in `runtime/templates/` exports a function accepting `RuntimeNames` and returning a JS source string
 
 ## Known Bug Fixes (do not regress)
