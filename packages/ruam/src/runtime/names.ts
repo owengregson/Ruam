@@ -17,8 +17,6 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 export interface RuntimeNames {
   /** Bytecode table. */
   bt: string;
-  /** Reverse opcode map. */
-  rm: string;
   /** VM dispatch function (exposed globally). */
   vm: string;
   /** Synchronous interpreter. */
@@ -109,8 +107,6 @@ export interface RuntimeNames {
   sPar: string;
   /** scope.vars */
   sVars: string;
-  /** scope.constVars */
-  sCVars: string;
   /** scope.tdzVars */
   sTdz: string;
 
@@ -183,7 +179,6 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
 
   return {
     bt: genName(),
-    rm: genName(),
     vm: genName(),
     exec: genName(),
     execAsync: genName(),
@@ -226,7 +221,6 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
     thresh: genName(),
     sPar: genName(),
     sVars: genName(),
-    sCVars: genName(),
     sTdz: genName(),
     strDec: genName(),
     fSlots: genName(),
