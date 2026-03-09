@@ -100,8 +100,6 @@ export const GLOBAL_IDENTIFIERS = new Set([
 // `generateRuntimeNames()` in `runtime/names.ts`.
 // ---------------------------------------------------------------------------
 
-export const VM_WATERMARK_NAME = "_ru4m";
-
 // ---------------------------------------------------------------------------
 // Bytecode unit ID generation.
 // ---------------------------------------------------------------------------
