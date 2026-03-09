@@ -1,23 +1,17 @@
 /**
- * Configuration presets for Ruam.
- *
- * Three built-in presets provide convenient groupings of options:
- *
- * - **low** — VM compilation only.  Smallest output overhead,
- *   fastest builds, minimal protection.
- * - **medium** — Adds identifier renaming, bytecode encryption,
- *   and decoy opcodes.  Good balance of protection and performance.
- * - **high** — Maximum protection: debug protection, dead code
- *   injection, and stack value encoding on top of medium settings.
- *
- * Explicit options always override preset values.
- *
+ * Built-in preset configurations (low / medium / high) and option resolution.
  * @module presets
  */
 
 import type { VmObfuscationOptions, PresetName } from "./types.js";
 
-/** Preset configurations keyed by name. */
+/**
+ * Preset configurations keyed by name.
+ *
+ * - `low` -- VM compilation only.
+ * - `medium` -- Adds identifier renaming, bytecode encryption, and decoy opcodes.
+ * - `high` -- Maximum protection: debug protection, dead code injection, stack encoding.
+ */
 export const PRESETS: Record<PresetName, Required<Omit<VmObfuscationOptions, "preset" | "debugLogging">>> = {
   low: {
     targetMode: "root",
@@ -62,8 +56,10 @@ export const PRESETS: Record<PresetName, Required<Omit<VmObfuscationOptions, "pr
 
 /**
  * Resolve options by merging a preset (if specified) with explicit overrides.
- *
  * Explicit options always win over preset values.
+ *
+ * @param options - User-supplied options, optionally referencing a preset.
+ * @returns Fully resolved options with preset defaults filled in.
  */
 export function resolveOptions(options: VmObfuscationOptions = {}): VmObfuscationOptions {
   let resolved: VmObfuscationOptions;
@@ -72,7 +68,6 @@ export function resolveOptions(options: VmObfuscationOptions = {}): VmObfuscatio
     const preset = PRESETS[options.preset];
     const { preset: _discard, ...explicit } = options;
 
-    // Build merged result: preset provides defaults, explicit options override
     resolved = { ...preset };
     for (const [key, value] of Object.entries(explicit)) {
       if (value !== undefined) {

@@ -1,12 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Ruam CLI entry point.
- *
- * Usage:
- *   ruam <input>              Obfuscate a file or directory
- *   ruam <input> -o <output>  Obfuscate to a specific output path
- *
+ * CLI entry point for the `ruam` command.
  * @module cli
  */
 
@@ -15,10 +10,9 @@ import type { VmObfuscationOptions, PresetName } from "./types.js";
 import fs from "fs-extra";
 import path from "path";
 
-// ---------------------------------------------------------------------------
-// CLI argument types
-// ---------------------------------------------------------------------------
+// --- CLI Argument Types ---
 
+/** Parsed CLI arguments. */
 interface CliArgs {
   input?: string;
   output?: string;
@@ -29,10 +23,9 @@ interface CliArgs {
   version: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Help text
-// ---------------------------------------------------------------------------
+// --- Help Text ---
 
+/** Print CLI usage information to stdout. */
 function printUsage(): void {
   console.log(`
 ruam - JS VM obfuscator
@@ -75,10 +68,14 @@ Examples:
 `.trim());
 }
 
-// ---------------------------------------------------------------------------
-// Argument parser
-// ---------------------------------------------------------------------------
+// --- Argument Parser ---
 
+/**
+ * Parse raw CLI arguments into a structured {@link CliArgs} object.
+ *
+ * @param argv - Arguments from `process.argv.slice(2)`.
+ * @returns Parsed CLI arguments.
+ */
 function parseArgs(argv: string[]): CliArgs {
   const result: CliArgs = {
     input: undefined,
@@ -142,10 +139,9 @@ function parseArgs(argv: string[]): CliArgs {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
+// --- Main ---
 
+/** CLI entry point. Parses arguments and dispatches to file or directory obfuscation. */
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
@@ -181,6 +177,12 @@ async function main(): Promise<void> {
   }
 }
 
+/**
+ * Obfuscate all matching files in a directory.
+ *
+ * @param inputPath - Absolute path to the input directory.
+ * @param args - Parsed CLI arguments.
+ */
 async function obfuscateDirectory(inputPath: string, args: CliArgs): Promise<void> {
   const outputDir = args.output ? path.resolve(args.output) : inputPath;
 
@@ -206,6 +208,12 @@ async function obfuscateDirectory(inputPath: string, args: CliArgs): Promise<voi
   console.log("Done.");
 }
 
+/**
+ * Obfuscate a single file and write the result.
+ *
+ * @param inputPath - Absolute path to the input file.
+ * @param args - Parsed CLI arguments.
+ */
 async function obfuscateSingleFile(inputPath: string, args: CliArgs): Promise<void> {
   const outputPath = args.output ? path.resolve(args.output) : inputPath;
 

@@ -1,13 +1,9 @@
 /**
  * Core type definitions for the Ruam VM obfuscator.
- *
- * All public interfaces and internal data structures are defined here
- * so the rest of the codebase imports types from a single module.
+ * @module types
  */
 
-// ---------------------------------------------------------------------------
-// Public API options
-// ---------------------------------------------------------------------------
+// --- Public API Options ---
 
 /** Preset names that group multiple options. */
 export type PresetName = "low" | "medium" | "high";
@@ -100,9 +96,7 @@ export interface VmObfuscationOptions {
   integrityBinding?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Bytecode data structures
-// ---------------------------------------------------------------------------
+// --- Bytecode Data Structures ---
 
 /**
  * A single entry in a bytecode unit's constant pool.

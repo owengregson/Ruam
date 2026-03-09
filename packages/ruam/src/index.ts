@@ -1,14 +1,6 @@
 /**
- * Ruam VM Obfuscator — public API.
- *
- * @example
- * ```ts
- * import { obfuscateCode } from "ruam";
- *
- * const obfuscated = obfuscateCode("function hello() { return 'world'; }");
- * ```
- *
- * @module
+ * Ruam VM Obfuscator -- public API surface.
+ * @module index
  */
 
 import { obfuscateCode as transformCode } from "./transform.js";
@@ -17,19 +9,18 @@ import fs from "fs-extra";
 import path from "path";
 import { globby } from "globby";
 
-// Re-export types and presets for consumers
 export { type VmObfuscationOptions, type PresetName } from "./types.js";
 export { PRESETS } from "./presets.js";
 
-// ---------------------------------------------------------------------------
-// Single-source obfuscation
-// ---------------------------------------------------------------------------
+// --- Single-Source Obfuscation ---
 
 /**
- * Obfuscate a JavaScript source string.
+ * Obfuscate a JavaScript source string. Compiles eligible functions to
+ * bytecode, embeds a VM runtime, and returns the transformed source.
  *
- * This is the primary API.  It compiles eligible functions to bytecode,
- * embeds a VM runtime, and returns the transformed source.
+ * @param source - JavaScript source code to obfuscate.
+ * @param options - Obfuscation options.
+ * @returns The obfuscated JavaScript source.
  */
 export function obfuscateCode(
   source: string,
@@ -38,16 +29,14 @@ export function obfuscateCode(
   return transformCode(source, options);
 }
 
-// ---------------------------------------------------------------------------
-// File-level obfuscation
-// ---------------------------------------------------------------------------
+// --- File-Level Obfuscation ---
 
 /**
  * Obfuscate a single file on disk.
  *
- * @param inputPath  - Path to the source JS file.
+ * @param inputPath - Path to the source JS file.
  * @param outputPath - Where to write the result (defaults to overwriting the input).
- * @param options    - Obfuscation options.
+ * @param options - Obfuscation options.
  */
 export async function obfuscateFile(
   inputPath: string,
@@ -59,14 +48,12 @@ export async function obfuscateFile(
   await fs.writeFile(outputPath ?? inputPath, result, "utf-8");
 }
 
-// ---------------------------------------------------------------------------
-// Directory-level obfuscation
-// ---------------------------------------------------------------------------
+// --- Directory-Level Obfuscation ---
 
 /**
  * Obfuscate all matching JS files in a directory.
  *
- * @param dir    - Root directory to scan.
+ * @param dir - Root directory to scan.
  * @param config - Include/exclude globs and obfuscation options.
  */
 export async function runVmObfuscation(

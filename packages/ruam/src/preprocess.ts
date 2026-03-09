@@ -1,10 +1,5 @@
 /**
- * Identifier preprocessing — renames all local bindings to `_0x` hex names.
- *
- * This is an optional pre-compilation pass that makes the source look
- * uniformly obfuscated before bytecode compilation.  Global / well-known
- * identifiers are preserved.
- *
+ * Optional pre-compilation pass that renames local bindings to `_0x` hex names.
  * @module preprocess
  */
 
@@ -12,29 +7,34 @@ import { parse } from "@babel/parser";
 import { BABEL_PARSER_PLUGINS, GLOBAL_IDENTIFIERS } from "./constants.js";
 import { traverse, generate } from "./babel-compat.js";
 
-// ---------------------------------------------------------------------------
-// Hex counter
-// ---------------------------------------------------------------------------
+// --- Hex Counter ---
 
 let hexCounter = 0;
 
+/**
+ * Generate the next sequential hex identifier (e.g. `_0x0000`, `_0x0001`).
+ * @returns A unique `_0x`-prefixed identifier string.
+ */
 function nextHexName(): string {
   return "_0x" + (hexCounter++).toString(16).padStart(4, "0");
 }
 
-/** Reset the hex counter (call before each file). */
+/**
+ * Reset the hex counter. Must be called before processing each file
+ * to ensure deterministic output.
+ */
 export function resetHexCounter(): void {
   hexCounter = 0;
 }
 
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
+// --- Public API ---
 
 /**
  * Rename all local bindings to sequential `_0x0000` hex names.
+ * Global identifiers and already-hex-named identifiers are skipped.
  *
- * Globals and already-hex-named identifiers are skipped.
+ * @param source - JavaScript source code to preprocess.
+ * @returns The source with local bindings renamed.
  */
 export function preprocessIdentifiers(source: string): string {
   const ast = parse(source, {

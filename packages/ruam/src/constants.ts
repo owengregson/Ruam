@@ -1,14 +1,11 @@
 /**
- * Shared constants used across the Ruam VM obfuscator.
- *
- * Centralizes magic values, parser configuration, and well-known identifier
- * lists so they can be maintained in a single place.
+ * Shared constants for parser configuration, well-known identifiers, and magic values.
+ * @module constants
  */
 
-// ---------------------------------------------------------------------------
-// Babel parser plugins applied when parsing input source code.
-// ---------------------------------------------------------------------------
+// --- Babel Parser Plugins ---
 
+/** Plugins enabled when parsing input source code with `@babel/parser`. */
 export const BABEL_PARSER_PLUGINS = [
   "typescript",
   "jsx",
@@ -20,12 +17,12 @@ export const BABEL_PARSER_PLUGINS = [
   "objectRestSpread",
 ] as const;
 
-// ---------------------------------------------------------------------------
-// Well-known global identifiers that should never be renamed by the
-// identifier preprocessor.  Kept here so both the preprocessor and any
-// future lint/diagnostic tooling can share a single source of truth.
-// ---------------------------------------------------------------------------
+// --- Global Identifiers ---
 
+/**
+ * Well-known global identifiers that must never be renamed by the preprocessor.
+ * Shared between the preprocessor and any future lint/diagnostic tooling.
+ */
 export const GLOBAL_IDENTIFIERS = new Set([
   // Language primitives
   "undefined", "null", "true", "false", "NaN", "Infinity",
@@ -93,16 +90,7 @@ export const GLOBAL_IDENTIFIERS = new Set([
   "WeakRef", "FinalizationRegistry",
 ] as const);
 
-// ---------------------------------------------------------------------------
-// VM runtime internal names.
-//
-// Runtime identifiers are randomized per build via
-// `generateRuntimeNames()` in `runtime/names.ts`.
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// Bytecode unit ID generation.
-// ---------------------------------------------------------------------------
+// --- Bytecode Unit ID Generation ---
 
 /** Prefix used for all bytecode unit IDs. */
 export const UNIT_ID_PREFIX = "u_";
@@ -110,27 +98,19 @@ export const UNIT_ID_PREFIX = "u_";
 /** Number of hex digits used to pad the unit counter. */
 export const UNIT_ID_PAD_LENGTH = 4;
 
-// ---------------------------------------------------------------------------
-// VM execution limits.
-// ---------------------------------------------------------------------------
+// --- VM Execution Limits ---
 
 /** Maximum nested VM call depth before throwing a RangeError. */
 export const VM_MAX_RECURSION_DEPTH = 500;
 
-// ---------------------------------------------------------------------------
-// Opcode shuffle map constants.
-// ---------------------------------------------------------------------------
+// --- Opcode Shuffle Map Constants ---
 
-/**
- * Linear Congruential Generator (LCG) constants used for opcode shuffle.
- * These are the classic Numerical Recipes values.
- */
+/** LCG multiplier for opcode shuffle (Numerical Recipes). */
 export const LCG_MULTIPLIER = 1664525;
+/** LCG increment for opcode shuffle (Numerical Recipes). */
 export const LCG_INCREMENT = 1013904223;
 
-// ---------------------------------------------------------------------------
-// Hash and mixing constants.
-// ---------------------------------------------------------------------------
+// --- Hash and Mixing Constants ---
 
 /** FNV-1a offset basis (32-bit). */
 export const FNV_OFFSET_BASIS = 0x811C9DC5;
@@ -138,7 +118,7 @@ export const FNV_OFFSET_BASIS = 0x811C9DC5;
 /** FNV-1a prime (32-bit). */
 export const FNV_PRIME = 0x01000193;
 
-/** Fibonacci / golden ratio hash constant (2^32 / phi). */
+/** Golden ratio hash constant (`2^32 / phi`). */
 export const GOLDEN_RATIO_PRIME = 0x9E3779B9;
 
 /** Murmur3 mixing prime 1. */
@@ -150,10 +130,8 @@ export const MIX_PRIME2 = 0xC2B2AE35;
 /** Murmur3 avalanche constant. */
 export const AVALANCHE_CONSTANT = 0x45D9F3B;
 
-// ---------------------------------------------------------------------------
-// Binary format type tags for constant pool serialization.
+// --- Binary Format Type Tags ---
 // Shared between encode.ts (build-time) and deserializer.ts (runtime).
-// ---------------------------------------------------------------------------
 
 export const BINARY_TAG_NULL = 0;
 export const BINARY_TAG_UNDEFINED = 1;
