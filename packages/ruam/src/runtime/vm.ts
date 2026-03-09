@@ -42,11 +42,15 @@ export function generateVmRuntime(options: {
   encrypt: boolean;
   debugProtection: boolean;
   debugLogging?: boolean;
+  dynamicOpcodes?: boolean;
+  decoyOpcodes?: boolean;
+  stackEncoding?: boolean;
   seed: number;
   stringKey?: number;
   rollingCipher?: boolean;
   integrityBinding?: boolean;
   integrityHash?: number;
+  usedOpcodes?: Set<number>;
 }): string {
   const {
     opcodeShuffleMap,
@@ -54,11 +58,15 @@ export function generateVmRuntime(options: {
     encrypt,
     debugProtection: dbgProt,
     debugLogging = false,
+    dynamicOpcodes = false,
+    decoyOpcodes = false,
+    stackEncoding = false,
     seed,
     stringKey,
     rollingCipher = false,
     integrityBinding = false,
     integrityHash,
+    usedOpcodes,
   } = options;
 
   // Build reverse map: physical -> logical opcode
@@ -101,7 +109,12 @@ export function generateVmRuntime(options: {
 
   // Interpreter core (sync + async) — uses direct physical dispatch
   // (no reverse opcode map emitted; case labels use physical opcodes directly)
-  parts.push(generateInterpreterCore(debugLogging, names, seed, opcodeShuffleMap, rollingCipher, integrityBinding));
+  parts.push(generateInterpreterCore(debugLogging, names, seed, opcodeShuffleMap, rollingCipher, integrityBinding, {
+    dynamicOpcodes,
+    decoyOpcodes,
+    stackEncoding,
+    usedOpcodes,
+  }));
 
   // Runner dispatch functions
   parts.push(generateRunners(debugLogging, names));

@@ -190,6 +190,14 @@ function inlineStackOps(source: string, S: string, P: string, W: string, X: stri
   return out;
 }
 
+/** Options for interpreter filtering and hardening. */
+export interface InterpreterOptions {
+  dynamicOpcodes?: boolean;
+  decoyOpcodes?: boolean;
+  stackEncoding?: boolean;
+  usedOpcodes?: Set<number>;
+}
+
 /**
  * Generate both sync and async interpreter bodies.
  */
@@ -200,8 +208,9 @@ export function generateInterpreterCore(
   shuffleMap: number[],
   rollingCipher: boolean = false,
   integrityBinding: boolean = false,
+  interpOpts: InterpreterOptions = {},
 ): string {
-  const raw = generateExecBody(false, debug, names, shuffleMap, rollingCipher, integrityBinding) + '\n' + generateExecBody(true, debug, names, shuffleMap, rollingCipher, integrityBinding);
+  const raw = generateExecBody(false, debug, names, shuffleMap, rollingCipher, integrityBinding, interpOpts) + '\n' + generateExecBody(true, debug, names, shuffleMap, rollingCipher, integrityBinding, interpOpts);
   const inlined = inlineStackOps(raw, names.stk, names.stp, names.sPush, names.sPop, names.sPeek);
   return obfuscateLocals(inlined, seed);
 }
@@ -216,6 +225,7 @@ function generateExecBody(
   shuffleMap: number[],
   rollingCipher: boolean = false,
   integrityBinding: boolean = false,
+  interpOpts: InterpreterOptions = {},
 ): string {
   const fnName = isAsync ? n.execAsync : n.exec;
   const fnDecl = isAsync ? `async function ${fnName}` : `function ${fnName}`;
@@ -252,7 +262,6 @@ function generateExecBody(
   // Scope property names (disguised)
   const sPar = n.sPar;
   const sV = n.sVars;
-  const sCV = n.sCVars;
   const sTdz = n.sTdz;
 
   // Watermark — used as an XOR key in the dispatch guard
@@ -344,7 +353,7 @@ function generateExecBody(
     ${PH}=(${PH}^(_ks&0xFFFF))&0xFFFF;
     ${O}=(${O}^_ks)|0;` : '';
 
-  const template = `
+  let template = `
 ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
   ${n.depth}++;
   var _uid_=(${U}._dbgId||'?');
@@ -970,10 +979,120 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
 }
 `;
 
+  // Dynamic opcodes: strip case handlers for opcodes not used by any compiled unit.
+  // This makes the interpreter smaller and unique per build.
+  if (interpOpts.dynamicOpcodes && interpOpts.usedOpcodes) {
+    template = filterUnusedOpcodeHandlers(template, interpOpts.usedOpcodes);
+  }
+
+  // Decoy opcodes: inject fake case handlers for unused opcode slots.
+  // These are never called but make the interpreter appear more complex.
+  if (interpOpts.decoyOpcodes && interpOpts.usedOpcodes) {
+    template = injectDecoyHandlers(template, interpOpts.usedOpcodes, shuffleMap, n);
+  }
+
   // Remap case labels from logical opcode numbers to physical (shuffled) numbers.
   // This eliminates the need for a plaintext reverse opcode map in the output.
   return template.replace(/\bcase (\d+):/g, (_, numStr) => {
     const logical = parseInt(numStr, 10);
     return `case ${shuffleMap[logical]!}:`;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Dynamic opcodes: strip unused case handlers from the switch
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove case handlers for opcodes that no compiled unit uses.
+ *
+ * Parses the template's switch body and removes `case N:...break;` blocks
+ * whose logical opcode number is not in the used set. The `default:break;`
+ * fallthrough handles any stripped opcodes at runtime.
+ */
+function filterUnusedOpcodeHandlers(template: string, usedOpcodes: Set<number>): string {
+  // Match each `case <number>:` followed by its handler body up to the next `case` or `default:`.
+  // The regex captures the logical opcode and the handler body.
+  return template.replace(
+    /case (\d+):(\{[^}]*(?:\{[^}]*\}[^}]*)*\}|[^}]*?)(?=case \d+:|default:)/g,
+    (match, numStr) => {
+      const logical = parseInt(numStr as string, 10);
+      if (usedOpcodes.has(logical)) return match;
+      return ''; // Strip unused handler
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Decoy opcodes: inject fake case handlers
+// ---------------------------------------------------------------------------
+
+/**
+ * Inject fake opcode handlers that look like real code but are never executed.
+ *
+ * Selects a random subset of unused opcodes and generates plausible-looking
+ * case handlers. Inserted just before the `default:break;` in the switch.
+ */
+function injectDecoyHandlers(
+  template: string,
+  usedOpcodes: Set<number>,
+  shuffleMap: number[],
+  n: RuntimeNames,
+): string {
+  const S = n.stk;
+  const P = n.stp;
+  const C = n.cArr;
+  const O = n.operand;
+  const R = n.regs;
+  const SC = n.scope;
+  const sV = n.sVars;
+
+  // Collect unused logical opcodes
+  const unused: number[] = [];
+  for (let i = 0; i < shuffleMap.length; i++) {
+    if (!usedOpcodes.has(i)) unused.push(i);
+  }
+  if (unused.length === 0) return template;
+
+  // Select 8-16 decoys (or all unused if fewer available)
+  const count = Math.min(unused.length, 8 + (shuffleMap[0]! % 9));
+  // Deterministic selection using the shuffle map as entropy
+  const selected: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const idx = (shuffleMap[i % shuffleMap.length]! + i * 7) % unused.length;
+    const op = unused[idx]!;
+    if (!selected.includes(op)) selected.push(op);
+  }
+
+  // Generate fake handler bodies that look realistic
+  const decoyTemplates = [
+    `{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]+b;break;}`,
+    `{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]-b;break;}`,
+    `{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]*b;break;}`,
+    `${S}[${P}]=~${S}[${P}];break;`,
+    `${S}[++${P}]=${C}[${O}];break;`,
+    `${R}[${O}]=${S}[${P}--];break;`,
+    `${S}[++${P}]=${R}[${O}];break;`,
+    `{var s=${SC};if(s&&s.${sV}){s.${sV}[${C}[${O}]]=${S}[${P}--];}break;}`,
+    `${S}[${P}]=!${S}[${P}];break;`,
+    `{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]&b;break;}`,
+    `{var b=${S}[${P}--];${S}[${P}]=${S}[${P}]|b;break;}`,
+    `${S}[${P}]=-${S}[${P}];break;`,
+    `${S}[${P}]=+${S}[${P}]+1;break;`,
+    `${S}[${P}]=typeof ${S}[${P}];break;`,
+    `${P}--;break;`,
+    `{${S}[${P}+1]=${S}[${P}];${P}++;break;}`,
+  ];
+
+  // Build decoy case strings (using logical opcodes — will be remapped later)
+  const decoys = selected.map((logicalOp, i) => {
+    const body = decoyTemplates[(logicalOp + i) % decoyTemplates.length]!;
+    return `case ${logicalOp}:${body}`;
+  }).join('\n    ');
+
+  // Insert decoys before `default:break;`
+  return template.replace(
+    /(\s*)(default:break;)/,
+    `$1${decoys}\n    $2`,
+  );
 }

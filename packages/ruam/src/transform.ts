@@ -19,7 +19,7 @@ import type { NodePath } from "@babel/traverse";
 import _generate from "@babel/generator";
 import * as t from "@babel/types";
 import { compileFunction, resetUnitCounter } from "./compiler/index.js";
-import { generateShuffleMap } from "./compiler/opcodes.js";
+import { generateShuffleMap, OPCODE_COUNT } from "./compiler/opcodes.js";
 import { serializeUnitToJson, encodeBytecodeUnit } from "./compiler/encode.js";
 import type { JsonSerializeOptions } from "./compiler/encode.js";
 import { generateVmRuntime } from "./runtime/vm.js";
@@ -56,6 +56,10 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
     encryptBytecode = false,
     debugProtection = false,
     debugLogging = false,
+    dynamicOpcodes = false,
+    decoyOpcodes = false,
+    deadCodeInjection = false,
+    stackEncoding = false,
     rollingCipher = false,
     integrityBinding = false,
   } = resolved;
@@ -103,16 +107,27 @@ export function obfuscateCode(source: string, options: VmObfuscationOptions = {}
 
   if (compiledUnits.size === 0) return code;
 
+  // -- Collect used opcodes (for dynamicOpcodes / decoyOpcodes) -----------
+  let usedOpcodes: Set<number> | undefined;
+  if (dynamicOpcodes || decoyOpcodes) {
+    usedOpcodes = collectUsedOpcodes(compiledUnits);
+  }
+
   // -- Assemble output -----------------------------------------------------
   return assembleOutput(ast, compiledUnits, shuffleMap, names, {
     encrypt: encryptBytecode,
     debugProtection,
     debugLogging,
+    dynamicOpcodes,
+    decoyOpcodes,
+    deadCodeInjection,
+    stackEncoding,
     seed: shuffleSeed,
     stringKey: encryptBytecode ? undefined : shuffleSeed,
     rollingCipher,
     integrityBinding,
     integrityHash,
+    usedOpcodes,
   });
 }
 
@@ -231,6 +246,21 @@ function compileTargets(
   return compiledUnits;
 }
 
+/**
+ * Collect all logical opcodes used across all compiled bytecode units.
+ */
+function collectUsedOpcodes(
+  compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }>,
+): Set<number> {
+  const used = new Set<number>();
+  for (const [, { unit }] of compiledUnits) {
+    for (const instr of unit.instructions) {
+      used.add(instr.opcode);
+    }
+  }
+  return used;
+}
+
 /** Encode a single bytecode unit in the configured format. */
 function encodeUnit(
   unit: BytecodeUnit,
@@ -268,11 +298,16 @@ function assembleOutput(
     encrypt: boolean;
     debugProtection: boolean;
     debugLogging: boolean;
+    dynamicOpcodes?: boolean;
+    decoyOpcodes?: boolean;
+    deadCodeInjection?: boolean;
+    stackEncoding?: boolean;
     seed: number;
     stringKey?: number;
     rollingCipher?: boolean;
     integrityBinding?: boolean;
     integrityHash?: number;
+    usedOpcodes?: Set<number>;
   },
 ): string {
   // Build bytecode table declaration (using randomized name)
@@ -290,11 +325,15 @@ function assembleOutput(
     encrypt: runtimeOptions.encrypt,
     debugProtection: runtimeOptions.debugProtection,
     debugLogging: runtimeOptions.debugLogging,
+    dynamicOpcodes: runtimeOptions.dynamicOpcodes,
+    decoyOpcodes: runtimeOptions.decoyOpcodes,
+    stackEncoding: runtimeOptions.stackEncoding,
     seed: runtimeOptions.seed,
     stringKey: runtimeOptions.stringKey,
     rollingCipher: runtimeOptions.rollingCipher,
     integrityBinding: runtimeOptions.integrityBinding,
     integrityHash: runtimeOptions.integrityHash,
+    usedOpcodes: runtimeOptions.usedOpcodes,
   });
 
   // Parse and inject bytecode table inside the runtime IIFE so each file
