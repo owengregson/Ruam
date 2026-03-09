@@ -376,6 +376,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
   ${debug ? `var _uid=${U}._dbgId||'?';${n.dbg}('ENTER','${fnLabel}','unit='+_uid,'params='+${U}.p,'args='+${A}.length,'async='+!!${U}.s,'regs='+${U}.r,'depth='+${n.depth});` : ''}
   ${rcInit}
 
+  ${interpOpts.stackEncoding ? generateStackEncodingProxy(n) : ''}
   function ${W}(v){${S}[++${P}]=v;}
   function ${X}(){return ${S}[${P}--];}
   function ${Y}(){return ${S}[${P}];}
@@ -997,6 +998,54 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
     const logical = parseInt(numStr, 10);
     return `case ${shuffleMap[logical]!}:`;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Stack encoding: encrypt values on the VM stack
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a Proxy-based stack encoding wrapper.
+ *
+ * Wraps the raw stack array in a Proxy that encodes values on set and
+ * decodes on get. This transparently handles ALL stack accesses —
+ * whether through the W/X/Y helpers or direct S[P] in opcode handlers.
+ *
+ * Encoding scheme: values are stored as `[encodedType, payload]` tuples.
+ * Numbers are XOR'd with a position-dependent key derived from unit metadata.
+ * Other types are wrapped and tagged. Memory dumps see only opaque arrays
+ * instead of raw runtime values.
+ */
+function generateStackEncodingProxy(n: RuntimeNames): string {
+  const S = n.stk;
+  return `
+  var _sek=(${n.unit}.i.length^${n.unit}.r^0x5A3C96E1)>>>0;
+  var _seRaw=[];
+  ${S}=new Proxy(_seRaw,{
+    set:function(_,k,v){
+      var i=+k;
+      if(i===i&&i>=0){
+        var t=typeof v;
+        if(t==='number'&&v===v){_seRaw[i]=[0,v^((_sek^(i*0x9E3779B9))>>>0)];}
+        else if(t==='boolean'){_seRaw[i]=[1,v?1:0];}
+        else if(t==='string'){_seRaw[i]=[2,v];}
+        else{_seRaw[i]=[3,v];}
+      }else{_seRaw[k]=v;}
+      return true;
+    },
+    get:function(_,k){
+      var i=+k;
+      if(i===i&&i>=0){
+        var e=_seRaw[i];
+        if(!e)return void 0;
+        if(e[0]===0)return e[1]^((_sek^(i*0x9E3779B9))>>>0);
+        if(e[0]===1)return !!e[1];
+        return e[1];
+      }
+      if(k==='length')return _seRaw.length;
+      return _seRaw[k];
+    }
+  });`;
 }
 
 // ---------------------------------------------------------------------------
