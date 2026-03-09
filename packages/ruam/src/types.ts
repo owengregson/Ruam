@@ -147,10 +147,10 @@ export interface BytecodeUnit {
   /** Flat instruction stream. */
   instructions: Instruction[];
 
-  /** Label → IP jump table (reserved for future use). */
+  /** Label → IP jump table. */
   jumpTable: Record<number, number>;
 
-  /** Exception handler table (reserved for future use). */
+  /** Exception handler table for try/catch/finally blocks. */
   exceptionTable: ExceptionEntry[];
 
   /** Number of declared parameters. */
