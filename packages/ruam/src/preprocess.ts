@@ -51,7 +51,7 @@ export function preprocessIdentifiers(source: string): string {
   traverse(ast, {
     Scope(path) {
       for (const [name, binding] of Object.entries(path.scope.bindings)) {
-        if (GLOBAL_IDENTIFIERS.has(name as any)) continue;
+        if ((GLOBAL_IDENTIFIERS as ReadonlySet<string>).has(name)) continue;
         if (renameMap.has(name)) continue;
         if (name.startsWith("_0x")) continue;
 
@@ -67,8 +67,8 @@ export function preprocessIdentifiers(source: string): string {
 
         for (const ref of binding.constantViolations) {
           const left = ref.get("left");
-          if (left && "isIdentifier" in left && (left as any).isIdentifier() && (left as any).node.name === name) {
-            (left as any).node.name = newName;
+          if (!Array.isArray(left) && left.isIdentifier() && left.node.name === name) {
+            left.node.name = newName;
           }
         }
       }
