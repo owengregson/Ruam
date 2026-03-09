@@ -66,17 +66,27 @@ export const PRESETS: Record<PresetName, Required<Omit<VmObfuscationOptions, "pr
  * Explicit options always win over preset values.
  */
 export function resolveOptions(options: VmObfuscationOptions = {}): VmObfuscationOptions {
-  if (!options.preset) return options;
+  let resolved: VmObfuscationOptions;
 
-  const preset = PRESETS[options.preset];
-  const { preset: _discard, ...explicit } = options;
+  if (options.preset) {
+    const preset = PRESETS[options.preset];
+    const { preset: _discard, ...explicit } = options;
 
-  // Build merged result: preset provides defaults, explicit options override
-  const merged: VmObfuscationOptions = { ...preset };
-  for (const [key, value] of Object.entries(explicit)) {
-    if (value !== undefined) {
-      (merged as Record<string, unknown>)[key] = value;
+    // Build merged result: preset provides defaults, explicit options override
+    resolved = { ...preset };
+    for (const [key, value] of Object.entries(explicit)) {
+      if (value !== undefined) {
+        (resolved as Record<string, unknown>)[key] = value;
+      }
     }
+  } else {
+    resolved = { ...options };
   }
-  return merged;
+
+  // integrityBinding requires rollingCipher — auto-enable it
+  if (resolved.integrityBinding && !resolved.rollingCipher) {
+    resolved.rollingCipher = true;
+  }
+
+  return resolved;
 }
