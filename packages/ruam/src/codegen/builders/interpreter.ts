@@ -15,7 +15,8 @@ import type { RuntimeNames } from "../../runtime/names.js";
 import { raw, caseClause, lit, switchStmt, id, breakStmt } from "../nodes.js";
 import { registry, makeHandlerCtx } from "../handlers/index.js";
 import { emit } from "../emit.js";
-import { VM_MAX_RECURSION_DEPTH } from "../../constants.js";
+import { VM_MAX_RECURSION_DEPTH, LCG_MULTIPLIER, LCG_INCREMENT } from "../../constants.js";
+import { KEEP, RESERVED } from "../transforms.js";
 
 /** Options for interpreter filtering and hardening. */
 export interface InterpreterBuildOptions {
@@ -36,14 +37,15 @@ export function buildInterpreterFunctions(
 	shuffleMap: number[],
 	debug: boolean,
 	rollingCipher: boolean,
+	seed: number,
 	interpOpts: InterpreterBuildOptions = {}
 ): JsNode[] {
 	return [
 		buildExecFunction(names, shuffleMap, {
-			isAsync: false, debug, rollingCipher, interpOpts,
+			isAsync: false, debug, rollingCipher, seed, interpOpts,
 		}),
 		buildExecFunction(names, shuffleMap, {
-			isAsync: true, debug, rollingCipher, interpOpts,
+			isAsync: true, debug, rollingCipher, seed, interpOpts,
 		}),
 	];
 }
@@ -58,6 +60,7 @@ export function buildExecFunction(
 		isAsync: boolean;
 		debug: boolean;
 		rollingCipher: boolean;
+		seed: number;
 		interpOpts: InterpreterBuildOptions;
 	}
 ): JsNode {
@@ -93,9 +96,15 @@ export function buildExecFunction(
 	const switchStr = emit(switchNode);
 
 	// Build the scaffolding with the switch injected
-	return raw(
-		buildScaffold(names, opts.isAsync, opts.debug, opts.rollingCipher, opts.interpOpts, switchStr)
-	);
+	let funcStr = buildScaffold(names, opts.isAsync, opts.debug, opts.rollingCipher, opts.interpOpts, switchStr);
+
+	// Apply string-based post-processing (same as the old template pipeline):
+	// 1. Inline W/X/Y stack operation calls → direct array access
+	// 2. Obfuscate remaining long local variable names
+	funcStr = stringInlineStackOps(funcStr, names.stk, names.stp, names.sPush, names.sPop, names.sPeek);
+	funcStr = stringObfuscateLocals(funcStr, opts.seed);
+
+	return raw(funcStr);
 }
 
 // --- Scaffolding ---
@@ -325,4 +334,144 @@ function buildStackEncodingProxy(n: RuntimeNames): string {
       return _seRaw[k];
     }
   });`;
+}
+
+// --- String-based post-processing transforms ---
+
+/**
+ * Inline stack operations: replace W(expr)->S[++P]=expr, X()->S[P--], Y()->S[P].
+ *
+ * This eliminates function call overhead on every single opcode dispatch.
+ * Ported from the old template-literal pipeline.
+ */
+function stringInlineStackOps(
+	source: string,
+	S: string,
+	P: string,
+	W: string,
+	X: string,
+	Y: string
+): string {
+	// Remove the push/pop/peek function definitions
+	const defPattern = new RegExp(
+		`function ${W}\\(v\\)\\{${S}\\[\\+\\+${P}\\]=v;\\}\\s*` +
+			`function ${X}\\(\\)\\{return ${S}\\[${P}--\\];\\}\\s*` +
+			`function ${Y}\\(\\)\\{return ${S}\\[${P}\\];\\}`,
+		"g"
+	);
+	let result = source.replace(defPattern, "");
+
+	// Replace X() -> S[P--]  (simple token, no args)
+	result = result.replace(new RegExp(`${X}\\(\\)`, "g"), `${S}[${P}--]`);
+
+	// Replace Y() -> S[P]   (simple token, no args)
+	result = result.replace(new RegExp(`${Y}\\(\\)`, "g"), `${S}[${P}]`);
+
+	// Replace W(expr) with inline stack push.
+	const popToken = `${S}[${P}--]`;
+	const wCall = `${W}(`;
+	let out = "";
+	let i = 0;
+	while (i < result.length) {
+		const idx = result.indexOf(wCall, i);
+		if (idx < 0) {
+			out += result.slice(i);
+			break;
+		}
+		out += result.slice(i, idx);
+		// Find the matching closing paren
+		let depth = 1;
+		let j = idx + wCall.length;
+		while (j < result.length && depth > 0) {
+			if (result[j] === "(") depth++;
+			else if (result[j] === ")") depth--;
+			j++;
+		}
+		const expr = result.slice(idx + wCall.length, j - 1);
+		if (!expr.includes(popToken) && !expr.includes(`${S}[${P}]`)) {
+			// No stack reads in expr — safe to use S[++P]=expr directly
+			out += `${S}[++${P}]=${expr}`;
+		} else {
+			// Expr reads from stack — evaluate first, then push
+			out += `${S}[++${P}]=((${expr}))`;
+		}
+		i = j;
+	}
+
+	return out;
+}
+
+/**
+ * Rename all case-local `var` declarations with names >= 3 chars
+ * that aren't in the KEEP set and don't start with `_`.
+ *
+ * Ported from the old template-literal pipeline.
+ */
+function stringObfuscateLocals(source: string, seed: number): string {
+	let s = seed >>> 0;
+	function lcg(): number {
+		s = (s * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+		return s;
+	}
+	const alpha = "abcdefghijklmnopqrstuvwxyz";
+	const alnum = "abcdefghijklmnopqrstuvwxyz0123456789";
+	const used = new Set<string>();
+
+	function genShort(): string {
+		for (;;) {
+			const c1 = alpha[lcg() % alpha.length]!;
+			const c2 = alnum[lcg() % alnum.length]!;
+			const name = c1 + c2;
+			if (!used.has(name) && !KEEP.has(name) && !RESERVED.has(name)) {
+				used.add(name);
+				return name;
+			}
+		}
+	}
+
+	// Find all `var <name>` declarations where name is 3+ chars, not starting with _
+	const varPattern = /\bvar\s+([a-zA-Z][a-zA-Z0-9_]{2,})\b/g;
+	const toRename = new Set<string>();
+	let m: RegExpExecArray | null;
+	while ((m = varPattern.exec(source)) !== null) {
+		const name = m[1]!;
+		if (!KEEP.has(name) && !name.startsWith("_")) {
+			toRename.add(name);
+		}
+	}
+
+	// Also find function parameter names that are revealing
+	const paramPattern = /function\s*\w*\s*\(([^)]+)\)/g;
+	while ((m = paramPattern.exec(source)) !== null) {
+		const params = m[1]!.split(",").map((p) => p.trim());
+		for (const p of params) {
+			const clean = p.replace(/^\.\.\./, "");
+			if (
+				clean.length >= 3 &&
+				!KEEP.has(clean) &&
+				!clean.startsWith("_")
+			) {
+				toRename.add(clean);
+			}
+		}
+	}
+
+	if (toRename.size === 0) return source;
+
+	// Build rename map
+	const renameMap = new Map<string, string>();
+	for (const name of toRename) {
+		renameMap.set(name, genShort());
+	}
+
+	// Apply renames using word-boundary replacements (longest first)
+	let result = source;
+	const sorted = [...renameMap.entries()].sort(
+		(a, b) => b[0].length - a[0].length
+	);
+	for (const [oldName, newName] of sorted) {
+		result = result.replace(new RegExp(`\\b${oldName}\\b`, "g"), newName);
+	}
+
+	return result;
 }
