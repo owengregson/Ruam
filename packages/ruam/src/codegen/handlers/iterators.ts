@@ -32,11 +32,13 @@ import { registry } from "./registry.js";
  * ```
  */
 function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterable=${ctx.X}();var iter=iterable[Symbol.iterator]();` +
-		`var first=iter.next();` +
-		`${ctx.W}({_iter:iter,_done:!!first.done,_value:first.value});break;`
-	)];
+	return [
+		raw(
+			`var iterable=${ctx.X}();var iter=iterable[Symbol.iterator]();` +
+				`var first=iter.next();` +
+				`${ctx.W}({_iter:iter,_done:!!first.done,_value:first.value});break;`
+		),
+	];
 }
 
 /**
@@ -48,46 +50,48 @@ function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterObj=${ctx.X}();${ctx.W}(iterObj._value);` +
-		`var nxt=iterObj._iter.next();iterObj._done=!!nxt.done;iterObj._value=nxt.value;break;`
-	)];
+	return [
+		raw(
+			`var iterObj=${ctx.X}();${ctx.W}(iterObj._value);` +
+				`var nxt=iterObj._iter.next();iterObj._done=!!nxt.done;iterObj._value=nxt.value;break;`
+		),
+	];
 }
 
 /**
  * ITER_DONE: peek at iterator object, push its done flag.
  */
 function ITER_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterObj=${ctx.Y}();${ctx.W}(!!iterObj._done);break;`
-	)];
+	return [raw(`var iterObj=${ctx.Y}();${ctx.W}(!!iterObj._done);break;`)];
 }
 
 /**
  * ITER_VALUE: peek at iterator object, push its current value.
  */
 function ITER_VALUE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);break;`
-	)];
+	return [raw(`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);break;`)];
 }
 
 /**
  * ITER_CLOSE: pop iterator object and call its return method if present.
  */
 function ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterObj=${ctx.X}();if(iterObj._iter.return)iterObj._iter.return();break;`
-	)];
+	return [
+		raw(
+			`var iterObj=${ctx.X}();if(iterObj._iter.return)iterObj._iter.return();break;`
+		),
+	];
 }
 
 /**
  * ITER_RESULT_UNWRAP: peek at iterator, push value then done flag.
  */
 function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);${ctx.W}(!!iterObj._done);break;`
-	)];
+	return [
+		raw(
+			`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);${ctx.W}(!!iterObj._done);break;`
+		),
+	];
 }
 
 // --- For-in handlers ---
@@ -101,28 +105,26 @@ function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function FORIN_INIT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var obj=${ctx.X}();var keys=[];for(var k in obj)keys.push(k);` +
-		`${ctx.W}({_keys:keys,_idx:0});break;`
-	)];
+	return [
+		raw(
+			`var obj=${ctx.X}();var keys=[];for(var k in obj)keys.push(k);` +
+				`${ctx.W}({_keys:keys,_idx:0});break;`
+		),
+	];
 }
 
 /**
  * FORIN_NEXT: pop for-in state, push next key.
  */
 function FORIN_NEXT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fi=${ctx.X}();${ctx.W}(fi._keys[fi._idx++]);break;`
-	)];
+	return [raw(`var fi=${ctx.X}();${ctx.W}(fi._keys[fi._idx++]);break;`)];
 }
 
 /**
  * FORIN_DONE: peek at for-in state, push whether iteration is complete.
  */
 function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fi=${ctx.Y}();${ctx.W}(fi._idx>=fi._keys.length);break;`
-	)];
+	return [raw(`var fi=${ctx.Y}();${ctx.W}(fi._idx>=fi._keys.length);break;`)];
 }
 
 // --- Async iterator handlers ---
@@ -133,12 +135,14 @@ function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
  * Falls back to Symbol.iterator if Symbol.asyncIterator is not present.
  */
 function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterable=${ctx.X}();` +
-		`var method=iterable[Symbol.asyncIterator]||iterable[Symbol.iterator];` +
-		`var iter=method.call(iterable);` +
-		`${ctx.W}({_iter:iter,_done:false,_value:void 0,_async:true});break;`
-	)];
+	return [
+		raw(
+			`var iterable=${ctx.X}();` +
+				`var method=iterable[Symbol.asyncIterator]||iterable[Symbol.iterator];` +
+				`var iter=method.call(iterable);` +
+				`${ctx.W}({_iter:iter,_done:false,_value:void 0,_async:true});break;`
+		),
+	];
 }
 
 /**
@@ -147,30 +151,28 @@ function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
  * When ctx.isAsync is true, emits `await` before `iterObj._iter.next()`.
  */
 function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
-	const awaitKw = ctx.isAsync ? 'await ' : '';
-	return [raw(
-		`var iterObj=${ctx.Y}();` +
-		`var result=${awaitKw}iterObj._iter.next();` +
-		`iterObj._done=!!result.done;iterObj._value=result.value;break;`
-	)];
+	const awaitKw = ctx.isAsync ? "await " : "";
+	return [
+		raw(
+			`var iterObj=${ctx.Y}();` +
+				`var result=${awaitKw}iterObj._iter.next();` +
+				`iterObj._done=!!result.done;iterObj._value=result.value;break;`
+		),
+	];
 }
 
 /**
  * ASYNC_ITER_DONE: peek at async iterator, push its done flag.
  */
 function ASYNC_ITER_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterObj=${ctx.Y}();${ctx.W}(!!iterObj._done);break;`
-	)];
+	return [raw(`var iterObj=${ctx.Y}();${ctx.W}(!!iterObj._done);break;`)];
 }
 
 /**
  * ASYNC_ITER_VALUE: peek at async iterator, push its current value.
  */
 function ASYNC_ITER_VALUE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);break;`
-	)];
+	return [raw(`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);break;`)];
 }
 
 /**
@@ -179,10 +181,12 @@ function ASYNC_ITER_VALUE(ctx: HandlerCtx): JsNode[] {
  * When ctx.isAsync is true, emits `await` before the return call.
  */
 function ASYNC_ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
-	const awaitKw = ctx.isAsync ? 'await ' : '';
-	return [raw(
-		`var iterObj=${ctx.X}();if(iterObj._iter.return)${awaitKw}iterObj._iter.return();break;`
-	)];
+	const awaitKw = ctx.isAsync ? "await " : "";
+	return [
+		raw(
+			`var iterObj=${ctx.X}();if(iterObj._iter.return)${awaitKw}iterObj._iter.return();break;`
+		),
+	];
 }
 
 /**
@@ -191,13 +195,15 @@ function ASYNC_ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
  * When ctx.isAsync is true, emits `await` before `iterObj._iter.next()`.
  */
 function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
-	const awaitKw = ctx.isAsync ? 'await ' : '';
-	return [raw(
-		`var iterObj=${ctx.Y}();` +
-		`var result=${awaitKw}iterObj._iter.next();` +
-		`iterObj._done=!!result.done;iterObj._value=result.value;` +
-		`${ctx.W}(result.value);break;`
-	)];
+	const awaitKw = ctx.isAsync ? "await " : "";
+	return [
+		raw(
+			`var iterObj=${ctx.Y}();` +
+				`var result=${awaitKw}iterObj._iter.next();` +
+				`iterObj._done=!!result.done;iterObj._value=result.value;` +
+				`${ctx.W}(result.value);break;`
+		),
+	];
 }
 
 // --- Conversion handler ---
@@ -206,9 +212,11 @@ function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
  * CREATE_ASYNC_FROM_SYNC_ITER: pop sync iterator, wrap as async-compatible.
  */
 function CREATE_ASYNC_FROM_SYNC_ITER(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var it=${ctx.X}();${ctx.W}({_iter:it,_done:false,_value:void 0});break;`
-	)];
+	return [
+		raw(
+			`var it=${ctx.X}();${ctx.W}({_iter:it,_done:false,_value:void 0});break;`
+		),
+	];
 }
 
 // --- Registration ---

@@ -41,13 +41,17 @@ import { registry, type HandlerCtx } from "./registry.js";
  * ```
  */
 function NEW_CLASS(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var hasSuperClass=${ctx.O};var SuperClass=hasSuperClass?${ctx.X}():null;` +
-		(ctx.debug ? `${ctx.dbg}('NEW_CLASS','hasSuper='+!!hasSuperClass);` : '') +
-		`var cls=(function(){var c=null;var f=function(){if(c)return c.apply(this,arguments);};f.__setCtor=function(x){c=x;};return f;})();` +
-		`if(SuperClass){cls.prototype=Object.create(SuperClass.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,SuperClass);}` +
-		`${ctx.W}(cls);break;`
-	)];
+	return [
+		raw(
+			`var hasSuperClass=${ctx.O};var SuperClass=hasSuperClass?${ctx.X}():null;` +
+				(ctx.debug
+					? `${ctx.dbg}('NEW_CLASS','hasSuper='+!!hasSuperClass);`
+					: "") +
+				`var cls=(function(){var c=null;var f=function(){if(c)return c.apply(this,arguments);};f.__setCtor=function(x){c=x;};return f;})();` +
+				`if(SuperClass){cls.prototype=Object.create(SuperClass.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,SuperClass);}` +
+				`${ctx.W}(cls);break;`
+		),
+	];
 }
 
 /**
@@ -63,13 +67,15 @@ function NEW_CLASS(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function NEW_DERIVED_CLASS(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var SuperClass=${ctx.X}();` +
-		(ctx.debug ? `${ctx.dbg}('NEW_DERIVED_CLASS');` : '') +
-		`var cls=(function(){var c=null;var f=function(){if(c)return c.apply(this,arguments);};f.__setCtor=function(x){c=x;};return f;})();` +
-		`cls.prototype=Object.create(SuperClass.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,SuperClass);` +
-		`${ctx.W}(cls);break;`
-	)];
+	return [
+		raw(
+			`var SuperClass=${ctx.X}();` +
+				(ctx.debug ? `${ctx.dbg}('NEW_DERIVED_CLASS');` : "") +
+				`var cls=(function(){var c=null;var f=function(){if(c)return c.apply(this,arguments);};f.__setCtor=function(x){c=x;};return f;})();` +
+				`cls.prototype=Object.create(SuperClass.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,SuperClass);` +
+				`${ctx.W}(cls);break;`
+		),
+	];
 }
 
 /**
@@ -82,10 +88,12 @@ function NEW_DERIVED_CLASS(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function EXTEND_CLASS(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var superCls=${ctx.X}();var cls=${ctx.Y}();` +
-		`cls.prototype=Object.create(superCls.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,superCls);break;`
-	)];
+	return [
+		raw(
+			`var superCls=${ctx.X}();var cls=${ctx.Y}();` +
+				`cls.prototype=Object.create(superCls.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,superCls);break;`
+		),
+	];
 }
 
 // --- Method definition ---
@@ -97,21 +105,25 @@ function EXTEND_CLASS(ctx: HandlerCtx): JsNode[] {
  * Includes debug trace when debug mode is enabled.
  */
 function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
-		(ctx.debug
-			? `${ctx.dbg}('DEFINE_METHOD','name='+name,'static='+!!isStatic,'isCtor='+(name==='constructor'));`
-			: '') +
-		`if(name==='constructor'){if(cls.__setCtor)cls.__setCtor(fn);fn._ho=cls.prototype;cls.prototype.constructor=fn;}` +
-		`else if(isStatic){fn._ho=cls;cls[name]=fn;}else{var _tgt=(cls.prototype||cls);fn._ho=_tgt;_tgt[name]=fn;}break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
+				(ctx.debug
+					? `${ctx.dbg}('DEFINE_METHOD','name='+name,'static='+!!isStatic,'isCtor='+(name==='constructor'));`
+					: "") +
+				`if(name==='constructor'){if(cls.__setCtor)cls.__setCtor(fn);fn._ho=cls.prototype;cls.prototype.constructor=fn;}` +
+				`else if(isStatic){fn._ho=cls;cls[name]=fn;}else{var _tgt=(cls.prototype||cls);fn._ho=_tgt;_tgt[name]=fn;}break;`
+		),
+	];
 }
 
 /** `{var fn=X();var cls=Y();fn._ho=cls;cls[C[O]]=fn;break;}` */
 function DEFINE_STATIC_METHOD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();fn._ho=cls;cls[${ctx.C}[${ctx.O}]]=fn;break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();fn._ho=cls;cls[${ctx.C}[${ctx.O}]]=fn;break;`
+		),
+	];
 }
 
 // --- Accessor definition ---
@@ -121,19 +133,23 @@ function DEFINE_STATIC_METHOD(ctx: HandlerCtx): JsNode[] {
  * Operand packs name constant index in low 16 bits and isStatic flag in bit 16.
  */
 function DEFINE_GETTER(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
-		`var target=isStatic?cls:(cls.prototype||cls);fn._ho=target;` +
-		`Object.defineProperty(target,name,{get:fn,configurable:true,enumerable:false});break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
+				`var target=isStatic?cls:(cls.prototype||cls);fn._ho=target;` +
+				`Object.defineProperty(target,name,{get:fn,configurable:true,enumerable:false});break;`
+		),
+	];
 }
 
 /** `{var fn=X();var cls=Y();fn._ho=cls;Object.defineProperty(cls,C[O],{get:fn,configurable:true,enumerable:false});break;}` */
 function DEFINE_STATIC_GETTER(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();fn._ho=cls;` +
-		`Object.defineProperty(cls,${ctx.C}[${ctx.O}],{get:fn,configurable:true,enumerable:false});break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();fn._ho=cls;` +
+				`Object.defineProperty(cls,${ctx.C}[${ctx.O}],{get:fn,configurable:true,enumerable:false});break;`
+		),
+	];
 }
 
 /**
@@ -141,88 +157,106 @@ function DEFINE_STATIC_GETTER(ctx: HandlerCtx): JsNode[] {
  * Operand packs name constant index in low 16 bits and isStatic flag in bit 16.
  */
 function DEFINE_SETTER(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
-		`var target=isStatic?cls:(cls.prototype||cls);fn._ho=target;` +
-		`Object.defineProperty(target,name,{set:fn,configurable:true,enumerable:false});break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
+				`var target=isStatic?cls:(cls.prototype||cls);fn._ho=target;` +
+				`Object.defineProperty(target,name,{set:fn,configurable:true,enumerable:false});break;`
+		),
+	];
 }
 
 /** `{var fn=X();var cls=Y();fn._ho=cls;Object.defineProperty(cls,C[O],{set:fn,configurable:true,enumerable:false});break;}` */
 function DEFINE_STATIC_SETTER(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();fn._ho=cls;` +
-		`Object.defineProperty(cls,${ctx.C}[${ctx.O}],{set:fn,configurable:true,enumerable:false});break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();fn._ho=cls;` +
+				`Object.defineProperty(cls,${ctx.C}[${ctx.O}],{set:fn,configurable:true,enumerable:false});break;`
+		),
+	];
 }
 
 // --- Field definition ---
 
 /** `{var val=X();var name=C[O];var obj=Y();obj[name]=val;break;}` */
 function DEFINE_FIELD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var obj=${ctx.Y}();obj[name]=val;break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var obj=${ctx.Y}();obj[name]=val;break;`
+		),
+	];
 }
 
 /** `{var val=X();var cls=Y();cls[C[O]]=val;break;}` */
 function DEFINE_STATIC_FIELD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.X}();var cls=${ctx.Y}();cls[${ctx.C}[${ctx.O}]]=val;break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.X}();var cls=${ctx.Y}();cls[${ctx.C}[${ctx.O}]]=val;break;`
+		),
+	];
 }
 
 // --- Private member definition ---
 
 /** `{var fn=X();var cls=Y();(cls.prototype||cls)[C[O]]=fn;break;}` */
 function DEFINE_PRIVATE_METHOD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();(cls.prototype||cls)[${ctx.C}[${ctx.O}]]=fn;break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();(cls.prototype||cls)[${ctx.C}[${ctx.O}]]=fn;break;`
+		),
+	];
 }
 
 /** `{var fn=X();var cls=Y();Object.defineProperty(cls.prototype||cls,C[O],{get:fn,configurable:true});break;}` */
 function DEFINE_PRIVATE_GETTER(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();Object.defineProperty(cls.prototype||cls,${ctx.C}[${ctx.O}],{get:fn,configurable:true});break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();Object.defineProperty(cls.prototype||cls,${ctx.C}[${ctx.O}],{get:fn,configurable:true});break;`
+		),
+	];
 }
 
 /** `{var fn=X();var cls=Y();Object.defineProperty(cls.prototype||cls,C[O],{set:fn,configurable:true});break;}` */
 function DEFINE_PRIVATE_SETTER(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();Object.defineProperty(cls.prototype||cls,${ctx.C}[${ctx.O}],{set:fn,configurable:true});break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();Object.defineProperty(cls.prototype||cls,${ctx.C}[${ctx.O}],{set:fn,configurable:true});break;`
+		),
+	];
 }
 
 /** `{var val=X();var obj=Y();obj[C[O]]=val;break;}` */
 function DEFINE_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.X}();var obj=${ctx.Y}();obj[${ctx.C}[${ctx.O}]]=val;break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.X}();var obj=${ctx.Y}();obj[${ctx.C}[${ctx.O}]]=val;break;`
+		),
+	];
 }
 
 /** `{var val=X();var cls=Y();cls[C[O]]=val;break;}` */
 function DEFINE_STATIC_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.X}();var cls=${ctx.Y}();cls[${ctx.C}[${ctx.O}]]=val;break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.X}();var cls=${ctx.Y}();cls[${ctx.C}[${ctx.O}]]=val;break;`
+		),
+	];
 }
 
 /** `{var fn=X();var cls=Y();cls[C[O]]=fn;break;}` */
 function DEFINE_STATIC_PRIVATE_METHOD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();cls[${ctx.C}[${ctx.O}]]=fn;break;`
-	)];
+	return [
+		raw(
+			`var fn=${ctx.X}();var cls=${ctx.Y}();cls[${ctx.C}[${ctx.O}]]=fn;break;`
+		),
+	];
 }
 
 // --- Static block ---
 
 /** `{var fn=X();var cls=Y();fn.call(cls);break;}` */
 function CLASS_STATIC_BLOCK(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var fn=${ctx.X}();var cls=${ctx.Y}();fn.call(cls);break;`
-	)];
+	return [raw(`var fn=${ctx.X}();var cls=${ctx.Y}();fn.call(cls);break;`)];
 }
 
 // --- No-op class handlers ---

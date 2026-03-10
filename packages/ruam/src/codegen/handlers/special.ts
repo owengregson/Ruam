@@ -13,37 +13,24 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id, call,
-	exprStmt, breakStmt, raw,
-} from "../nodes.js";
+import { type JsNode, id, call, exprStmt, breakStmt, raw } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple push handlers (AST nodes) ---
 
 /** `W(TV);break;` — push `this` value */
 function PUSH_THIS(ctx: HandlerCtx): JsNode[] {
-	return [
-		exprStmt(call(id(ctx.W), [id(ctx.TV)])),
-		breakStmt(),
-	];
+	return [exprStmt(call(id(ctx.W), [id(ctx.TV)])), breakStmt()];
 }
 
 /** `W(A);break;` — push arguments object */
 function PUSH_ARGUMENTS(ctx: HandlerCtx): JsNode[] {
-	return [
-		exprStmt(call(id(ctx.W), [id(ctx.A)])),
-		breakStmt(),
-	];
+	return [exprStmt(call(id(ctx.W), [id(ctx.A)])), breakStmt()];
 }
 
 /** `W(NT);break;` — push new.target */
 function PUSH_NEW_TARGET(ctx: HandlerCtx): JsNode[] {
-	return [
-		exprStmt(call(id(ctx.W), [id(ctx.NT)])),
-		breakStmt(),
-	];
+	return [exprStmt(call(id(ctx.W), [id(ctx.NT)])), breakStmt()];
 }
 
 // --- Complex push handlers (raw) ---
@@ -54,9 +41,7 @@ function PUSH_NEW_TARGET(ctx: HandlerCtx): JsNode[] {
  * Uses intermediate `var g` to match the original runtime pattern.
  */
 function PUSH_GLOBAL_THIS(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var g=_g;${ctx.W}(g);break;`
-	)];
+	return [raw(`var g=_g;${ctx.W}(g);break;`)];
 }
 
 /**
@@ -71,13 +56,15 @@ function PUSH_GLOBAL_THIS(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var syms=[Symbol.iterator,Symbol.asyncIterator,Symbol.hasInstance,` +
-		`Symbol.toPrimitive,Symbol.toStringTag,Symbol.species,` +
-		`Symbol.isConcatSpreadable,Symbol.match,Symbol.replace,` +
-		`Symbol.search,Symbol.split,Symbol.unscopables];` +
-		`${ctx.W}(syms[${ctx.O}]||Symbol.iterator);break;`
-	)];
+	return [
+		raw(
+			`var syms=[Symbol.iterator,Symbol.asyncIterator,Symbol.hasInstance,` +
+				`Symbol.toPrimitive,Symbol.toStringTag,Symbol.species,` +
+				`Symbol.isConcatSpreadable,Symbol.match,Symbol.replace,` +
+				`Symbol.search,Symbol.split,Symbol.unscopables];` +
+				`${ctx.W}(syms[${ctx.O}]||Symbol.iterator);break;`
+		),
+	];
 }
 
 // --- Arguments handlers (raw — method chain call) ---
@@ -88,9 +75,7 @@ function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
  * Both opcodes produce the same handler — a sliced copy of the arguments object.
  */
 function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`${ctx.W}(Array.prototype.slice.call(${ctx.A}));break;`
-	)];
+	return [raw(`${ctx.W}(Array.prototype.slice.call(${ctx.A}));break;`)];
 }
 
 /**
@@ -99,9 +84,9 @@ function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
  * Slices arguments from the operand index onward (rest parameter start).
  */
 function CREATE_REST_ARGS(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`${ctx.W}(Array.prototype.slice.call(${ctx.A},${ctx.O}));break;`
-	)];
+	return [
+		raw(`${ctx.W}(Array.prototype.slice.call(${ctx.A},${ctx.O}));break;`),
+	];
 }
 
 // --- Registration ---

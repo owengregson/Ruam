@@ -35,10 +35,12 @@ import { registry } from "./registry.js";
  * @returns Handler function producing the case body
  */
 function compoundScopedAssign(assignOp: string): HandlerFn {
-	return (ctx) => [raw(
-		`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-		`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]${assignOp}val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
-	)];
+	return (ctx) => [
+		raw(
+			`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]${assignOp}val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+		),
+	];
 }
 
 /**
@@ -52,10 +54,12 @@ function compoundScopedAssign(assignOp: string): HandlerFn {
  * @returns Handler function producing the case body
  */
 function logicalScopedAssign(logicalOp: string): HandlerFn {
-	return (ctx) => [raw(
-		`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-		`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]${logicalOp}val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
-	)];
+	return (ctx) => [
+		raw(
+			`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]${logicalOp}val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+		),
+	];
 }
 
 // --- Increment / decrement ---
@@ -66,10 +70,12 @@ function logicalScopedAssign(logicalOp: string): HandlerFn {
  * Walks scope chain, increments in-place, pushes new value.
  */
 function INC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-		`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]+1;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]+1;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+		),
+	];
 }
 
 /**
@@ -78,10 +84,12 @@ function INC_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Walks scope chain, decrements in-place, pushes new value.
  */
 function DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-		`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]-1;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]-1;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+		),
+	];
 }
 
 /**
@@ -90,10 +98,12 @@ function DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Walks scope chain, saves old value, increments, pushes old value.
  */
 function POST_INC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-		`while(s){if(name in s.${ctx.sV}){var old=s.${ctx.sV}[name];s.${ctx.sV}[name]=old+1;${ctx.W}(old);break;}s=s.${ctx.sPar};}break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				`while(s){if(name in s.${ctx.sV}){var old=s.${ctx.sV}[name];s.${ctx.sV}[name]=old+1;${ctx.W}(old);break;}s=s.${ctx.sPar};}break;`
+		),
+	];
 }
 
 /**
@@ -102,10 +112,12 @@ function POST_INC_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Walks scope chain, saves old value, decrements, pushes old value.
  */
 function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-		`while(s){if(name in s.${ctx.sV}){var old=s.${ctx.sV}[name];s.${ctx.sV}[name]=old-1;${ctx.W}(old);break;}s=s.${ctx.sPar};}break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				`while(s){if(name in s.${ctx.sV}){var old=s.${ctx.sV}[name];s.${ctx.sV}[name]=old-1;${ctx.W}(old);break;}s=s.${ctx.sPar};}break;`
+		),
+	];
 }
 
 // --- Nullish assign (special: conditional assignment) ---
@@ -116,10 +128,12 @@ function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Only assigns if the current value is null or undefined.
  */
 function NULLISH_ASSIGN_SCOPED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-		`while(s){if(name in s.${ctx.sV}){if(s.${ctx.sV}[name]==null)s.${ctx.sV}[name]=val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				`while(s){if(name in s.${ctx.sV}){if(s.${ctx.sV}[name]==null)s.${ctx.sV}[name]=val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+		),
+	];
 }
 
 // --- ASSIGN_OP (no-op marker) ---
@@ -135,19 +149,19 @@ registry.set(Op.INC_SCOPED, INC_SCOPED);
 registry.set(Op.DEC_SCOPED, DEC_SCOPED);
 registry.set(Op.POST_INC_SCOPED, POST_INC_SCOPED);
 registry.set(Op.POST_DEC_SCOPED, POST_DEC_SCOPED);
-registry.set(Op.ADD_ASSIGN_SCOPED, compoundScopedAssign('+='));
-registry.set(Op.SUB_ASSIGN_SCOPED, compoundScopedAssign('-='));
-registry.set(Op.MUL_ASSIGN_SCOPED, compoundScopedAssign('*='));
-registry.set(Op.DIV_ASSIGN_SCOPED, compoundScopedAssign('/='));
-registry.set(Op.MOD_ASSIGN_SCOPED, compoundScopedAssign('%='));
-registry.set(Op.POW_ASSIGN_SCOPED, compoundScopedAssign('**='));
-registry.set(Op.BIT_AND_ASSIGN_SCOPED, compoundScopedAssign('&='));
-registry.set(Op.BIT_OR_ASSIGN_SCOPED, compoundScopedAssign('|='));
-registry.set(Op.BIT_XOR_ASSIGN_SCOPED, compoundScopedAssign('^='));
-registry.set(Op.SHL_ASSIGN_SCOPED, compoundScopedAssign('<<='));
-registry.set(Op.SHR_ASSIGN_SCOPED, compoundScopedAssign('>>='));
-registry.set(Op.USHR_ASSIGN_SCOPED, compoundScopedAssign('>>>='));
-registry.set(Op.AND_ASSIGN_SCOPED, logicalScopedAssign('&&'));
-registry.set(Op.OR_ASSIGN_SCOPED, logicalScopedAssign('||'));
+registry.set(Op.ADD_ASSIGN_SCOPED, compoundScopedAssign("+="));
+registry.set(Op.SUB_ASSIGN_SCOPED, compoundScopedAssign("-="));
+registry.set(Op.MUL_ASSIGN_SCOPED, compoundScopedAssign("*="));
+registry.set(Op.DIV_ASSIGN_SCOPED, compoundScopedAssign("/="));
+registry.set(Op.MOD_ASSIGN_SCOPED, compoundScopedAssign("%="));
+registry.set(Op.POW_ASSIGN_SCOPED, compoundScopedAssign("**="));
+registry.set(Op.BIT_AND_ASSIGN_SCOPED, compoundScopedAssign("&="));
+registry.set(Op.BIT_OR_ASSIGN_SCOPED, compoundScopedAssign("|="));
+registry.set(Op.BIT_XOR_ASSIGN_SCOPED, compoundScopedAssign("^="));
+registry.set(Op.SHL_ASSIGN_SCOPED, compoundScopedAssign("<<="));
+registry.set(Op.SHR_ASSIGN_SCOPED, compoundScopedAssign(">>="));
+registry.set(Op.USHR_ASSIGN_SCOPED, compoundScopedAssign(">>>="));
+registry.set(Op.AND_ASSIGN_SCOPED, logicalScopedAssign("&&"));
+registry.set(Op.OR_ASSIGN_SCOPED, logicalScopedAssign("||"));
 registry.set(Op.NULLISH_ASSIGN_SCOPED, NULLISH_ASSIGN_SCOPED);
 registry.set(Op.ASSIGN_OP, ASSIGN_OP);

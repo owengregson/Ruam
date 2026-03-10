@@ -49,24 +49,22 @@ function buildDeriveKeyFunction(
 	integrityHash?: number
 ): JsNode {
 	const ihashXor =
-		integrityHash !== undefined
-			? `k=(k^${names.ihash})>>>0;`
-			: "";
+		integrityHash !== undefined ? `k=(k^${names.ihash})>>>0;` : "";
 
 	return raw(
 		`function ${names.rcDeriveKey}(u){` +
-		`var h=0x811C9DC5;` +
-		`h=Math.imul(h^(u.i.length>>>1),0x01000193);` +
-		`h=Math.imul(h^u.r,0x01000193);` +
-		`h=Math.imul(h^u.p,0x01000193);` +
-		`h=Math.imul(h^u.c.length,0x01000193);` +
-		`h^=h>>>16;` +
-		`h=Math.imul(h,0x45D9F3B);` +
-		`h^=h>>>13;` +
-		`var k=h>>>0;` +
-		ihashXor +
-		`return k;` +
-		`}`
+			`var h=0x811C9DC5;` +
+			`h=Math.imul(h^(u.i.length>>>1),0x01000193);` +
+			`h=Math.imul(h^u.r,0x01000193);` +
+			`h=Math.imul(h^u.p,0x01000193);` +
+			`h=Math.imul(h^u.c.length,0x01000193);` +
+			`h^=h>>>16;` +
+			`h=Math.imul(h,0x45D9F3B);` +
+			`h^=h>>>13;` +
+			`var k=h>>>0;` +
+			ihashXor +
+			`return k;` +
+			`}`
 	);
 }
 
@@ -81,11 +79,11 @@ function buildDeriveKeyFunction(
 function buildMixFunction(names: RuntimeNames): JsNode {
 	return raw(
 		`function ${names.rcMix}(s,a,b){` +
-		`var h=s;` +
-		`h=Math.imul(h^a,0x85EBCA6B)>>>0;` +
-		`h=Math.imul(h^b,0xC2B2AE35)>>>0;` +
-		`h^=h>>>16;` +
-		`return h>>>0;` +
-		`}`
+			`var h=s;` +
+			`h=Math.imul(h^a,0x85EBCA6B)>>>0;` +
+			`h=Math.imul(h^b,0xC2B2AE35)>>>0;` +
+			`h^=h>>>16;` +
+			`return h>>>0;` +
+			`}`
 	);
 }

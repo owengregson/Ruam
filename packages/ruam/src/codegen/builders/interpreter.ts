@@ -15,7 +15,11 @@ import type { RuntimeNames } from "../../runtime/names.js";
 import { raw, caseClause, lit, switchStmt, id, breakStmt } from "../nodes.js";
 import { registry, makeHandlerCtx } from "../handlers/index.js";
 import { emit } from "../emit.js";
-import { VM_MAX_RECURSION_DEPTH, LCG_MULTIPLIER, LCG_INCREMENT } from "../../constants.js";
+import {
+	VM_MAX_RECURSION_DEPTH,
+	LCG_MULTIPLIER,
+	LCG_INCREMENT,
+} from "../../constants.js";
 import { KEEP, RESERVED } from "../transforms.js";
 
 /** Options for interpreter filtering and hardening. */
@@ -42,10 +46,18 @@ export function buildInterpreterFunctions(
 ): JsNode[] {
 	return [
 		buildExecFunction(names, shuffleMap, {
-			isAsync: false, debug, rollingCipher, seed, interpOpts,
+			isAsync: false,
+			debug,
+			rollingCipher,
+			seed,
+			interpOpts,
 		}),
 		buildExecFunction(names, shuffleMap, {
-			isAsync: true, debug, rollingCipher, seed, interpOpts,
+			isAsync: true,
+			debug,
+			rollingCipher,
+			seed,
+			interpOpts,
 		}),
 	];
 }
@@ -84,7 +96,11 @@ export function buildExecFunction(
 	// Generate decoy handlers for unused opcodes
 	if (opts.interpOpts.decoyOpcodes && opts.interpOpts.usedOpcodes) {
 		cases.push(
-			...generateDecoyHandlers(names, shuffleMap, opts.interpOpts.usedOpcodes)
+			...generateDecoyHandlers(
+				names,
+				shuffleMap,
+				opts.interpOpts.usedOpcodes
+			)
 		);
 	}
 
@@ -96,12 +112,26 @@ export function buildExecFunction(
 	const switchStr = emit(switchNode);
 
 	// Build the scaffolding with the switch injected
-	let funcStr = buildScaffold(names, opts.isAsync, opts.debug, opts.rollingCipher, opts.interpOpts, switchStr);
+	let funcStr = buildScaffold(
+		names,
+		opts.isAsync,
+		opts.debug,
+		opts.rollingCipher,
+		opts.interpOpts,
+		switchStr
+	);
 
 	// Apply string-based post-processing (same as the old template pipeline):
 	// 1. Inline W/X/Y stack operation calls → direct array access
 	// 2. Obfuscate remaining long local variable names
-	funcStr = stringInlineStackOps(funcStr, names.stk, names.stp, names.sPush, names.sPop, names.sPeek);
+	funcStr = stringInlineStackOps(
+		funcStr,
+		names.stk,
+		names.stp,
+		names.sPush,
+		names.sPop,
+		names.sPeek
+	);
 	funcStr = stringObfuscateLocals(funcStr, opts.seed);
 
 	return raw(funcStr);
@@ -127,13 +157,31 @@ function buildScaffold(
 	const fnDecl = isAsync ? `async function ${fnName}` : `function ${fnName}`;
 	const fnLabel = isAsync ? n.execAsync : n.exec;
 
-	const S = n.stk, P = n.stp, W = n.sPush, X = n.sPop, Y = n.sPeek;
-	const O = n.operand, SC = n.scope, R = n.regs, IP = n.ip;
-	const C = n.cArr, I = n.iArr, EX = n.exStk;
-	const PE = n.pEx, HPE = n.hPEx, CT = n.cType, CV = n.cVal;
-	const U = n.unit, A = n.args, OS = n.outer;
-	const TV = n.tVal, NT = n.nTgt, HO = n.ho, PH = n.phys;
-	const sPar = n.sPar, sV = n.sVars;
+	const S = n.stk,
+		P = n.stp,
+		W = n.sPush,
+		X = n.sPop,
+		Y = n.sPeek;
+	const O = n.operand,
+		SC = n.scope,
+		R = n.regs,
+		IP = n.ip;
+	const C = n.cArr,
+		I = n.iArr,
+		EX = n.exStk;
+	const PE = n.pEx,
+		HPE = n.hPEx,
+		CT = n.cType,
+		CV = n.cVal;
+	const U = n.unit,
+		A = n.args,
+		OS = n.outer;
+	const TV = n.tVal,
+		NT = n.nTgt,
+		HO = n.ho,
+		PH = n.phys;
+	const sPar = n.sPar,
+		sV = n.sVars;
 
 	const dbgTrace = debug ? `${n.dbgOp}(${PH},${O},${C},${P},${S});` : "";
 
@@ -249,8 +297,13 @@ function generateDecoyHandlers(
 	shuffleMap: number[],
 	usedOpcodes: Set<number>
 ): CaseClause[] {
-	const S = n.stk, P = n.stp, C = n.cArr, O = n.operand;
-	const R = n.regs, SC = n.scope, sV = n.sVars;
+	const S = n.stk,
+		P = n.stp,
+		C = n.cArr,
+		O = n.operand;
+	const R = n.regs,
+		SC = n.scope,
+		sV = n.sVars;
 
 	// Collect unused logical opcodes
 	const unused: number[] = [];

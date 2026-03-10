@@ -30,14 +30,16 @@ import { registry } from "./registry.js";
  * Fast path checks current scope first, then walks parent chain.
  */
 function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];` +
-		`if(name in ${ctx.SC}.${ctx.sV}){${ctx.W}(${ctx.SC}.${ctx.sV}[name]);break;}` +
-		`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
-		`while(s){if(name in s.${ctx.sV}){${ctx.W}(s.${ctx.sV}[name]);found=true;break;}s=s.${ctx.sPar};}` +
-		`if(!found){${ctx.W}(_g[name]);}` +
-		`break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];` +
+				`if(name in ${ctx.SC}.${ctx.sV}){${ctx.W}(${ctx.SC}.${ctx.sV}[name]);break;}` +
+				`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
+				`while(s){if(name in s.${ctx.sV}){${ctx.W}(s.${ctx.sV}[name]);found=true;break;}s=s.${ctx.sPar};}` +
+				`if(!found){${ctx.W}(_g[name]);}` +
+				`break;`
+		),
+	];
 }
 
 /**
@@ -46,14 +48,16 @@ function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Pops value from stack, assigns to first scope that contains the name.
  */
 function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];var val=${ctx.S}[${ctx.P}--];` +
-		`if(name in ${ctx.SC}.${ctx.sV}){${ctx.SC}.${ctx.sV}[name]=val;break;}` +
-		`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
-		`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=val;found=true;break;}s=s.${ctx.sPar};}` +
-		`if(!found){_g[name]=val;}` +
-		`break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];var val=${ctx.S}[${ctx.P}--];` +
+				`if(name in ${ctx.SC}.${ctx.sV}){${ctx.SC}.${ctx.sV}[name]=val;break;}` +
+				`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
+				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=val;found=true;break;}s=s.${ctx.sPar};}` +
+				`if(!found){_g[name]=val;}` +
+				`break;`
+		),
+	];
 }
 
 // --- Declarations ---
@@ -64,9 +68,11 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Only initializes to undefined if the name is not already present.
  */
 function declareHandler(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];if(!(name in ${ctx.SC}.${ctx.sV}))${ctx.SC}.${ctx.sV}[name]=void 0;break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];if(!(name in ${ctx.SC}.${ctx.sV}))${ctx.SC}.${ctx.sV}[name]=void 0;break;`
+		),
+	];
 }
 
 // --- Push / pop scope ---
@@ -78,16 +84,12 @@ function declareHandler(ctx: HandlerCtx): JsNode[] {
  * pointer to the current scope.
  */
 function pushScopeHandler(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`${ctx.SC}={${ctx.sPar}:${ctx.SC},${ctx.sV}:{}};break;`
-	)];
+	return [raw(`${ctx.SC}={${ctx.sPar}:${ctx.SC},${ctx.sV}:{}};break;`)];
 }
 
 /** POP_SCOPE: restore parent scope (or stay if already at root). */
 function POP_SCOPE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`${ctx.SC}=${ctx.SC}.${ctx.sPar}||${ctx.SC};break;`
-	)];
+	return [raw(`${ctx.SC}=${ctx.SC}.${ctx.sPar}||${ctx.SC};break;`)];
 }
 
 // --- TDZ (Temporal Dead Zone) ---
@@ -96,18 +98,22 @@ function POP_SCOPE(ctx: HandlerCtx): JsNode[] {
  * TDZ_CHECK: throw ReferenceError if variable is still in temporal dead zone.
  */
 function TDZ_CHECK(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];` +
-		`if(${ctx.SC}.${ctx.sTdz}&&${ctx.SC}.${ctx.sTdz}[name])` +
-		`throw new ReferenceError("Cannot access '"+name+"' before initialization");break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];` +
+				`if(${ctx.SC}.${ctx.sTdz}&&${ctx.SC}.${ctx.sTdz}[name])` +
+				`throw new ReferenceError("Cannot access '"+name+"' before initialization");break;`
+		),
+	];
 }
 
 /** TDZ_MARK: remove variable from TDZ set (it has been initialized). */
 function TDZ_MARK(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];if(${ctx.SC}.${ctx.sTdz})delete ${ctx.SC}.${ctx.sTdz}[name];break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];if(${ctx.SC}.${ctx.sTdz})delete ${ctx.SC}.${ctx.sTdz}[name];break;`
+		),
+	];
 }
 
 // --- With scope ---
@@ -117,9 +123,11 @@ function TDZ_MARK(ctx: HandlerCtx): JsNode[] {
  * variable bag (for `with` statements).
  */
 function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var wObj=${ctx.X}();${ctx.SC}={${ctx.sPar}:${ctx.SC},${ctx.sV}:wObj};break;`
-	)];
+	return [
+		raw(
+			`var wObj=${ctx.X}();${ctx.SC}={${ctx.sPar}:${ctx.SC},${ctx.sV}:wObj};break;`
+		),
+	];
 }
 
 // --- Delete scoped ---
@@ -130,26 +138,24 @@ function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
  * Pushes the result of `delete` onto the stack.
  */
 function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-		`while(s){if(name in s.${ctx.sV}){${ctx.W}(delete s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				`while(s){if(name in s.${ctx.sV}){${ctx.W}(delete s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+		),
+	];
 }
 
 // --- Global access ---
 
 /** LOAD_GLOBAL: load a global variable by name. */
 function LOAD_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var g=_g;${ctx.W}(g[${ctx.C}[${ctx.O}]]);break;`
-	)];
+	return [raw(`var g=_g;${ctx.W}(g[${ctx.C}[${ctx.O}]]);break;`)];
 }
 
 /** STORE_GLOBAL: store a value to a global variable by name. */
 function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var g=_g;g[${ctx.C}[${ctx.O}]]=${ctx.X}();break;`
-	)];
+	return [raw(`var g=_g;g[${ctx.C}[${ctx.O}]]=${ctx.X}();break;`)];
 }
 
 /**
@@ -159,13 +165,15 @@ function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
  * This ensures `typeof x` works correctly in closures where `x` is captured.
  */
 function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var name=${ctx.C}[${ctx.O}];` +
-		`var s=${ctx.SC};var _tf=false;` +
-		`while(s){if(name in s.${ctx.sV}){${ctx.W}(typeof s.${ctx.sV}[name]);_tf=true;break;}s=s.${ctx.sPar};}` +
-		`if(!_tf){${ctx.W}(typeof _g[name]);}` +
-		`break;`
-	)];
+	return [
+		raw(
+			`var name=${ctx.C}[${ctx.O}];` +
+				`var s=${ctx.SC};var _tf=false;` +
+				`while(s){if(name in s.${ctx.sV}){${ctx.W}(typeof s.${ctx.sV}[name]);_tf=true;break;}s=s.${ctx.sPar};}` +
+				`if(!_tf){${ctx.W}(typeof _g[name]);}` +
+				`break;`
+		),
+	];
 }
 
 // --- Registration ---

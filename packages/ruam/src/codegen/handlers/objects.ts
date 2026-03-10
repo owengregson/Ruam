@@ -27,9 +27,9 @@ import { registry, type HandlerCtx } from "./registry.js";
 
 /** `S[P]=S[P][C[O]];break;` */
 function GET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}][${ctx.C}[${ctx.O}]];break;`
-	)];
+	return [
+		raw(`${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}][${ctx.C}[${ctx.O}]];break;`),
+	];
 }
 
 /**
@@ -42,68 +42,86 @@ function GET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function SET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];var k=${ctx.C}[${ctx.O}];` +
-		`try{obj[k]=val;}catch(_){Object.defineProperty(obj,k,{value:val,writable:true,configurable:true});}break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];var k=${ctx.C}[${ctx.O}];` +
+				`try{obj[k]=val;}catch(_){Object.defineProperty(obj,k,{value:val,writable:true,configurable:true});}break;`
+		),
+	];
 }
 
 /** `{var key=S[P--];S[P]=S[P][key];break;}` */
 function GET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var key=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}][key];break;`
-	)];
+	return [
+		raw(
+			`var key=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}][key];break;`
+		),
+	];
 }
 
 /** `{var val=S[P--];var key=S[P--];var obj=S[P];obj[key]=val;break;}` */
 function SET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.S}[${ctx.P}--];var key=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];obj[key]=val;break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.S}[${ctx.P}--];var key=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];obj[key]=val;break;`
+		),
+	];
 }
 
 /** `S[P]=delete S[P][C[O]];break;` */
 function DELETE_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`${ctx.S}[${ctx.P}]=delete ${ctx.S}[${ctx.P}][${ctx.C}[${ctx.O}]];break;`
-	)];
+	return [
+		raw(
+			`${ctx.S}[${ctx.P}]=delete ${ctx.S}[${ctx.P}][${ctx.C}[${ctx.O}]];break;`
+		),
+	];
 }
 
 /** `{var key=S[P--];S[P]=delete S[P][key];break;}` */
 function DELETE_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var key=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=delete ${ctx.S}[${ctx.P}][key];break;`
-	)];
+	return [
+		raw(
+			`var key=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=delete ${ctx.S}[${ctx.P}][key];break;`
+		),
+	];
 }
 
 /** `{var key=C[O];var obj=S[P];S[P]=obj==null?void 0:obj[key];break;}` */
 function OPT_CHAIN_GET(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var key=${ctx.C}[${ctx.O}];var obj=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=obj==null?void 0:obj[key];break;`
-	)];
+	return [
+		raw(
+			`var key=${ctx.C}[${ctx.O}];var obj=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=obj==null?void 0:obj[key];break;`
+		),
+	];
 }
 
 /** `{var key=S[P--];var obj=S[P];S[P]=obj==null?void 0:obj[key];break;}` */
 function OPT_CHAIN_DYNAMIC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var key=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=obj==null?void 0:obj[key];break;`
-	)];
+	return [
+		raw(
+			`var key=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=obj==null?void 0:obj[key];break;`
+		),
+	];
 }
 
 // --- Operators ---
 
 /** `{var obj=S[P--];S[P]=S[P] in obj;break;}` */
 function IN_OP(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var obj=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}] in obj;break;`
-	)];
+	return [
+		raw(
+			`var obj=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}] in obj;break;`
+		),
+	];
 }
 
 /** `{var ctor=S[P--];S[P]=S[P] instanceof ctor;break;}` */
 function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var ctor=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}] instanceof ctor;break;`
-	)];
+	return [
+		raw(
+			`var ctor=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}] instanceof ctor;break;`
+		),
+	];
 }
 
 // --- Super property access ---
@@ -118,11 +136,13 @@ function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
-		`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.X}();` +
-		`${ctx.W}(sp2?sp2[key]:void 0);break;`
-	)];
+	return [
+		raw(
+			`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
+				`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.X}();` +
+				`${ctx.W}(sp2?sp2[key]:void 0);break;`
+		),
+	];
 }
 
 /**
@@ -136,44 +156,54 @@ function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function SET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.X}();` +
-		`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
-		`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.X}();` +
-		`if(sp2)sp2[key]=val;${ctx.W}(val);break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.X}();` +
+				`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
+				`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.X}();` +
+				`if(sp2)sp2[key]=val;${ctx.W}(val);break;`
+		),
+	];
 }
 
 // --- Private field access ---
 
 /** `{var obj=X();var name=C[O];W(obj[name]);break;}` */
 function GET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];${ctx.W}(obj[name]);break;`
-	)];
+	return [
+		raw(
+			`var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];${ctx.W}(obj[name]);break;`
+		),
+	];
 }
 
 /** `{var val=X();var obj=X();var name=C[O];obj[name]=val;W(val);break;}` */
 function SET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.X}();var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];obj[name]=val;${ctx.W}(val);break;`
-	)];
+	return [
+		raw(
+			`var val=${ctx.X}();var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];obj[name]=val;${ctx.W}(val);break;`
+		),
+	];
 }
 
 /** `{var obj=X();var name=C[O];W(name in obj);break;}` */
 function HAS_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];${ctx.W}(name in obj);break;`
-	)];
+	return [
+		raw(
+			`var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];${ctx.W}(name in obj);break;`
+		),
+	];
 }
 
 // --- Object/array construction ---
 
 /** `{var desc=X();var key=X();var obj=X();Object.defineProperty(obj,key,desc);W(obj);break;}` */
 function DEFINE_OWN_PROPERTY(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var desc=${ctx.X}();var key=${ctx.X}();var obj=${ctx.X}();Object.defineProperty(obj,key,desc);${ctx.W}(obj);break;`
-	)];
+	return [
+		raw(
+			`var desc=${ctx.X}();var key=${ctx.X}();var obj=${ctx.X}();Object.defineProperty(obj,key,desc);${ctx.W}(obj);break;`
+		),
+	];
 }
 
 /** `W({});break;` */
@@ -193,16 +223,12 @@ function NEW_ARRAY_WITH_SIZE(ctx: HandlerCtx): JsNode[] {
 
 /** `{var val=X();var arr=Y();arr.push(val);break;}` */
 function ARRAY_PUSH(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var val=${ctx.X}();var arr=${ctx.Y}();arr.push(val);break;`
-	)];
+	return [raw(`var val=${ctx.X}();var arr=${ctx.Y}();arr.push(val);break;`)];
 }
 
 /** `{var arr=Y();arr.length++;break;}` */
 function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var arr=${ctx.Y}();arr.length++;break;`
-	)];
+	return [raw(`var arr=${ctx.Y}();arr.length++;break;`)];
 }
 
 /**
@@ -216,18 +242,22 @@ function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function SPREAD_ARRAY(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var src=${ctx.X}();var target=${ctx.Y}();` +
-		`if(Array.isArray(target)){var items=Array.from(src);for(var si=0;si<items.length;si++)target.push(items[si]);}` +
-		`else{Object.assign(target,src);}break;`
-	)];
+	return [
+		raw(
+			`var src=${ctx.X}();var target=${ctx.Y}();` +
+				`if(Array.isArray(target)){var items=Array.from(src);for(var si=0;si<items.length;si++)target.push(items[si]);}` +
+				`else{Object.assign(target,src);}break;`
+		),
+	];
 }
 
 /** `{var src=X();var target=Y();Object.assign(target,src);break;}` */
 function SPREAD_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var src=${ctx.X}();var target=${ctx.Y}();Object.assign(target,src);break;`
-	)];
+	return [
+		raw(
+			`var src=${ctx.X}();var target=${ctx.Y}();Object.assign(target,src);break;`
+		),
+	];
 }
 
 /**
@@ -241,18 +271,22 @@ function SPREAD_OBJECT(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var excludeKeys=${ctx.X}();var src=${ctx.X}();var target=${ctx.Y}();` +
-		`var keys=Object.keys(src);` +
-		`for(var ki=0;ki<keys.length;ki++){if(!excludeKeys||excludeKeys.indexOf(keys[ki])<0)target[keys[ki]]=src[keys[ki]];}break;`
-	)];
+	return [
+		raw(
+			`var excludeKeys=${ctx.X}();var src=${ctx.X}();var target=${ctx.Y}();` +
+				`var keys=Object.keys(src);` +
+				`for(var ki=0;ki<keys.length;ki++){if(!excludeKeys||excludeKeys.indexOf(keys[ki])<0)target[keys[ki]]=src[keys[ki]];}break;`
+		),
+	];
 }
 
 /** `{var proto=X();var obj=X();Object.setPrototypeOf(obj,proto);W(obj);break;}` */
 function SET_PROTO(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var proto=${ctx.X}();var obj=${ctx.X}();Object.setPrototypeOf(obj,proto);${ctx.W}(obj);break;`
-	)];
+	return [
+		raw(
+			`var proto=${ctx.X}();var obj=${ctx.X}();Object.setPrototypeOf(obj,proto);${ctx.W}(obj);break;`
+		),
+	];
 }
 
 /** `{Object.freeze(Y());break;}` */
@@ -267,9 +301,11 @@ function SEAL_OBJECT(ctx: HandlerCtx): JsNode[] {
 
 /** `{var desc=X();var key=X();var obj=Y();Object.defineProperty(obj,key,desc);break;}` */
 function DEFINE_PROPERTY_DESC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var desc=${ctx.X}();var key=${ctx.X}();var obj=${ctx.Y}();Object.defineProperty(obj,key,desc);break;`
-	)];
+	return [
+		raw(
+			`var desc=${ctx.X}();var key=${ctx.X}();var obj=${ctx.Y}();Object.defineProperty(obj,key,desc);break;`
+		),
+	];
 }
 
 /**
@@ -282,11 +318,13 @@ function DEFINE_PROPERTY_DESC(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function CREATE_TEMPLATE_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var raw=${ctx.X}();var cooked=${ctx.X}();` +
-		`Object.defineProperty(cooked,'raw',{value:Object.freeze(raw)});` +
-		`Object.freeze(cooked);${ctx.W}(cooked);break;`
-	)];
+	return [
+		raw(
+			`var raw=${ctx.X}();var cooked=${ctx.X}();` +
+				`Object.defineProperty(cooked,'raw',{value:Object.freeze(raw)});` +
+				`Object.freeze(cooked);${ctx.W}(cooked);break;`
+		),
+	];
 }
 
 // --- Registration ---

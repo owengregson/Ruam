@@ -55,13 +55,15 @@ export function buildLoader(
 			varDecl(WATERMARK_NAME, un("!", lit(0))),
 			varDecl(names.depth, lit(0)),
 			varDecl(names.callStack, raw("[]")),
-			varDecl(names.cache, raw("{}")),
+			varDecl(names.cache, raw("{}"))
 		);
 	}
 
 	// --- Load function ---
 
-	nodes.push(raw(buildLoadFunction(encrypt, names, hasStringEncoding, rollingCipher)));
+	nodes.push(
+		raw(buildLoadFunction(encrypt, names, hasStringEncoding, rollingCipher))
+	);
 
 	return nodes;
 }

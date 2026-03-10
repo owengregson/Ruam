@@ -29,11 +29,16 @@ import { Op, OPCODE_COUNT } from "../../compiler/opcodes.js";
  * @param names - Randomized runtime identifier names.
  * @returns An array of JsNode containing the config var and two function declarations.
  */
-export function buildDebugLogging(reverseMap: number[], names: RuntimeNames): JsNode[] {
+export function buildDebugLogging(
+	reverseMap: number[],
+	names: RuntimeNames
+): JsNode[] {
 	// --- Build opcode name table: physical opcode -> name string ---
 
 	const opNames = Object.entries(Op)
-		.filter(([, v]) => typeof v === "number" && (v as number) < OPCODE_COUNT)
+		.filter(
+			([, v]) => typeof v === "number" && (v as number) < OPCODE_COUNT
+		)
 		.reduce((m, [name, num]) => {
 			m[num as number] = name;
 			return m;
@@ -58,50 +63,50 @@ export function buildDebugLogging(reverseMap: number[], names: RuntimeNames): Js
 
 	const configNode = raw(
 		`var ${cfg}={` +
-		`enabled:true,` +
-		`level:'trace',` +
-		`filter:null,` +
-		`maxLogs:10000,` +
-		`_count:0,` +
-		`_opNames:{${nameEntries.join(",")}},` +
-		`levels:{trace:0,info:1,warn:2,error:3}` +
-		`}`
+			`enabled:true,` +
+			`level:'trace',` +
+			`filter:null,` +
+			`maxLogs:10000,` +
+			`_count:0,` +
+			`_opNames:{${nameEntries.join(",")}},` +
+			`levels:{trace:0,info:1,warn:2,error:3}` +
+			`}`
 	);
 
 	// --- General debug log function ---
 
 	const dbgFn = raw(
 		`function ${names.dbg}(){` +
-		`if(!${cfg}.enabled)return;` +
-		`if(${cfg}._count>=${cfg}.maxLogs){` +
-		`if(${cfg}._count===${cfg}.maxLogs){console.warn('[VM_DBG] max logs reached ('+${cfg}.maxLogs+'), silencing');${cfg}._count++;}` +
-		`return;` +
-		`}` +
-		`${cfg}._count++;` +
-		`var args=Array.prototype.slice.call(arguments);` +
-		`console.log.apply(console,['[VM_DBG]'].concat(args));` +
-		`}`
+			`if(!${cfg}.enabled)return;` +
+			`if(${cfg}._count>=${cfg}.maxLogs){` +
+			`if(${cfg}._count===${cfg}.maxLogs){console.warn('[VM_DBG] max logs reached ('+${cfg}.maxLogs+'), silencing');${cfg}._count++;}` +
+			`return;` +
+			`}` +
+			`${cfg}._count++;` +
+			`var args=Array.prototype.slice.call(arguments);` +
+			`console.log.apply(console,['[VM_DBG]'].concat(args));` +
+			`}`
 	);
 
 	// --- Opcode trace function ---
 
 	const dbgOpFn = raw(
 		`function ${names.dbgOp}(${OP},${O},C,${P},${S}){` +
-		`if(!${cfg}.enabled||${cfg}.levels[${cfg}.level]>0)return;` +
-		`if(${cfg}._count>=${cfg}.maxLogs)return;` +
-		`${cfg}._count++;` +
-		`var name=${cfg}._opNames[${OP}]||('OP_'+${OP});` +
-		`var topStr='(empty)';` +
-		`if(${P}>=0){` +
-		`var top=${S}[${P}];` +
-		`topStr=typeof top==='function'?'[fn'+(top.name?':'+top.name:'')+']':typeof top==='object'&&top!==null?'[obj:'+Object.keys(top).slice(0,3).join(',')+']':String(top);` +
-		`if(topStr.length>60)topStr=topStr.slice(0,60)+'...';` +
-		`}` +
-		`var constStr='';` +
-		`if(typeof C[${O}]==='string')constStr=' c=\"'+C[${O}].slice(0,30)+'\"';` +
-		`else if(typeof C[${O}]==='number')constStr=' c='+C[${O}];` +
-		`console.log('[VM_TRACE] '+name+' op='+${O}+constStr+' sp='+${P}+' top='+topStr);` +
-		`}`
+			`if(!${cfg}.enabled||${cfg}.levels[${cfg}.level]>0)return;` +
+			`if(${cfg}._count>=${cfg}.maxLogs)return;` +
+			`${cfg}._count++;` +
+			`var name=${cfg}._opNames[${OP}]||('OP_'+${OP});` +
+			`var topStr='(empty)';` +
+			`if(${P}>=0){` +
+			`var top=${S}[${P}];` +
+			`topStr=typeof top==='function'?'[fn'+(top.name?':'+top.name:'')+']':typeof top==='object'&&top!==null?'[obj:'+Object.keys(top).slice(0,3).join(',')+']':String(top);` +
+			`if(topStr.length>60)topStr=topStr.slice(0,60)+'...';` +
+			`}` +
+			`var constStr='';` +
+			`if(typeof C[${O}]==='string')constStr=' c=\"'+C[${O}].slice(0,30)+'\"';` +
+			`else if(typeof C[${O}]==='number')constStr=' c='+C[${O}];` +
+			`console.log('[VM_TRACE] '+name+' op='+${O}+constStr+' sp='+${P}+' top='+topStr);` +
+			`}`
 	);
 
 	return [configNode, dbgFn, dbgOpFn];

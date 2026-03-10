@@ -34,10 +34,12 @@ import { registry } from "./registry.js";
  * @returns Handler function producing the case body
  */
 function regBinOp(op: string): HandlerFn {
-	return (ctx) => [raw(
-		`var ra=${ctx.O}&0xFFFF;var rb=(${ctx.O}>>>16)&0xFFFF;` +
-		`${ctx.W}(${ctx.R}[ra]${op}${ctx.R}[rb]);break;`
-	)];
+	return (ctx) => [
+		raw(
+			`var ra=${ctx.O}&0xFFFF;var rb=(${ctx.O}>>>16)&0xFFFF;` +
+				`${ctx.W}(${ctx.R}[ra]${op}${ctx.R}[rb]);break;`
+		),
+	];
 }
 
 /**
@@ -52,10 +54,12 @@ function regBinOp(op: string): HandlerFn {
  * @returns Handler function producing the case body
  */
 function regConstOp(op: string): HandlerFn {
-	return (ctx) => [raw(
-		`var r=${ctx.O}&0xFFFF;var ci=(${ctx.O}>>>16)&0xFFFF;` +
-		`${ctx.R}[r]=${ctx.R}[r]${op}${ctx.C}[ci];break;`
-	)];
+	return (ctx) => [
+		raw(
+			`var r=${ctx.O}&0xFFFF;var ci=(${ctx.O}>>>16)&0xFFFF;` +
+				`${ctx.R}[r]=${ctx.R}[r]${op}${ctx.C}[ci];break;`
+		),
+	];
 }
 
 /**
@@ -70,32 +74,34 @@ function regConstOp(op: string): HandlerFn {
  * @returns Handler function producing the case body
  */
 function regConstPush(op: string): HandlerFn {
-	return (ctx) => [raw(
-		`var r=${ctx.O}&0xFFFF;var ci=(${ctx.O}>>>16)&0xFFFF;` +
-		`${ctx.W}(${ctx.R}[r]${op}${ctx.C}[ci]);break;`
-	)];
+	return (ctx) => [
+		raw(
+			`var r=${ctx.O}&0xFFFF;var ci=(${ctx.O}>>>16)&0xFFFF;` +
+				`${ctx.W}(${ctx.R}[r]${op}${ctx.C}[ci]);break;`
+		),
+	];
 }
 
 // --- Dual-register binary operations ---
 
-registry.set(Op.REG_ADD, regBinOp('+'));
-registry.set(Op.REG_SUB, regBinOp('-'));
-registry.set(Op.REG_MUL, regBinOp('*'));
-registry.set(Op.REG_DIV, regBinOp('/'));
-registry.set(Op.REG_MOD, regBinOp('%'));
-registry.set(Op.REG_LT, regBinOp('<'));
-registry.set(Op.REG_LTE, regBinOp('<='));
-registry.set(Op.REG_GT, regBinOp('>'));
-registry.set(Op.REG_GTE, regBinOp('>='));
-registry.set(Op.REG_SEQ, regBinOp('==='));
-registry.set(Op.REG_SNEQ, regBinOp('!=='));
+registry.set(Op.REG_ADD, regBinOp("+"));
+registry.set(Op.REG_SUB, regBinOp("-"));
+registry.set(Op.REG_MUL, regBinOp("*"));
+registry.set(Op.REG_DIV, regBinOp("/"));
+registry.set(Op.REG_MOD, regBinOp("%"));
+registry.set(Op.REG_LT, regBinOp("<"));
+registry.set(Op.REG_LTE, regBinOp("<="));
+registry.set(Op.REG_GT, regBinOp(">"));
+registry.set(Op.REG_GTE, regBinOp(">="));
+registry.set(Op.REG_SEQ, regBinOp("==="));
+registry.set(Op.REG_SNEQ, regBinOp("!=="));
 
 // --- Register + constant operations ---
 
-registry.set(Op.REG_ADD_CONST, regConstOp('+'));
-registry.set(Op.REG_CONST_SUB, regConstPush('-'));
-registry.set(Op.REG_CONST_MUL, regConstPush('*'));
-registry.set(Op.REG_CONST_MOD, regConstPush('%'));
+registry.set(Op.REG_ADD_CONST, regConstOp("+"));
+registry.set(Op.REG_CONST_SUB, regConstPush("-"));
+registry.set(Op.REG_CONST_MUL, regConstPush("*"));
+registry.set(Op.REG_CONST_MOD, regConstPush("%"));
 
 // --- Property access ---
 
@@ -106,10 +112,12 @@ registry.set(Op.REG_CONST_MOD, regConstPush('%'));
  * (high 16 bits), then pushes `R[r][C[ni]]`.
  */
 function REG_GET_PROP(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var r=${ctx.O}&0xFFFF;var ni=(${ctx.O}>>>16)&0xFFFF;` +
-		`${ctx.W}(${ctx.R}[r][${ctx.C}[ni]]);break;`
-	)];
+	return [
+		raw(
+			`var r=${ctx.O}&0xFFFF;var ni=(${ctx.O}>>>16)&0xFFFF;` +
+				`${ctx.W}(${ctx.R}[r][${ctx.C}[ni]]);break;`
+		),
+	];
 }
 registry.set(Op.REG_GET_PROP, REG_GET_PROP);
 
@@ -126,10 +134,12 @@ registry.set(Op.REG_GET_PROP, REG_GET_PROP);
  * ```
  */
 function REG_LT_CONST_JF(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var r=${ctx.O}&0xFF;var ci=(${ctx.O}>>>8)&0xFF;var tgt=(${ctx.O}>>>16)&0xFFFF;` +
-		`if(!(${ctx.R}[r]<${ctx.C}[ci]))${ctx.IP}=tgt*2;break;`
-	)];
+	return [
+		raw(
+			`var r=${ctx.O}&0xFF;var ci=(${ctx.O}>>>8)&0xFF;var tgt=(${ctx.O}>>>16)&0xFFFF;` +
+				`if(!(${ctx.R}[r]<${ctx.C}[ci]))${ctx.IP}=tgt*2;break;`
+		),
+	];
 }
 registry.set(Op.REG_LT_CONST_JF, REG_LT_CONST_JF);
 
@@ -144,9 +154,11 @@ registry.set(Op.REG_LT_CONST_JF, REG_LT_CONST_JF);
  * ```
  */
 function REG_LT_REG_JF(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var ra=${ctx.O}&0xFF;var rb=(${ctx.O}>>>8)&0xFF;var tgt=(${ctx.O}>>>16)&0xFFFF;` +
-		`if(!(${ctx.R}[ra]<${ctx.R}[rb]))${ctx.IP}=tgt*2;break;`
-	)];
+	return [
+		raw(
+			`var ra=${ctx.O}&0xFF;var rb=(${ctx.O}>>>8)&0xFF;var tgt=(${ctx.O}>>>16)&0xFFFF;` +
+				`if(!(${ctx.R}[ra]<${ctx.R}[rb]))${ctx.IP}=tgt*2;break;`
+		),
+	];
 }
 registry.set(Op.REG_LT_REG_JF, REG_LT_REG_JF);

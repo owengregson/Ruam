@@ -41,20 +41,20 @@ export function buildRunners(debug: boolean, names: RuntimeNames): JsNode[] {
 	return [
 		raw(
 			`function ${names.vm}(id,${A},${OS},${TV},${NT},${HO}){` +
-			`var ${U}=${names.load}(id);` +
-			dbgEntry +
-			`if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},${NT},${HO});` +
-			`return ${names.exec}(${U},${A}||[],${OS}||null,${TV},${NT},${HO});` +
-			`}`
+				`var ${U}=${names.load}(id);` +
+				dbgEntry +
+				`if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},${NT},${HO});` +
+				`return ${names.exec}(${U},${A}||[],${OS}||null,${TV},${NT},${HO});` +
+				`}`
 		),
 		raw(
 			`${names.vm}.call=function(${TV},id,${A},${OS},${HO}){` +
-			`var ${U}=${names.load}(id);` +
-			dbgEntry +
-			`if(!${U}.a&&!${U}.st){if(${TV}==null)${TV}=globalThis;else{var _t=typeof ${TV};if(_t!=="object"&&_t!=="function")${TV}=Object(${TV});}}` +
-			`if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},void 0,${HO});` +
-			`return ${names.exec}(${U},${A}||[],${OS}||null,${TV},void 0,${HO});` +
-			`};`
+				`var ${U}=${names.load}(id);` +
+				dbgEntry +
+				`if(!${U}.a&&!${U}.st){if(${TV}==null)${TV}=globalThis;else{var _t=typeof ${TV};if(_t!=="object"&&_t!=="function")${TV}=Object(${TV});}}` +
+				`if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},void 0,${HO});` +
+				`return ${names.exec}(${U},${A}||[],${OS}||null,${TV},void 0,${HO});` +
+				`};`
 		),
 	];
 }
@@ -96,13 +96,13 @@ export function buildRouter(
 		raw(`var ${RM}={};${entries.join("")}`),
 		raw(
 			`function ${routerName}(id,${A},${OS},${TV},${NT},${HO}){` +
-			`return ${RM}[id](id,${A},${OS},${TV},${NT},${HO});` +
-			`}`
+				`return ${RM}[id](id,${A},${OS},${TV},${NT},${HO});` +
+				`}`
 		),
 		raw(
 			`${routerName}.call=function(${TV},id,${A},${OS},${HO}){` +
-			`return ${RM}[id].call(${TV},id,${A},${OS},${HO});` +
-			`};`
+				`return ${RM}[id].call(${TV},id,${A},${OS},${HO});` +
+				`};`
 		),
 	];
 }

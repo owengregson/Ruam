@@ -19,50 +19,50 @@ import type { Op } from "../../compiler/opcodes.js";
  */
 export interface HandlerCtx {
 	// Stack machine
-	S: string;     // stack array
-	P: string;     // stack pointer
-	W: string;     // push function (pre-inline)
-	X: string;     // pop function (pre-inline)
-	Y: string;     // peek function (pre-inline)
+	S: string; // stack array
+	P: string; // stack pointer
+	W: string; // push function (pre-inline)
+	X: string; // pop function (pre-inline)
+	Y: string; // peek function (pre-inline)
 
 	// Interpreter state
-	IP: string;    // instruction pointer
-	C: string;     // constants array
-	O: string;     // operand
-	SC: string;    // scope
-	R: string;     // registers
-	EX: string;    // exception handler stack
-	PE: string;    // pending exception
-	HPE: string;   // has pending exception
-	CT: string;    // completion type
-	CV: string;    // completion value
-	PH: string;    // physical opcode variable
+	IP: string; // instruction pointer
+	C: string; // constants array
+	O: string; // operand
+	SC: string; // scope
+	R: string; // registers
+	EX: string; // exception handler stack
+	PE: string; // pending exception
+	HPE: string; // has pending exception
+	CT: string; // completion type
+	CV: string; // completion value
+	PH: string; // physical opcode variable
 
 	// Function parameters
-	U: string;     // unit parameter
-	A: string;     // args parameter
-	OS: string;    // outerScope parameter
-	TV: string;    // thisVal parameter
-	NT: string;    // newTarget parameter
-	HO: string;    // homeObject parameter
+	U: string; // unit parameter
+	A: string; // args parameter
+	OS: string; // outerScope parameter
+	TV: string; // thisVal parameter
+	NT: string; // newTarget parameter
+	HO: string; // homeObject parameter
 
 	// Scope property names
-	sPar: string;  // scope.parent
-	sV: string;    // scope.vars
-	sTdz: string;  // scope.tdzVars
+	sPar: string; // scope.parent
+	sV: string; // scope.vars
+	sTdz: string; // scope.tdzVars
 
 	// Infrastructure references
-	exec: string;      // sync exec function name
+	exec: string; // sync exec function name
 	execAsync: string; // async exec function name
-	load: string;      // loader function name
-	depth: string;     // recursion depth counter
+	load: string; // loader function name
+	depth: string; // recursion depth counter
 	callStack: string; // call stack for error messages
-	dbg: string;       // debug log function name
-	fSlots: string;    // function slots array name
+	dbg: string; // debug log function name
+	fSlots: string; // function slots array name
 
 	// Flags
-	isAsync: boolean;  // true when building async interpreter variant
-	debug: boolean;    // true when debug logging is enabled
+	isAsync: boolean; // true when building async interpreter variant
+	debug: boolean; // true when debug logging is enabled
 }
 
 /** A handler function returns the case body as AST nodes. */
@@ -74,7 +74,11 @@ export const registry = new Map<Op, HandlerFn>();
 /**
  * Build a HandlerCtx from RuntimeNames and flags.
  */
-export function makeHandlerCtx(names: RuntimeNames, isAsync: boolean, debug: boolean): HandlerCtx {
+export function makeHandlerCtx(
+	names: RuntimeNames,
+	isAsync: boolean,
+	debug: boolean
+): HandlerCtx {
 	return {
 		S: names.stk,
 		P: names.stp,
