@@ -10,7 +10,6 @@ import {
 	un,
 	member,
 	ternary,
-	raw,
 	varDecl,
 	exprStmt,
 	breakStmt,
@@ -176,16 +175,23 @@ function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
 /**
  * FAST_GET_PROP: scope-walking property access.
  *
- * Uses raw() because the while-loop with break is difficult to express
- * in AST form (the inner `break` exits the while loop, not the switch case).
- * The raw string contains both the while-break and the case-break.
+ * Extracts a variable name (upper 16 bits) and property name (lower 16 bits)
+ * from the packed operand, then walks the scope chain to resolve `obj[prop]`.
  */
 function FAST_GET_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}&0xFFFF];var varName=${ctx.C}[(${ctx.O}>>16)&0xFFFF];` +
-				`var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`${ctx.pushStr(ctx.svStr("varName")+"[name]")};`, "varName")
+		varDecl("name", index(id(ctx.C), bin("&", id(ctx.O), lit(0xffff)))),
+		varDecl(
+			"varName",
+			index(
+				id(ctx.C),
+				bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))
+			)
+		),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk(
+			[exprStmt(ctx.push(index(ctx.sv(id("varName")), id("name"))))],
+			id("varName")
 		),
 	];
 }
