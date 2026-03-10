@@ -9,22 +9,11 @@
  * @module runtime/fingerprint
  */
 
-import type { RuntimeNames } from "./names.js";
-
 // The fingerprint uses an inverted-square-root magic constant as a seed,
 // then XORs in the `.length` of several built-in functions at different
 // bit positions.  The result is mixed with a Murmur3-style finalizer.
 
 const SEED = 0x5f3759df;
-
-/**
- * Generate the runtime source code for the `_fingerprint()` function.
- *
- * The returned string is meant to be injected verbatim into the VM IIFE.
- */
-export function generateFingerprintSource(names: RuntimeNames): string {
-	return `function ${names.fp}(){var h=0x5f3759df;h^=Array.prototype.reduce.length<<0x18;h^=String.prototype.charCodeAt.length<<0x14;h^=Math.floor.length<<0x10;h^=Object.keys.length<<0x0c;h^=JSON.stringify.length<<0x08;h^=parseInt.length<<0x04;h=(h^(h>>>16))*0x45d9f3b;h=(h^(h>>>13))*0x45d9f3b;h=h^(h>>>16);return h>>>0;}`;
-}
 
 /**
  * Compute the fingerprint at build time (for encrypting bytecode before
