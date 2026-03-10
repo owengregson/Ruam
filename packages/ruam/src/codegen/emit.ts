@@ -64,6 +64,22 @@ const KEYWORD_BINOP = new Set(["in", "instanceof"]);
 /** Keyword unary operators that need a space after them. */
 const KEYWORD_UNOP = new Set(["typeof", "void", "delete"]);
 
+/**
+ * Whether a unary operator's operand needs parentheses.
+ *
+ * Unary `!`, `~`, `+`, `-` bind tighter than any binary operator, so
+ * `!a<b` parses as `(!a)<b`. When the operand is a binary, ternary,
+ * assignment, or sequence expression we must add parens: `!(a<b)`.
+ */
+function needsUnaryParens(expr: JsNode): boolean {
+	return (
+		expr.type === "BinOp" ||
+		expr.type === "TernaryExpr" ||
+		expr.type === "AssignExpr" ||
+		expr.type === "SequenceExpr"
+	);
+}
+
 function needsParens(
 	child: JsNode,
 	parentOp: string,
@@ -163,9 +179,11 @@ export function emit(node: JsNode): string {
 				return `${left} ${node.op} ${right}`;
 			return `${left}${node.op}${right}`;
 		}
-		case "UnaryOp":
-			if (KEYWORD_UNOP.has(node.op))
-				return `${node.op} ${emit(node.expr)}`;
+		case "UnaryOp": {
+			if (KEYWORD_UNOP.has(node.op)) {
+				const inner = emit(node.expr);
+				return `${node.op} ${needsUnaryParens(node.expr) ? `(${inner})` : inner}`;
+			}
 			// Prevent --x from becoming ---x (double minus + negate)
 			if (
 				node.op === "-" &&
@@ -173,7 +191,9 @@ export function emit(node: JsNode): string {
 				node.expr.op === "-"
 			)
 				return `-(${emit(node.expr)})`;
-			return `${node.op}${emit(node.expr)}`;
+			const inner = emit(node.expr);
+			return `${node.op}${needsUnaryParens(node.expr) ? `(${inner})` : inner}`;
+		}
 		case "UpdateExpr":
 			return node.prefix
 				? `${node.op}${emit(node.arg)}`
