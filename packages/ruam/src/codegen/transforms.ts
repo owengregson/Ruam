@@ -279,7 +279,7 @@ export const KEEP = new Set([
 ]);
 
 /** JS reserved words and keywords that can't be used as identifiers. */
-const RESERVED = new Set([
+export const RESERVED = new Set([
 	"do", "if", "in", "of", "as", "is", "for", "let", "new", "try", "var", "int",
 	"case", "else", "enum", "null", "this", "true", "void", "with",
 	"await", "break", "catch", "class", "const", "false", "super", "throw", "while", "yield",
