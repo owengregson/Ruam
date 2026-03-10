@@ -210,11 +210,11 @@ function buildScaffold(
 		: "";
 
 	const debugCatch = debug
-		? `\n        ${n.dbg}('CATCH','ip='+handler.catchIp,'sp='+handler.sp);`
+		? `\n        ${n.dbg}('CATCH','ip='+_h._ci,'sp='+_h._sp);`
 		: "";
 
 	const debugFinally = debug
-		? `\n        ${n.dbg}('FINALLY','ip='+handler.finallyIp,'sp='+handler.sp);`
+		? `\n        ${n.dbg}('FINALLY','ip='+_h._fi,'sp='+_h._sp);`
 		: "";
 
 	const debugUncaught = debug
@@ -262,17 +262,17 @@ ${stackEncoding}
   }catch(e){${debugException}
     ${HPE}=false;${PE}=null;${CT}=0;${CV}=void 0;
     if(${EX}&&${EX}.length>0){
-      var handler=${EX}.pop();
-      if(handler.catchIp>=0){${debugCatch}
-        ${P}=handler.sp;
+      var _h=${EX}.pop();
+      if(_h._ci>=0){${debugCatch}
+        ${P}=_h._sp;
         ${W}(e);
-        ${IP}=handler.catchIp*2;
+        ${IP}=_h._ci*2;
         continue;
       }
-      if(handler.finallyIp>=0){${debugFinally}
-        ${P}=handler.sp;
+      if(_h._fi>=0){${debugFinally}
+        ${P}=_h._sp;
         ${PE}=e;${HPE}=true;
-        ${IP}=handler.finallyIp*2;
+        ${IP}=_h._fi*2;
         continue;
       }
     }${debugUncaught}
