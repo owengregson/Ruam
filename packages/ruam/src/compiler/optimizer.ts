@@ -12,7 +12,16 @@
  */
 
 import type { Instruction, ConstantPoolEntry } from "../types.js";
-import { Op } from "./opcodes.js";
+import {
+	Op,
+	JUMP_OPS,
+	ALL_JUMP_OPS,
+	PACKED_JUMP_OPS,
+	FOLDABLE_BINOPS,
+	PURE_PUSH_OPS,
+	REG_BINOP_MAP,
+	REG_CONST_BINOP_MAP,
+} from "./opcodes.js";
 import type { Emitter } from "./emitter.js";
 
 // ---------------------------------------------------------------------------
@@ -72,7 +81,7 @@ function peepholePass(emitter: Emitter): boolean {
 
 		// PUSH_X + POP → NOP + NOP (for side-effect-free pushes)
 		if (
-			isPurePush(cur.opcode) &&
+			PURE_PUSH_OPS.has(cur.opcode) &&
 			i + 1 < instrs.length &&
 			instrs[i + 1]!.opcode === Op.POP
 		) {
@@ -93,7 +102,7 @@ function peepholePass(emitter: Emitter): boolean {
 			const binop = instrs[i + 2]!;
 			if (
 				next.opcode === Op.PUSH_CONST &&
-				isFoldableBinop(binop.opcode)
+				FOLDABLE_BINOPS.has(binop.opcode)
 			) {
 				const a = getNumericConst(consts, cur.operand);
 				const b = getNumericConst(consts, next.operand);
@@ -143,7 +152,7 @@ function peepholePass(emitter: Emitter): boolean {
 
 		// --- Jump threading ---
 		// JMP(L) where L points to JMP(L2) → JMP(L2)
-		if (isJump(cur.opcode) && cur.operand >= 0) {
+		if (JUMP_OPS.has(cur.opcode) && cur.operand >= 0) {
 			const targetIdx = cur.operand; // target instruction index
 			if (targetIdx < instrs.length) {
 				const targetInstr = instrs[targetIdx]!;
@@ -233,8 +242,8 @@ function superinstructionPass(emitter: Emitter): boolean {
 			const ra = a.operand;
 			const rb = b.operand;
 			if (ra <= 0xffff && rb <= 0xffff) {
-				const superOp = regBinopMap(c.opcode);
-				if (superOp !== null) {
+				const superOp = REG_BINOP_MAP.get(c.opcode);
+				if (superOp != null) {
 					a.opcode = superOp;
 					a.operand = (ra & 0xffff) | ((rb & 0xffff) << 16);
 					b.opcode = Op.NOP;
@@ -252,8 +261,8 @@ function superinstructionPass(emitter: Emitter): boolean {
 			const r = a.operand;
 			const ci = b.operand;
 			if (r <= 0xffff && ci <= 0xffff) {
-				const superOp = regConstBinopMap(c.opcode);
-				if (superOp !== null) {
+				const superOp = REG_CONST_BINOP_MAP.get(c.opcode);
+				if (superOp != null) {
 					a.opcode = superOp;
 					a.operand = (r & 0xffff) | ((ci & 0xffff) << 16);
 					b.opcode = Op.NOP;
@@ -373,14 +382,13 @@ function removeNops(emitter: Emitter): void {
 
 	// Retarget all jumps
 	for (const instr of instrs) {
-		if (
-			isJump(instr.opcode) &&
-			instr.operand >= 0 &&
-			instr.operand < instrs.length
-		) {
-			instr.operand = indexMap[instr.operand]!;
+		// Simple jumps: operand is a direct IP target
+		if (ALL_JUMP_OPS.has(instr.opcode)) {
+			if (instr.operand >= 0 && instr.operand < instrs.length) {
+				instr.operand = indexMap[instr.operand]!;
+			}
 		}
-		// Handle TRY_PUSH which encodes two IPs
+		// Packed jumps: target(s) encoded in upper/lower bits
 		if (instr.opcode === Op.TRY_PUSH) {
 			let catchIp = (instr.operand >> 16) & 0xffff;
 			let finallyIp = instr.operand & 0xffff;
@@ -389,9 +397,7 @@ function removeNops(emitter: Emitter): void {
 			if (finallyIp !== 0xffff && finallyIp < instrs.length)
 				finallyIp = indexMap[finallyIp]!;
 			instr.operand = ((catchIp & 0xffff) << 16) | (finallyIp & 0xffff);
-		}
-		// Handle REG_LT_CONST_JF / REG_LT_REG_JF which encode a jump target in bits 16-31
-		if (
+		} else if (
 			instr.opcode === Op.REG_LT_CONST_JF ||
 			instr.opcode === Op.REG_LT_REG_JF
 		) {
@@ -400,27 +406,6 @@ function removeNops(emitter: Emitter): void {
 			if (target < instrs.length) target = indexMap[target]!;
 			instr.operand = low | ((target & 0xffff) << 16);
 		}
-		// Handle LOGICAL_AND/OR/NULLISH_COALESCE which use operand as instruction index
-		if (
-			instr.opcode === Op.LOGICAL_AND ||
-			instr.opcode === Op.LOGICAL_OR ||
-			instr.opcode === Op.NULLISH_COALESCE
-		) {
-			if (instr.operand >= 0 && instr.operand < instrs.length) {
-				instr.operand = indexMap[instr.operand]!;
-			}
-		}
-		// Handle TABLE_SWITCH/LOOKUP_SWITCH
-		if (
-			instr.opcode === Op.TABLE_SWITCH ||
-			instr.opcode === Op.LOOKUP_SWITCH
-		) {
-			if (instr.operand >= 0 && instr.operand < instrs.length) {
-				instr.operand = indexMap[instr.operand]!;
-			}
-		}
-		// Handle CALL_SUPER_METHOD which packs name index in upper 16 bits
-		// (NOT a jump target — skip)
 	}
 
 	// Remove NOPs
@@ -433,80 +418,10 @@ function removeNops(emitter: Emitter): void {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function isPurePush(op: number): boolean {
-	return (
-		op === Op.PUSH_CONST ||
-		op === Op.PUSH_UNDEFINED ||
-		op === Op.PUSH_NULL ||
-		op === Op.PUSH_TRUE ||
-		op === Op.PUSH_FALSE ||
-		op === Op.PUSH_ZERO ||
-		op === Op.PUSH_ONE ||
-		op === Op.PUSH_NEG_ONE ||
-		op === Op.PUSH_EMPTY_STRING ||
-		op === Op.PUSH_NAN ||
-		op === Op.PUSH_INFINITY ||
-		op === Op.PUSH_NEG_INFINITY ||
-		op === Op.LOAD_REG
-	);
-}
-
-function isJump(op: number): boolean {
-	return (
-		op === Op.JMP ||
-		op === Op.JMP_TRUE ||
-		op === Op.JMP_FALSE ||
-		op === Op.JMP_NULLISH ||
-		op === Op.JMP_UNDEFINED ||
-		op === Op.JMP_TRUE_KEEP ||
-		op === Op.JMP_FALSE_KEEP ||
-		op === Op.JMP_NULLISH_KEEP
-	);
-}
-
-function isFoldableBinop(op: number): boolean {
-	return (
-		op === Op.ADD ||
-		op === Op.SUB ||
-		op === Op.MUL ||
-		op === Op.DIV ||
-		op === Op.MOD ||
-		op === Op.BIT_AND ||
-		op === Op.BIT_OR ||
-		op === Op.BIT_XOR ||
-		op === Op.SHL ||
-		op === Op.SHR ||
-		op === Op.USHR
-	);
-}
-
-function foldBinop(op: number, a: number, b: number): number | null {
-	switch (op) {
-		case Op.ADD:
-			return a + b;
-		case Op.SUB:
-			return a - b;
-		case Op.MUL:
-			return a * b;
-		case Op.DIV:
-			return b !== 0 ? a / b : null;
-		case Op.MOD:
-			return b !== 0 ? a % b : null;
-		case Op.BIT_AND:
-			return a & b;
-		case Op.BIT_OR:
-			return a | b;
-		case Op.BIT_XOR:
-			return a ^ b;
-		case Op.SHL:
-			return a << b;
-		case Op.SHR:
-			return a >> b;
-		case Op.USHR:
-			return a >>> b;
-		default:
-			return null;
-	}
+/** Evaluate a foldable binary opcode on two numeric constants. */
+function foldBinop(op: Op, a: number, b: number): number | null {
+	const fn = FOLDABLE_BINOPS.get(op);
+	return fn ? fn(a, b) : null;
 }
 
 function getNumericConst(
@@ -519,47 +434,6 @@ function getNumericConst(
 	return null;
 }
 
-function regBinopMap(op: number): Op | null {
-	switch (op) {
-		case Op.ADD:
-			return Op.REG_ADD;
-		case Op.SUB:
-			return Op.REG_SUB;
-		case Op.MUL:
-			return Op.REG_MUL;
-		case Op.LT:
-			return Op.REG_LT;
-		case Op.LTE:
-			return Op.REG_LTE;
-		case Op.GT:
-			return Op.REG_GT;
-		case Op.GTE:
-			return Op.REG_GTE;
-		case Op.SEQ:
-			return Op.REG_SEQ;
-		case Op.SNEQ:
-			return Op.REG_SNEQ;
-		case Op.DIV:
-			return Op.REG_DIV;
-		case Op.MOD:
-			return Op.REG_MOD;
-		default:
-			return null;
-	}
-}
-
-function regConstBinopMap(op: number): Op | null {
-	switch (op) {
-		case Op.SUB:
-			return Op.REG_CONST_SUB;
-		case Op.MUL:
-			return Op.REG_CONST_MUL;
-		case Op.MOD:
-			return Op.REG_CONST_MOD;
-		default:
-			return null;
-	}
-}
 
 /**
  * Pre-compute the set of all instruction indices that are jump targets.
@@ -568,26 +442,15 @@ function regConstBinopMap(op: number): Op | null {
 function computeJumpTargets(instrs: Instruction[]): Set<number> {
 	const targets = new Set<number>();
 	for (const instr of instrs) {
-		if (isJump(instr.opcode) && instr.operand >= 0)
-			targets.add(instr.operand);
-		if (instr.opcode === Op.TRY_PUSH) {
-			const catchIp = (instr.operand >> 16) & 0xffff;
-			const finallyIp = instr.operand & 0xffff;
-			if (catchIp !== 0xffff) targets.add(catchIp);
-			if (finallyIp !== 0xffff) targets.add(finallyIp);
-		}
-		if (
-			instr.opcode === Op.LOGICAL_AND ||
-			instr.opcode === Op.LOGICAL_OR ||
-			instr.opcode === Op.NULLISH_COALESCE
-		) {
+		if (ALL_JUMP_OPS.has(instr.opcode)) {
 			if (instr.operand >= 0) targets.add(instr.operand);
 		}
-		if (
-			instr.opcode === Op.TABLE_SWITCH ||
-			instr.opcode === Op.LOOKUP_SWITCH
-		) {
-			if (instr.operand >= 0) targets.add(instr.operand);
+		if (PACKED_JUMP_OPS.has(instr.opcode)) {
+			const upper = (instr.operand >>> 16) & 0xffff;
+			const lower = instr.operand & 0xffff;
+			if (upper !== 0xffff) targets.add(upper);
+			if (instr.opcode === Op.TRY_PUSH && lower !== 0xffff)
+				targets.add(lower);
 		}
 	}
 	return targets;
