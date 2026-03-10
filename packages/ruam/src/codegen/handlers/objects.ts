@@ -1,5 +1,5 @@
 /**
- * Object and array opcode handlers in raw node form.
+ * Object and array opcode handlers using pure AST nodes.
  *
  * Covers 29 opcodes across four categories:
  *  - Property access:  GET_PROP_STATIC, SET_PROP_STATIC, GET_PROP_DYNAMIC,
@@ -13,22 +13,44 @@
  *                      COPY_DATA_PROPERTIES, SET_PROTO, FREEZE_OBJECT, SEAL_OBJECT,
  *                      DEFINE_PROPERTY_DESC, CREATE_TEMPLATE_OBJECT
  *
- * All handlers use raw() — property access chains, try/catch fallbacks, and
- * complex iteration patterns are most cleanly expressed as literal JS.
- *
  * @module codegen/handlers/objects
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	forStmt,
+	tryCatch,
+	breakStmt,
+	obj,
+	arr,
+	newExpr,
+	ternary,
+	update,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
+import { superProto, superKey } from "./helpers.js";
 
 // --- Property access handlers ---
 
 /** `S[P]=S[P][C[O]];break;` */
 function GET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(`${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}][${ctx.C}[${ctx.O}]];break;`),
+		exprStmt(
+			assign(ctx.peek(), index(ctx.peek(), index(id(ctx.C), id(ctx.O))))
+		),
+		breakStmt(),
 	];
 }
 
@@ -43,64 +65,107 @@ function GET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
  */
 function SET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var val=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];var k=${ctx.C}[${ctx.O}];` +
-				`try{obj[k]=val;}catch(_){Object.defineProperty(obj,k,{value:val,writable:true,configurable:true});}break;`
+		varDecl("val", ctx.pop()),
+		varDecl("obj", ctx.peek()),
+		varDecl("k", index(id(ctx.C), id(ctx.O))),
+		tryCatch(
+			[exprStmt(assign(index(id("obj"), id("k")), id("val")))],
+			"_",
+			[
+				exprStmt(
+					call(member(id("Object"), "defineProperty"), [
+						id("obj"),
+						id("k"),
+						obj(
+							["value", id("val")],
+							["writable", lit(true)],
+							["configurable", lit(true)]
+						),
+					])
+				),
+			]
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var key=S[P--];S[P]=S[P][key];break;}` */
 function GET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var key=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}][key];break;`
-		),
+		varDecl("key", ctx.pop()),
+		exprStmt(assign(ctx.peek(), index(ctx.peek(), id("key")))),
+		breakStmt(),
 	];
 }
 
 /** `{var val=S[P--];var key=S[P--];var obj=S[P];obj[key]=val;break;}` */
 function SET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var val=${ctx.S}[${ctx.P}--];var key=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];obj[key]=val;break;`
-		),
+		varDecl("val", ctx.pop()),
+		varDecl("key", ctx.pop()),
+		varDecl("obj", ctx.peek()),
+		exprStmt(assign(index(id("obj"), id("key")), id("val"))),
+		breakStmt(),
 	];
 }
 
 /** `S[P]=delete S[P][C[O]];break;` */
 function DELETE_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`${ctx.S}[${ctx.P}]=delete ${ctx.S}[${ctx.P}][${ctx.C}[${ctx.O}]];break;`
+		exprStmt(
+			assign(
+				ctx.peek(),
+				un("delete", index(ctx.peek(), index(id(ctx.C), id(ctx.O))))
+			)
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var key=S[P--];S[P]=delete S[P][key];break;}` */
 function DELETE_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var key=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=delete ${ctx.S}[${ctx.P}][key];break;`
-		),
+		varDecl("key", ctx.pop()),
+		exprStmt(assign(ctx.peek(), un("delete", index(ctx.peek(), id("key"))))),
+		breakStmt(),
 	];
 }
 
 /** `{var key=C[O];var obj=S[P];S[P]=obj==null?void 0:obj[key];break;}` */
 function OPT_CHAIN_GET(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var key=${ctx.C}[${ctx.O}];var obj=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=obj==null?void 0:obj[key];break;`
+		varDecl("key", index(id(ctx.C), id(ctx.O))),
+		varDecl("obj", ctx.peek()),
+		exprStmt(
+			assign(
+				ctx.peek(),
+				ternary(
+					bin("==", id("obj"), lit(null)),
+					un("void", lit(0)),
+					index(id("obj"), id("key"))
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var key=S[P--];var obj=S[P];S[P]=obj==null?void 0:obj[key];break;}` */
 function OPT_CHAIN_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var key=${ctx.S}[${ctx.P}--];var obj=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=obj==null?void 0:obj[key];break;`
+		varDecl("key", ctx.pop()),
+		varDecl("obj", ctx.peek()),
+		exprStmt(
+			assign(
+				ctx.peek(),
+				ternary(
+					bin("==", id("obj"), lit(null)),
+					un("void", lit(0)),
+					index(id("obj"), id("key"))
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -109,18 +174,18 @@ function OPT_CHAIN_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 /** `{var obj=S[P--];S[P]=S[P] in obj;break;}` */
 function IN_OP(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var obj=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}] in obj;break;`
-		),
+		varDecl("obj", ctx.pop()),
+		exprStmt(assign(ctx.peek(), bin("in", ctx.peek(), id("obj")))),
+		breakStmt(),
 	];
 }
 
 /** `{var ctor=S[P--];S[P]=S[P] instanceof ctor;break;}` */
 function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var ctor=${ctx.S}[${ctx.P}--];${ctx.S}[${ctx.P}]=${ctx.S}[${ctx.P}] instanceof ctor;break;`
-		),
+		varDecl("ctor", ctx.pop()),
+		exprStmt(assign(ctx.peek(), bin("instanceof", ctx.peek(), id("ctor")))),
+		breakStmt(),
 	];
 }
 
@@ -137,11 +202,18 @@ function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
  */
 function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
-				`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.popStr()};` +
-				`${ctx.pushStr("sp2?sp2[key]:void 0")};break;`
+		varDecl("sp2", superProto(ctx)),
+		varDecl("key", superKey(ctx)),
+		exprStmt(
+			ctx.push(
+				ternary(
+					id("sp2"),
+					index(id("sp2"), id("key")),
+					un("void", lit(0))
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -157,12 +229,14 @@ function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
  */
 function SET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var val=${ctx.popStr()};` +
-				`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
-				`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.popStr()};` +
-				`if(sp2)sp2[key]=val;${ctx.pushStr("val")};break;`
-		),
+		varDecl("val", ctx.pop()),
+		varDecl("sp2", superProto(ctx)),
+		varDecl("key", superKey(ctx)),
+		ifStmt(id("sp2"), [
+			exprStmt(assign(index(id("sp2"), id("key")), id("val"))),
+		]),
+		exprStmt(ctx.push(id("val"))),
+		breakStmt(),
 	];
 }
 
@@ -171,27 +245,32 @@ function SET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 /** `{var obj=X();var name=C[O];W(obj[name]);break;}` */
 function GET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var obj=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];${ctx.pushStr("obj[name]")};break;`
-		),
+		varDecl("obj", ctx.pop()),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		exprStmt(ctx.push(index(id("obj"), id("name")))),
+		breakStmt(),
 	];
 }
 
 /** `{var val=X();var obj=X();var name=C[O];obj[name]=val;W(val);break;}` */
 function SET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var val=${ctx.popStr()};var obj=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];obj[name]=val;${ctx.pushStr("val")};break;`
-		),
+		varDecl("val", ctx.pop()),
+		varDecl("obj", ctx.pop()),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		exprStmt(assign(index(id("obj"), id("name")), id("val"))),
+		exprStmt(ctx.push(id("val"))),
+		breakStmt(),
 	];
 }
 
 /** `{var obj=X();var name=C[O];W(name in obj);break;}` */
 function HAS_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var obj=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];${ctx.pushStr("name in obj")};break;`
-		),
+		varDecl("obj", ctx.pop()),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		exprStmt(ctx.push(bin("in", id("name"), id("obj")))),
+		breakStmt(),
 	];
 }
 
@@ -200,35 +279,53 @@ function HAS_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 /** `{var desc=X();var key=X();var obj=X();Object.defineProperty(obj,key,desc);W(obj);break;}` */
 function DEFINE_OWN_PROPERTY(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var desc=${ctx.popStr()};var key=${ctx.popStr()};var obj=${ctx.popStr()};Object.defineProperty(obj,key,desc);${ctx.pushStr("obj")};break;`
+		varDecl("desc", ctx.pop()),
+		varDecl("key", ctx.pop()),
+		varDecl("obj", ctx.pop()),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				id("obj"),
+				id("key"),
+				id("desc"),
+			])
 		),
+		exprStmt(ctx.push(id("obj"))),
+		breakStmt(),
 	];
 }
 
 /** `W({});break;` */
 function NEW_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.pushStr("{}")};break;`)];
+	return [exprStmt(ctx.push(obj())), breakStmt()];
 }
 
 /** `W([]);break;` */
 function NEW_ARRAY(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.pushStr("[]")};break;`)];
+	return [exprStmt(ctx.push(arr())), breakStmt()];
 }
 
 /** `W(new Array(O));break;` */
 function NEW_ARRAY_WITH_SIZE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.pushStr("new Array("+ctx.O+")")};break;`)];
+	return [exprStmt(ctx.push(newExpr(id("Array"), [id(ctx.O)]))), breakStmt()];
 }
 
 /** `{var val=X();var arr=Y();arr.push(val);break;}` */
 function ARRAY_PUSH(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var val=${ctx.popStr()};var arr=${ctx.peekStr()};arr.push(val);break;`)];
+	return [
+		varDecl("val", ctx.pop()),
+		varDecl("arr", ctx.peek()),
+		exprStmt(call(member(id("arr"), "push"), [id("val")])),
+		breakStmt(),
+	];
 }
 
 /** `{var arr=Y();arr.length++;break;}` */
 function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var arr=${ctx.peekStr()};arr.length++;break;`)];
+	return [
+		varDecl("arr", ctx.peek()),
+		exprStmt(update("++", false, member(id("arr"), "length"))),
+		breakStmt(),
+	];
 }
 
 /**
@@ -243,20 +340,50 @@ function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
  */
 function SPREAD_ARRAY(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var src=${ctx.popStr()};var target=${ctx.peekStr()};` +
-				`if(Array.isArray(target)){var items=Array.from(src);for(var si=0;si<items.length;si++)target.push(items[si]);}` +
-				`else{Object.assign(target,src);}break;`
+		varDecl("src", ctx.pop()),
+		varDecl("target", ctx.peek()),
+		ifStmt(
+			call(member(id("Array"), "isArray"), [id("target")]),
+			[
+				varDecl(
+					"items",
+					call(member(id("Array"), "from"), [id("src")])
+				),
+				forStmt(
+					varDecl("si", lit(0)),
+					bin("<", id("si"), member(id("items"), "length")),
+					update("++", false, id("si")),
+					[
+						exprStmt(
+							call(member(id("target"), "push"), [
+								index(id("items"), id("si")),
+							])
+						),
+					]
+				),
+			],
+			[
+				exprStmt(
+					call(member(id("Object"), "assign"), [
+						id("target"),
+						id("src"),
+					])
+				),
+			]
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var src=X();var target=Y();Object.assign(target,src);break;}` */
 function SPREAD_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var src=${ctx.popStr()};var target=${ctx.peekStr()};Object.assign(target,src);break;`
+		varDecl("src", ctx.pop()),
+		varDecl("target", ctx.peek()),
+		exprStmt(
+			call(member(id("Object"), "assign"), [id("target"), id("src")])
 		),
+		breakStmt(),
 	];
 }
 
@@ -272,39 +399,88 @@ function SPREAD_OBJECT(ctx: HandlerCtx): JsNode[] {
  */
 function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var excludeKeys=${ctx.popStr()};var src=${ctx.popStr()};var target=${ctx.peekStr()};` +
-				`var keys=Object.keys(src);` +
-				`for(var ki=0;ki<keys.length;ki++){if(!excludeKeys||excludeKeys.indexOf(keys[ki])<0)target[keys[ki]]=src[keys[ki]];}break;`
+		varDecl("excludeKeys", ctx.pop()),
+		varDecl("src", ctx.pop()),
+		varDecl("target", ctx.peek()),
+		varDecl("keys", call(member(id("Object"), "keys"), [id("src")])),
+		forStmt(
+			varDecl("ki", lit(0)),
+			bin("<", id("ki"), member(id("keys"), "length")),
+			update("++", false, id("ki")),
+			[
+				ifStmt(
+					bin(
+						"||",
+						un("!", id("excludeKeys")),
+						bin(
+							"<",
+							call(member(id("excludeKeys"), "indexOf"), [
+								index(id("keys"), id("ki")),
+							]),
+							lit(0)
+						)
+					),
+					[
+						exprStmt(
+							assign(
+								index(id("target"), index(id("keys"), id("ki"))),
+								index(id("src"), index(id("keys"), id("ki")))
+							)
+						),
+					]
+				),
+			]
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var proto=X();var obj=X();Object.setPrototypeOf(obj,proto);W(obj);break;}` */
 function SET_PROTO(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var proto=${ctx.popStr()};var obj=${ctx.popStr()};Object.setPrototypeOf(obj,proto);${ctx.pushStr("obj")};break;`
+		varDecl("proto", ctx.pop()),
+		varDecl("obj", ctx.pop()),
+		exprStmt(
+			call(member(id("Object"), "setPrototypeOf"), [
+				id("obj"),
+				id("proto"),
+			])
 		),
+		exprStmt(ctx.push(id("obj"))),
+		breakStmt(),
 	];
 }
 
 /** `{Object.freeze(Y());break;}` */
 function FREEZE_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`Object.freeze(${ctx.peekStr()});break;`)];
+	return [
+		exprStmt(call(member(id("Object"), "freeze"), [ctx.peek()])),
+		breakStmt(),
+	];
 }
 
 /** `{Object.seal(Y());break;}` */
 function SEAL_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`Object.seal(${ctx.peekStr()});break;`)];
+	return [
+		exprStmt(call(member(id("Object"), "seal"), [ctx.peek()])),
+		breakStmt(),
+	];
 }
 
 /** `{var desc=X();var key=X();var obj=Y();Object.defineProperty(obj,key,desc);break;}` */
 function DEFINE_PROPERTY_DESC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var desc=${ctx.popStr()};var key=${ctx.popStr()};var obj=${ctx.peekStr()};Object.defineProperty(obj,key,desc);break;`
+		varDecl("desc", ctx.pop()),
+		varDecl("key", ctx.pop()),
+		varDecl("obj", ctx.peek()),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				id("obj"),
+				id("key"),
+				id("desc"),
+			])
 		),
+		breakStmt(),
 	];
 }
 
@@ -319,11 +495,21 @@ function DEFINE_PROPERTY_DESC(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_TEMPLATE_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var raw=${ctx.popStr()};var cooked=${ctx.popStr()};` +
-				`Object.defineProperty(cooked,'raw',{value:Object.freeze(raw)});` +
-				`Object.freeze(cooked);${ctx.pushStr("cooked")};break;`
+		varDecl("raw", ctx.pop()),
+		varDecl("cooked", ctx.pop()),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				id("cooked"),
+				lit("raw"),
+				obj([
+					"value",
+					call(member(id("Object"), "freeze"), [id("raw")]),
+				]),
+			])
 		),
+		exprStmt(call(member(id("Object"), "freeze"), [id("cooked")])),
+		exprStmt(ctx.push(id("cooked"))),
+		breakStmt(),
 	];
 }
 
