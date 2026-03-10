@@ -42,6 +42,10 @@ export interface EncodeOptions {
   shuffleMap: number[];
   /** When `true`, RC4-encrypt the binary output. */
   encrypt: boolean;
+  /** Apply rolling cipher encryption to the instruction stream. */
+  rollingCipher?: boolean;
+  /** Integrity hash to fold into the rolling cipher key. */
+  integrityHash?: number;
 }
 
 /**
@@ -50,7 +54,7 @@ export interface EncodeOptions {
  * @returns A base64-encoded string (suitable for embedding in JS source).
  */
 export function encodeBytecodeUnit(unit: BytecodeUnit, options: EncodeOptions): string {
-  const bytes = serializeUnit(unit, options.shuffleMap);
+  const bytes = serializeUnit(unit, options.shuffleMap, options.rollingCipher, options.integrityHash);
   if (options.encrypt) {
     const key = computeFingerprint().toString(16);
     const encrypted = rc4(bytes, key);
@@ -185,7 +189,12 @@ export function serializeUnitToJson(
 // ---------------------------------------------------------------------------
 
 /** Serialize a bytecode unit into a compact `Uint8Array`. */
-function serializeUnit(unit: BytecodeUnit, shuffleMap: number[]): Uint8Array {
+function serializeUnit(
+  unit: BytecodeUnit,
+  shuffleMap: number[],
+  applyRollingCipher: boolean = false,
+  integrityHash?: number,
+): Uint8Array {
   const buf = new ArrayBuffer(estimateSize(unit));
   const view = new DataView(buf);
   let offset = 0;
@@ -219,11 +228,29 @@ function serializeUnit(unit: BytecodeUnit, shuffleMap: number[]): Uint8Array {
     writeConstant(c, writeU8, writeI32, writeF64, writeStr);
   }
 
-  // Instructions (physical opcodes via shuffle map)
-  writeU32(unit.instructions.length);
+  // Build flat instruction array with shuffled opcodes
+  const flatInstrs: number[] = [];
   for (const instr of unit.instructions) {
-    writeU16(shuffleMap[instr.opcode]!);
-    writeI32(instr.operand);
+    flatInstrs.push(shuffleMap[instr.opcode]!);
+    flatInstrs.push(instr.operand);
+  }
+
+  // Apply rolling cipher encryption if enabled (must happen after shuffle)
+  if (applyRollingCipher) {
+    const masterKey = deriveImplicitKey(
+      unit.instructions.length,
+      unit.registerCount,
+      unit.paramCount,
+      unit.constants.length,
+    );
+    rollingEncrypt(flatInstrs, masterKey, integrityHash);
+  }
+
+  // Write instructions to binary buffer
+  writeU32(unit.instructions.length);
+  for (let i = 0; i < flatInstrs.length; i += 2) {
+    writeU16(flatInstrs[i]!);
+    writeI32(flatInstrs[i + 1]!);
   }
 
   // Jump table

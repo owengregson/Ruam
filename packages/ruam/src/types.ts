@@ -6,7 +6,7 @@
 // --- Public API Options ---
 
 /** Preset names that group multiple options. */
-export type PresetName = "low" | "medium" | "high";
+export type PresetName = "low" | "medium" | "max";
 
 /** Options accepted by {@link obfuscateCode} and the CLI. */
 export interface VmObfuscationOptions {
@@ -15,7 +15,7 @@ export interface VmObfuscationOptions {
    *
    * - `"low"` — VM compilation only.
    * - `"medium"` — Adds identifier renaming, bytecode encryption, decoy opcodes.
-   * - `"high"` — Adds debug protection, dead code injection, stack encoding.
+   * - `"max"` — All protections: debug protection, dead code injection, stack encoding, VM shielding.
    */
   preset?: PresetName;
 
@@ -94,6 +94,20 @@ export interface VmObfuscationOptions {
    * Requires {@link rollingCipher} to be enabled (auto-enabled).
    */
   integrityBinding?: boolean;
+
+  /**
+   * Generate per-function micro-interpreters instead of one shared
+   * interpreter.
+   *
+   * Each root function and its children get a unique opcode shuffle,
+   * unique runtime names, and a stripped-down interpreter containing
+   * only the opcodes they use.  An attacker who reverses one function's
+   * interpreter cannot reuse that knowledge for any other function.
+   *
+   * Increases output size proportionally to the number of root functions.
+   * Automatically enables {@link rollingCipher}.
+   */
+  vmShielding?: boolean;
 }
 
 // --- Bytecode Data Structures ---

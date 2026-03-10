@@ -599,11 +599,111 @@ describe("rolling cipher with other features", () => {
     `, { preset: "medium" });
   });
 
-  it("works with high preset (auto-enables both)", () => {
+  it("works with max preset (auto-enables both)", () => {
     assertEquivalent(`
       function add(a, b) { return a + b; }
       add(1, 2);
-    `, { preset: "high" });
+    `, { preset: "max" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Binary encoding + rolling cipher (encryptBytecode: true)
+// ---------------------------------------------------------------------------
+
+const binaryRcOpts = { encryptBytecode: true, rollingCipher: true };
+const binaryIbOpts = { encryptBytecode: true, rollingCipher: true, integrityBinding: true };
+
+describe("binary encoding with rolling cipher", () => {
+  it("simple function", () => {
+    assertEquivalent(`
+      function add(a, b) { return a + b; }
+      add(3, 4);
+    `, binaryRcOpts);
+  });
+
+  it("fibonacci", () => {
+    assertEquivalent(`
+      function fibonacci(n) {
+        if (n <= 1) return n;
+        return fibonacci(n - 1) + fibonacci(n - 2);
+      }
+      fibonacci(10);
+    `, binaryRcOpts);
+  });
+
+  it("closures", () => {
+    assertEquivalent(`
+      function makeCounter() {
+        var count = 0;
+        return function() { return ++count; };
+      }
+      var c = makeCounter();
+      [c(), c(), c()];
+    `, binaryRcOpts);
+  });
+
+  it("classes", () => {
+    assertEquivalent(`
+      function test() {
+        class Foo {
+          constructor(x) { this.x = x; }
+          getX() { return this.x; }
+        }
+        return new Foo(42).getX();
+      }
+      test();
+    `, binaryRcOpts);
+  });
+
+  it("try/catch", () => {
+    assertEquivalent(`
+      function safe(x) {
+        try {
+          if (x < 0) throw new Error("neg");
+          return x * 2;
+        } catch(e) {
+          return -1;
+        }
+      }
+      [safe(5), safe(-1)];
+    `, binaryRcOpts);
+  });
+
+  it("loops", () => {
+    assertEquivalent(`
+      function sum(n) {
+        var t = 0;
+        for (var i = 1; i <= n; i++) t += i;
+        return t;
+      }
+      sum(100);
+    `, binaryRcOpts);
+  });
+
+  it("async function", () => {
+    assertEquivalent(`
+      async function getData() { return 42; }
+      getData();
+    `, binaryRcOpts);
+  });
+
+  it("with integrity binding", () => {
+    assertEquivalent(`
+      function add(a, b) { return a + b; }
+      add(3, 4);
+    `, binaryIbOpts);
+  });
+
+  it("full high preset (encryptBytecode not overridden)", () => {
+    // Explicitly pass encryptBytecode: true to override the test helper default
+    assertEquivalent(`
+      function fibonacci(n) {
+        if (n <= 1) return n;
+        return fibonacci(n - 1) + fibonacci(n - 2);
+      }
+      fibonacci(10);
+    `, { preset: "max", encryptBytecode: true });
   });
 });
 
@@ -711,5 +811,154 @@ describe("rolling cipher edge cases", () => {
       }
       test();
     `, rcOpts);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Dead code injection (exception table + jump table patching)
+// ---------------------------------------------------------------------------
+
+const deadCodeOpts = { deadCodeInjection: true };
+const highPresetOpts = { preset: "max" as const, encryptBytecode: false };
+
+describe("dead code injection", () => {
+  it("simple function", () => {
+    assertEquivalent(`
+      function add(a, b) { return a + b; }
+      add(3, 4);
+    `, deadCodeOpts);
+  });
+
+  it("try/catch", () => {
+    assertEquivalent(`
+      function safe(x) {
+        try {
+          if (x < 0) throw new Error("neg");
+          return x * 2;
+        } catch(e) {
+          return -1;
+        }
+      }
+      [safe(5), safe(-1)];
+    `, deadCodeOpts);
+  });
+
+  it("try/catch/finally", () => {
+    assertEquivalent(`
+      function test(x) {
+        var result = [];
+        try {
+          result.push("try");
+          if (x) throw new Error("err");
+          result.push("no-throw");
+        } catch(e) {
+          result.push("catch");
+        } finally {
+          result.push("finally");
+        }
+        return result;
+      }
+      [test(false), test(true)];
+    `, deadCodeOpts);
+  });
+
+  it("nested try/catch", () => {
+    assertEquivalent(`
+      function test() {
+        var r = [];
+        try {
+          try {
+            throw new Error("inner");
+          } catch(e) {
+            r.push("inner-catch:" + e.message);
+          }
+          r.push("between");
+          try {
+            throw new Error("second");
+          } catch(e2) {
+            r.push("second-catch:" + e2.message);
+          }
+        } catch(e) {
+          r.push("outer-catch");
+        }
+        return r;
+      }
+      test();
+    `, deadCodeOpts);
+  });
+
+  it("loops with multiple returns", () => {
+    assertEquivalent(`
+      function findFirst(arr, pred) {
+        for (var i = 0; i < arr.length; i++) {
+          if (pred(arr[i])) return arr[i];
+        }
+        return null;
+      }
+      findFirst([1, 2, 3, 4, 5], function(x) { return x > 3; });
+    `, deadCodeOpts);
+  });
+
+  it("switch with returns", () => {
+    assertEquivalent(`
+      function classify(n) {
+        switch(true) {
+          case n < 0: return "negative";
+          case n === 0: return "zero";
+          case n > 100: return "large";
+          default: return "small";
+        }
+      }
+      [classify(-5), classify(0), classify(200), classify(42)];
+    `, deadCodeOpts);
+  });
+
+  it("with rolling cipher + integrity binding", () => {
+    assertEquivalent(`
+      function test() {
+        try {
+          var obj = { a: 1, b: 2 };
+          return obj.a + obj.b;
+        } catch(e) {
+          return -1;
+        }
+      }
+      test();
+    `, { deadCodeInjection: true, rollingCipher: true, integrityBinding: true });
+  });
+
+  it("full high preset with try/catch", () => {
+    assertEquivalent(`
+      function safeGet(obj, key) {
+        try {
+          return obj[key];
+        } catch(e) {
+          return undefined;
+        }
+      }
+      [safeGet({x: 1}, "x"), safeGet(null, "x")];
+    `, highPresetOpts);
+  });
+
+  it("complex: optional access pattern (Chrome extension style)", () => {
+    assertEquivalent(`
+      function test() {
+        var win = { sessionStorage: { getItem: function(k) { return 'v_' + k; } } };
+        var winNull = {};
+        var r1, r2;
+        try {
+          r1 = win.sessionStorage.getItem('key');
+        } catch(e) {
+          r1 = null;
+        }
+        try {
+          r2 = winNull.sessionStorage.getItem('key');
+        } catch(e) {
+          r2 = null;
+        }
+        return [r1, r2];
+      }
+      test();
+    `, highPresetOpts);
   });
 });

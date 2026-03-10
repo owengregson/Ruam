@@ -573,6 +573,48 @@ describe("optional chaining", () => {
       test();
     `);
   });
+
+  it("optional call on property: obj.prop?.method?.()", () => {
+    assertEquivalent(`
+      function test() {
+        var win = { sessionStorage: { getItem: function(k) { return 'v_' + k; } } };
+        var winNull = { sessionStorage: null };
+        var winMissing = {};
+        var r1 = win.sessionStorage?.getItem?.('key1');
+        var r2 = winNull.sessionStorage?.getItem?.('key2');
+        var r3 = winMissing.sessionStorage?.getItem?.('key3');
+        return [r1, r2, r3];
+      }
+      test();
+    `);
+  });
+
+  it("optional call with nullish coalescing: obj.prop?.method?.() ?? fallback", () => {
+    assertEquivalent(`
+      function test() {
+        var win = { sessionStorage: { getItem: function(k) { return 'v_' + k; } } };
+        var winNull = { sessionStorage: null };
+        var r1 = win.sessionStorage?.getItem?.('key1') ?? 'fallback1';
+        var r2 = winNull.sessionStorage?.getItem?.('key2') ?? 'fallback2';
+        return [r1, r2];
+      }
+      test();
+    `);
+  });
+
+  it("optional call inside try/catch", () => {
+    assertEquivalent(`
+      function test() {
+        var obj = null;
+        try {
+          return obj?.method?.('arg') ?? 'default';
+        } catch(_) {
+          return 'caught';
+        }
+      }
+      test();
+    `);
+  });
 });
 
 describe("nullish coalescing with objects", () => {

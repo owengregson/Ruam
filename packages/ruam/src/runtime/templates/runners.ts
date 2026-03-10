@@ -38,3 +38,44 @@ ${names.vm}.call=function(${TV},id,${A},${OS},${HO}){
 };
 `;
 }
+
+/**
+ * Generate the router function for VM Shielding mode.
+ *
+ * The router maps unit IDs to their group's dispatch function and
+ * serves as the single global entry point. External function bodies
+ * call the router, which delegates to the correct micro-interpreter.
+ *
+ * @param routerName - The global router function name.
+ * @param groupRegistrations - Per-group unit ID lists and dispatch function names.
+ * @param names - Shared RuntimeNames (for parameter names).
+ */
+export function generateRouter(
+  routerName: string,
+  groupRegistrations: { unitIds: string[]; dispatchName: string }[],
+  names: RuntimeNames,
+): string {
+  const A = names.args;
+  const OS = names.outer;
+  const TV = names.tVal;
+  const NT = names.nTgt;
+  const HO = names.ho;
+
+  const entries: string[] = [];
+  for (const { unitIds, dispatchName } of groupRegistrations) {
+    for (const id of unitIds) {
+      entries.push(`_rm["${id}"]=${dispatchName};`);
+    }
+  }
+
+  return `
+var _rm={};
+${entries.join("")}
+function ${routerName}(id,${A},${OS},${TV},${NT},${HO}){
+  return _rm[id](id,${A},${OS},${TV},${NT},${HO});
+}
+${routerName}.call=function(${TV},id,${A},${OS},${HO}){
+  return _rm[id].call(${TV},id,${A},${OS},${HO});
+};
+`;
+}

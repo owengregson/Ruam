@@ -33,6 +33,9 @@ export function resetHexCounter(): void {
  * Rename all local bindings to sequential `_0x0000` hex names.
  * Global identifiers and already-hex-named identifiers are skipped.
  *
+ * Uses Babel's `scope.rename()` to correctly handle all edge cases
+ * including duplicate `var` declarations and cross-scope name collisions.
+ *
  * @param source - JavaScript source code to preprocess.
  * @returns The source with local bindings renamed.
  */
@@ -42,34 +45,33 @@ export function preprocessIdentifiers(source: string): string {
     plugins: [...BABEL_PARSER_PLUGINS],
   });
 
-  const renameMap = new Map<string, string>();
+  // Collect all (scope, bindingName) pairs first, then rename.
+  // This avoids iterator invalidation from renaming during traversal.
+  const toRename: { scope: any; name: string }[] = [];
 
   traverse(ast, {
     Scope(path) {
-      for (const [name, binding] of Object.entries(path.scope.bindings)) {
+      for (const name of Object.keys(path.scope.bindings)) {
         if ((GLOBAL_IDENTIFIERS as ReadonlySet<string>).has(name)) continue;
-        if (renameMap.has(name)) continue;
         if (name.startsWith("_0x")) continue;
-
-        const newName = nextHexName();
-        renameMap.set(name, newName);
-        binding.identifier.name = newName;
-
-        for (const ref of binding.referencePaths) {
-          if (ref.isIdentifier()) {
-            ref.node.name = newName;
-          }
-        }
-
-        for (const ref of binding.constantViolations) {
-          const left = ref.get("left");
-          if (!Array.isArray(left) && left.isIdentifier() && left.node.name === name) {
-            left.node.name = newName;
-          }
-        }
+        toRename.push({ scope: path.scope, name });
       }
     },
   });
+
+  // Use a Set to track which (scope, name) pairs we've already renamed
+  // (scope.rename handles the actual AST mutation correctly)
+  const renamed = new Set<object>();
+
+  for (const { scope, name } of toRename) {
+    const binding = scope.bindings[name];
+    if (!binding) continue; // may have been removed by a prior rename
+    if (renamed.has(binding)) continue;
+    renamed.add(binding);
+
+    const newName = nextHexName();
+    scope.rename(name, newName);
+  }
 
   return generate(ast).code;
 }

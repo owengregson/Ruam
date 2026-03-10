@@ -19,6 +19,7 @@ export function generateLoader(
   names: RuntimeNames,
   hasStringEncoding: boolean = false,
   rollingCipher: boolean = false,
+  options?: { skipSharedDecls?: boolean },
 ): string {
   // _ru4m is used as a guard in the loader: if falsy, raw is forced to undefined,
   // so every bytecode load silently fails and the program breaks.
@@ -37,11 +38,13 @@ export function generateLoader(
       : `else if(Array.isArray(cv)){raw.c[j]=${names.strDec}(cv,j);}`
     : '';
 
-  return `
+  const sharedDecls = options?.skipSharedDecls ? '' : `
 var ${WATERMARK_NAME}=!0;
 var ${names.depth}=0;
 var ${names.callStack}=[];
-var ${names.cache}={};
+var ${names.cache}={};`;
+
+  return `${sharedDecls}
 function ${names.load}(id){
   if(${names.cache}[id])return ${names.cache}[id];
   var raw=${WATERMARK_NAME}?${names.bt}[id]:void 0;

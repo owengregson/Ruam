@@ -133,6 +133,10 @@ export interface RuntimeNames {
   // Watermark — looks like an essential variable
   /** Watermark variable name (_ru4m). */
   wm: string;
+
+  // VM Shielding router
+  /** Router function name (used in vmShielding mode). */
+  router: string;
 }
 
 /** The watermark variable name — always `_ru4m`. */
@@ -230,5 +234,66 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
     ihash: genName(),
     ihashFn: genName(),
     wm: WATERMARK_NAME,
+    router: genName(),
   };
+}
+
+/** Fields of {@link RuntimeNames} that are shared across all shielding groups. */
+const SHARED_NAME_KEYS = [
+  "bt", "cache", "depth", "callStack", "fp", "rc4", "b64", "deser",
+  "dbg", "dbgOp", "dbgCfg", "dbgProt", "wm", "router",
+] as const;
+
+/**
+ * Generate a set of shared names plus unique per-group name sets for
+ * VM Shielding mode.
+ *
+ * Shared names (bytecode table, cache, depth, debug, etc.) are
+ * consistent across all groups. Per-group names (interpreter locals,
+ * rolling cipher, etc.) are unique per group and collision-free.
+ *
+ * @param sharedSeed - Seed for shared infrastructure names.
+ * @param groupSeeds - One seed per shielding group.
+ * @returns An object with the shared names and an array of per-group names.
+ */
+export function generateShieldedNames(
+  sharedSeed: number,
+  groupSeeds: number[],
+): { shared: RuntimeNames; groups: RuntimeNames[] } {
+  // Generate shared names from the shared seed
+  const shared = generateRuntimeNames(sharedSeed);
+
+  // Generate per-group names, overriding shared fields for consistency
+  const groups: RuntimeNames[] = [];
+  // Collect all names already used by shared to prevent collisions
+  const globalUsed = new Set<string>();
+  for (const key of SHARED_NAME_KEYS) {
+    globalUsed.add(shared[key]);
+  }
+
+  for (const groupSeed of groupSeeds) {
+    let names: RuntimeNames;
+    // Retry if a group name collides with shared or another group
+    let attempt = 0;
+    for (;;) {
+      names = generateRuntimeNames((groupSeed ^ groups.length) + attempt);
+      attempt++;
+      // Override shared fields
+      for (const key of SHARED_NAME_KEYS) {
+        (names as Record<string, string>)[key] = shared[key];
+      }
+      // Check for collisions among non-shared names
+      const groupNonShared = Object.entries(names)
+        .filter(([k]) => !(SHARED_NAME_KEYS as readonly string[]).includes(k))
+        .map(([, v]) => v);
+      const hasCollision = groupNonShared.some(n => globalUsed.has(n));
+      if (!hasCollision) {
+        for (const n of groupNonShared) globalUsed.add(n);
+        break;
+      }
+    }
+    groups.push(names);
+  }
+
+  return { shared, groups };
 }

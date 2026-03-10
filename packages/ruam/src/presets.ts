@@ -10,7 +10,7 @@ import type { VmObfuscationOptions, PresetName } from "./types.js";
  *
  * - `low` -- VM compilation only.
  * - `medium` -- Adds identifier renaming, bytecode encryption, and decoy opcodes.
- * - `high` -- Maximum protection: debug protection, dead code injection, stack encoding.
+ * - `max` -- Maximum protection: debug protection, dead code injection, stack encoding.
  */
 export const PRESETS: Record<PresetName, Required<Omit<VmObfuscationOptions, "preset" | "debugLogging">>> = {
   low: {
@@ -25,6 +25,7 @@ export const PRESETS: Record<PresetName, Required<Omit<VmObfuscationOptions, "pr
     stackEncoding: false,
     rollingCipher: false,
     integrityBinding: false,
+    vmShielding: false,
   },
   medium: {
     targetMode: "root",
@@ -38,8 +39,9 @@ export const PRESETS: Record<PresetName, Required<Omit<VmObfuscationOptions, "pr
     stackEncoding: false,
     rollingCipher: true,
     integrityBinding: false,
+    vmShielding: false,
   },
-  high: {
+  max: {
     targetMode: "root",
     threshold: 1.0,
     preprocessIdentifiers: true,
@@ -51,6 +53,7 @@ export const PRESETS: Record<PresetName, Required<Omit<VmObfuscationOptions, "pr
     stackEncoding: true,
     rollingCipher: true,
     integrityBinding: true,
+    vmShielding: true,
   },
 };
 
@@ -80,6 +83,11 @@ export function resolveOptions(options: VmObfuscationOptions = {}): VmObfuscatio
 
   // integrityBinding requires rollingCipher — auto-enable it
   if (resolved.integrityBinding && !resolved.rollingCipher) {
+    resolved.rollingCipher = true;
+  }
+
+  // vmShielding requires rollingCipher (implicit per-unit key derivation)
+  if (resolved.vmShielding && !resolved.rollingCipher) {
     resolved.rollingCipher = true;
   }
 

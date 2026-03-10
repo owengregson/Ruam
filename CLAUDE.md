@@ -38,7 +38,7 @@ src/
       classes.ts            Class compilation (methods, properties, inheritance)
 
   runtime/
-    vm.ts                   VM runtime orchestrator (~100 lines, assembles IIFE from templates)
+    vm.ts                   VM runtime orchestrator (assembles IIFE from templates, incl. shielded mode)
     names.ts                RuntimeNames interface + per-build randomized name generation (LCG PRNG)
     fingerprint.ts          Environment fingerprinting for encryption
     decoder.ts              RC4 + base64 codec + string constant XOR decoder
@@ -46,7 +46,7 @@ src/
     templates/
       interpreter.ts        Main interpreter core (sync + async exec, opcode switch)
       loader.ts             Bytecode loader, cache, depth tracking, _ru4m watermark
-      runners.ts            VM dispatch functions (run/runAsync)
+      runners.ts            VM dispatch functions (run/runAsync) + shielding router
       deserializer.ts       Binary bytecode deserializer
       debug-protection.ts   Anti-debugger timing side-channel
       debug-logging.ts      Debug trace infrastructure
@@ -56,7 +56,7 @@ test/
   helpers.ts                Test utility (wraps obfuscateCode + eval)
   core/                     Core JS language feature tests (arithmetic, strings, arrays, objects, etc.)
   stress/                   Stress tests, VM-breaker patterns, randomized fuzz tests
-  security/                 Anti-reversing, string encoding, rolling cipher tests
+  security/                 Anti-reversing, string encoding, rolling cipher, VM shielding tests
   integration/              Real-world patterns (Chrome extension, RuamTester)
 
 docs/
@@ -73,7 +73,8 @@ docs/
 - **Watermark**: Every output contains `var _ru4m=!0;` — looks random but encodes "ruam" with a `4` for `a`.
 - **Rolling cipher** (`rollingCipher` option): Position-dependent XOR encryption on every instruction. The master key is derived implicitly from bytecode metadata (instruction count, register count, param count, constant count) via FNV-1a — no plaintext seed appears in the output. Each instruction is encrypted with `mixState(baseKey, index, index ^ 0x9E3779B9)`. Implemented in `runtime/rolling-cipher.ts`. When enabled, string encoding also uses the implicit key instead of a plaintext literal.
 - **Integrity binding** (`integrityBinding` option): A per-build hash (FNV-1a of the interpreter template source) is folded into the rolling cipher's base key (`baseKey = masterKey XOR integrityHash`). The hash is embedded as a numeric literal in the IIFE. If an attacker modifies the hash value, all instruction decryption produces garbage. Requires `rollingCipher`.
-- **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `high` (+debug protection, integrity binding, dead code, stack encoding). Defined in `presets.ts`.
+- **VM Shielding** (`vmShielding` option): Each root function gets its own micro-interpreter with unique opcode shuffle, identifier names, and rolling cipher key. A shared router function maps unit IDs to group dispatch functions. Shared infrastructure (cache, fingerprint, deserializer) is emitted once. Auto-enables `rollingCipher`. Implemented in `transform.ts` (`assembleShielded()`), `runtime/vm.ts` (`generateShieldedVmRuntime()`), `runtime/names.ts` (`generateShieldedNames()`), and `runtime/templates/runners.ts` (`generateRouter()`).
+- **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `high` (+debug protection, integrity binding, dead code, stack encoding, VM shielding). Defined in `presets.ts`.
 - **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
 - `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
 - **Home object (`[[HomeObject]]`)**: Class methods get `fn._ho = target` stamped at define-time. The home object is passed through the VM dispatch chain (`_vm.call` → `exec`) so `super` resolves correctly in multi-level inheritance. `GET_SUPER_PROP`, `SET_SUPER_PROP`, `CALL_SUPER_METHOD`, `SUPER_CALL` all use `Object.getPrototypeOf(homeObject)` when available.

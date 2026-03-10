@@ -903,6 +903,14 @@ function compileCallExpression(
       }
     }
     emitter.emit(Op.SUPER_CALL, args.length);
+  } else if (callee.node.type === "Import") {
+    // Dynamic import(): import(specifier)
+    if (args.length > 0) {
+      compileExpression(args[0] as NodePath<t.Expression>, emitter, scope, ctx);
+    } else {
+      emitter.emit(Op.PUSH_UNDEFINED, 0);
+    }
+    emitter.emit(Op.DYNAMIC_IMPORT, 0);
   } else {
     compileExpression(callee as NodePath<t.Expression>, emitter, scope, ctx);
 

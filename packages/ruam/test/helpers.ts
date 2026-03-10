@@ -51,8 +51,30 @@ function makeContext(): vm.Context {
   });
 }
 
+async function wrapModule(specifier: string, ctx: vm.Context): Promise<vm.Module> {
+  const mod = await import(specifier);
+  const exports = Object.keys(mod);
+  const synth = new vm.SyntheticModule(exports, function () {
+    for (const key of exports) {
+      this.setExport(key, mod[key]);
+    }
+  }, { context: ctx });
+  await synth.link(() => { throw new Error("unexpected link"); });
+  await synth.evaluate();
+  return synth;
+}
+
+function runInContext(code: string, ctx: vm.Context): unknown {
+  const script = new vm.Script(code, {
+    importModuleDynamically: ((specifier: string) => {
+      return wrapModule(specifier, ctx);
+    }) as vm.ScriptOptions["importModuleDynamically"],
+  });
+  return script.runInContext(ctx);
+}
+
 export function evalOriginal(source: string): unknown {
-  return vm.runInContext(source, makeContext());
+  return runInContext(source, makeContext());
 }
 
 export function evalObfuscated(source: string, options?: VmObfuscationOptions): unknown {
@@ -63,7 +85,7 @@ export function evalObfuscated(source: string, options?: VmObfuscationOptions): 
     ...options,
   });
   try {
-    return vm.runInContext(obfuscated, makeContext());
+    return runInContext(obfuscated, makeContext());
   } catch (e) {
     console.error("ERROR:", (e as Error).message);
     console.error("--- OBFUSCATED CODE (first 200 lines) ---");

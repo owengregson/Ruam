@@ -35,8 +35,11 @@
     "@babel/parser": "^7.25.0",
     "@babel/traverse": "^7.25.0",
     "@babel/types": "^7.25.0",
+    "@inquirer/prompts": "^8.3.0",
+    "chalk": "^5.6.2",
     "fs-extra": "^11.2.0",
-    "globby": "^14.0.2"
+    "globby": "^14.0.2",
+    "ora": "^9.3.0"
   },
   "devDependencies": {
     "@types/babel__generator": "^7.6.8",

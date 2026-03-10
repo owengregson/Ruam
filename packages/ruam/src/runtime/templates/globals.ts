@@ -9,11 +9,12 @@
 
 import type { RuntimeNames } from "../names.js";
 
-export function generateGlobalExposure(names: RuntimeNames): string {
+export function generateGlobalExposure(names: RuntimeNames, overrideName?: string): string {
+  const n = overrideName ?? names.vm;
   return `
-if(typeof globalThis!=='undefined'){globalThis.${names.vm}=${names.vm};}
-else if(typeof window!=='undefined'){window.${names.vm}=${names.vm};}
-else if(typeof global!=='undefined'){global.${names.vm}=${names.vm};}
-else if(typeof self!=='undefined'){self.${names.vm}=${names.vm};}
+if(typeof globalThis!=='undefined'){globalThis.${n}=${n};}
+else if(typeof window!=='undefined'){window.${n}=${n};}
+else if(typeof global!=='undefined'){global.${n}=${n};}
+else if(typeof self!=='undefined'){self.${n}=${n};}
 `;
 }

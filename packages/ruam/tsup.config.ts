@@ -12,7 +12,10 @@ export default defineConfig({
     "@babel/parser",
     "@babel/traverse",
     "@babel/types",
+    "@inquirer/prompts",
+    "chalk",
     "fs-extra",
     "globby",
+    "ora",
   ],
 });

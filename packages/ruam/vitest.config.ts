@@ -9,5 +9,6 @@ export default defineConfig({
     outputFile: {
       json: "test-results.json",
     },
+    execArgv: ["--experimental-vm-modules"],
   },
 });

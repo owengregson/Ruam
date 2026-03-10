@@ -770,7 +770,7 @@ describe("randomized: integrity binding correctness", () => {
 // ---------------------------------------------------------------------------
 
 describe("randomized: presets", () => {
-  const presets = ["low", "medium", "high"] as const;
+  const presets = ["low", "medium", "max"] as const;
 
   for (const preset of presets) {
     for (let trial = 0; trial < 3 * FUZZ_MULTIPLIER; trial++) {

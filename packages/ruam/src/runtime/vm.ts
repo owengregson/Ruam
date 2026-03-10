@@ -26,7 +26,7 @@ import { generateDebugProtection } from "./templates/debug-protection.js";
 import { generateDebugLogging } from "./templates/debug-logging.js";
 import { generateInterpreterCore } from "./templates/interpreter.js";
 import { generateLoader } from "./templates/loader.js";
-import { generateRunners } from "./templates/runners.js";
+import { generateRunners, generateRouter } from "./templates/runners.js";
 import { generateDeserializer } from "./templates/deserializer.js";
 import { generateGlobalExposure } from "./templates/globals.js";
 import { generateRollingCipherSource } from "./rolling-cipher.js";
@@ -132,6 +132,138 @@ export function generateVmRuntime(options: {
 
   // Global exposure
   parts.push(generateGlobalExposure(names));
+
+  // IIFE close
+  parts.push(`})();`);
+
+  return parts.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// VM Shielding: per-group micro-interpreters
+// ---------------------------------------------------------------------------
+
+/** Per-group configuration for shielded runtime generation. */
+export interface ShieldingGroup {
+  /** Group-specific opcode shuffle map. */
+  shuffleMap: number[];
+  /** Group-specific randomized identifier names. */
+  names: RuntimeNames;
+  /** Group-specific seed (for obfuscateLocals). */
+  seed: number;
+  /** Unit IDs belonging to this group (root + children). */
+  unitIds: string[];
+  /** Opcodes used by this group's units. */
+  usedOpcodes: Set<number>;
+  /** Per-group integrity hash (if integrityBinding is on). */
+  integrityHash?: number;
+}
+
+/**
+ * Generate a shielded VM runtime with per-group micro-interpreters.
+ *
+ * Shared infrastructure (bytecode table, cache, fingerprint, debug, deserializer)
+ * is emitted once. Each group gets its own interpreter, runners, loader, and
+ * rolling cipher with unique opcode shuffle and identifier names.
+ *
+ * @returns A JS source string containing the shielded runtime IIFE.
+ */
+export function generateShieldedVmRuntime(options: {
+  groups: ShieldingGroup[];
+  sharedNames: RuntimeNames;
+  encrypt: boolean;
+  debugProtection: boolean;
+  debugLogging?: boolean;
+  decoyOpcodes?: boolean;
+  stackEncoding?: boolean;
+  integrityBinding?: boolean;
+}): string {
+  const {
+    groups,
+    sharedNames,
+    encrypt,
+    debugProtection: dbgProt,
+    debugLogging = false,
+    decoyOpcodes = false,
+    stackEncoding = false,
+    integrityBinding = false,
+  } = options;
+
+  const parts: string[] = [];
+
+  // IIFE open
+  parts.push(`(function(){`);
+  parts.push(`"use strict";`);
+
+  // Shared: encryption support
+  if (encrypt) {
+    parts.push(generateFingerprintSource(sharedNames));
+    parts.push(generateDecoderSource(sharedNames));
+  }
+
+  // Shared: debug protection
+  if (dbgProt) {
+    parts.push(generateDebugProtection(sharedNames));
+  }
+
+  // Shared: deserializer
+  parts.push(generateDeserializer(sharedNames));
+
+  // Per-group micro-interpreters
+  const groupRegistrations: { unitIds: string[]; dispatchName: string }[] = [];
+
+  for (const group of groups) {
+    const gn = group.names;
+
+    // Debug logging (per-group — uses shared debug function names but group's reverse map)
+    if (debugLogging) {
+      const reverseMap = new Array<number>(OPCODE_COUNT);
+      for (let i = 0; i < group.shuffleMap.length; i++) {
+        reverseMap[group.shuffleMap[i]!] = i;
+      }
+      parts.push(generateDebugLogging(reverseMap, gn));
+    }
+
+    // Rolling cipher (always on with vmShielding)
+    if (integrityBinding && group.integrityHash !== undefined) {
+      parts.push(`var ${gn.ihash}=${group.integrityHash};`);
+    }
+    parts.push(generateRollingCipherSource(gn, integrityBinding));
+
+    // Interpreter core (per-group shuffle, per-group names, per-group opcodes)
+    parts.push(generateInterpreterCore(debugLogging, gn, group.seed, group.shuffleMap, true, integrityBinding, {
+      dynamicOpcodes: true, // always strip unused opcodes in shielding mode
+      decoyOpcodes,
+      stackEncoding,
+      usedOpcodes: group.usedOpcodes,
+    }));
+
+    // Runners (per-group dispatch function)
+    parts.push(generateRunners(debugLogging, gn));
+
+    // String decoder (per-group, rolling cipher implicit key)
+    parts.push(generateStringDecoderSource(gn, 0, true));
+
+    // Loader (per-group, skips shared var declarations)
+    parts.push(generateLoader(encrypt, gn, true, true, { skipSharedDecls: true }));
+
+    groupRegistrations.push({
+      unitIds: group.unitIds,
+      dispatchName: gn.vm,
+    });
+  }
+
+  // Shared: watermark, depth, callStack, cache (emitted once)
+  parts.push(`var _ru4m=!0;`);
+  parts.push(`var ${sharedNames.depth}=0;`);
+  parts.push(`var ${sharedNames.callStack}=[];`);
+  parts.push(`var ${sharedNames.cache}={};`);
+
+  // Router: maps unit IDs to group dispatch functions
+  parts.push(generateRouter(sharedNames.router, groupRegistrations, sharedNames));
+
+  // Global exposure: expose the router
+  parts.push(generateGlobalExposure(sharedNames, sharedNames.router));
 
   // IIFE close
   parts.push(`})();`);

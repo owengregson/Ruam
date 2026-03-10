@@ -1,5 +1,6 @@
-import { describe, it } from "vitest";
+import { describe, it, expect } from "vitest";
 import { assertEquivalent } from "../helpers.js";
+import { obfuscateCode } from "../../src/transform.js";
 
 describe("edge cases", () => {
   it("this binding with call", () => {
@@ -171,5 +172,19 @@ describe("edge cases", () => {
       }
       test();
     `);
+  });
+
+  it("dynamic import() compiles and executes", async () => {
+    // import() returns a Promise — verify it resolves to a module
+    const { evalObfuscated } = await import("../helpers.js");
+    const result = evalObfuscated(`
+      function loadPath() {
+        return import("node:path");
+      }
+      loadPath();
+    `);
+    // Result is a Promise; verify it resolves to the path module
+    const mod = await (result as Promise<any>);
+    expect(typeof mod.join).toBe("function");
   });
 });

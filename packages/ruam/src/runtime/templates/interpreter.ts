@@ -953,7 +953,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
   }
   return void 0;
   }catch(e){
-    ${debug ? `${n.dbg}('EXCEPTION','error=',e&&e.message?e.message:e,'${EX}='+${EX}.length);` : ''}
+    ${debug ? `${n.dbg}('EXCEPTION','error=',e&&e.message?e.message:e,'${EX}='+(${EX}?${EX}.length:0));` : ''}
     ${HPE}=false;${PE}=null;${CT}=0;${CV}=void 0;
     if(${EX}&&${EX}.length>0){
       var handler=${EX}.pop();
@@ -1026,7 +1026,7 @@ function generateStackEncodingProxy(n: RuntimeNames): string {
       var i=+k;
       if(i===i&&i>=0){
         var t=typeof v;
-        if(t==='number'&&v===v){_seRaw[i]=[0,v^((_sek^(i*0x9E3779B9))>>>0)];}
+        if(t==='number'&&(v|0)===v){_seRaw[i]=[0,v^((_sek^(i*0x9E3779B9))>>>0)];}
         else if(t==='boolean'){_seRaw[i]=[1,v?1:0];}
         else if(t==='string'){_seRaw[i]=[2,v];}
         else{_seRaw[i]=[3,v];}
