@@ -2,37 +2,33 @@
  * VM runtime code generator.
  *
  * Produces a self-contained IIFE that contains:
- *   - The reverse shuffle map
  *   - The interpreter cores (sync / async)
  *   - The dispatch functions
  *   - A bytecode loader + cache
  *   - Optional: fingerprint + RC4 decoder, debug protection, debug logging
  *   - The `_ru4m` watermark variable
  *
- * The generated code is meant to be prepended to the obfuscated source file
- * with the bytecode table injected inside the IIFE.
- *
- * All internal identifiers are randomized per build via {@link RuntimeNames}
- * so the output looks like generic minified code.
+ * Uses AST-based builders from `codegen/builders/` instead of template
+ * literals, then emits via `codegen/emit.ts`.
  *
  * @module runtime/vm
  */
 
 import { OPCODE_COUNT } from "../compiler/opcodes.js";
 import type { RuntimeNames } from "./names.js";
-import { generateFingerprintSource } from "./fingerprint.js";
-import {
-	generateDecoderSource,
-	generateStringDecoderSource,
-} from "./decoder.js";
-import { generateDebugProtection } from "./templates/debug-protection.js";
-import { generateDebugLogging } from "./templates/debug-logging.js";
-import { generateInterpreterCore } from "./templates/interpreter.js";
-import { generateLoader } from "./templates/loader.js";
-import { generateRunners, generateRouter } from "./templates/runners.js";
-import { generateDeserializer } from "./templates/deserializer.js";
-import { generateGlobalExposure } from "./templates/globals.js";
-import { generateRollingCipherSource } from "./rolling-cipher.js";
+import type { JsNode } from "../codegen/nodes.js";
+import { raw, exprStmt, lit, varDecl } from "../codegen/nodes.js";
+import { emit } from "../codegen/emit.js";
+import { buildFingerprintSource } from "../codegen/builders/fingerprint.js";
+import { buildDecoderSource, buildStringDecoderSource } from "../codegen/builders/decoder.js";
+import { buildDebugProtection } from "../codegen/builders/debug-protection.js";
+import { buildDebugLogging } from "../codegen/builders/debug-logging.js";
+import { buildRollingCipherSource } from "../codegen/builders/rolling-cipher.js";
+import { buildInterpreterFunctions } from "../codegen/builders/interpreter.js";
+import { buildRunners, buildRouter } from "../codegen/builders/runners.js";
+import { buildLoader } from "../codegen/builders/loader.js";
+import { buildDeserializer } from "../codegen/builders/deserializer.js";
+import { buildGlobalExposure } from "../codegen/builders/globals.js";
 
 /**
  * Generate the complete VM runtime source code.
@@ -78,48 +74,46 @@ export function generateVmRuntime(options: {
 		reverseMap[opcodeShuffleMap[i]!] = i;
 	}
 
-	const parts: string[] = [];
+	const nodes: JsNode[] = [];
 
-	// IIFE open
-	parts.push(`(function(){`);
-	parts.push(`"use strict";`);
+	// "use strict" directive
+	nodes.push(exprStmt(lit('use strict')));
 
 	// Optional encryption support
 	if (encrypt) {
-		parts.push(generateFingerprintSource(names));
-		parts.push(generateDecoderSource(names));
+		nodes.push(...buildFingerprintSource(names));
+		nodes.push(...buildDecoderSource(names));
 	}
 
 	// Optional debug protection
 	if (dbgProt) {
-		parts.push(generateDebugProtection(names));
+		nodes.push(...buildDebugProtection(names));
 	}
 
 	// Optional debug logging
 	if (debugLogging) {
-		parts.push(generateDebugLogging(reverseMap, names));
+		nodes.push(...buildDebugLogging(reverseMap, names));
 	}
 
 	// Rolling cipher helpers (must come before interpreter)
 	if (rollingCipher) {
 		if (integrityBinding && integrityHash !== undefined) {
-			// Embed the precomputed integrity hash as a literal.
-			// This value is folded into the rolling cipher key derivation.
-			parts.push(`var ${names.ihash}=${integrityHash};`);
+			nodes.push(raw(`var ${names.ihash}=${integrityHash}`));
 		}
-		parts.push(generateRollingCipherSource(names, integrityBinding));
+		nodes.push(...buildRollingCipherSource(
+			names,
+			integrityBinding ? integrityHash : undefined
+		));
 	}
 
 	// Interpreter core (sync + async) — uses direct physical dispatch
-	// (no reverse opcode map emitted; case labels use physical opcodes directly)
-	parts.push(
-		generateInterpreterCore(
-			debugLogging,
+	nodes.push(
+		...buildInterpreterFunctions(
 			names,
-			seed,
 			opcodeShuffleMap,
+			debugLogging,
 			rollingCipher,
-			integrityBinding,
+			seed,
 			{
 				dynamicOpcodes,
 				decoyOpcodes,
@@ -130,30 +124,28 @@ export function generateVmRuntime(options: {
 	);
 
 	// Runner dispatch functions
-	parts.push(generateRunners(debugLogging, names));
+	nodes.push(...buildRunners(debugLogging, names));
 
 	// String constant decoder (XOR key stream)
 	if (stringKey !== undefined) {
-		parts.push(
-			generateStringDecoderSource(names, stringKey, rollingCipher)
+		nodes.push(
+			...buildStringDecoderSource(names, stringKey, rollingCipher)
 		);
 	}
 
 	// Loader, cache, depth tracking, watermark
-	parts.push(
-		generateLoader(encrypt, names, stringKey !== undefined, rollingCipher)
+	nodes.push(
+		...buildLoader(encrypt, names, stringKey !== undefined, rollingCipher)
 	);
 
 	// Binary deserializer
-	parts.push(generateDeserializer(names));
+	nodes.push(...buildDeserializer(names));
 
 	// Global exposure
-	parts.push(generateGlobalExposure(names));
+	nodes.push(...buildGlobalExposure(names.vm));
 
-	// IIFE close
-	parts.push(`})();`);
-
-	return parts.join("\n");
+	// Wrap in IIFE and emit
+	return emitIIFE(nodes);
 }
 
 // ---------------------------------------------------------------------------
@@ -206,25 +198,24 @@ export function generateShieldedVmRuntime(options: {
 		integrityBinding = false,
 	} = options;
 
-	const parts: string[] = [];
+	const nodes: JsNode[] = [];
 
-	// IIFE open
-	parts.push(`(function(){`);
-	parts.push(`"use strict";`);
+	// "use strict" directive
+	nodes.push(exprStmt(lit('use strict')));
 
 	// Shared: encryption support
 	if (encrypt) {
-		parts.push(generateFingerprintSource(sharedNames));
-		parts.push(generateDecoderSource(sharedNames));
+		nodes.push(...buildFingerprintSource(sharedNames));
+		nodes.push(...buildDecoderSource(sharedNames));
 	}
 
 	// Shared: debug protection
 	if (dbgProt) {
-		parts.push(generateDebugProtection(sharedNames));
+		nodes.push(...buildDebugProtection(sharedNames));
 	}
 
 	// Shared: deserializer
-	parts.push(generateDeserializer(sharedNames));
+	nodes.push(...buildDeserializer(sharedNames));
 
 	// Per-group micro-interpreters
 	const groupRegistrations: { unitIds: string[]; dispatchName: string }[] =
@@ -233,30 +224,32 @@ export function generateShieldedVmRuntime(options: {
 	for (const group of groups) {
 		const gn = group.names;
 
-		// Debug logging (per-group — uses shared debug function names but group's reverse map)
+		// Debug logging (per-group)
 		if (debugLogging) {
 			const reverseMap = new Array<number>(OPCODE_COUNT);
 			for (let i = 0; i < group.shuffleMap.length; i++) {
 				reverseMap[group.shuffleMap[i]!] = i;
 			}
-			parts.push(generateDebugLogging(reverseMap, gn));
+			nodes.push(...buildDebugLogging(reverseMap, gn));
 		}
 
 		// Rolling cipher (always on with vmShielding)
 		if (integrityBinding && group.integrityHash !== undefined) {
-			parts.push(`var ${gn.ihash}=${group.integrityHash};`);
+			nodes.push(raw(`var ${gn.ihash}=${group.integrityHash}`));
 		}
-		parts.push(generateRollingCipherSource(gn, integrityBinding));
+		nodes.push(...buildRollingCipherSource(
+			gn,
+			integrityBinding ? group.integrityHash : undefined
+		));
 
 		// Interpreter core (per-group shuffle, per-group names, per-group opcodes)
-		parts.push(
-			generateInterpreterCore(
-				debugLogging,
+		nodes.push(
+			...buildInterpreterFunctions(
 				gn,
-				group.seed,
 				group.shuffleMap,
-				true,
-				integrityBinding,
+				debugLogging,
+				true, // rollingCipher always on in shielding mode
+				group.seed,
 				{
 					dynamicOpcodes: true, // always strip unused opcodes in shielding mode
 					decoyOpcodes,
@@ -267,14 +260,14 @@ export function generateShieldedVmRuntime(options: {
 		);
 
 		// Runners (per-group dispatch function)
-		parts.push(generateRunners(debugLogging, gn));
+		nodes.push(...buildRunners(debugLogging, gn));
 
 		// String decoder (per-group, rolling cipher implicit key)
-		parts.push(generateStringDecoderSource(gn, 0, true));
+		nodes.push(...buildStringDecoderSource(gn, 0, true));
 
 		// Loader (per-group, skips shared var declarations)
-		parts.push(
-			generateLoader(encrypt, gn, true, true, { skipSharedDecls: true })
+		nodes.push(
+			...buildLoader(encrypt, gn, true, true, { skipSharedDecls: true })
 		);
 
 		groupRegistrations.push({
@@ -284,21 +277,45 @@ export function generateShieldedVmRuntime(options: {
 	}
 
 	// Shared: watermark, depth, callStack, cache (emitted once)
-	parts.push(`var _ru4m=!0;`);
-	parts.push(`var ${sharedNames.depth}=0;`);
-	parts.push(`var ${sharedNames.callStack}=[];`);
-	parts.push(`var ${sharedNames.cache}={};`);
+	nodes.push(raw("var _ru4m=!0"));
+	nodes.push(varDecl(sharedNames.depth, lit(0)));
+	nodes.push(raw(`var ${sharedNames.callStack}=[]`));
+	nodes.push(raw(`var ${sharedNames.cache}={}`));
 
 	// Router: maps unit IDs to group dispatch functions
-	parts.push(
-		generateRouter(sharedNames.router, groupRegistrations, sharedNames)
+	nodes.push(
+		...buildRouter(sharedNames.router, groupRegistrations, sharedNames)
 	);
 
 	// Global exposure: expose the router
-	parts.push(generateGlobalExposure(sharedNames, sharedNames.router));
+	nodes.push(...buildGlobalExposure(sharedNames.router));
 
-	// IIFE close
-	parts.push(`})();`);
+	// Wrap in IIFE and emit
+	return emitIIFE(nodes);
+}
 
+// --- Helpers ---
+
+/**
+ * Wrap an array of JsNode[] in a self-executing IIFE and emit to string.
+ *
+ * Produces: `(function(){...nodes...})();`
+ */
+function emitIIFE(nodes: JsNode[]): string {
+	// Emit each node as a top-level statement inside the IIFE.
+	// We build the IIFE manually to ensure correct formatting.
+	const parts: string[] = [];
+	parts.push("(function(){");
+	for (const node of nodes) {
+		const s = emit(node);
+		if (s.length === 0) continue;
+		parts.push(s);
+		// Add semicolon if the emitted string doesn't already end with one
+		// and isn't a function/block that doesn't need one
+		if (!s.endsWith(";") && !s.endsWith("}")) {
+			parts.push(";");
+		}
+	}
+	parts.push("})();");
 	return parts.join("\n");
 }
