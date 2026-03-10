@@ -9,7 +9,7 @@
  */
 
 import type { JsNode } from "./nodes.js";
-import { id, index, update, assign } from "./nodes.js";
+import { id, index, update, assign, mapChildren } from "./nodes.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // --- Generic tree walker ---
@@ -29,192 +29,13 @@ function walkReplace(
 
 /**
  * Recursively walk all child nodes, producing a new node with walked children.
+ * Delegates to the generic mapChildren() from nodes.ts using the CHILD_FIELDS metadata table.
  */
 function walkChildren(
 	node: JsNode,
 	visitor: (n: JsNode) => JsNode | null
 ): JsNode {
-	switch (node.type) {
-		// --- Declarations ---
-		case "VarDecl":
-			return node.init
-				? { ...node, init: walkReplace(node.init, visitor) }
-				: node;
-		case "ConstDecl":
-			return node.init
-				? { ...node, init: walkReplace(node.init, visitor) }
-				: node;
-		case "FnDecl":
-			return {
-				...node,
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-
-		// --- Statements ---
-		case "ExprStmt":
-			return { ...node, expr: walkReplace(node.expr, visitor) };
-		case "Block":
-			return {
-				...node,
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-		case "IfStmt": {
-			const result: JsNode = {
-				...node,
-				test: walkReplace(node.test, visitor),
-				then: node.then.map((n) => walkReplace(n, visitor)),
-			};
-			if (node.else) {
-				(result as typeof node).else = node.else.map((n) =>
-					walkReplace(n, visitor)
-				);
-			}
-			return result;
-		}
-		case "WhileStmt":
-			return {
-				...node,
-				test: walkReplace(node.test, visitor),
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-		case "ForStmt":
-			return {
-				...node,
-				init: node.init ? walkReplace(node.init, visitor) : null,
-				test: node.test ? walkReplace(node.test, visitor) : null,
-				update: node.update ? walkReplace(node.update, visitor) : null,
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-		case "ForInStmt":
-			return {
-				...node,
-				obj: walkReplace(node.obj, visitor),
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-		case "SwitchStmt":
-			return {
-				...node,
-				disc: walkReplace(node.disc, visitor),
-				cases: node.cases.map((c) =>
-					walkReplace(c, visitor)
-				) as typeof node.cases,
-			};
-		case "CaseClause":
-			return {
-				...node,
-				label: node.label ? walkReplace(node.label, visitor) : null,
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-		case "ReturnStmt":
-			return node.value
-				? { ...node, value: walkReplace(node.value, visitor) }
-				: node;
-		case "ThrowStmt":
-			return { ...node, value: walkReplace(node.value, visitor) };
-		case "TryCatchStmt": {
-			const result: typeof node = {
-				...node,
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-			if (node.handler)
-				result.handler = node.handler.map((n) =>
-					walkReplace(n, visitor)
-				);
-			if (node.finalizer)
-				result.finalizer = node.finalizer.map((n) =>
-					walkReplace(n, visitor)
-				);
-			return result;
-		}
-		case "BreakStmt":
-		case "ContinueStmt":
-		case "DebuggerStmt":
-			return node;
-
-		// --- Expressions ---
-		case "Id":
-		case "Literal":
-		case "Raw":
-			return node;
-		case "BinOp":
-			return {
-				...node,
-				left: walkReplace(node.left, visitor),
-				right: walkReplace(node.right, visitor),
-			};
-		case "UnaryOp":
-			return { ...node, expr: walkReplace(node.expr, visitor) };
-		case "UpdateExpr":
-			return { ...node, arg: walkReplace(node.arg, visitor) };
-		case "AssignExpr":
-			return {
-				...node,
-				target: walkReplace(node.target, visitor),
-				value: walkReplace(node.value, visitor),
-			};
-		case "CallExpr":
-			return {
-				...node,
-				callee: walkReplace(node.callee, visitor),
-				args: node.args.map((a) => walkReplace(a, visitor)),
-			};
-		case "MemberExpr":
-			return { ...node, obj: walkReplace(node.obj, visitor) };
-		case "IndexExpr":
-			return {
-				...node,
-				obj: walkReplace(node.obj, visitor),
-				index: walkReplace(node.index, visitor),
-			};
-		case "TernaryExpr":
-			return {
-				...node,
-				test: walkReplace(node.test, visitor),
-				then: walkReplace(node.then, visitor),
-				else: walkReplace(node.else, visitor),
-			};
-		case "ArrayExpr":
-			return {
-				...node,
-				elements: node.elements.map((e) => walkReplace(e, visitor)),
-			};
-		case "ObjectExpr":
-			return {
-				...node,
-				entries: node.entries.map(
-					([k, v]) =>
-						[
-							typeof k === "string" ? k : walkReplace(k, visitor),
-							walkReplace(v, visitor),
-						] as [string | JsNode, JsNode]
-				),
-			};
-		case "FnExpr":
-			return {
-				...node,
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-		case "ArrowFn":
-			return {
-				...node,
-				body: node.body.map((n) => walkReplace(n, visitor)),
-			};
-		case "NewExpr":
-			return {
-				...node,
-				callee: walkReplace(node.callee, visitor),
-				args: node.args.map((a) => walkReplace(a, visitor)),
-			};
-		case "SequenceExpr":
-			return {
-				...node,
-				exprs: node.exprs.map((e) => walkReplace(e, visitor)),
-			};
-		case "AwaitExpr":
-			return { ...node, expr: walkReplace(node.expr, visitor) };
-		case "ImportExpr":
-			return { ...node, specifier: walkReplace(node.specifier, visitor) };
-	}
+	return mapChildren(node, (child) => walkReplace(child, visitor));
 }
 
 // --- inlineStackOps ---
@@ -554,143 +375,32 @@ function collectNames(nodes: JsNode[], out: Set<string>): void {
 }
 
 function collectNamesFromNode(node: JsNode, out: Set<string>): void {
+	// Handle the 7 node types that declare names
 	switch (node.type) {
 		case "VarDecl":
-			if (shouldRename(node.name)) out.add(node.name);
-			if (node.init) collectNamesFromNode(node.init, out);
-			break;
 		case "ConstDecl":
 			if (shouldRename(node.name)) out.add(node.name);
-			if (node.init) collectNamesFromNode(node.init, out);
 			break;
 		case "FnDecl":
-			for (const p of node.params) {
-				const clean = p.replace(/^\.\.\./, "");
-				if (shouldRename(clean)) out.add(clean);
-			}
-			collectNames(node.body, out);
-			break;
 		case "FnExpr":
-			for (const p of node.params) {
-				const clean = p.replace(/^\.\.\./, "");
-				if (shouldRename(clean)) out.add(clean);
-			}
-			collectNames(node.body, out);
-			break;
 		case "ArrowFn":
 			for (const p of node.params) {
 				const clean = p.replace(/^\.\.\./, "");
 				if (shouldRename(clean)) out.add(clean);
 			}
-			collectNames(node.body, out);
 			break;
 		case "ForInStmt":
 			if (shouldRename(node.decl)) out.add(node.decl);
-			collectNamesFromNode(node.obj, out);
-			collectNames(node.body, out);
 			break;
 		case "TryCatchStmt":
-			collectNames(node.body, out);
 			if (node.param && shouldRename(node.param)) out.add(node.param);
-			if (node.handler) collectNames(node.handler, out);
-			if (node.finalizer) collectNames(node.finalizer, out);
-			break;
-		case "ExprStmt":
-			collectNamesFromNode(node.expr, out);
-			break;
-		case "Block":
-			collectNames(node.body, out);
-			break;
-		case "IfStmt":
-			collectNamesFromNode(node.test, out);
-			collectNames(node.then, out);
-			if (node.else) collectNames(node.else, out);
-			break;
-		case "WhileStmt":
-			collectNamesFromNode(node.test, out);
-			collectNames(node.body, out);
-			break;
-		case "ForStmt":
-			if (node.init) collectNamesFromNode(node.init, out);
-			if (node.test) collectNamesFromNode(node.test, out);
-			if (node.update) collectNamesFromNode(node.update, out);
-			collectNames(node.body, out);
-			break;
-		case "SwitchStmt":
-			collectNamesFromNode(node.disc, out);
-			for (const c of node.cases) collectNamesFromNode(c, out);
-			break;
-		case "CaseClause":
-			if (node.label) collectNamesFromNode(node.label, out);
-			collectNames(node.body, out);
-			break;
-		case "ReturnStmt":
-			if (node.value) collectNamesFromNode(node.value, out);
-			break;
-		case "ThrowStmt":
-			collectNamesFromNode(node.value, out);
-			break;
-		case "BinOp":
-			collectNamesFromNode(node.left, out);
-			collectNamesFromNode(node.right, out);
-			break;
-		case "UnaryOp":
-			collectNamesFromNode(node.expr, out);
-			break;
-		case "UpdateExpr":
-			collectNamesFromNode(node.arg, out);
-			break;
-		case "AssignExpr":
-			collectNamesFromNode(node.target, out);
-			collectNamesFromNode(node.value, out);
-			break;
-		case "CallExpr":
-			collectNamesFromNode(node.callee, out);
-			for (const a of node.args) collectNamesFromNode(a, out);
-			break;
-		case "MemberExpr":
-			collectNamesFromNode(node.obj, out);
-			break;
-		case "IndexExpr":
-			collectNamesFromNode(node.obj, out);
-			collectNamesFromNode(node.index, out);
-			break;
-		case "TernaryExpr":
-			collectNamesFromNode(node.test, out);
-			collectNamesFromNode(node.then, out);
-			collectNamesFromNode(node.else, out);
-			break;
-		case "ArrayExpr":
-			for (const e of node.elements) collectNamesFromNode(e, out);
-			break;
-		case "ObjectExpr":
-			for (const [k, v] of node.entries) {
-				if (typeof k !== "string") collectNamesFromNode(k, out);
-				collectNamesFromNode(v, out);
-			}
-			break;
-		case "NewExpr":
-			collectNamesFromNode(node.callee, out);
-			for (const a of node.args) collectNamesFromNode(a, out);
-			break;
-		case "SequenceExpr":
-			for (const e of node.exprs) collectNamesFromNode(e, out);
-			break;
-		case "AwaitExpr":
-			collectNamesFromNode(node.expr, out);
-			break;
-		case "ImportExpr":
-			collectNamesFromNode(node.specifier, out);
-			break;
-		// Leaf nodes and Raw — no names to collect
-		case "Id":
-		case "Literal":
-		case "Raw":
-		case "BreakStmt":
-		case "ContinueStmt":
-		case "DebuggerStmt":
 			break;
 	}
+	// Traverse all children generically — no 36-case switch needed
+	mapChildren(node, (child) => {
+		collectNamesFromNode(child, out);
+		return child;
+	});
 }
 
 /** Rename identifiers in a node tree using the rename map. */

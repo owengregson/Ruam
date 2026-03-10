@@ -8,6 +8,7 @@
  */
 
 import type { JsNode, ReturnStmt } from "./nodes.js";
+import { assertNever } from "./nodes.js";
 
 // --- Operator precedence table (higher = tighter binding) ---
 
@@ -240,6 +241,8 @@ export function emit(node: JsNode): string {
 			return `import(${emit(node.specifier)})`;
 		case "Raw":
 			return node.code;
+		default:
+			return assertNever(node);
 	}
 }
 
