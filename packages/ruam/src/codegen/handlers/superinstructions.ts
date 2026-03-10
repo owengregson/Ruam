@@ -37,7 +37,7 @@ function regBinOp(op: string): HandlerFn {
 	return (ctx) => [
 		raw(
 			`var ra=${ctx.O}&0xFFFF;var rb=(${ctx.O}>>>16)&0xFFFF;` +
-				`${ctx.W}(${ctx.R}[ra]${op}${ctx.R}[rb]);break;`
+				`${ctx.pushStr(ctx.R+"[ra]"+op+ctx.R+"[rb]")};break;`
 		),
 	];
 }
@@ -77,7 +77,7 @@ function regConstPush(op: string): HandlerFn {
 	return (ctx) => [
 		raw(
 			`var r=${ctx.O}&0xFFFF;var ci=(${ctx.O}>>>16)&0xFFFF;` +
-				`${ctx.W}(${ctx.R}[r]${op}${ctx.C}[ci]);break;`
+				`${ctx.pushStr(ctx.R+"[r]"+op+ctx.C+"[ci]")};break;`
 		),
 	];
 }
@@ -115,7 +115,7 @@ function REG_GET_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
 			`var r=${ctx.O}&0xFFFF;var ni=(${ctx.O}>>>16)&0xFFFF;` +
-				`${ctx.W}(${ctx.R}[r][${ctx.C}[ni]]);break;`
+				`${ctx.pushStr(ctx.R+"[r]["+ctx.C+"[ni]]")};break;`
 		),
 	];
 }

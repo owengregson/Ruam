@@ -113,9 +113,9 @@ function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
 			`var exprCount=${ctx.O};var parts=[];` +
-				`for(var ti=exprCount*2;ti>=0;ti--)parts.unshift(${ctx.X}());` +
+				`for(var ti=exprCount*2;ti>=0;ti--)parts.unshift(${ctx.popStr()});` +
 				`var result='';for(var ti=0;ti<parts.length;ti++)result+=String(parts[ti]!=null?parts[ti]:'');` +
-				`${ctx.W}(result);break;`
+				`${ctx.pushStr("result")};break;`
 		),
 	];
 }
@@ -133,8 +133,8 @@ function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
 			`var argc=${ctx.O};var callArgs=[];` +
-				`for(var ai=0;ai<argc;ai++)callArgs.unshift(${ctx.X}());` +
-				`var fn=${ctx.X}();${ctx.W}(fn.apply(void 0,callArgs));break;`
+				`for(var ai=0;ai<argc;ai++)callArgs.unshift(${ctx.popStr()});` +
+				`var fn=${ctx.popStr()};${ctx.pushStr("fn.apply(void 0,callArgs)")};break;`
 		),
 	];
 }
@@ -152,8 +152,8 @@ function CREATE_RAW_STRINGS(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
 			`var count=${ctx.O};var raw=[];` +
-				`for(var ri=0;ri<count;ri++)raw.unshift(${ctx.X}());` +
-				`Object.freeze(raw);${ctx.W}(raw);break;`
+				`for(var ri=0;ri<count;ri++)raw.unshift(${ctx.popStr()});` +
+				`Object.freeze(raw);${ctx.pushStr("raw")};break;`
 		),
 	];
 }
@@ -189,7 +189,7 @@ function IMPORT_META(ctx: HandlerCtx): JsNode[] {
  * DYNAMIC_IMPORT: `{var spec=X();W(import(spec));break;}`
  */
 function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var spec=${ctx.X}();${ctx.W}(import(spec));break;`)];
+	return [raw(`var spec=${ctx.popStr()};${ctx.pushStr("import(spec)")};break;`)];
 }
 
 // --- Assertion handlers (raw — conditional throw) ---
@@ -200,7 +200,7 @@ function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
 function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var v=${ctx.Y}();if(v===void 0)throw new TypeError('Cannot read properties of undefined');break;`
+			`var v=${ctx.peekStr()};if(v===void 0)throw new TypeError('Cannot read properties of undefined');break;`
 		),
 	];
 }
@@ -211,7 +211,7 @@ function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
 function ASSERT_FUNCTION(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var v=${ctx.Y}();if(typeof v!=='function')throw new TypeError(v+' is not a function');break;`
+			`var v=${ctx.peekStr()};if(typeof v!=='function')throw new TypeError(v+' is not a function');break;`
 		),
 	];
 }

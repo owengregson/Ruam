@@ -41,7 +41,7 @@ function PUSH_NEW_TARGET(ctx: HandlerCtx): JsNode[] {
  * Uses intermediate `var g` to match the original runtime pattern.
  */
 function PUSH_GLOBAL_THIS(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var g=_g;${ctx.W}(g);break;`)];
+	return [raw(`var g=_g;${ctx.pushStr("g")};break;`)];
 }
 
 /**
@@ -62,7 +62,7 @@ function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
 				`Symbol.toPrimitive,Symbol.toStringTag,Symbol.species,` +
 				`Symbol.isConcatSpreadable,Symbol.match,Symbol.replace,` +
 				`Symbol.search,Symbol.split,Symbol.unscopables];` +
-				`${ctx.W}(syms[${ctx.O}]||Symbol.iterator);break;`
+				`${ctx.pushStr("syms["+ctx.O+"]||Symbol.iterator")};break;`
 		),
 	];
 }
@@ -75,7 +75,7 @@ function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
  * Both opcodes produce the same handler — a sliced copy of the arguments object.
  */
 function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.W}(Array.prototype.slice.call(${ctx.A}));break;`)];
+	return [raw(`${ctx.pushStr("Array.prototype.slice.call("+ctx.A+")")};break;`)];
 }
 
 /**
@@ -85,7 +85,7 @@ function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_REST_ARGS(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(`${ctx.W}(Array.prototype.slice.call(${ctx.A},${ctx.O}));break;`),
+		raw(`${ctx.pushStr("Array.prototype.slice.call("+ctx.A+","+ctx.O+")")};break;`),
 	];
 }
 

@@ -10,7 +10,20 @@
  */
 
 import type { JsNode, StackPush, StackPop, StackPeek } from "../nodes.js";
-import { stackPush, stackPop, stackPeek } from "../nodes.js";
+import {
+	stackPush,
+	stackPop,
+	stackPeek,
+	id,
+	index,
+	member,
+	bin,
+	assign,
+	ifStmt,
+	whileStmt,
+	exprStmt,
+	breakStmt,
+} from "../nodes.js";
 import type { RuntimeNames } from "../../runtime/names.js";
 import type { Op } from "../../compiler/opcodes.js";
 
@@ -22,9 +35,6 @@ export interface HandlerCtx {
 	// Stack machine
 	S: string; // stack array
 	P: string; // stack pointer
-	W: string; // push function (pre-inline)
-	X: string; // pop function (pre-inline)
-	Y: string; // peek function (pre-inline)
 
 	// Interpreter state
 	IP: string; // instruction pointer
@@ -70,13 +80,27 @@ export interface HandlerCtx {
 	pop: () => StackPop;
 	peek: () => StackPeek;
 
-	// Scope chain helpers — DRY templates for the while(s){…} walk pattern
-	/** `s.sV[key]` — scoped variable reference (default key: `"name"`) */
-	sv: (key?: string) => string;
-	/** `SC.sV[key]` — current scope variable reference (default key: `"name"`) */
-	curSv: (key?: string) => string;
-	/** `while(s){if(key in s.sV){<body>break;}s=s.sPar;}break;` (default key: `"name"`) */
-	scopeWalk: (body: string, key?: string) => string;
+	// Scope chain helpers — AST-returning versions for structured composition
+	/** `s.sV[key]` — scoped variable reference as AST node (default key: `id("name")`) */
+	sv: (key?: JsNode) => JsNode;
+	/** `SC.sV[key]` — current scope variable reference as AST node (default key: `id("name")`) */
+	curSv: (key?: JsNode) => JsNode;
+	/** Scope walk pattern as AST nodes: `while(s){if(key in s.sV){<body>break;}s=s.sPar;}break;` */
+	scopeWalk: (body: JsNode[], key?: JsNode) => JsNode[];
+
+	// Legacy string-returning helpers — for incremental migration from raw() templates
+	/** @deprecated Use sv() which returns JsNode */
+	svStr: (key?: string) => string;
+	/** @deprecated Use curSv() which returns JsNode */
+	curSvStr: (key?: string) => string;
+	/** @deprecated Use scopeWalk() which returns JsNode[] */
+	scopeWalkStr: (body: string, key?: string) => string;
+	/** @deprecated Use pop() */
+	popStr: () => string;
+	/** @deprecated Use peek() */
+	peekStr: () => string;
+	/** @deprecated Use push() — returns string like `W(expr)` */
+	pushStr: (expr: string) => string;
 }
 
 /** A handler function returns the case body as AST nodes. */
@@ -96,9 +120,6 @@ export function makeHandlerCtx(
 	return {
 		S: names.stk,
 		P: names.stp,
-		W: names.sPush,
-		X: names.sPop,
-		Y: names.sPeek,
 		IP: names.ip,
 		C: names.cArr,
 		O: names.operand,
@@ -131,9 +152,29 @@ export function makeHandlerCtx(
 		push: (value: JsNode) => stackPush(names.stk, names.stp, value),
 		pop: () => stackPop(names.stk, names.stp),
 		peek: () => stackPeek(names.stk, names.stp),
-		sv: (key = "name") => `s.${names.sVars}[${key}]`,
-		curSv: (key = "name") => `${names.scope}.${names.sVars}[${key}]`,
-		scopeWalk: (body: string, key = "name") =>
+
+		// AST-returning scope helpers
+		sv: (key: JsNode = id("name")) => index(member(id("s"), names.sVars), key),
+		curSv: (key: JsNode = id("name")) =>
+			index(member(id(names.scope), names.sVars), key),
+		scopeWalk: (body: JsNode[], key: JsNode = id("name")): JsNode[] => [
+			whileStmt(id("s"), [
+				ifStmt(bin("in", key, member(id("s"), names.sVars)), [
+					...body,
+					breakStmt(),
+				]),
+				exprStmt(assign(id("s"), member(id("s"), names.sPar))),
+			]),
+			breakStmt(),
+		],
+
+		// Legacy string-returning helpers for incremental migration
+		svStr: (key = "name") => `s.${names.sVars}[${key}]`,
+		curSvStr: (key = "name") => `${names.scope}.${names.sVars}[${key}]`,
+		scopeWalkStr: (body: string, key = "name") =>
 			`while(s){if(${key} in s.${names.sVars}){${body}break;}s=s.${names.sPar};}break;`,
+		popStr: () => `${names.stk}[${names.stp}--]`,
+		peekStr: () => `${names.stk}[${names.stp}]`,
+		pushStr: (expr: string) => `${names.sPush}(${expr})`,
 	};
 }

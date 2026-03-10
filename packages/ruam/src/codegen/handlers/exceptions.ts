@@ -60,11 +60,11 @@ function TRY_POP(ctx: HandlerCtx): JsNode[] {
 function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var err=${ctx.X}();` +
+			`var err=${ctx.popStr()};` +
 				`if(${ctx.O}>=0){var cname=${ctx.C}[${ctx.O}];` +
 				`if(typeof cname==='string'){${ctx.SC}.${ctx.sV}[cname]=err;}` +
 				`else{${ctx.R}[${ctx.O}]=err;}}` +
-				`else{${ctx.W}(err);}break;`
+				`else{${ctx.pushStr("err")};}break;`
 		),
 	];
 }
@@ -76,7 +76,7 @@ function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
  * the stack for subsequent destructuring opcodes.
  */
 function CATCH_BIND_PATTERN(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var err=${ctx.X}();${ctx.W}(err);break;`)];
+	return [raw(`var err=${ctx.popStr()};${ctx.pushStr("err")};break;`)];
 }
 
 // --- Finally handlers ---
@@ -116,7 +116,7 @@ function END_FINALLY(ctx: HandlerCtx): JsNode[] {
 function THROW_IF_NOT_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var v=${ctx.Y}();if(typeof v!=='object'||v===null)throw new TypeError('Value is not an object');break;`
+			`var v=${ctx.peekStr()};if(typeof v!=='object'||v===null)throw new TypeError('Value is not an object');break;`
 		),
 	];
 }
