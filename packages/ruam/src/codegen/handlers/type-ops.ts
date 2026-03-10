@@ -9,8 +9,7 @@
  *  - Meta:      IMPORT_META, DYNAMIC_IMPORT
  *  - Assertions: ASSERT_DEFINED, ASSERT_FUNCTION
  *
- * Simple handlers use AST nodes directly.  Handlers with complex control flow
- * (loops, multi-statement var blocks, conditional logic) use raw() nodes.
+ * All handlers use pure AST nodes — no raw() escape hatch.
  *
  * @module codegen/handlers/type-ops
  */
@@ -21,11 +20,21 @@ import {
 	id,
 	lit,
 	un,
+	bin,
 	assign,
 	call,
+	member,
+	index,
+	ternary,
+	newExpr,
+	varDecl,
 	exprStmt,
+	ifStmt,
+	forStmt,
+	throwStmt,
 	breakStmt,
-	raw,
+	update,
+	importExpr,
 } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
@@ -73,16 +82,25 @@ function TO_OBJECT(ctx: HandlerCtx): JsNode[] {
 	];
 }
 
-// --- Complex type coercions (raw) ---
+// --- Conditional type coercions ---
 
 /**
  * TO_PROPERTY_KEY: `{var v=S[P];S[P]=typeof v==='symbol'?v:String(v);break;}`
  */
 function TO_PROPERTY_KEY(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var v=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=typeof v==='symbol'?v:String(v);break;`
+		varDecl("v", ctx.peek()),
+		exprStmt(
+			assign(
+				ctx.peek(),
+				ternary(
+					bin("===", un("typeof", id("v")), lit("symbol")),
+					id("v"),
+					call(id("String"), [id("v")])
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -91,13 +109,22 @@ function TO_PROPERTY_KEY(ctx: HandlerCtx): JsNode[] {
  */
 function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var v=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=typeof v==='bigint'?v:Number(v);break;`
+		varDecl("v", ctx.peek()),
+		exprStmt(
+			assign(
+				ctx.peek(),
+				ternary(
+					bin("===", un("typeof", id("v")), lit("bigint")),
+					id("v"),
+					call(id("Number"), [id("v")])
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
-// --- Template handlers (raw — complex loops and string building) ---
+// --- Template handlers ---
 
 /**
  * TEMPLATE_LITERAL: assemble template parts from the stack.
@@ -111,12 +138,41 @@ function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
  */
 function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var exprCount=${ctx.O};var parts=[];` +
-				`for(var ti=exprCount*2;ti>=0;ti--)parts.unshift(${ctx.popStr()});` +
-				`var result='';for(var ti=0;ti<parts.length;ti++)result+=String(parts[ti]!=null?parts[ti]:'');` +
-				`${ctx.pushStr("result")};break;`
+		varDecl("exprCount", id(ctx.O)),
+		varDecl("parts", { type: "ArrayExpr", elements: [] }),
+		forStmt(
+			varDecl("ti", bin("*", id("exprCount"), lit(2))),
+			bin(">=", id("ti"), lit(0)),
+			update("--", false, id("ti")),
+			[
+				exprStmt(
+					call(member(id("parts"), "unshift"), [ctx.pop()])
+				),
+			]
 		),
+		varDecl("result", lit("")),
+		forStmt(
+			varDecl("ti", lit(0)),
+			bin("<", id("ti"), member(id("parts"), "length")),
+			update("++", false, id("ti")),
+			[
+				exprStmt(
+					assign(
+						id("result"),
+						call(id("String"), [
+							ternary(
+								bin("!=", index(id("parts"), id("ti")), lit(null)),
+								index(id("parts"), id("ti")),
+								lit("")
+							),
+						]),
+						"+"
+					)
+				),
+			]
+		),
+		exprStmt(ctx.push(id("result"))),
+		breakStmt(),
 	];
 }
 
@@ -131,11 +187,28 @@ function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
  */
 function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var argc=${ctx.O};var callArgs=[];` +
-				`for(var ai=0;ai<argc;ai++)callArgs.unshift(${ctx.popStr()});` +
-				`var fn=${ctx.popStr()};${ctx.pushStr("fn.apply(void 0,callArgs)")};break;`
+		varDecl("argc", id(ctx.O)),
+		varDecl("callArgs", { type: "ArrayExpr", elements: [] }),
+		forStmt(
+			varDecl("ai", lit(0)),
+			bin("<", id("ai"), id("argc")),
+			update("++", false, id("ai")),
+			[
+				exprStmt(
+					call(member(id("callArgs"), "unshift"), [ctx.pop()])
+				),
+			]
 		),
+		varDecl("fn", ctx.pop()),
+		exprStmt(
+			ctx.push(
+				call(member(id("fn"), "apply"), [
+					un("void", lit(0)),
+					id("callArgs"),
+				])
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -150,11 +223,21 @@ function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_RAW_STRINGS(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var count=${ctx.O};var raw=[];` +
-				`for(var ri=0;ri<count;ri++)raw.unshift(${ctx.popStr()});` +
-				`Object.freeze(raw);${ctx.pushStr("raw")};break;`
+		varDecl("count", id(ctx.O)),
+		varDecl("raw", { type: "ArrayExpr", elements: [] }),
+		forStmt(
+			varDecl("ri", lit(0)),
+			bin("<", id("ri"), id("count")),
+			update("++", false, id("ri")),
+			[
+				exprStmt(
+					call(member(id("raw"), "unshift"), [ctx.pop()])
+				),
+			]
 		),
+		exprStmt(call(member(id("Object"), "freeze"), [id("raw")])),
+		exprStmt(ctx.push(id("raw"))),
+		breakStmt(),
 	];
 }
 
@@ -189,19 +272,32 @@ function IMPORT_META(ctx: HandlerCtx): JsNode[] {
  * DYNAMIC_IMPORT: `{var spec=X();W(import(spec));break;}`
  */
 function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var spec=${ctx.popStr()};${ctx.pushStr("import(spec)")};break;`)];
+	return [
+		varDecl("spec", ctx.pop()),
+		exprStmt(ctx.push(importExpr(id("spec")))),
+		breakStmt(),
+	];
 }
 
-// --- Assertion handlers (raw — conditional throw) ---
+// --- Assertion handlers ---
 
 /**
  * ASSERT_DEFINED: `{var v=Y();if(v===void 0)throw new TypeError('Cannot read properties of undefined');break;}`
  */
 function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var v=${ctx.peekStr()};if(v===void 0)throw new TypeError('Cannot read properties of undefined');break;`
+		varDecl("v", ctx.peek()),
+		ifStmt(
+			bin("===", id("v"), un("void", lit(0))),
+			[
+				throwStmt(
+					newExpr(id("TypeError"), [
+						lit("Cannot read properties of undefined"),
+					])
+				),
+			]
 		),
+		breakStmt(),
 	];
 }
 
@@ -210,9 +306,18 @@ function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
  */
 function ASSERT_FUNCTION(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var v=${ctx.peekStr()};if(typeof v!=='function')throw new TypeError(v+' is not a function');break;`
+		varDecl("v", ctx.peek()),
+		ifStmt(
+			bin("!==", un("typeof", id("v")), lit("function")),
+			[
+				throwStmt(
+					newExpr(id("TypeError"), [
+						bin("+", id("v"), lit(" is not a function")),
+					])
+				),
+			]
 		),
+		breakStmt(),
 	];
 }
 
