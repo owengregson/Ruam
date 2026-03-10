@@ -36,7 +36,8 @@ import {
 	FNV_OFFSET_BASIS,
 	FNV_PRIME,
 } from "./constants.js";
-import { generateInterpreterCore } from "./runtime/templates/interpreter.js";
+import { buildInterpreterFunctions } from "./codegen/builders/interpreter.js";
+import { emit } from "./codegen/emit.js";
 
 import { randomBytes } from "node:crypto";
 
@@ -130,14 +131,10 @@ export function obfuscateCode(
 	// key derivation so removing or changing it breaks all decryption.
 	let integrityHash: number | undefined;
 	if (integrityBinding) {
-		const interpSource = generateInterpreterCore(
-			debugLogging,
-			names,
-			shuffleSeed,
-			shuffleMap,
-			true,
-			true
+		const interpNodes = buildInterpreterFunctions(
+			names, shuffleMap, debugLogging, true, shuffleSeed
 		);
+		const interpSource = interpNodes.map(n => emit(n)).join("\n");
 		integrityHash = fnv1a(interpSource);
 	}
 
@@ -624,14 +621,10 @@ function assembleShielded(
 		// Compute per-group integrity hash
 		let groupIntegrityHash: number | undefined;
 		if (opts.integrityBinding) {
-			const interpSource = generateInterpreterCore(
-				opts.debugLogging,
-				groupNames,
-				groupSeed,
-				groupShuffleMap,
-				true,
-				true
+			const interpNodes = buildInterpreterFunctions(
+				groupNames, groupShuffleMap, opts.debugLogging ?? false, true, groupSeed
 			);
+			const interpSource = interpNodes.map(n => emit(n)).join("\n");
 			groupIntegrityHash = fnv1a(interpSource);
 		}
 
