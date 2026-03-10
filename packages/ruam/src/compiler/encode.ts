@@ -166,17 +166,12 @@ export function serializeUnitToJson(
 
 	const constants: unknown[] = unit.constants.map((c, idx) => {
 		if (c.type === "regex") {
-			const v = c.value as { pattern: string; flags: string };
-			return { __regex__: true, p: v.pattern, f: v.flags };
+			return { __regex__: true, p: c.value.pattern, f: c.value.flags };
 		}
 		if (c.type === "bigint")
-			return { __bigint__: true, v: String(c.value) };
+			return { __bigint__: true, v: c.value };
 		if (c.type === "string" && effectiveStringKey !== undefined) {
-			return encodeStringChars(
-				c.value as string,
-				effectiveStringKey,
-				idx
-			);
+			return encodeStringChars(c.value, effectiveStringKey, idx);
 		}
 		return c.value;
 	});
@@ -336,7 +331,7 @@ function writeConstant(
 			writeU8(c.value ? BINARY_TAG_TRUE : BINARY_TAG_FALSE);
 			break;
 		case "number": {
-			const n = c.value as number;
+			const n = c.value;
 			if (Number.isInteger(n)) {
 				if (n >= -128 && n <= 127) {
 					writeU8(BINARY_TAG_INT8);
@@ -360,14 +355,14 @@ function writeConstant(
 		}
 		case "string":
 			writeU8(BINARY_TAG_STRING);
-			writeStr(c.value as string);
+			writeStr(c.value);
 			break;
 		case "bigint":
 			writeU8(BINARY_TAG_BIGINT);
-			writeStr(String(c.value));
+			writeStr(c.value);
 			break;
 		case "regex": {
-			const v = c.value as { pattern: string; flags: string };
+			const v = c.value;
 			writeU8(BINARY_TAG_REGEX);
 			writeStr(v.pattern);
 			writeStr(v.flags);
@@ -385,12 +380,11 @@ function estimateSize(unit: BytecodeUnit): number {
 	size += 4; // constant count
 	for (const c of unit.constants) {
 		size += 1; // type tag
-		if (c.type === "string") size += 4 + (c.value as string).length * 3;
+		if (c.type === "string") size += 4 + c.value.length * 3;
 		else if (c.type === "number") size += 8;
-		else if (c.type === "bigint") size += 4 + String(c.value).length * 3;
+		else if (c.type === "bigint") size += 4 + c.value.length * 3;
 		else if (c.type === "regex") {
-			const v = c.value as { pattern: string; flags: string };
-			size += 8 + v.pattern.length * 3 + v.flags.length * 3;
+			size += 8 + c.value.pattern.length * 3 + c.value.flags.length * 3;
 		} else {
 			size += 8;
 		}

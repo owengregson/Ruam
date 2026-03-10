@@ -491,6 +491,20 @@ function injectDeadCode(unit: BytecodeUnit, seed: number): void {
 }
 
 
+/** Build a `var <name>={...}` declaration for the bytecode table. */
+function buildBtDecl(
+	units: Map<string, { encoded: string }>,
+	btName: string,
+	encrypt: boolean
+): string {
+	const entries: string[] = [];
+	for (const [id, { encoded }] of units) {
+		const value = encrypt ? `"${encoded}"` : encoded;
+		entries.push(`"${id}":${value}`);
+	}
+	return `var ${btName}={${entries.join(",")}};`;
+}
+
 /**
  * Collect all logical opcodes used across all compiled bytecode units.
  */
@@ -660,12 +674,11 @@ function assembleShielded(
 		return generate(ast, { comments: false }).code;
 
 	// Build bytecode table
-	const btEntries: string[] = [];
-	for (const [id, { encoded }] of allCompiledUnits) {
-		const value = opts.encryptBytecode ? `"${encoded}"` : encoded;
-		btEntries.push(`"${id}":${value}`);
-	}
-	const btDecl = `var ${sharedNames.bt}={${btEntries.join(",")}};`;
+	const btDecl = buildBtDecl(
+		allCompiledUnits,
+		sharedNames.bt,
+		!!opts.encryptBytecode
+	);
 
 	// Generate shielded runtime
 	const runtime = generateShieldedVmRuntime({
@@ -723,12 +736,7 @@ function assembleOutput(
 	}
 ): string {
 	// Build bytecode table declaration (using randomized name)
-	const btEntries: string[] = [];
-	for (const [id, { encoded }] of compiledUnits) {
-		const value = runtimeOptions.encrypt ? `"${encoded}"` : encoded;
-		btEntries.push(`"${id}":${value}`);
-	}
-	const btDecl = `var ${names.bt}={${btEntries.join(",")}};`;
+	const btDecl = buildBtDecl(compiledUnits, names.bt, runtimeOptions.encrypt);
 
 	// Generate runtime IIFE
 	const runtime = generateVmRuntime({
