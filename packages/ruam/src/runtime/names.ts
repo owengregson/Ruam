@@ -137,6 +137,8 @@ export interface RuntimeNames {
 	// VM Shielding router
 	/** Router function name (used in vmShielding mode). */
 	router: string;
+	/** Route map object (maps unit IDs to group dispatch functions). */
+	routeMap: string;
 }
 
 /** The watermark variable name — always `_ru4m`. */
@@ -245,6 +247,7 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
 		ihashFn: genName(),
 		wm: WATERMARK_NAME,
 		router: genName(),
+		routeMap: genName(),
 	};
 }
 
@@ -264,6 +267,7 @@ const SHARED_NAME_KEYS = [
 	"dbgProt",
 	"wm",
 	"router",
+	"routeMap",
 ] as const;
 
 /**
