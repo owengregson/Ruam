@@ -10,16 +10,41 @@
  *  - Conversion:      CREATE_ASYNC_FROM_SYNC_ITER
  *
  * Async iterator handlers conditionally emit `await` when ctx.isAsync is true.
- * All handlers use raw() due to multi-step object manipulation and iterator
- * protocol calls.
+ * All handlers use pure AST nodes — no raw() escape hatch.
  *
  * @module codegen/handlers/iterators
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	breakStmt,
+	forIn,
+	obj,
+	arr,
+	awaitExpr,
+	update,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
+
+// --- Helpers ---
+
+/** Wrap an expression with `await` when ctx.isAsync is true. */
+function maybeAwait(ctx: HandlerCtx, expr: JsNode): JsNode {
+	return ctx.isAsync ? awaitExpr(expr) : expr;
+}
 
 // --- Sync iterator handlers ---
 
@@ -33,11 +58,25 @@ import { registry } from "./registry.js";
  */
 function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var iterable=${ctx.popStr()};var iter=iterable[Symbol.iterator]();` +
-				`var first=iter.next();` +
-				`${ctx.pushStr("{_iter:iter,_done:!!first.done,_value:first.value}")};break;`
+		varDecl("iterable", ctx.pop()),
+		varDecl(
+			"iter",
+			call(
+				index(id("iterable"), member(id("Symbol"), "iterator")),
+				[]
+			)
 		),
+		varDecl("first", call(member(id("iter"), "next"), [])),
+		exprStmt(
+			ctx.push(
+				obj(
+					["_iter", id("iter")],
+					["_done", un("!", un("!", member(id("first"), "done")))],
+					["_value", member(id("first"), "value")]
+				)
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -51,10 +90,19 @@ function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
  */
 function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var iterObj=${ctx.popStr()};${ctx.pushStr("iterObj._value")};` +
-				`var nxt=iterObj._iter.next();iterObj._done=!!nxt.done;iterObj._value=nxt.value;break;`
+		varDecl("iterObj", ctx.pop()),
+		exprStmt(ctx.push(member(id("iterObj"), "_value"))),
+		varDecl("nxt", call(member(member(id("iterObj"), "_iter"), "next"), [])),
+		exprStmt(
+			assign(
+				member(id("iterObj"), "_done"),
+				un("!", un("!", member(id("nxt"), "done")))
+			)
 		),
+		exprStmt(
+			assign(member(id("iterObj"), "_value"), member(id("nxt"), "value"))
+		),
+		breakStmt(),
 	];
 }
 
@@ -62,14 +110,24 @@ function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
  * ITER_DONE: peek at iterator object, push its done flag.
  */
 function ITER_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var iterObj=${ctx.peekStr()};${ctx.pushStr("!!iterObj._done")};break;`)];
+	return [
+		varDecl("iterObj", ctx.peek()),
+		exprStmt(
+			ctx.push(un("!", un("!", member(id("iterObj"), "_done"))))
+		),
+		breakStmt(),
+	];
 }
 
 /**
  * ITER_VALUE: peek at iterator object, push its current value.
  */
 function ITER_VALUE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var iterObj=${ctx.peekStr()};${ctx.pushStr("iterObj._value")};break;`)];
+	return [
+		varDecl("iterObj", ctx.peek()),
+		exprStmt(ctx.push(member(id("iterObj"), "_value"))),
+		breakStmt(),
+	];
 }
 
 /**
@@ -77,9 +135,13 @@ function ITER_VALUE(ctx: HandlerCtx): JsNode[] {
  */
 function ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var iterObj=${ctx.popStr()};if(iterObj._iter.return)iterObj._iter.return();break;`
-		),
+		varDecl("iterObj", ctx.pop()),
+		ifStmt(member(member(id("iterObj"), "_iter"), "return"), [
+			exprStmt(
+				call(member(member(id("iterObj"), "_iter"), "return"), [])
+			),
+		]),
+		breakStmt(),
 	];
 }
 
@@ -88,9 +150,12 @@ function ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
  */
 function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var iterObj=${ctx.peekStr()};${ctx.pushStr("iterObj._value")};${ctx.pushStr("!!iterObj._done")};break;`
+		varDecl("iterObj", ctx.peek()),
+		exprStmt(ctx.push(member(id("iterObj"), "_value"))),
+		exprStmt(
+			ctx.push(un("!", un("!", member(id("iterObj"), "_done"))))
 		),
+		breakStmt(),
 	];
 }
 
@@ -106,10 +171,17 @@ function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
  */
 function FORIN_INIT(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var obj=${ctx.popStr()};var keys=[];for(var k in obj)keys.push(k);` +
-				`${ctx.pushStr("{_keys:keys,_idx:0}")};break;`
+		varDecl("obj", ctx.pop()),
+		varDecl("keys", arr()),
+		forIn("k", id("obj"), [
+			exprStmt(call(member(id("keys"), "push"), [id("k")])),
+		]),
+		exprStmt(
+			ctx.push(
+				obj(["_keys", id("keys")], ["_idx", lit(0)])
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -117,14 +189,37 @@ function FORIN_INIT(ctx: HandlerCtx): JsNode[] {
  * FORIN_NEXT: pop for-in state, push next key.
  */
 function FORIN_NEXT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var fi=${ctx.popStr()};${ctx.pushStr("fi._keys[fi._idx++]")};break;`)];
+	return [
+		varDecl("fi", ctx.pop()),
+		exprStmt(
+			ctx.push(
+				index(
+					member(id("fi"), "_keys"),
+					update("++", false, member(id("fi"), "_idx"))
+				)
+			)
+		),
+		breakStmt(),
+	];
 }
 
 /**
  * FORIN_DONE: peek at for-in state, push whether iteration is complete.
  */
 function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var fi=${ctx.peekStr()};${ctx.pushStr("fi._idx>=fi._keys.length")};break;`)];
+	return [
+		varDecl("fi", ctx.peek()),
+		exprStmt(
+			ctx.push(
+				bin(
+					">=",
+					member(id("fi"), "_idx"),
+					member(member(id("fi"), "_keys"), "length")
+				)
+			)
+		),
+		breakStmt(),
+	];
 }
 
 // --- Async iterator handlers ---
@@ -136,12 +231,30 @@ function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
  */
 function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var iterable=${ctx.popStr()};` +
-				`var method=iterable[Symbol.asyncIterator]||iterable[Symbol.iterator];` +
-				`var iter=method.call(iterable);` +
-				`${ctx.pushStr("{_iter:iter,_done:false,_value:void 0,_async:true}")};break;`
+		varDecl("iterable", ctx.pop()),
+		varDecl(
+			"method",
+			bin(
+				"||",
+				index(id("iterable"), member(id("Symbol"), "asyncIterator")),
+				index(id("iterable"), member(id("Symbol"), "iterator"))
+			)
 		),
+		varDecl(
+			"iter",
+			call(member(id("method"), "call"), [id("iterable")])
+		),
+		exprStmt(
+			ctx.push(
+				obj(
+					["_iter", id("iter")],
+					["_done", lit(false)],
+					["_value", un("void", lit(0))],
+					["_async", lit(true)]
+				)
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -151,13 +264,28 @@ function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
  * When ctx.isAsync is true, emits `await` before `iterObj._iter.next()`.
  */
 function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
-	const awaitKw = ctx.isAsync ? "await " : "";
 	return [
-		raw(
-			`var iterObj=${ctx.peekStr()};` +
-				`var result=${awaitKw}iterObj._iter.next();` +
-				`iterObj._done=!!result.done;iterObj._value=result.value;break;`
+		varDecl("iterObj", ctx.peek()),
+		varDecl(
+			"result",
+			maybeAwait(
+				ctx,
+				call(member(member(id("iterObj"), "_iter"), "next"), [])
+			)
 		),
+		exprStmt(
+			assign(
+				member(id("iterObj"), "_done"),
+				un("!", un("!", member(id("result"), "done")))
+			)
+		),
+		exprStmt(
+			assign(
+				member(id("iterObj"), "_value"),
+				member(id("result"), "value")
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -165,14 +293,24 @@ function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
  * ASYNC_ITER_DONE: peek at async iterator, push its done flag.
  */
 function ASYNC_ITER_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var iterObj=${ctx.peekStr()};${ctx.pushStr("!!iterObj._done")};break;`)];
+	return [
+		varDecl("iterObj", ctx.peek()),
+		exprStmt(
+			ctx.push(un("!", un("!", member(id("iterObj"), "_done"))))
+		),
+		breakStmt(),
+	];
 }
 
 /**
  * ASYNC_ITER_VALUE: peek at async iterator, push its current value.
  */
 function ASYNC_ITER_VALUE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var iterObj=${ctx.peekStr()};${ctx.pushStr("iterObj._value")};break;`)];
+	return [
+		varDecl("iterObj", ctx.peek()),
+		exprStmt(ctx.push(member(id("iterObj"), "_value"))),
+		breakStmt(),
+	];
 }
 
 /**
@@ -181,11 +319,17 @@ function ASYNC_ITER_VALUE(ctx: HandlerCtx): JsNode[] {
  * When ctx.isAsync is true, emits `await` before the return call.
  */
 function ASYNC_ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
-	const awaitKw = ctx.isAsync ? "await " : "";
 	return [
-		raw(
-			`var iterObj=${ctx.popStr()};if(iterObj._iter.return)${awaitKw}iterObj._iter.return();break;`
-		),
+		varDecl("iterObj", ctx.pop()),
+		ifStmt(member(member(id("iterObj"), "_iter"), "return"), [
+			exprStmt(
+				maybeAwait(
+					ctx,
+					call(member(member(id("iterObj"), "_iter"), "return"), [])
+				)
+			),
+		]),
+		breakStmt(),
 	];
 }
 
@@ -195,14 +339,29 @@ function ASYNC_ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
  * When ctx.isAsync is true, emits `await` before `iterObj._iter.next()`.
  */
 function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
-	const awaitKw = ctx.isAsync ? "await " : "";
 	return [
-		raw(
-			`var iterObj=${ctx.peekStr()};` +
-				`var result=${awaitKw}iterObj._iter.next();` +
-				`iterObj._done=!!result.done;iterObj._value=result.value;` +
-				`${ctx.pushStr("result.value")};break;`
+		varDecl("iterObj", ctx.peek()),
+		varDecl(
+			"result",
+			maybeAwait(
+				ctx,
+				call(member(member(id("iterObj"), "_iter"), "next"), [])
+			)
 		),
+		exprStmt(
+			assign(
+				member(id("iterObj"), "_done"),
+				un("!", un("!", member(id("result"), "done")))
+			)
+		),
+		exprStmt(
+			assign(
+				member(id("iterObj"), "_value"),
+				member(id("result"), "value")
+			)
+		),
+		exprStmt(ctx.push(member(id("result"), "value"))),
+		breakStmt(),
 	];
 }
 
@@ -213,9 +372,17 @@ function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_ASYNC_FROM_SYNC_ITER(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var it=${ctx.popStr()};${ctx.pushStr("{_iter:it,_done:false,_value:void 0}")};break;`
+		varDecl("it", ctx.pop()),
+		exprStmt(
+			ctx.push(
+				obj(
+					["_iter", id("it")],
+					["_done", lit(false)],
+					["_value", un("void", lit(0))]
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
