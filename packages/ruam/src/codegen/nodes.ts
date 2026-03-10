@@ -415,3 +415,153 @@ export function iife(body: Block): CallExpr {
 export function rest(name: string): string {
 	return `...${name}`;
 }
+
+// --- Reflective child metadata ---
+
+/**
+ * Field kind for child metadata.
+ * 'node' = single JsNode, 'nodes' = JsNode[],
+ * '?' suffix = nullable/optional (may be null or undefined).
+ */
+type FieldKind = "node" | "node?" | "nodes" | "nodes?";
+
+/**
+ * Metadata map declaring which fields of each node type contain child JsNode(s).
+ * Fields not listed here are data (strings, booleans, etc.) and are NOT traversed.
+ *
+ * This is the single source of truth for structural traversal — `mapChildren()`
+ * uses this table instead of a hand-written 36-case switch.
+ */
+export const CHILD_FIELDS: Record<JsNode["type"], Record<string, FieldKind>> = {
+	// Declarations
+	VarDecl: { init: "node?" },
+	ConstDecl: { init: "node?" },
+	FnDecl: { body: "nodes" },
+	// Statements
+	ExprStmt: { expr: "node" },
+	Block: { body: "nodes" },
+	IfStmt: { test: "node", then: "nodes", else: "nodes?" },
+	WhileStmt: { test: "node", body: "nodes" },
+	ForStmt: { init: "node?", test: "node?", update: "node?", body: "nodes" },
+	ForInStmt: { obj: "node", body: "nodes" },
+	SwitchStmt: { disc: "node", cases: "nodes" },
+	CaseClause: { label: "node?", body: "nodes" },
+	BreakStmt: {},
+	ContinueStmt: {},
+	ReturnStmt: { value: "node?" },
+	ThrowStmt: { value: "node" },
+	TryCatchStmt: { body: "nodes", handler: "nodes?", finalizer: "nodes?" },
+	DebuggerStmt: {},
+	// Expressions
+	Id: {},
+	Literal: {},
+	BinOp: { left: "node", right: "node" },
+	UnaryOp: { expr: "node" },
+	UpdateExpr: { arg: "node" },
+	AssignExpr: { target: "node", value: "node" },
+	CallExpr: { callee: "node", args: "nodes" },
+	MemberExpr: { obj: "node" },
+	IndexExpr: { obj: "node", index: "node" },
+	TernaryExpr: { test: "node", then: "node", else: "node" },
+	ArrayExpr: { elements: "nodes" },
+	ObjectExpr: {}, // special: entries are [string|JsNode, JsNode] tuples — handled in mapChildren
+	FnExpr: { body: "nodes" },
+	ArrowFn: { body: "nodes" },
+	NewExpr: { callee: "node", args: "nodes" },
+	SequenceExpr: { exprs: "nodes" },
+	AwaitExpr: { expr: "node" },
+	ImportExpr: { specifier: "node" },
+	Raw: {},
+};
+
+/**
+ * Apply a mapping function to every child JsNode of the given node.
+ * Uses the CHILD_FIELDS metadata table instead of a hand-written switch.
+ * Returns a structurally-equal new node if any child changed, or the original if not.
+ *
+ * ObjectExpr entries are handled specially (tuple array with string|JsNode keys).
+ *
+ * @param node - The node whose children to map
+ * @param fn - The mapping function applied to each child
+ * @returns The original node (if unchanged) or a new node with mapped children
+ */
+export function mapChildren(
+	node: JsNode,
+	fn: (child: JsNode) => JsNode
+): JsNode {
+	// Special case: ObjectExpr has [string|JsNode, JsNode] tuple entries
+	if (node.type === "ObjectExpr") {
+		let changed = false;
+		const mapped = node.entries.map(([k, v]) => {
+			const nk = typeof k === "string" ? k : fn(k);
+			const nv = fn(v);
+			if (nk !== k || nv !== v) changed = true;
+			return [nk, nv] as [string | JsNode, JsNode];
+		});
+		return changed ? { ...node, entries: mapped } : node;
+	}
+
+	const schema = CHILD_FIELDS[node.type];
+	const entries = Object.entries(schema);
+	if (entries.length === 0) return node;
+
+	const result = { ...node } as unknown as Record<string, unknown>;
+	let changed = false;
+	for (const [field, kind] of entries) {
+		const val = (node as unknown as Record<string, unknown>)[field];
+		if (val == null) continue;
+		if (kind === "node" || kind === "node?") {
+			const mapped = fn(val as JsNode);
+			if (mapped !== val) {
+				result[field] = mapped;
+				changed = true;
+			}
+		} else {
+			// 'nodes' or 'nodes?'
+			const arr = val as JsNode[];
+			const mapped = arr.map(fn);
+			if (mapped.some((v, i) => v !== arr[i])) {
+				result[field] = mapped;
+				changed = true;
+			}
+		}
+	}
+	return changed ? (result as unknown as JsNode) : node;
+}
+
+// --- Exhaustive visitor types ---
+
+/** All discriminant type strings in the JsNode union. */
+export type NodeType = JsNode["type"];
+
+/** Extract a specific node type from the union by its discriminant. */
+export type NodeOfType<T extends NodeType> = Extract<JsNode, { type: T }>;
+
+/**
+ * A visitor object that must have a handler for every node type.
+ * TypeScript enforces exhaustiveness at compile time — adding a new node type
+ * to the JsNode union immediately causes errors in all ExhaustiveVisitor objects.
+ */
+export type ExhaustiveVisitor<R> = {
+	[K in NodeType]: (node: NodeOfType<K>) => R;
+};
+
+/**
+ * Dispatch a node to the appropriate handler in an exhaustive visitor.
+ *
+ * @param node - The node to visit
+ * @param v - The visitor object with a handler for every node type
+ * @returns The result of the matching handler
+ */
+export function visit<R>(node: JsNode, v: ExhaustiveVisitor<R>): R {
+	return (v[node.type] as (node: JsNode) => R)(node);
+}
+
+/**
+ * Compile-time exhaustiveness assertion for switch default cases.
+ * Passing a value here that isn't `never` produces a TypeScript error,
+ * catching unhandled node types at compile time.
+ */
+export function assertNever(x: never): never {
+	throw new Error(`Unhandled node type: ${(x as { type: string }).type}`);
+}
