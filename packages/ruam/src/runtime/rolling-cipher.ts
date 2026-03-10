@@ -8,7 +8,6 @@
  * @module runtime/rolling-cipher
  */
 
-import type { RuntimeNames } from "./names.js";
 import {
 	FNV_OFFSET_BASIS,
 	FNV_PRIME,
@@ -90,28 +89,3 @@ export function rollingEncrypt(
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Runtime source generation
-// ---------------------------------------------------------------------------
-
-/**
- * Generate the runtime rolling cipher helper functions.
- *
- * Emits:
- * - `rcDeriveKey(unit)` — derives the implicit master key from unit metadata
- * - `rcMix(state, a, b)` — rolling state update
- *
- * These are called inside the interpreter loop to decrypt each instruction.
- */
-export function generateRollingCipherSource(
-	names: RuntimeNames,
-	integrityBinding: boolean
-): string {
-	// The derive function reads the same structural fields used at build time
-	const ihashXor = integrityBinding ? `k=(k^${names.ihash})>>>0;` : "";
-
-	return `
-function ${names.rcDeriveKey}(u){var h=0x811C9DC5;h=Math.imul(h^(u.i.length>>>1),0x01000193);h=Math.imul(h^u.r,0x01000193);h=Math.imul(h^u.p,0x01000193);h=Math.imul(h^u.c.length,0x01000193);h^=h>>>16;h=Math.imul(h,0x45D9F3B);h^=h>>>13;var k=h>>>0;${ihashXor}return k;}
-function ${names.rcMix}(s,a,b){var h=s;h=Math.imul(h^a,0x85EBCA6B)>>>0;h=Math.imul(h^b,0xC2B2AE35)>>>0;h^=h>>>16;return h>>>0;}
-`;
-}
