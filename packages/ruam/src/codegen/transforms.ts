@@ -12,6 +12,7 @@ import type { JsNode } from "./nodes.js";
 import {
 	id, index, update, assign,
 } from "./nodes.js";
+import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // --- Generic tree walker ---
 
@@ -243,4 +244,311 @@ export function inlineStackOps(
 	return nodes
 		.filter(n => !isStackFnDecl(n, W, X, Y))
 		.map(n => walkReplace(n, visitor));
+}
+
+// --- obfuscateLocals ---
+
+/** Names that must NOT be renamed (JS built-ins, APIs, short names). */
+export const KEEP = new Set([
+	// JS built-ins
+	"undefined", "null", "true", "false", "NaN", "Infinity",
+	"void", "typeof", "instanceof", "delete", "new", "this", "arguments",
+	// Globals used in the output
+	"Object", "Array", "Symbol", "String", "Number", "Boolean", "BigInt",
+	"RegExp", "Math", "JSON", "Date", "Error", "TypeError", "RangeError",
+	"ReferenceError", "SyntaxError", "Uint8Array", "DataView", "Buffer",
+	"globalThis", "window", "global", "self", "console", "atob", "eval",
+	"setInterval", "setTimeout", "clearInterval", "clearTimeout",
+	// Short generic names (already look minified)
+	"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "s", "v", "w", "x",
+	"a1", "a2", "a3", "ai", "ki", "si", "ri", "ti",
+	// Object property/method names that are part of the language API
+	"length", "push", "pop", "call", "apply", "bind", "keys", "value", "done",
+	"next", "return", "get", "set", "create", "freeze", "seal", "from", "assign",
+	"prototype", "constructor", "name", "writable", "configurable", "enumerable",
+	"slice", "concat", "indexOf", "join", "charCodeAt", "toString",
+	"getPrototypeOf", "setPrototypeOf", "defineProperty", "isArray",
+	"getUint8", "getUint16", "getUint32", "getInt32", "getFloat64",
+	"getInt8", "getInt16", "buffer", "byteOffset", "byteLength",
+	"fromCharCode", "reduce", "floor", "parse", "stringify",
+	"iterator", "asyncIterator", "hasInstance", "toPrimitive", "toStringTag",
+	"species", "isConcatSpreadable", "match", "replace", "search", "split",
+	"unscopables", "raw", "log", "warn", "message",
+	// Computed identifiers
+	"id", "uid", "cs", "ct",
+]);
+
+/** JS reserved words and keywords that can't be used as identifiers. */
+const RESERVED = new Set([
+	"do", "if", "in", "of", "as", "is", "for", "let", "new", "try", "var", "int",
+	"case", "else", "enum", "null", "this", "true", "void", "with",
+	"await", "break", "catch", "class", "const", "false", "super", "throw", "while", "yield",
+	"delete", "export", "import", "public", "return", "static", "switch", "typeof",
+	"default", "extends", "finally", "package", "private",
+	"continue", "debugger", "function", "abstract", "volatile",
+	"protected", "interface", "instanceof", "implements",
+]);
+
+/**
+ * Rename case-local variables with names >= 3 chars to short 2-char names.
+ *
+ * Collects VarDecl.name, FnDecl.params, FnExpr.params, ArrowFn.params,
+ * ForInStmt.decl, and TryCatchStmt.param entries with names >= 3 chars
+ * that aren't in the KEEP set and don't start with `_`. Generates
+ * short replacements via LCG and renames all matching Id references.
+ *
+ * Raw nodes are opaque — identifiers inside them are not renamed.
+ *
+ * @param nodes - The statement list to transform
+ * @param seed - LCG seed for deterministic name generation
+ * @returns Transformed statement list
+ */
+export function obfuscateLocals(nodes: JsNode[], seed: number): JsNode[] {
+	// Collect names to rename
+	const toRename = new Set<string>();
+	collectNames(nodes, toRename);
+	if (toRename.size === 0) return nodes;
+
+	// Generate short replacement names via LCG
+	let s = seed >>> 0;
+	function lcg(): number {
+		s = (s * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+		return s;
+	}
+	const alpha = "abcdefghijklmnopqrstuvwxyz";
+	const alnum = "abcdefghijklmnopqrstuvwxyz0123456789";
+	const used = new Set<string>();
+
+	function genShort(): string {
+		for (;;) {
+			const c1 = alpha[lcg() % alpha.length]!;
+			const c2 = alnum[lcg() % alnum.length]!;
+			const name = c1 + c2;
+			if (!used.has(name) && !KEEP.has(name) && !RESERVED.has(name)) {
+				used.add(name);
+				return name;
+			}
+		}
+	}
+
+	const renameMap = new Map<string, string>();
+	for (const name of toRename) {
+		renameMap.set(name, genShort());
+	}
+
+	// Apply renames
+	return nodes.map(n => renameNode(n, renameMap));
+}
+
+/** Check if a name should be renamed. */
+function shouldRename(name: string): boolean {
+	return name.length >= 3 && !KEEP.has(name) && !name.startsWith("_");
+}
+
+/** Collect variable and parameter names to rename from the tree. */
+function collectNames(nodes: JsNode[], out: Set<string>): void {
+	for (const node of nodes) {
+		collectNamesFromNode(node, out);
+	}
+}
+
+function collectNamesFromNode(node: JsNode, out: Set<string>): void {
+	switch (node.type) {
+		case 'VarDecl':
+			if (shouldRename(node.name)) out.add(node.name);
+			if (node.init) collectNamesFromNode(node.init, out);
+			break;
+		case 'ConstDecl':
+			if (shouldRename(node.name)) out.add(node.name);
+			if (node.init) collectNamesFromNode(node.init, out);
+			break;
+		case 'FnDecl':
+			for (const p of node.params) {
+				const clean = p.replace(/^\.\.\./, "");
+				if (shouldRename(clean)) out.add(clean);
+			}
+			collectNames(node.body, out);
+			break;
+		case 'FnExpr':
+			for (const p of node.params) {
+				const clean = p.replace(/^\.\.\./, "");
+				if (shouldRename(clean)) out.add(clean);
+			}
+			collectNames(node.body, out);
+			break;
+		case 'ArrowFn':
+			for (const p of node.params) {
+				const clean = p.replace(/^\.\.\./, "");
+				if (shouldRename(clean)) out.add(clean);
+			}
+			collectNames(node.body, out);
+			break;
+		case 'ForInStmt':
+			if (shouldRename(node.decl)) out.add(node.decl);
+			collectNamesFromNode(node.obj, out);
+			collectNames(node.body, out);
+			break;
+		case 'TryCatchStmt':
+			collectNames(node.body, out);
+			if (node.param && shouldRename(node.param)) out.add(node.param);
+			if (node.handler) collectNames(node.handler, out);
+			if (node.finalizer) collectNames(node.finalizer, out);
+			break;
+		case 'ExprStmt':
+			collectNamesFromNode(node.expr, out);
+			break;
+		case 'Block':
+			collectNames(node.body, out);
+			break;
+		case 'IfStmt':
+			collectNamesFromNode(node.test, out);
+			collectNames(node.then, out);
+			if (node.else) collectNames(node.else, out);
+			break;
+		case 'WhileStmt':
+			collectNamesFromNode(node.test, out);
+			collectNames(node.body, out);
+			break;
+		case 'ForStmt':
+			if (node.init) collectNamesFromNode(node.init, out);
+			if (node.test) collectNamesFromNode(node.test, out);
+			if (node.update) collectNamesFromNode(node.update, out);
+			collectNames(node.body, out);
+			break;
+		case 'SwitchStmt':
+			collectNamesFromNode(node.disc, out);
+			for (const c of node.cases) collectNamesFromNode(c, out);
+			break;
+		case 'CaseClause':
+			if (node.label) collectNamesFromNode(node.label, out);
+			collectNames(node.body, out);
+			break;
+		case 'ReturnStmt':
+			if (node.value) collectNamesFromNode(node.value, out);
+			break;
+		case 'ThrowStmt':
+			collectNamesFromNode(node.value, out);
+			break;
+		case 'BinOp':
+			collectNamesFromNode(node.left, out);
+			collectNamesFromNode(node.right, out);
+			break;
+		case 'UnaryOp':
+			collectNamesFromNode(node.expr, out);
+			break;
+		case 'UpdateExpr':
+			collectNamesFromNode(node.arg, out);
+			break;
+		case 'AssignExpr':
+			collectNamesFromNode(node.target, out);
+			collectNamesFromNode(node.value, out);
+			break;
+		case 'CallExpr':
+			collectNamesFromNode(node.callee, out);
+			for (const a of node.args) collectNamesFromNode(a, out);
+			break;
+		case 'MemberExpr':
+			collectNamesFromNode(node.obj, out);
+			break;
+		case 'IndexExpr':
+			collectNamesFromNode(node.obj, out);
+			collectNamesFromNode(node.index, out);
+			break;
+		case 'TernaryExpr':
+			collectNamesFromNode(node.test, out);
+			collectNamesFromNode(node.then, out);
+			collectNamesFromNode(node.else, out);
+			break;
+		case 'ArrayExpr':
+			for (const e of node.elements) collectNamesFromNode(e, out);
+			break;
+		case 'ObjectExpr':
+			for (const [k, v] of node.entries) {
+				if (typeof k !== 'string') collectNamesFromNode(k, out);
+				collectNamesFromNode(v, out);
+			}
+			break;
+		case 'NewExpr':
+			collectNamesFromNode(node.callee, out);
+			for (const a of node.args) collectNamesFromNode(a, out);
+			break;
+		case 'SequenceExpr':
+			for (const e of node.exprs) collectNamesFromNode(e, out);
+			break;
+		case 'AwaitExpr':
+			collectNamesFromNode(node.expr, out);
+			break;
+		case 'ImportExpr':
+			collectNamesFromNode(node.specifier, out);
+			break;
+		// Leaf nodes and Raw — no names to collect
+		case 'Id':
+		case 'Literal':
+		case 'Raw':
+		case 'BreakStmt':
+		case 'ContinueStmt':
+		case 'DebuggerStmt':
+			break;
+	}
+}
+
+/** Rename identifiers in a node tree using the rename map. */
+function renameNode(node: JsNode, map: Map<string, string>): JsNode {
+	return walkReplace(node, (n) => {
+		switch (n.type) {
+			case 'Id': {
+				const renamed = map.get(n.name);
+				return renamed ? id(renamed) : null;
+			}
+			case 'VarDecl': {
+				const renamed = map.get(n.name);
+				return renamed ? { ...n, name: renamed } : null;
+			}
+			case 'ConstDecl': {
+				const renamed = map.get(n.name);
+				return renamed ? { ...n, name: renamed } : null;
+			}
+			case 'FnDecl': {
+				const newParams = renameParams(n.params, map);
+				return newParams ? { ...n, params: newParams } : null;
+			}
+			case 'FnExpr': {
+				const newParams = renameParams(n.params, map);
+				return newParams ? { ...n, params: newParams } : null;
+			}
+			case 'ArrowFn': {
+				const newParams = renameParams(n.params, map);
+				return newParams ? { ...n, params: newParams } : null;
+			}
+			case 'ForInStmt': {
+				const renamed = map.get(n.decl);
+				return renamed ? { ...n, decl: renamed } : null;
+			}
+			case 'TryCatchStmt': {
+				if (n.param) {
+					const renamed = map.get(n.param);
+					return renamed ? { ...n, param: renamed } : null;
+				}
+				return null;
+			}
+			default:
+				return null;
+		}
+	});
+}
+
+/** Rename function params, returning null if no changes. */
+function renameParams(params: string[], map: Map<string, string>): string[] | null {
+	let changed = false;
+	const newParams = params.map(p => {
+		const isRest = p.startsWith("...");
+		const clean = isRest ? p.slice(3) : p;
+		const renamed = map.get(clean);
+		if (renamed) {
+			changed = true;
+			return isRest ? `...${renamed}` : renamed;
+		}
+		return p;
+	});
+	return changed ? newParams : null;
 }
