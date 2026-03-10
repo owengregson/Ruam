@@ -8,15 +8,13 @@ import {
 	index,
 	bin,
 	un,
-	update,
-	assign,
-	call,
 	member,
 	ternary,
 	raw,
 	varDecl,
 	exprStmt,
 	breakStmt,
+	assign,
 } from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
@@ -28,60 +26,50 @@ function rSlot(ctx: HandlerCtx): JsNode {
 	return index(id(ctx.R), id(ctx.O));
 }
 
-/** Pop expression: `S[P--]` */
-function sPop(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), update("--", false, id(ctx.P)));
-}
-
-/** Stack-top expression: `S[P]` */
-function sTop(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), id(ctx.P));
-}
-
 /**
  * Build a compound assignment register handler.
  *
- * Pattern: `{var val=S[P--];R[O]=R[O] <op> val;W(R[O]);break;}`
+ * Pattern: `{var val=S[P--];R[O]=R[O] <op> val;S[++P]=R[O];break;}`
  *
  * @param op - JS binary operator string (e.g. `'+'`, `'-'`, `'*'`, `'/'`, `'%'`)
  * @returns Handler function producing the case body AST nodes
  */
 function regAssignHandler(op: string): HandlerFn {
 	return (ctx) => [
-		varDecl("val", sPop(ctx)),
+		varDecl("val", ctx.pop()),
 		exprStmt(
 			assign(rSlot(ctx), bin(op, index(id(ctx.R), id(ctx.O)), id("val")))
 		),
-		exprStmt(call(id(ctx.W), [index(id(ctx.R), id(ctx.O))])),
+		exprStmt(ctx.push(index(id(ctx.R), id(ctx.O)))),
 		breakStmt(),
 	];
 }
 
 // --- Register load/store ---
 
-/** LOAD_REG: `W(R[O]);break;` */
+/** LOAD_REG: `S[++P]=R[O];break;` */
 function LOAD_REG(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [rSlot(ctx)])), breakStmt()];
+	return [exprStmt(ctx.push(rSlot(ctx))), breakStmt()];
 }
 
 /** STORE_REG: `R[O]=S[P--];break;` */
 function STORE_REG(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(assign(rSlot(ctx), sPop(ctx))), breakStmt()];
+	return [exprStmt(assign(rSlot(ctx), ctx.pop())), breakStmt()];
 }
 
 // --- Argument load/store ---
 
-/** LOAD_ARG: `W(O<A.length?A[O]:void 0);break;` */
+/** LOAD_ARG: `S[++P]=O<A.length?A[O]:void 0;break;` */
 function LOAD_ARG(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			call(id(ctx.W), [
+			ctx.push(
 				ternary(
 					bin("<", id(ctx.O), member(id(ctx.A), "length")),
 					index(id(ctx.A), id(ctx.O)),
 					un("void", lit(0))
-				),
-			])
+				)
+			)
 		),
 		breakStmt(),
 	];
@@ -90,16 +78,16 @@ function LOAD_ARG(ctx: HandlerCtx): JsNode[] {
 /** STORE_ARG: `A[O]=S[P--];break;` */
 function STORE_ARG(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(index(id(ctx.A), id(ctx.O)), sPop(ctx))),
+		exprStmt(assign(index(id(ctx.A), id(ctx.O)), ctx.pop())),
 		breakStmt(),
 	];
 }
 
-/** LOAD_ARG_OR_DEFAULT: `W(O<A.length&&A[O]!==void 0?A[O]:void 0);break;` */
+/** LOAD_ARG_OR_DEFAULT: `S[++P]=O<A.length&&A[O]!==void 0?A[O]:void 0;break;` */
 function LOAD_ARG_OR_DEFAULT(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			call(id(ctx.W), [
+			ctx.push(
 				ternary(
 					bin(
 						"&&",
@@ -112,17 +100,17 @@ function LOAD_ARG_OR_DEFAULT(ctx: HandlerCtx): JsNode[] {
 					),
 					index(id(ctx.A), id(ctx.O)),
 					un("void", lit(0))
-				),
-			])
+				)
+			)
 		),
 		breakStmt(),
 	];
 }
 
-/** GET_ARG_COUNT: `W(A.length);break;` */
+/** GET_ARG_COUNT: `S[++P]=A.length;break;` */
 function GET_ARG_COUNT(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(call(id(ctx.W), [member(id(ctx.A), "length")])),
+		exprStmt(ctx.push(member(id(ctx.A), "length"))),
 		breakStmt(),
 	];
 }
@@ -145,22 +133,22 @@ function DEC_REG(ctx: HandlerCtx): JsNode[] {
 	];
 }
 
-/** POST_INC_REG: `{var old=R[O];R[O]=+old+1;W(+old);break;}` */
+/** POST_INC_REG: `{var old=R[O];R[O]=+old+1;S[++P]=+old;break;}` */
 function POST_INC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("old", rSlot(ctx)),
 		exprStmt(assign(rSlot(ctx), bin("+", un("+", id("old")), lit(1)))),
-		exprStmt(call(id(ctx.W), [un("+", id("old"))])),
+		exprStmt(ctx.push(un("+", id("old")))),
 		breakStmt(),
 	];
 }
 
-/** POST_DEC_REG: `{var old=R[O];R[O]=+old-1;W(+old);break;}` */
+/** POST_DEC_REG: `{var old=R[O];R[O]=+old-1;S[++P]=+old;break;}` */
 function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("old", rSlot(ctx)),
 		exprStmt(assign(rSlot(ctx), bin("-", un("+", id("old")), lit(1)))),
-		exprStmt(call(id(ctx.W), [un("+", id("old"))])),
+		exprStmt(ctx.push(un("+", id("old")))),
 		breakStmt(),
 	];
 }
@@ -170,7 +158,7 @@ function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 /** FAST_ADD_CONST: `S[P]=+S[P]+O;break;` */
 function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), bin("+", un("+", sTop(ctx)), id(ctx.O)))),
+		exprStmt(assign(ctx.peek(), bin("+", un("+", ctx.peek()), id(ctx.O)))),
 		breakStmt(),
 	];
 }
@@ -178,7 +166,7 @@ function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 /** FAST_SUB_CONST: `S[P]=+S[P]-O;break;` */
 function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), bin("-", un("+", sTop(ctx)), id(ctx.O)))),
+		exprStmt(assign(ctx.peek(), bin("-", un("+", ctx.peek()), id(ctx.O)))),
 		breakStmt(),
 	];
 }
@@ -203,13 +191,11 @@ function FAST_GET_PROP(ctx: HandlerCtx): JsNode[] {
 
 // --- Fast global access ---
 
-/** LOAD_GLOBAL_FAST: `{var g=_g;W(g[C[O]]);break;}` */
+/** LOAD_GLOBAL_FAST: `{var g=_g;S[++P]=g[C[O]];break;}` */
 function LOAD_GLOBAL_FAST(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("g", id("_g")),
-		exprStmt(
-			call(id(ctx.W), [index(id("g"), index(id(ctx.C), id(ctx.O)))])
-		),
+		exprStmt(ctx.push(index(id("g"), index(id(ctx.C), id(ctx.O))))),
 		breakStmt(),
 	];
 }

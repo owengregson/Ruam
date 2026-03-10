@@ -11,8 +11,6 @@
 import { Op } from "../../compiler/opcodes.js";
 import {
 	id,
-	index,
-	update,
 	varDecl,
 	exprStmt,
 	assign,
@@ -26,16 +24,6 @@ import { registry, type HandlerCtx, type HandlerFn } from "./registry.js";
 
 // --- Helpers ---
 
-/** Stack-top expression: `S[P]` */
-function sTop(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), id(ctx.P));
-}
-
-/** Pop-into-b expression: `S[P--]` */
-function sPop(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), update("--", false, id(ctx.P)));
-}
-
 /**
  * Build a handler for binary ops: `{var b=S[P--];S[P]=S[P] op b;break;}`
  *
@@ -44,8 +32,8 @@ function sPop(ctx: HandlerCtx): JsNode {
  */
 function binaryHandler(op: string): HandlerFn {
 	return (ctx) => [
-		varDecl("b", sPop(ctx)),
-		exprStmt(assign(sTop(ctx), bin(op, sTop(ctx), id("b")))),
+		varDecl("b", ctx.pop()),
+		exprStmt(assign(ctx.peek(), bin(op, ctx.peek(), id("b")))),
 		breakStmt(),
 	];
 }
@@ -58,7 +46,7 @@ function binaryHandler(op: string): HandlerFn {
  */
 function unaryHandler(op: string): HandlerFn {
 	return (ctx) => [
-		exprStmt(assign(sTop(ctx), un(op, sTop(ctx)))),
+		exprStmt(assign(ctx.peek(), un(op, ctx.peek()))),
 		breakStmt(),
 	];
 }
@@ -77,13 +65,13 @@ registry.set(Op.UNARY_PLUS, unaryHandler("+"));
 
 /** INC: `S[P]=+S[P]+1;break;` -- unary `+` for ToNumber coercion */
 registry.set(Op.INC, (ctx) => [
-	exprStmt(assign(sTop(ctx), bin("+", un("+", sTop(ctx)), lit(1)))),
+	exprStmt(assign(ctx.peek(), bin("+", un("+", ctx.peek()), lit(1)))),
 	breakStmt(),
 ]);
 
 /** DEC: `S[P]=+S[P]-1;break;` -- unary `+` for ToNumber coercion */
 registry.set(Op.DEC, (ctx) => [
-	exprStmt(assign(sTop(ctx), bin("-", un("+", sTop(ctx)), lit(1)))),
+	exprStmt(assign(ctx.peek(), bin("-", un("+", ctx.peek()), lit(1)))),
 	breakStmt(),
 ]);
 

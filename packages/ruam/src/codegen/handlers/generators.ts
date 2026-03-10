@@ -11,7 +11,6 @@
  *
  * AWAIT conditionally emits `await` when ctx.isAsync is true.
  * YIELD/YIELD_DELEGATE push undefined (generators are stub-executed).
- * Generator and async generator lifecycle opcodes are stubs (break only).
  *
  * @module codegen/handlers/generators
  */
@@ -21,8 +20,6 @@ import {
 	type JsNode,
 	exprStmt,
 	breakStmt,
-	call,
-	id,
 	un,
 	lit,
 	raw,
@@ -35,10 +32,10 @@ import { registry } from "./registry.js";
 /**
  * YIELD / YIELD_DELEGATE: push undefined (stub — generators run to completion).
  *
- * `W(void 0);break;`
+ * `S[++P]=void 0;break;`
  */
 function YIELD_HANDLER(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [un("void", lit(0))])), breakStmt()];
+	return [exprStmt(ctx.push(un("void", lit(0)))), breakStmt()];
 }
 
 // --- Await handler ---

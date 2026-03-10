@@ -3,7 +3,6 @@
 import { Op } from "../../compiler/opcodes.js";
 import {
 	id,
-	index,
 	lit,
 	bin,
 	un,
@@ -23,12 +22,7 @@ import { registry } from "./registry.js";
  * `S[P]=!S[P];break;`
  */
 registry.set(Op.NOT, (ctx: HandlerCtx) => [
-	exprStmt(
-		assign(
-			index(id(ctx.S), id(ctx.P)),
-			un("!", index(id(ctx.S), id(ctx.P)))
-		)
-	),
+	exprStmt(assign(ctx.peek(), un("!", ctx.peek()))),
 	breakStmt(),
 ]);
 
@@ -40,7 +34,7 @@ registry.set(Op.NOT, (ctx: HandlerCtx) => [
  * Short-circuit: if falsy, jump to operand target; otherwise pop TOS and continue.
  */
 registry.set(Op.LOGICAL_AND, (ctx: HandlerCtx) => [
-	varDecl("v", index(id(ctx.S), id(ctx.P))),
+	varDecl("v", ctx.peek()),
 	ifStmt(
 		un("!", id("v")),
 		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
@@ -57,7 +51,7 @@ registry.set(Op.LOGICAL_AND, (ctx: HandlerCtx) => [
  * Short-circuit: if truthy, jump to operand target; otherwise pop TOS and continue.
  */
 registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
-	varDecl("v", index(id(ctx.S), id(ctx.P))),
+	varDecl("v", ctx.peek()),
 	ifStmt(
 		id("v"),
 		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
@@ -74,7 +68,7 @@ registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
  * Short-circuit: if non-nullish (not null and not undefined), jump; otherwise pop and continue.
  */
 registry.set(Op.NULLISH_COALESCE, (ctx: HandlerCtx) => [
-	varDecl("v", index(id(ctx.S), id(ctx.P))),
+	varDecl("v", ctx.peek()),
 	ifStmt(
 		bin(
 			"&&",

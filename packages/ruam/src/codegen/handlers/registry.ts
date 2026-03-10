@@ -9,7 +9,8 @@
  * @module codegen/handlers/registry
  */
 
-import type { JsNode } from "../nodes.js";
+import type { JsNode, StackPush, StackPop, StackPeek } from "../nodes.js";
+import { stackPush, stackPop, stackPeek } from "../nodes.js";
 import type { RuntimeNames } from "../../runtime/names.js";
 import type { Op } from "../../compiler/opcodes.js";
 
@@ -63,6 +64,11 @@ export interface HandlerCtx {
 	// Flags
 	isAsync: boolean; // true when building async interpreter variant
 	debug: boolean; // true when debug logging is enabled
+
+	// Stack operation factories — emit directly as S[++P]=expr, S[P--], S[P]
+	push: (value: JsNode) => StackPush;
+	pop: () => StackPop;
+	peek: () => StackPeek;
 }
 
 /** A handler function returns the case body as AST nodes. */
@@ -114,5 +120,8 @@ export function makeHandlerCtx(
 		fSlots: names.fSlots,
 		isAsync,
 		debug,
+		push: (value: JsNode) => stackPush(names.stk, names.stp, value),
+		pop: () => stackPop(names.stk, names.stp),
+		peek: () => stackPeek(names.stk, names.stp),
 	};
 }

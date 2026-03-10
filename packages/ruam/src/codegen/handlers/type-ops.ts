@@ -19,7 +19,6 @@ import { Op } from "../../compiler/opcodes.js";
 import {
 	type JsNode,
 	id,
-	index,
 	lit,
 	un,
 	assign,
@@ -30,29 +29,22 @@ import {
 } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
-// --- Helpers ---
-
-/** Stack-top expression: `S[P]` */
-function sTop(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), id(ctx.P));
-}
-
 // --- Simple type coercions (AST nodes) ---
 
 /** `S[P]=typeof S[P];break;` */
 function TYPEOF(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(assign(sTop(ctx), un("typeof", sTop(ctx)))), breakStmt()];
+	return [exprStmt(assign(ctx.peek(), un("typeof", ctx.peek()))), breakStmt()];
 }
 
 /** `S[P]=void 0;break;` */
 function VOID(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(assign(sTop(ctx), un("void", lit(0)))), breakStmt()];
+	return [exprStmt(assign(ctx.peek(), un("void", lit(0)))), breakStmt()];
 }
 
 /** `S[P]=Number(S[P]);break;` */
 function TO_NUMBER(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), call(id("Number"), [sTop(ctx)]))),
+		exprStmt(assign(ctx.peek(), call(id("Number"), [ctx.peek()]))),
 		breakStmt(),
 	];
 }
@@ -60,7 +52,7 @@ function TO_NUMBER(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=String(S[P]);break;` */
 function TO_STRING(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), call(id("String"), [sTop(ctx)]))),
+		exprStmt(assign(ctx.peek(), call(id("String"), [ctx.peek()]))),
 		breakStmt(),
 	];
 }
@@ -68,7 +60,7 @@ function TO_STRING(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=Boolean(S[P]);break;` */
 function TO_BOOLEAN(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), call(id("Boolean"), [sTop(ctx)]))),
+		exprStmt(assign(ctx.peek(), call(id("Boolean"), [ctx.peek()]))),
 		breakStmt(),
 	];
 }
@@ -76,7 +68,7 @@ function TO_BOOLEAN(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=Object(S[P]);break;` */
 function TO_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), call(id("Object"), [sTop(ctx)]))),
+		exprStmt(assign(ctx.peek(), call(id("Object"), [ctx.peek()]))),
 		breakStmt(),
 	];
 }
@@ -185,10 +177,10 @@ function SOURCE_MAP(_ctx: HandlerCtx): JsNode[] {
 
 // --- Meta / import handlers ---
 
-/** `W({});break;` — import.meta stub */
+/** `S[++P]={};break;` — import.meta stub */
 function IMPORT_META(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(call(id(ctx.W), [{ type: "ObjectExpr", entries: [] }])),
+		exprStmt(ctx.push({ type: "ObjectExpr", entries: [] })),
 		breakStmt(),
 	];
 }
