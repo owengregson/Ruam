@@ -32,16 +32,16 @@ import { registry } from "./registry.js";
  * because the global fallback runs after the while loop.
  */
 function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const csv = ctx.curSv();
-	const sv = ctx.sv();
+	const csv = ctx.curSvStr();
+	const sv = ctx.svStr();
 	const curScope = `${ctx.SC}.${ctx.sV}`;
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];` +
-				`if(name in ${curScope}){${ctx.W}(${csv});break;}` +
+				`if(name in ${curScope}){${ctx.pushStr(csv)};break;}` +
 				`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
-				`while(s){if(name in s.${ctx.sV}){${ctx.W}(${sv});found=true;break;}s=s.${ctx.sPar};}` +
-				`if(!found){${ctx.W}(_g[name]);}` +
+				`while(s){if(name in s.${ctx.sV}){${ctx.pushStr(sv)};found=true;break;}s=s.${ctx.sPar};}` +
+				`if(!found){${ctx.pushStr("_g[name]")};}` +
 				`break;`
 		),
 	];
@@ -53,8 +53,8 @@ function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Pops value from stack, assigns to first scope that contains the name.
  */
 function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const csv = ctx.curSv();
-	const sv = ctx.sv();
+	const csv = ctx.curSvStr();
+	const sv = ctx.svStr();
 	const curScope = `${ctx.SC}.${ctx.sV}`;
 	return [
 		raw(
@@ -77,7 +77,7 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
  */
 function declareHandler(ctx: HandlerCtx): JsNode[] {
 	const curScope = `${ctx.SC}.${ctx.sV}`;
-	const csv = ctx.curSv();
+	const csv = ctx.curSvStr();
 	return [
 		raw(`var name=${ctx.C}[${ctx.O}];if(!(name in ${curScope}))${csv}=void 0;break;`),
 	];
@@ -133,7 +133,7 @@ function TDZ_MARK(ctx: HandlerCtx): JsNode[] {
 function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var wObj=${ctx.X}();${ctx.SC}={${ctx.sPar}:${ctx.SC},${ctx.sV}:wObj};break;`
+			`var wObj=${ctx.popStr()};${ctx.SC}={${ctx.sPar}:${ctx.SC},${ctx.sV}:wObj};break;`
 		),
 	];
 }
@@ -146,11 +146,11 @@ function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
  * Pushes the result of `delete` onto the stack.
  */
 function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.sv();
+	const sv = ctx.svStr();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalk(`${ctx.W}(delete ${sv});`)
+				ctx.scopeWalkStr(`${ctx.pushStr("delete "+sv)};`)
 		),
 	];
 }
@@ -159,12 +159,12 @@ function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
 
 /** LOAD_GLOBAL: load a global variable by name. */
 function LOAD_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var g=_g;${ctx.W}(g[${ctx.C}[${ctx.O}]]);break;`)];
+	return [raw(`var g=_g;${ctx.pushStr("g["+ctx.C+"["+ctx.O+"]]")};break;`)];
 }
 
 /** STORE_GLOBAL: store a value to a global variable by name. */
 function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var g=_g;g[${ctx.C}[${ctx.O}]]=${ctx.X}();break;`)];
+	return [raw(`var g=_g;g[${ctx.C}[${ctx.O}]]=${ctx.popStr()};break;`)];
 }
 
 /**
@@ -175,13 +175,13 @@ function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
  * because the global fallback runs after the while loop.
  */
 function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.sv();
+	const sv = ctx.svStr();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];` +
 				`var s=${ctx.SC};var _tf=false;` +
-				`while(s){if(name in s.${ctx.sV}){${ctx.W}(typeof ${sv});_tf=true;break;}s=s.${ctx.sPar};}` +
-				`if(!_tf){${ctx.W}(typeof _g[name]);}` +
+				`while(s){if(name in s.${ctx.sV}){${ctx.pushStr("typeof "+sv)};_tf=true;break;}s=s.${ctx.sPar};}` +
+				`if(!_tf){${ctx.pushStr("typeof _g[name]")};}` +
 				`break;`
 		),
 	];

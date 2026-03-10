@@ -185,7 +185,7 @@ function FAST_GET_PROP(ctx: HandlerCtx): JsNode[] {
 		raw(
 			`var name=${ctx.C}[${ctx.O}&0xFFFF];var varName=${ctx.C}[(${ctx.O}>>16)&0xFFFF];` +
 				`var s=${ctx.SC};` +
-				ctx.scopeWalk(`${ctx.W}(${ctx.sv("varName")}[name]);`, "varName")
+				ctx.scopeWalkStr(`${ctx.pushStr(ctx.svStr("varName")+"[name]")};`, "varName")
 		),
 	];
 }

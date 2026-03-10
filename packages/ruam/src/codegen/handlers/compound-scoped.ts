@@ -34,11 +34,11 @@ import { registry } from "./registry.js";
  */
 function compoundScopedAssign(assignOp: string): HandlerFn {
 	return (ctx) => {
-		const sv = ctx.sv();
+		const sv = ctx.svStr();
 		return [
 			raw(
-				`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-					ctx.scopeWalk(`${sv}${assignOp}val;${ctx.W}(${sv});`)
+				`var val=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+					ctx.scopeWalkStr(`${sv}${assignOp}val;${ctx.pushStr(sv)};`)
 			),
 		];
 	};
@@ -54,11 +54,11 @@ function compoundScopedAssign(assignOp: string): HandlerFn {
  */
 function logicalScopedAssign(logicalOp: string): HandlerFn {
 	return (ctx) => {
-		const sv = ctx.sv();
+		const sv = ctx.svStr();
 		return [
 			raw(
-				`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-					ctx.scopeWalk(`${sv}=${sv}${logicalOp}val;${ctx.W}(${sv});`)
+				`var val=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+					ctx.scopeWalkStr(`${sv}=${sv}${logicalOp}val;${ctx.pushStr(sv)};`)
 			),
 		];
 	};
@@ -68,44 +68,44 @@ function logicalScopedAssign(logicalOp: string): HandlerFn {
 
 /** INC_SCOPED: pre-increment a scoped variable, push new value. */
 function INC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.sv();
+	const sv = ctx.svStr();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalk(`${sv}=${sv}+1;${ctx.W}(${sv});`)
+				ctx.scopeWalkStr(`${sv}=${sv}+1;${ctx.pushStr(sv)};`)
 		),
 	];
 }
 
 /** DEC_SCOPED: pre-decrement a scoped variable, push new value. */
 function DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.sv();
+	const sv = ctx.svStr();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalk(`${sv}=${sv}-1;${ctx.W}(${sv});`)
+				ctx.scopeWalkStr(`${sv}=${sv}-1;${ctx.pushStr(sv)};`)
 		),
 	];
 }
 
 /** POST_INC_SCOPED: post-increment a scoped variable, push old value. */
 function POST_INC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.sv();
+	const sv = ctx.svStr();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalk(`var old=${sv};${sv}=old+1;${ctx.W}(old);`)
+				ctx.scopeWalkStr(`var old=${sv};${sv}=old+1;${ctx.pushStr("old")};`)
 		),
 	];
 }
 
 /** POST_DEC_SCOPED: post-decrement a scoped variable, push old value. */
 function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.sv();
+	const sv = ctx.svStr();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalk(`var old=${sv};${sv}=old-1;${ctx.W}(old);`)
+				ctx.scopeWalkStr(`var old=${sv};${sv}=old-1;${ctx.pushStr("old")};`)
 		),
 	];
 }
@@ -114,11 +114,11 @@ function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
 
 /** NULLISH_ASSIGN_SCOPED: `??=` — only assign if current value is null/undefined. */
 function NULLISH_ASSIGN_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.sv();
+	const sv = ctx.svStr();
 	return [
 		raw(
-			`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalk(`if(${sv}==null)${sv}=val;${ctx.W}(${sv});`)
+			`var val=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+				ctx.scopeWalkStr(`if(${sv}==null)${sv}=val;${ctx.pushStr(sv)};`)
 		),
 	];
 }

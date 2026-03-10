@@ -34,9 +34,9 @@ import { registry } from "./registry.js";
 function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var iterable=${ctx.X}();var iter=iterable[Symbol.iterator]();` +
+			`var iterable=${ctx.popStr()};var iter=iterable[Symbol.iterator]();` +
 				`var first=iter.next();` +
-				`${ctx.W}({_iter:iter,_done:!!first.done,_value:first.value});break;`
+				`${ctx.pushStr("{_iter:iter,_done:!!first.done,_value:first.value}")};break;`
 		),
 	];
 }
@@ -52,7 +52,7 @@ function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
 function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var iterObj=${ctx.X}();${ctx.W}(iterObj._value);` +
+			`var iterObj=${ctx.popStr()};${ctx.pushStr("iterObj._value")};` +
 				`var nxt=iterObj._iter.next();iterObj._done=!!nxt.done;iterObj._value=nxt.value;break;`
 		),
 	];
@@ -62,14 +62,14 @@ function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
  * ITER_DONE: peek at iterator object, push its done flag.
  */
 function ITER_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var iterObj=${ctx.Y}();${ctx.W}(!!iterObj._done);break;`)];
+	return [raw(`var iterObj=${ctx.peekStr()};${ctx.pushStr("!!iterObj._done")};break;`)];
 }
 
 /**
  * ITER_VALUE: peek at iterator object, push its current value.
  */
 function ITER_VALUE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);break;`)];
+	return [raw(`var iterObj=${ctx.peekStr()};${ctx.pushStr("iterObj._value")};break;`)];
 }
 
 /**
@@ -78,7 +78,7 @@ function ITER_VALUE(ctx: HandlerCtx): JsNode[] {
 function ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var iterObj=${ctx.X}();if(iterObj._iter.return)iterObj._iter.return();break;`
+			`var iterObj=${ctx.popStr()};if(iterObj._iter.return)iterObj._iter.return();break;`
 		),
 	];
 }
@@ -89,7 +89,7 @@ function ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
 function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);${ctx.W}(!!iterObj._done);break;`
+			`var iterObj=${ctx.peekStr()};${ctx.pushStr("iterObj._value")};${ctx.pushStr("!!iterObj._done")};break;`
 		),
 	];
 }
@@ -107,8 +107,8 @@ function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
 function FORIN_INIT(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var obj=${ctx.X}();var keys=[];for(var k in obj)keys.push(k);` +
-				`${ctx.W}({_keys:keys,_idx:0});break;`
+			`var obj=${ctx.popStr()};var keys=[];for(var k in obj)keys.push(k);` +
+				`${ctx.pushStr("{_keys:keys,_idx:0}")};break;`
 		),
 	];
 }
@@ -117,14 +117,14 @@ function FORIN_INIT(ctx: HandlerCtx): JsNode[] {
  * FORIN_NEXT: pop for-in state, push next key.
  */
 function FORIN_NEXT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var fi=${ctx.X}();${ctx.W}(fi._keys[fi._idx++]);break;`)];
+	return [raw(`var fi=${ctx.popStr()};${ctx.pushStr("fi._keys[fi._idx++]")};break;`)];
 }
 
 /**
  * FORIN_DONE: peek at for-in state, push whether iteration is complete.
  */
 function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var fi=${ctx.Y}();${ctx.W}(fi._idx>=fi._keys.length);break;`)];
+	return [raw(`var fi=${ctx.peekStr()};${ctx.pushStr("fi._idx>=fi._keys.length")};break;`)];
 }
 
 // --- Async iterator handlers ---
@@ -137,10 +137,10 @@ function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
 function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var iterable=${ctx.X}();` +
+			`var iterable=${ctx.popStr()};` +
 				`var method=iterable[Symbol.asyncIterator]||iterable[Symbol.iterator];` +
 				`var iter=method.call(iterable);` +
-				`${ctx.W}({_iter:iter,_done:false,_value:void 0,_async:true});break;`
+				`${ctx.pushStr("{_iter:iter,_done:false,_value:void 0,_async:true}")};break;`
 		),
 	];
 }
@@ -154,7 +154,7 @@ function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 	const awaitKw = ctx.isAsync ? "await " : "";
 	return [
 		raw(
-			`var iterObj=${ctx.Y}();` +
+			`var iterObj=${ctx.peekStr()};` +
 				`var result=${awaitKw}iterObj._iter.next();` +
 				`iterObj._done=!!result.done;iterObj._value=result.value;break;`
 		),
@@ -165,14 +165,14 @@ function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
  * ASYNC_ITER_DONE: peek at async iterator, push its done flag.
  */
 function ASYNC_ITER_DONE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var iterObj=${ctx.Y}();${ctx.W}(!!iterObj._done);break;`)];
+	return [raw(`var iterObj=${ctx.peekStr()};${ctx.pushStr("!!iterObj._done")};break;`)];
 }
 
 /**
  * ASYNC_ITER_VALUE: peek at async iterator, push its current value.
  */
 function ASYNC_ITER_VALUE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var iterObj=${ctx.Y}();${ctx.W}(iterObj._value);break;`)];
+	return [raw(`var iterObj=${ctx.peekStr()};${ctx.pushStr("iterObj._value")};break;`)];
 }
 
 /**
@@ -184,7 +184,7 @@ function ASYNC_ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
 	const awaitKw = ctx.isAsync ? "await " : "";
 	return [
 		raw(
-			`var iterObj=${ctx.X}();if(iterObj._iter.return)${awaitKw}iterObj._iter.return();break;`
+			`var iterObj=${ctx.popStr()};if(iterObj._iter.return)${awaitKw}iterObj._iter.return();break;`
 		),
 	];
 }
@@ -198,10 +198,10 @@ function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
 	const awaitKw = ctx.isAsync ? "await " : "";
 	return [
 		raw(
-			`var iterObj=${ctx.Y}();` +
+			`var iterObj=${ctx.peekStr()};` +
 				`var result=${awaitKw}iterObj._iter.next();` +
 				`iterObj._done=!!result.done;iterObj._value=result.value;` +
-				`${ctx.W}(result.value);break;`
+				`${ctx.pushStr("result.value")};break;`
 		),
 	];
 }
@@ -214,7 +214,7 @@ function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
 function CREATE_ASYNC_FROM_SYNC_ITER(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var it=${ctx.X}();${ctx.W}({_iter:it,_done:false,_value:void 0});break;`
+			`var it=${ctx.popStr()};${ctx.pushStr("{_iter:it,_done:false,_value:void 0}")};break;`
 		),
 	];
 }

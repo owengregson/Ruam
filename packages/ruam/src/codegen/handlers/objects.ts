@@ -139,8 +139,8 @@ function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
 			`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
-				`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.X}();` +
-				`${ctx.W}(sp2?sp2[key]:void 0);break;`
+				`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.popStr()};` +
+				`${ctx.pushStr("sp2?sp2[key]:void 0")};break;`
 		),
 	];
 }
@@ -158,10 +158,10 @@ function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 function SET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var val=${ctx.X}();` +
+			`var val=${ctx.popStr()};` +
 				`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
-				`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.X}();` +
-				`if(sp2)sp2[key]=val;${ctx.W}(val);break;`
+				`var key=${ctx.O}>=0?${ctx.C}[${ctx.O}]:${ctx.popStr()};` +
+				`if(sp2)sp2[key]=val;${ctx.pushStr("val")};break;`
 		),
 	];
 }
@@ -172,7 +172,7 @@ function SET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 function GET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];${ctx.W}(obj[name]);break;`
+			`var obj=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];${ctx.pushStr("obj[name]")};break;`
 		),
 	];
 }
@@ -181,7 +181,7 @@ function GET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 function SET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var val=${ctx.X}();var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];obj[name]=val;${ctx.W}(val);break;`
+			`var val=${ctx.popStr()};var obj=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];obj[name]=val;${ctx.pushStr("val")};break;`
 		),
 	];
 }
@@ -190,7 +190,7 @@ function SET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 function HAS_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var obj=${ctx.X}();var name=${ctx.C}[${ctx.O}];${ctx.W}(name in obj);break;`
+			`var obj=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];${ctx.pushStr("name in obj")};break;`
 		),
 	];
 }
@@ -201,34 +201,34 @@ function HAS_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 function DEFINE_OWN_PROPERTY(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var desc=${ctx.X}();var key=${ctx.X}();var obj=${ctx.X}();Object.defineProperty(obj,key,desc);${ctx.W}(obj);break;`
+			`var desc=${ctx.popStr()};var key=${ctx.popStr()};var obj=${ctx.popStr()};Object.defineProperty(obj,key,desc);${ctx.pushStr("obj")};break;`
 		),
 	];
 }
 
 /** `W({});break;` */
 function NEW_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.W}({});break;`)];
+	return [raw(`${ctx.pushStr("{}")};break;`)];
 }
 
 /** `W([]);break;` */
 function NEW_ARRAY(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.W}([]);break;`)];
+	return [raw(`${ctx.pushStr("[]")};break;`)];
 }
 
 /** `W(new Array(O));break;` */
 function NEW_ARRAY_WITH_SIZE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.W}(new Array(${ctx.O}));break;`)];
+	return [raw(`${ctx.pushStr("new Array("+ctx.O+")")};break;`)];
 }
 
 /** `{var val=X();var arr=Y();arr.push(val);break;}` */
 function ARRAY_PUSH(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var val=${ctx.X}();var arr=${ctx.Y}();arr.push(val);break;`)];
+	return [raw(`var val=${ctx.popStr()};var arr=${ctx.peekStr()};arr.push(val);break;`)];
 }
 
 /** `{var arr=Y();arr.length++;break;}` */
 function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var arr=${ctx.Y}();arr.length++;break;`)];
+	return [raw(`var arr=${ctx.peekStr()};arr.length++;break;`)];
 }
 
 /**
@@ -244,7 +244,7 @@ function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
 function SPREAD_ARRAY(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var src=${ctx.X}();var target=${ctx.Y}();` +
+			`var src=${ctx.popStr()};var target=${ctx.peekStr()};` +
 				`if(Array.isArray(target)){var items=Array.from(src);for(var si=0;si<items.length;si++)target.push(items[si]);}` +
 				`else{Object.assign(target,src);}break;`
 		),
@@ -255,7 +255,7 @@ function SPREAD_ARRAY(ctx: HandlerCtx): JsNode[] {
 function SPREAD_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var src=${ctx.X}();var target=${ctx.Y}();Object.assign(target,src);break;`
+			`var src=${ctx.popStr()};var target=${ctx.peekStr()};Object.assign(target,src);break;`
 		),
 	];
 }
@@ -273,7 +273,7 @@ function SPREAD_OBJECT(ctx: HandlerCtx): JsNode[] {
 function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var excludeKeys=${ctx.X}();var src=${ctx.X}();var target=${ctx.Y}();` +
+			`var excludeKeys=${ctx.popStr()};var src=${ctx.popStr()};var target=${ctx.peekStr()};` +
 				`var keys=Object.keys(src);` +
 				`for(var ki=0;ki<keys.length;ki++){if(!excludeKeys||excludeKeys.indexOf(keys[ki])<0)target[keys[ki]]=src[keys[ki]];}break;`
 		),
@@ -284,26 +284,26 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 function SET_PROTO(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var proto=${ctx.X}();var obj=${ctx.X}();Object.setPrototypeOf(obj,proto);${ctx.W}(obj);break;`
+			`var proto=${ctx.popStr()};var obj=${ctx.popStr()};Object.setPrototypeOf(obj,proto);${ctx.pushStr("obj")};break;`
 		),
 	];
 }
 
 /** `{Object.freeze(Y());break;}` */
 function FREEZE_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`Object.freeze(${ctx.Y}());break;`)];
+	return [raw(`Object.freeze(${ctx.peekStr()});break;`)];
 }
 
 /** `{Object.seal(Y());break;}` */
 function SEAL_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(`Object.seal(${ctx.Y}());break;`)];
+	return [raw(`Object.seal(${ctx.peekStr()});break;`)];
 }
 
 /** `{var desc=X();var key=X();var obj=Y();Object.defineProperty(obj,key,desc);break;}` */
 function DEFINE_PROPERTY_DESC(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var desc=${ctx.X}();var key=${ctx.X}();var obj=${ctx.Y}();Object.defineProperty(obj,key,desc);break;`
+			`var desc=${ctx.popStr()};var key=${ctx.popStr()};var obj=${ctx.peekStr()};Object.defineProperty(obj,key,desc);break;`
 		),
 	];
 }
@@ -320,9 +320,9 @@ function DEFINE_PROPERTY_DESC(ctx: HandlerCtx): JsNode[] {
 function CREATE_TEMPLATE_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var raw=${ctx.X}();var cooked=${ctx.X}();` +
+			`var raw=${ctx.popStr()};var cooked=${ctx.popStr()};` +
 				`Object.defineProperty(cooked,'raw',{value:Object.freeze(raw)});` +
-				`Object.freeze(cooked);${ctx.W}(cooked);break;`
+				`Object.freeze(cooked);${ctx.pushStr("cooked")};break;`
 		),
 	];
 }
