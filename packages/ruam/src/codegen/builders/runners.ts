@@ -78,6 +78,7 @@ export function buildRouter(
 	groupRegistrations: { unitIds: string[]; dispatchName: string }[],
 	names: RuntimeNames
 ): JsNode[] {
+	const RM = names.routeMap;
 	const A = names.args;
 	const OS = names.outer;
 	const TV = names.tVal;
@@ -87,20 +88,20 @@ export function buildRouter(
 	const entries: string[] = [];
 	for (const { unitIds, dispatchName } of groupRegistrations) {
 		for (const id of unitIds) {
-			entries.push(`_rm["${id}"]=${dispatchName};`);
+			entries.push(`${RM}["${id}"]=${dispatchName};`);
 		}
 	}
 
 	return [
-		raw(`var _rm={};${entries.join("")}`),
+		raw(`var ${RM}={};${entries.join("")}`),
 		raw(
 			`function ${routerName}(id,${A},${OS},${TV},${NT},${HO}){` +
-			`return _rm[id](id,${A},${OS},${TV},${NT},${HO});` +
+			`return ${RM}[id](id,${A},${OS},${TV},${NT},${HO});` +
 			`}`
 		),
 		raw(
 			`${routerName}.call=function(${TV},id,${A},${OS},${HO}){` +
-			`return _rm[id].call(${TV},id,${A},${OS},${HO});` +
+			`return ${RM}[id].call(${TV},id,${A},${OS},${HO});` +
 			`};`
 		),
 	];

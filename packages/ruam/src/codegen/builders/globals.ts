@@ -9,7 +9,16 @@
  */
 
 import type { JsNode } from "../nodes.js";
-import { ifStmt, exprStmt, assign, member, id, bin, un, lit } from "../nodes.js";
+import {
+	ifStmt,
+	exprStmt,
+	assign,
+	member,
+	id,
+	bin,
+	un,
+	lit,
+} from "../nodes.js";
 
 // --- Helpers ---
 
@@ -39,10 +48,9 @@ export function buildGlobalExposure(vmName: string): JsNode[] {
 
 	// Build the chain from the inside out (last else-if has no else clause)
 	// Start with the last branch: if(typeof self !== 'undefined') { self.vm = vm; }
-	let current = ifStmt(
-		typeofCheck(globals[3]),
-		[globalAssign(globals[3], vmName)]
-	);
+	let current = ifStmt(typeofCheck(globals[3]), [
+		globalAssign(globals[3], vmName),
+	]);
 
 	// Build remaining branches in reverse: global, window, globalThis
 	for (let i = globals.length - 2; i >= 0; i--) {
