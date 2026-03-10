@@ -29,18 +29,19 @@ import { registry } from "./registry.js";
  * Build a compound assignment handler that pops a value from the stack,
  * walks the scope chain, and applies the given compound operator.
  *
- * Pattern: `{var val=X();var name=C[O];var s=SC;while(s){if(name in s.sV){s.sV[name] <op>= val;W(s.sV[name]);break;}s=s.sPar;}break;}`
- *
  * @param assignOp - The compound assignment operator (e.g. `'+='`, `'-='`)
  * @returns Handler function producing the case body
  */
 function compoundScopedAssign(assignOp: string): HandlerFn {
-	return (ctx) => [
-		raw(
-			`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]${assignOp}val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
-		),
-	];
+	return (ctx) => {
+		const sv = ctx.sv();
+		return [
+			raw(
+				`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+					ctx.scopeWalk(`${sv}${assignOp}val;${ctx.W}(${sv});`)
+			),
+		];
+	};
 }
 
 /**
@@ -48,90 +49,76 @@ function compoundScopedAssign(assignOp: string): HandlerFn {
  * walks the scope chain, and applies the given logical operator as a
  * full assignment (not compound, since `&&=` is not a simple operator).
  *
- * Pattern: `s.sV[name] = s.sV[name] <op> val`
- *
  * @param logicalOp - The logical operator (`'&&'` or `'||'`)
  * @returns Handler function producing the case body
  */
 function logicalScopedAssign(logicalOp: string): HandlerFn {
-	return (ctx) => [
-		raw(
-			`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]${logicalOp}val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
-		),
-	];
+	return (ctx) => {
+		const sv = ctx.sv();
+		return [
+			raw(
+				`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
+					ctx.scopeWalk(`${sv}=${sv}${logicalOp}val;${ctx.W}(${sv});`)
+			),
+		];
+	};
 }
 
 // --- Increment / decrement ---
 
-/**
- * INC_SCOPED: pre-increment a scoped variable.
- *
- * Walks scope chain, increments in-place, pushes new value.
- */
+/** INC_SCOPED: pre-increment a scoped variable, push new value. */
 function INC_SCOPED(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]+1;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+				ctx.scopeWalk(`${sv}=${sv}+1;${ctx.W}(${sv});`)
 		),
 	];
 }
 
-/**
- * DEC_SCOPED: pre-decrement a scoped variable.
- *
- * Walks scope chain, decrements in-place, pushes new value.
- */
+/** DEC_SCOPED: pre-decrement a scoped variable, push new value. */
 function DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=s.${ctx.sV}[name]-1;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+				ctx.scopeWalk(`${sv}=${sv}-1;${ctx.W}(${sv});`)
 		),
 	];
 }
 
-/**
- * POST_INC_SCOPED: post-increment a scoped variable.
- *
- * Walks scope chain, saves old value, increments, pushes old value.
- */
+/** POST_INC_SCOPED: post-increment a scoped variable, push old value. */
 function POST_INC_SCOPED(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){var old=s.${ctx.sV}[name];s.${ctx.sV}[name]=old+1;${ctx.W}(old);break;}s=s.${ctx.sPar};}break;`
+				ctx.scopeWalk(`var old=${sv};${sv}=old+1;${ctx.W}(old);`)
 		),
 	];
 }
 
-/**
- * POST_DEC_SCOPED: post-decrement a scoped variable.
- *
- * Walks scope chain, saves old value, decrements, pushes old value.
- */
+/** POST_DEC_SCOPED: post-decrement a scoped variable, push old value. */
 function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){var old=s.${ctx.sV}[name];s.${ctx.sV}[name]=old-1;${ctx.W}(old);break;}s=s.${ctx.sPar};}break;`
+				ctx.scopeWalk(`var old=${sv};${sv}=old-1;${ctx.W}(old);`)
 		),
 	];
 }
 
 // --- Nullish assign (special: conditional assignment) ---
 
-/**
- * NULLISH_ASSIGN_SCOPED: nullish coalescing assignment (`??=`).
- *
- * Only assigns if the current value is null or undefined.
- */
+/** NULLISH_ASSIGN_SCOPED: `??=` — only assign if current value is null/undefined. */
 function NULLISH_ASSIGN_SCOPED(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var val=${ctx.X}();var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){if(s.${ctx.sV}[name]==null)s.${ctx.sV}[name]=val;${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+				ctx.scopeWalk(`if(${sv}==null)${sv}=val;${ctx.W}(${sv});`)
 		),
 	];
 }

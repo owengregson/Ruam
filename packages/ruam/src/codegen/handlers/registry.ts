@@ -69,6 +69,14 @@ export interface HandlerCtx {
 	push: (value: JsNode) => StackPush;
 	pop: () => StackPop;
 	peek: () => StackPeek;
+
+	// Scope chain helpers — DRY templates for the while(s){…} walk pattern
+	/** `s.sV[key]` — scoped variable reference (default key: `"name"`) */
+	sv: (key?: string) => string;
+	/** `SC.sV[key]` — current scope variable reference (default key: `"name"`) */
+	curSv: (key?: string) => string;
+	/** `while(s){if(key in s.sV){<body>break;}s=s.sPar;}break;` (default key: `"name"`) */
+	scopeWalk: (body: string, key?: string) => string;
 }
 
 /** A handler function returns the case body as AST nodes. */
@@ -123,5 +131,9 @@ export function makeHandlerCtx(
 		push: (value: JsNode) => stackPush(names.stk, names.stp, value),
 		pop: () => stackPop(names.stk, names.stp),
 		peek: () => stackPeek(names.stk, names.stp),
+		sv: (key = "name") => `s.${names.sVars}[${key}]`,
+		curSv: (key = "name") => `${names.scope}.${names.sVars}[${key}]`,
+		scopeWalk: (body: string, key = "name") =>
+			`while(s){if(${key} in s.${names.sVars}){${body}break;}s=s.${names.sPar};}break;`,
 	};
 }

@@ -206,10 +206,11 @@ function BIND_STUB(_ctx: HandlerCtx): JsNode[] {
  * Uses raw() because the while-loop with `break` exits the loop, not the case.
  */
 function PUSH_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){${ctx.W}(s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+				ctx.scopeWalk(`${ctx.W}(${sv});`)
 		),
 	];
 }
@@ -220,10 +221,11 @@ function PUSH_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
  * Pops the value from the stack, then walks the scope chain to find the slot.
  */
 function STORE_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var val=${ctx.X}();var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=val;break;}s=s.${ctx.sPar};}break;`
+				ctx.scopeWalk(`${sv}=val;`)
 		),
 	];
 }
