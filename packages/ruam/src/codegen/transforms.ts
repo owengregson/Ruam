@@ -9,7 +9,7 @@
  */
 
 import type { JsNode } from "./nodes.js";
-import { id, index, update, assign, mapChildren } from "./nodes.js";
+import { id, mapChildren } from "./nodes.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // --- Generic tree walker ---
@@ -36,77 +36,6 @@ function walkChildren(
 	visitor: (n: JsNode) => JsNode | null
 ): JsNode {
 	return mapChildren(node, (child) => walkReplace(child, visitor));
-}
-
-// --- inlineStackOps ---
-
-/** Check if a node is a function call to the named function. */
-function isCallTo(
-	node: JsNode,
-	name: string
-): node is JsNode & { type: "CallExpr" } {
-	return (
-		node.type === "CallExpr" &&
-		node.callee.type === "Id" &&
-		node.callee.name === name
-	);
-}
-
-/** Check if a node is the W/X/Y function declaration. */
-function isStackFnDecl(node: JsNode, W: string, X: string, Y: string): boolean {
-	if (node.type === "FnDecl") {
-		return node.name === W || node.name === X || node.name === Y;
-	}
-	return false;
-}
-
-/**
- * Inline stack operations: replace W(expr) → S[++P]=expr, X() → S[P--], Y() → S[P].
- * Also removes the W/X/Y function declarations.
- *
- * @param nodes - The statement list to transform
- * @param S - Stack array variable name
- * @param P - Stack pointer variable name
- * @param W - Push function name
- * @param X - Pop function name
- * @param Y - Peek function name
- * @returns Transformed statement list
- */
-export function inlineStackOps(
-	nodes: JsNode[],
-	S: string,
-	P: string,
-	W: string,
-	X: string,
-	Y: string
-): JsNode[] {
-	const visitor = (node: JsNode): JsNode | null => {
-		if (node.type !== "CallExpr") return null;
-
-		// W(expr) → S[++P]=expr
-		if (isCallTo(node, W) && node.args.length === 1) {
-			return assign(
-				index(id(S), update("++", true, id(P))),
-				node.args[0]!
-			);
-		}
-
-		// X() → S[P--]
-		if (isCallTo(node, X) && node.args.length === 0) {
-			return index(id(S), update("--", false, id(P)));
-		}
-
-		// Y() → S[P]
-		if (isCallTo(node, Y) && node.args.length === 0) {
-			return index(id(S), id(P));
-		}
-
-		return null;
-	};
-
-	return nodes
-		.filter((n) => !isStackFnDecl(n, W, X, Y))
-		.map((n) => walkReplace(n, visitor));
 }
 
 // --- obfuscateLocals ---

@@ -239,6 +239,12 @@ export function emit(node: JsNode): string {
 			return `await ${emit(node.expr)}`;
 		case "ImportExpr":
 			return `import(${emit(node.specifier)})`;
+		case "StackPush":
+			return `${node.S}[++${node.P}]=${emit(node.value)}`;
+		case "StackPop":
+			return `${node.S}[${node.P}--]`;
+		case "StackPeek":
+			return `${node.S}[${node.P}]`;
 		case "Raw":
 			return node.code;
 		default:

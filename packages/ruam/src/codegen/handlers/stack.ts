@@ -18,7 +18,6 @@ import {
 	un,
 	update,
 	assign,
-	call,
 	index,
 } from "../nodes.js";
 import { type HandlerCtx, registry } from "./registry.js";
@@ -27,53 +26,53 @@ import { type HandlerCtx, registry } from "./registry.js";
 
 function PUSH_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(call(id(ctx.W), [index(id(ctx.C), id(ctx.O))])),
+		exprStmt(ctx.push(index(id(ctx.C), id(ctx.O)))),
 		breakStmt(),
 	];
 }
 
 function PUSH_UNDEFINED(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [un("void", lit(0))])), breakStmt()];
+	return [exprStmt(ctx.push(un("void", lit(0)))), breakStmt()];
 }
 
 function PUSH_NULL(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [lit(null)])), breakStmt()];
+	return [exprStmt(ctx.push(lit(null))), breakStmt()];
 }
 
 function PUSH_TRUE(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [lit(true)])), breakStmt()];
+	return [exprStmt(ctx.push(lit(true))), breakStmt()];
 }
 
 function PUSH_FALSE(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [lit(false)])), breakStmt()];
+	return [exprStmt(ctx.push(lit(false))), breakStmt()];
 }
 
 function PUSH_ZERO(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [lit(0)])), breakStmt()];
+	return [exprStmt(ctx.push(lit(0))), breakStmt()];
 }
 
 function PUSH_ONE(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [lit(1)])), breakStmt()];
+	return [exprStmt(ctx.push(lit(1))), breakStmt()];
 }
 
 function PUSH_NEG_ONE(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [un("-", lit(1))])), breakStmt()];
+	return [exprStmt(ctx.push(un("-", lit(1)))), breakStmt()];
 }
 
 function PUSH_EMPTY_STRING(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [lit("")])), breakStmt()];
+	return [exprStmt(ctx.push(lit(""))), breakStmt()];
 }
 
 function PUSH_NAN(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [id("NaN")])), breakStmt()];
+	return [exprStmt(ctx.push(id("NaN"))), breakStmt()];
 }
 
 function PUSH_INFINITY(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [id("Infinity")])), breakStmt()];
+	return [exprStmt(ctx.push(id("Infinity"))), breakStmt()];
 }
 
 function PUSH_NEG_INFINITY(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [un("-", id("Infinity"))])), breakStmt()];
+	return [exprStmt(ctx.push(un("-", id("Infinity")))), breakStmt()];
 }
 
 // --- Pop / stack pointer handlers ---

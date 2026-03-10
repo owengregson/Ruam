@@ -3,10 +3,8 @@
 import { Op } from "../../compiler/opcodes.js";
 import {
 	id,
-	index,
 	bin,
 	assign,
-	update,
 	varDecl,
 	exprStmt,
 	breakStmt,
@@ -26,13 +24,8 @@ import { registry } from "./registry.js";
  */
 function cmpHandler(op: string): HandlerFn {
 	return (ctx: HandlerCtx) => [
-		varDecl("b", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		exprStmt(
-			assign(
-				index(id(ctx.S), id(ctx.P)),
-				bin(op, index(id(ctx.S), id(ctx.P)), id("b"))
-			)
-		),
+		varDecl("b", ctx.pop()),
+		exprStmt(assign(ctx.peek(), bin(op, ctx.peek(), id("b")))),
 		breakStmt(),
 	];
 }

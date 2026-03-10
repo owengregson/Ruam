@@ -13,24 +13,24 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, call, exprStmt, breakStmt, raw } from "../nodes.js";
+import { type JsNode, id, exprStmt, breakStmt, raw } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple push handlers (AST nodes) ---
 
-/** `W(TV);break;` — push `this` value */
+/** `S[++P]=TV;break;` — push `this` value */
 function PUSH_THIS(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [id(ctx.TV)])), breakStmt()];
+	return [exprStmt(ctx.push(id(ctx.TV))), breakStmt()];
 }
 
-/** `W(A);break;` — push arguments object */
+/** `S[++P]=A;break;` — push arguments object */
 function PUSH_ARGUMENTS(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [id(ctx.A)])), breakStmt()];
+	return [exprStmt(ctx.push(id(ctx.A))), breakStmt()];
 }
 
-/** `W(NT);break;` — push new.target */
+/** `S[++P]=NT;break;` — push new.target */
 function PUSH_NEW_TARGET(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(call(id(ctx.W), [id(ctx.NT)])), breakStmt()];
+	return [exprStmt(ctx.push(id(ctx.NT))), breakStmt()];
 }
 
 // --- Complex push handlers (raw) ---

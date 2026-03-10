@@ -45,6 +45,9 @@ export type JsNode =
 	| SequenceExpr
 	| AwaitExpr
 	| ImportExpr
+	| StackPush
+	| StackPop
+	| StackPeek
 	| RawNode;
 
 // --- Declarations ---
@@ -228,6 +231,25 @@ export interface ImportExpr {
 	type: "ImportExpr";
 	specifier: JsNode;
 }
+// --- Stack operations (emit directly as S[++P]=expr, S[P--], S[P]) ---
+
+export interface StackPush {
+	type: "StackPush";
+	value: JsNode;
+	S: string;
+	P: string;
+}
+export interface StackPop {
+	type: "StackPop";
+	S: string;
+	P: string;
+}
+export interface StackPeek {
+	type: "StackPeek";
+	S: string;
+	P: string;
+}
+
 export interface RawNode {
 	type: "Raw";
 	code: string;
@@ -402,6 +424,16 @@ export function importExpr(specifier: JsNode): ImportExpr {
 	return { type: "ImportExpr", specifier };
 }
 
+export function stackPush(S: string, P: string, value: JsNode): StackPush {
+	return { type: "StackPush", value, S, P };
+}
+export function stackPop(S: string, P: string): StackPop {
+	return { type: "StackPop", S, P };
+}
+export function stackPeek(S: string, P: string): StackPeek {
+	return { type: "StackPeek", S, P };
+}
+
 export function raw(code: string): RawNode {
 	return { type: "Raw", code };
 }
@@ -471,6 +503,9 @@ export const CHILD_FIELDS: Record<JsNode["type"], Record<string, FieldKind>> = {
 	SequenceExpr: { exprs: "nodes" },
 	AwaitExpr: { expr: "node" },
 	ImportExpr: { specifier: "node" },
+	StackPush: { value: "node" },
+	StackPop: {},
+	StackPeek: {},
 	Raw: {},
 };
 

@@ -24,8 +24,6 @@ import {
 	un,
 	exprStmt,
 	assign,
-	index,
-	update,
 	ifStmt,
 	varDecl,
 	breakStmt,
@@ -34,16 +32,6 @@ import {
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Shorthand helpers ---
-
-/** `S[P]` — stack top */
-function sP(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), id(ctx.P));
-}
-
-/** `S[P--]` — pop stack top */
-function sPdec(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), update("--", false, id(ctx.P)));
-}
 
 /** `IP=O*2;` — standard jump target assignment */
 function ipAssign(ctx: HandlerCtx): JsNode {
@@ -59,18 +47,18 @@ function JMP(ctx: HandlerCtx): JsNode[] {
 
 /** `if(S[P--])IP=O*2;break;` */
 function JMP_TRUE(ctx: HandlerCtx): JsNode[] {
-	return [ifStmt(sPdec(ctx), [ipAssign(ctx)]), breakStmt()];
+	return [ifStmt(ctx.pop(), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `if(!S[P--])IP=O*2;break;` */
 function JMP_FALSE(ctx: HandlerCtx): JsNode[] {
-	return [ifStmt(un("!", sPdec(ctx)), [ipAssign(ctx)]), breakStmt()];
+	return [ifStmt(un("!", ctx.pop()), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `{var v=S[P--];if(v===null||v===void 0)IP=O*2;break;}` */
 function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", sPdec(ctx)),
+		varDecl("v", ctx.pop()),
 		ifStmt(
 			bin(
 				"||",
@@ -86,7 +74,7 @@ function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 /** `{var v=S[P--];if(v===void 0)IP=O*2;break;}` */
 function JMP_UNDEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", sPdec(ctx)),
+		varDecl("v", ctx.pop()),
 		ifStmt(bin("===", id("v"), un("void", lit(0))), [ipAssign(ctx)]),
 		breakStmt(),
 	];
@@ -94,18 +82,18 @@ function JMP_UNDEFINED(ctx: HandlerCtx): JsNode[] {
 
 /** `if(S[P])IP=O*2;break;` — keeps value on stack */
 function JMP_TRUE_KEEP(ctx: HandlerCtx): JsNode[] {
-	return [ifStmt(sP(ctx), [ipAssign(ctx)]), breakStmt()];
+	return [ifStmt(ctx.peek(), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `if(!S[P])IP=O*2;break;` — keeps value on stack */
 function JMP_FALSE_KEEP(ctx: HandlerCtx): JsNode[] {
-	return [ifStmt(un("!", sP(ctx)), [ipAssign(ctx)]), breakStmt()];
+	return [ifStmt(un("!", ctx.peek()), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `{var v=S[P];if(v===null||v===void 0)IP=O*2;break;}` — keeps value on stack */
 function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", sP(ctx)),
+		varDecl("v", ctx.peek()),
 		ifStmt(
 			bin(
 				"||",
