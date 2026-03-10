@@ -21,7 +21,7 @@ import {
 	id, index, lit, un, assign, call,
 	exprStmt, breakStmt, raw,
 } from "../nodes.js";
-import { registry, type HandlerCtx } from "./index.js";
+import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Helpers ---
 

@@ -18,7 +18,7 @@
 
 import { Op } from "../../compiler/opcodes.js";
 import { type JsNode, raw } from "../nodes.js";
-import { registry, type HandlerCtx } from "./index.js";
+import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Helpers ---
 

@@ -14,7 +14,7 @@ import {
 	bin, un, update, assign,
 	call, index,
 } from "../nodes.js";
-import { type HandlerCtx, registry } from "./index.js";
+import { type HandlerCtx, registry } from "./registry.js";
 
 // --- Push handlers ---
 

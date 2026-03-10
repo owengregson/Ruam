@@ -21,8 +21,8 @@ import {
 	type JsNode,
 	exprStmt, breakStmt, call, id, un, lit, raw,
 } from "../nodes.js";
-import type { HandlerCtx } from "./index.js";
-import { registry } from "./index.js";
+import type { HandlerCtx } from "./registry.js";
+import { registry } from "./registry.js";
 
 // --- Yield handlers ---
 
