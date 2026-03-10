@@ -7,14 +7,32 @@
  *  - ARRAY_PATTERN_INIT, OBJECT_PATTERN_GET
  *
  * DESTRUCTURE_BIND is a simple no-op (break only).  All other handlers use
- * raw() nodes due to complex control flow (while loops, conditional logic,
- * multi-step property iteration).
+ * pure AST nodes for structured code generation.
  *
  * @module codegen/handlers/destructuring
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, breakStmt, raw } from "../nodes.js";
+import {
+	type JsNode,
+	breakStmt,
+	varDecl,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	exprStmt,
+	ifStmt,
+	whileStmt,
+	forStmt,
+	obj,
+	arr,
+	update,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple handler ---
@@ -24,20 +42,24 @@ function DESTRUCTURE_BIND(_ctx: HandlerCtx): JsNode[] {
 	return [breakStmt()];
 }
 
-// --- Complex handlers (raw — loops and conditional logic) ---
+// --- Converted handlers (pure AST) ---
 
 /**
  * DESTRUCTURE_DEFAULT: apply default value if top-of-stack is undefined.
  *
  * ```
- * var v=Y();if(v===void 0){P--;var def=C[O];W(def);}break;
+ * var v=S[P];if(v===void 0){P--;var def=C[O];S[++P]=def;}break;
  * ```
  */
 function DESTRUCTURE_DEFAULT(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var v=${ctx.peekStr()};if(v===void 0){${ctx.P}--;var def=${ctx.C}[${ctx.O}];${ctx.pushStr("def")};}break;`
-		),
+		varDecl("v", ctx.peek()),
+		ifStmt(bin("===", id("v"), un("void", lit(0))), [
+			exprStmt(update("--", false, id(ctx.P))),
+			varDecl("def", index(id(ctx.C), id(ctx.O))),
+			exprStmt(ctx.push(id("def"))),
+		]),
+		breakStmt(),
 	];
 }
 
@@ -45,20 +67,35 @@ function DESTRUCTURE_DEFAULT(ctx: HandlerCtx): JsNode[] {
  * DESTRUCTURE_REST_ARRAY: collect remaining iterator values into a rest array.
  *
  * ```
- * var iterObj=X();var rest=[];
+ * var iterObj=S[P--];var rest=[];
  * while(!iterObj._done){rest.push(iterObj._value);
  *   var nxt=iterObj._iter.next();iterObj._done=!!nxt.done;iterObj._value=nxt.value;}
- * W(rest);break;
+ * S[++P]=rest;break;
  * ```
  */
 function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var iterObj=${ctx.popStr()};var rest=[];` +
-				`while(!iterObj._done){rest.push(iterObj._value);` +
-				`var nxt=iterObj._iter.next();iterObj._done=!!nxt.done;iterObj._value=nxt.value;}` +
-				`${ctx.pushStr("rest")};break;`
-		),
+		varDecl("iterObj", ctx.pop()),
+		varDecl("rest", arr()),
+		whileStmt(un("!", member(id("iterObj"), "_done")), [
+			exprStmt(
+				call(member(id("rest"), "push"), [
+					member(id("iterObj"), "_value"),
+				])
+			),
+			varDecl("nxt", call(member(member(id("iterObj"), "_iter"), "next"), [])),
+			exprStmt(
+				assign(
+					member(id("iterObj"), "_done"),
+					un("!", un("!", member(id("nxt"), "done")))
+				)
+			),
+			exprStmt(
+				assign(member(id("iterObj"), "_value"), member(id("nxt"), "value"))
+			),
+		]),
+		exprStmt(ctx.push(id("rest"))),
+		breakStmt(),
 	];
 }
 
@@ -66,22 +103,45 @@ function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
  * DESTRUCTURE_REST_OBJECT: collect remaining object keys into a rest object.
  *
  * ```
- * var excludeKeys=X();var src=X();var rest={};
+ * var excludeKeys=S[P--];var src=S[P--];var rest={};
  * var keys=Object.keys(src);
  * for(var ki=0;ki<keys.length;ki++){
  *   if(excludeKeys.indexOf(keys[ki])<0)rest[keys[ki]]=src[keys[ki]];}
- * W(rest);break;
+ * S[++P]=rest;break;
  * ```
  */
 function DESTRUCTURE_REST_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var excludeKeys=${ctx.popStr()};var src=${ctx.popStr()};var rest={};` +
-				`var keys=Object.keys(src);` +
-				`for(var ki=0;ki<keys.length;ki++){` +
-				`if(excludeKeys.indexOf(keys[ki])<0)rest[keys[ki]]=src[keys[ki]];}` +
-				`${ctx.pushStr("rest")};break;`
+		varDecl("excludeKeys", ctx.pop()),
+		varDecl("src", ctx.pop()),
+		varDecl("rest", obj()),
+		varDecl("keys", call(member(id("Object"), "keys"), [id("src")])),
+		forStmt(
+			varDecl("ki", lit(0)),
+			bin("<", id("ki"), member(id("keys"), "length")),
+			update("++", false, id("ki")),
+			[
+				ifStmt(
+					bin(
+						"<",
+						call(member(id("excludeKeys"), "indexOf"), [
+							index(id("keys"), id("ki")),
+						]),
+						lit(0)
+					),
+					[
+						exprStmt(
+							assign(
+								index(id("rest"), index(id("keys"), id("ki"))),
+								index(id("src"), index(id("keys"), id("ki")))
+							)
+						),
+					]
+				),
+			]
 		),
+		exprStmt(ctx.push(id("rest"))),
+		breakStmt(),
 	];
 }
 
@@ -89,18 +149,32 @@ function DESTRUCTURE_REST_OBJECT(ctx: HandlerCtx): JsNode[] {
  * ARRAY_PATTERN_INIT: initialize array destructuring iterator.
  *
  * ```
- * var arr=X();var iter=arr[Symbol.iterator]();
+ * var arr=S[P--];var iter=arr[Symbol.iterator]();
  * var first=iter.next();
- * W({_iter:iter,_done:!!first.done,_value:first.value});break;
+ * S[++P]={_iter:iter,_done:!!first.done,_value:first.value};break;
  * ```
  */
 function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var arr=${ctx.popStr()};var iter=arr[Symbol.iterator]();` +
-				`var first=iter.next();` +
-				`${ctx.pushStr("{_iter:iter,_done:!!first.done,_value:first.value}")};break;`
+		varDecl("arr", ctx.pop()),
+		varDecl(
+			"iter",
+			call(index(id("arr"), member(id("Symbol"), "iterator")), [])
 		),
+		varDecl("first", call(member(id("iter"), "next"), [])),
+		exprStmt(
+			ctx.push(
+				obj(
+					["_iter", id("iter")],
+					[
+						"_done",
+						un("!", un("!", member(id("first"), "done"))),
+					],
+					["_value", member(id("first"), "value")]
+				)
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -108,11 +182,15 @@ function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
  * OBJECT_PATTERN_GET: get a property from the object on top of stack.
  *
  * ```
- * var obj=Y();W(obj[C[O]]);break;
+ * var obj=S[P];S[++P]=obj[C[O]];break;
  * ```
  */
 function OBJECT_PATTERN_GET(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var obj=${ctx.peekStr()};${ctx.pushStr("obj["+ctx.C+"["+ctx.O+"]]")};break;`)];
+	return [
+		varDecl("obj", ctx.peek()),
+		exprStmt(ctx.push(index(id("obj"), index(id(ctx.C), id(ctx.O))))),
+		breakStmt(),
+	];
 }
 
 // --- Registration ---
