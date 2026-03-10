@@ -107,8 +107,7 @@ export class Emitter {
 /** Produce a unique string key for a constant pool entry (for de-dup). */
 function constantKey(entry: ConstantPoolEntry): string {
 	if (entry.type === "regex") {
-		const v = entry.value as { pattern: string; flags: string };
-		return `regex:${v.pattern}:${v.flags}`;
+		return `regex:${entry.value.pattern}:${entry.value.flags}`;
 	}
 	return `${entry.type}:${String(entry.value)}`;
 }

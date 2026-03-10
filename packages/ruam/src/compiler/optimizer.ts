@@ -430,7 +430,7 @@ function getNumericConst(
 ): number | null {
 	const c = consts[idx];
 	if (!c) return null;
-	if (c.type === "number") return c.value as number;
+	if (c.type === "number") return c.value;
 	return null;
 }
 

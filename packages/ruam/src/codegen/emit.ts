@@ -320,7 +320,10 @@ function emitLiteral(value: string | number | boolean | null | RegExp): string {
 				.replace(/'/g, "\\'")
 				.replace(/\n/g, "\\n")
 				.replace(/\r/g, "\\r")
-				.replace(/\t/g, "\\t") +
+				.replace(/\t/g, "\\t")
+				.replace(/\0/g, "\\0")
+				.replace(/\u2028/g, "\\u2028")
+				.replace(/\u2029/g, "\\u2029") +
 			"'"
 		);
 	}

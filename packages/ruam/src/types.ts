@@ -115,21 +115,16 @@ export interface VmObfuscationOptions {
 /**
  * A single entry in a bytecode unit's constant pool.
  *
- * The `value` field is typed loosely because it carries heterogeneous data
- * (strings, numbers, regex descriptors, etc.) that is only interpreted
- * at runtime by the VM.
+ * Discriminated union — TypeScript narrows `value` based on the `type` tag.
  */
-export interface ConstantPoolEntry {
-	type:
-		| "null"
-		| "undefined"
-		| "boolean"
-		| "number"
-		| "string"
-		| "bigint"
-		| "regex";
-	value: unknown;
-}
+export type ConstantPoolEntry =
+	| { type: "null"; value: null }
+	| { type: "undefined"; value: undefined }
+	| { type: "boolean"; value: boolean }
+	| { type: "number"; value: number }
+	| { type: "string"; value: string }
+	| { type: "bigint"; value: string }
+	| { type: "regex"; value: { pattern: string; flags: string } };
 
 /** A single bytecode instruction (opcode + operand pair). */
 export interface Instruction {
