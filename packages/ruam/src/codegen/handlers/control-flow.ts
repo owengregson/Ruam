@@ -22,7 +22,7 @@ import {
 	exprStmt, assign, index, update,
 	ifStmt, varDecl, breakStmt, raw,
 } from "../nodes.js";
-import { registry, type HandlerCtx } from "./index.js";
+import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Shorthand helpers ---
 

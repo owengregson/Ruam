@@ -19,8 +19,8 @@
 
 import { Op } from "../../compiler/opcodes.js";
 import { type JsNode, raw, breakStmt } from "../nodes.js";
-import type { HandlerCtx } from "./index.js";
-import { registry } from "./index.js";
+import type { HandlerCtx } from "./registry.js";
+import { registry } from "./registry.js";
 
 // --- Primary closure handlers ---
 

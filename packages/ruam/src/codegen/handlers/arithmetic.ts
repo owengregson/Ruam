@@ -13,7 +13,7 @@ import {
 	id, index, update, varDecl, exprStmt, assign, bin, un, lit, breakStmt,
 	type JsNode,
 } from "../nodes.js";
-import { registry, type HandlerCtx, type HandlerFn } from "./index.js";
+import { registry, type HandlerCtx, type HandlerFn } from "./registry.js";
 
 // --- Helpers ---
 

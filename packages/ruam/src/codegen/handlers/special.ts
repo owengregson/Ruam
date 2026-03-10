@@ -18,7 +18,7 @@ import {
 	id, call,
 	exprStmt, breakStmt, raw,
 } from "../nodes.js";
-import { registry, type HandlerCtx } from "./index.js";
+import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple push handlers (AST nodes) ---
 
