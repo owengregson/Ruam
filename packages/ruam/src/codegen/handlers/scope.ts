@@ -28,14 +28,19 @@ import { registry } from "./registry.js";
  * LOAD_SCOPED: walk scope chain to find variable, fall back to global.
  *
  * Fast path checks current scope first, then walks parent chain.
+ * Uses sv()/curSv() for DRY scope variable references but NOT scopeWalk()
+ * because the global fallback runs after the while loop.
  */
 function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
+	const csv = ctx.curSv();
+	const sv = ctx.sv();
+	const curScope = `${ctx.SC}.${ctx.sV}`;
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];` +
-				`if(name in ${ctx.SC}.${ctx.sV}){${ctx.W}(${ctx.SC}.${ctx.sV}[name]);break;}` +
+				`if(name in ${curScope}){${ctx.W}(${csv});break;}` +
 				`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
-				`while(s){if(name in s.${ctx.sV}){${ctx.W}(s.${ctx.sV}[name]);found=true;break;}s=s.${ctx.sPar};}` +
+				`while(s){if(name in s.${ctx.sV}){${ctx.W}(${sv});found=true;break;}s=s.${ctx.sPar};}` +
 				`if(!found){${ctx.W}(_g[name]);}` +
 				`break;`
 		),
@@ -48,12 +53,15 @@ function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Pops value from stack, assigns to first scope that contains the name.
  */
 function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
+	const csv = ctx.curSv();
+	const sv = ctx.sv();
+	const curScope = `${ctx.SC}.${ctx.sV}`;
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var val=${ctx.S}[${ctx.P}--];` +
-				`if(name in ${ctx.SC}.${ctx.sV}){${ctx.SC}.${ctx.sV}[name]=val;break;}` +
+				`if(name in ${curScope}){${csv}=val;break;}` +
 				`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
-				`while(s){if(name in s.${ctx.sV}){s.${ctx.sV}[name]=val;found=true;break;}s=s.${ctx.sPar};}` +
+				`while(s){if(name in s.${ctx.sV}){${sv}=val;found=true;break;}s=s.${ctx.sPar};}` +
 				`if(!found){_g[name]=val;}` +
 				`break;`
 		),
@@ -68,10 +76,10 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Only initializes to undefined if the name is not already present.
  */
 function declareHandler(ctx: HandlerCtx): JsNode[] {
+	const curScope = `${ctx.SC}.${ctx.sV}`;
+	const csv = ctx.curSv();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];if(!(name in ${ctx.SC}.${ctx.sV}))${ctx.SC}.${ctx.sV}[name]=void 0;break;`
-		),
+		raw(`var name=${ctx.C}[${ctx.O}];if(!(name in ${curScope}))${csv}=void 0;break;`),
 	];
 }
 
@@ -138,10 +146,11 @@ function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
  * Pushes the result of `delete` onto the stack.
  */
 function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				`while(s){if(name in s.${ctx.sV}){${ctx.W}(delete s.${ctx.sV}[name]);break;}s=s.${ctx.sPar};}break;`
+				ctx.scopeWalk(`${ctx.W}(delete ${sv});`)
 		),
 	];
 }
@@ -162,14 +171,16 @@ function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
  * TYPEOF_GLOBAL: walk scope chain first (for closures), then fall back to
  * `typeof _g[name]` for true globals.
  *
- * This ensures `typeof x` works correctly in closures where `x` is captured.
+ * Uses sv() for DRY scope variable references but NOT scopeWalk()
+ * because the global fallback runs after the while loop.
  */
 function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
+	const sv = ctx.sv();
 	return [
 		raw(
 			`var name=${ctx.C}[${ctx.O}];` +
 				`var s=${ctx.SC};var _tf=false;` +
-				`while(s){if(name in s.${ctx.sV}){${ctx.W}(typeof s.${ctx.sV}[name]);_tf=true;break;}s=s.${ctx.sPar};}` +
+				`while(s){if(name in s.${ctx.sV}){${ctx.W}(typeof ${sv});_tf=true;break;}s=s.${ctx.sPar};}` +
 				`if(!_tf){${ctx.W}(typeof _g[name]);}` +
 				`break;`
 		),
