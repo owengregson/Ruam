@@ -27,17 +27,17 @@ import { registry } from "./registry.js";
  * 0xFFFF sentinel means no catch/finally target.
  *
  * ```
- * var catchIp=(O>>16)&0xFFFF;var finallyIp=O&0xFFFF;
- * if(catchIp===0xFFFF)catchIp=-1;if(finallyIp===0xFFFF)finallyIp=-1;
- * if(!EX)EX=[];EX.push({catchIp:catchIp,finallyIp:finallyIp,sp:P});break;
+ * var _ci=(O>>16)&0xFFFF;var _fi=O&0xFFFF;
+ * if(_ci===0xFFFF)_ci=-1;if(_fi===0xFFFF)_fi=-1;
+ * if(!EX)EX=[];EX.push({_ci:_ci,_fi:_fi,_sp:P});break;
  * ```
  */
 function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
 	return [
 		raw(
-			`var catchIp=(${ctx.O}>>16)&0xFFFF;var finallyIp=${ctx.O}&0xFFFF;` +
-				`if(catchIp===0xFFFF)catchIp=-1;if(finallyIp===0xFFFF)finallyIp=-1;` +
-				`if(!${ctx.EX})${ctx.EX}=[];${ctx.EX}.push({catchIp:catchIp,finallyIp:finallyIp,sp:${ctx.P}});break;`
+			`var _ci=(${ctx.O}>>16)&0xFFFF;var _fi=${ctx.O}&0xFFFF;` +
+				`if(_ci===0xFFFF)_ci=-1;if(_fi===0xFFFF)_fi=-1;` +
+				`if(!${ctx.EX})${ctx.EX}=[];${ctx.EX}.push({_ci:_ci,_fi:_fi,_sp:${ctx.P}});break;`
 		),
 	];
 }

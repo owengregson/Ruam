@@ -114,7 +114,7 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
  * ```
  * var _rv=S[P--];
  * <debug trace if enabled>
- * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h.finallyIp>=0){CT=1;CV=_rv;EX.pop();P=_h.sp;IP=_h.finallyIp*2;break;}}
+ * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h._fi>=0){CT=1;CV=_rv;EX.pop();P=_h._sp;IP=_h._fi*2;break;}}
  * return _rv;
  * ```
  */
@@ -124,8 +124,8 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
 			`var _rv=${ctx.S}[${ctx.P}--];` +
 				(ctx.debug ? `${ctx.dbg}('RETURN','value=',_rv);` : "") +
 				`if(${ctx.EX}&&${ctx.EX}.length>0){var _h=${ctx.EX}[${ctx.EX}.length-1];` +
-				`if(_h.finallyIp>=0){${ctx.CT}=1;${ctx.CV}=_rv;${ctx.EX}.pop();` +
-				`${ctx.P}=_h.sp;${ctx.IP}=_h.finallyIp*2;break;}}return _rv;`
+				`if(_h._fi>=0){${ctx.CT}=1;${ctx.CV}=_rv;${ctx.EX}.pop();` +
+				`${ctx.P}=_h._sp;${ctx.IP}=_h._fi*2;break;}}return _rv;`
 		),
 	];
 }
@@ -135,7 +135,7 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
  *
  * ```
  * <debug trace if enabled>
- * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h.finallyIp>=0){CT=1;CV=void 0;EX.pop();P=_h.sp;IP=_h.finallyIp*2;break;}}
+ * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h._fi>=0){CT=1;CV=void 0;EX.pop();P=_h._sp;IP=_h._fi*2;break;}}
  * return void 0;
  * ```
  */
@@ -144,8 +144,8 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 		raw(
 			(ctx.debug ? `${ctx.dbg}('RETURN_VOID');` : "") +
 				`if(${ctx.EX}&&${ctx.EX}.length>0){var _h=${ctx.EX}[${ctx.EX}.length-1];` +
-				`if(_h.finallyIp>=0){${ctx.CT}=1;${ctx.CV}=void 0;${ctx.EX}.pop();` +
-				`${ctx.P}=_h.sp;${ctx.IP}=_h.finallyIp*2;break;}}return void 0;`
+				`if(_h._fi>=0){${ctx.CT}=1;${ctx.CV}=void 0;${ctx.EX}.pop();` +
+				`${ctx.P}=_h._sp;${ctx.IP}=_h._fi*2;break;}}return void 0;`
 		),
 	];
 }
