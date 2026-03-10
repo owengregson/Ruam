@@ -33,18 +33,18 @@ import { registry } from "./registry.js";
  * ```
  */
 function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var catchIp=(${ctx.O}>>16)&0xFFFF;var finallyIp=${ctx.O}&0xFFFF;` +
-		`if(catchIp===0xFFFF)catchIp=-1;if(finallyIp===0xFFFF)finallyIp=-1;` +
-		`if(!${ctx.EX})${ctx.EX}=[];${ctx.EX}.push({catchIp:catchIp,finallyIp:finallyIp,sp:${ctx.P}});break;`
-	)];
+	return [
+		raw(
+			`var catchIp=(${ctx.O}>>16)&0xFFFF;var finallyIp=${ctx.O}&0xFFFF;` +
+				`if(catchIp===0xFFFF)catchIp=-1;if(finallyIp===0xFFFF)finallyIp=-1;` +
+				`if(!${ctx.EX})${ctx.EX}=[];${ctx.EX}.push({catchIp:catchIp,finallyIp:finallyIp,sp:${ctx.P}});break;`
+		),
+	];
 }
 
 /** TRY_POP: pop the top exception handler frame. */
 function TRY_POP(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`${ctx.EX}.pop();break;`
-	)];
+	return [raw(`${ctx.EX}.pop();break;`)];
 }
 
 /**
@@ -58,13 +58,15 @@ function TRY_POP(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var err=${ctx.X}();` +
-		`if(${ctx.O}>=0){var cname=${ctx.C}[${ctx.O}];` +
-		`if(typeof cname==='string'){${ctx.SC}.${ctx.sV}[cname]=err;}` +
-		`else{${ctx.R}[${ctx.O}]=err;}}` +
-		`else{${ctx.W}(err);}break;`
-	)];
+	return [
+		raw(
+			`var err=${ctx.X}();` +
+				`if(${ctx.O}>=0){var cname=${ctx.C}[${ctx.O}];` +
+				`if(typeof cname==='string'){${ctx.SC}.${ctx.sV}[cname]=err;}` +
+				`else{${ctx.R}[${ctx.O}]=err;}}` +
+				`else{${ctx.W}(err);}break;`
+		),
+	];
 }
 
 /**
@@ -74,9 +76,7 @@ function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
  * the stack for subsequent destructuring opcodes.
  */
 function CATCH_BIND_PATTERN(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var err=${ctx.X}();${ctx.W}(err);break;`
-	)];
+	return [raw(`var err=${ctx.X}();${ctx.W}(err);break;`)];
 }
 
 // --- Finally handlers ---
@@ -98,10 +98,12 @@ function FINALLY_MARK(_ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function END_FINALLY(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`if(${ctx.HPE}){var ex=${ctx.PE};${ctx.PE}=null;${ctx.HPE}=false;throw ex;}` +
-		`if(${ctx.CT}===1){var _rv2=${ctx.CV};${ctx.CT}=0;${ctx.CV}=void 0;return _rv2;}break;`
-	)];
+	return [
+		raw(
+			`if(${ctx.HPE}){var ex=${ctx.PE};${ctx.PE}=null;${ctx.HPE}=false;throw ex;}` +
+				`if(${ctx.CT}===1){var _rv2=${ctx.CV};${ctx.CT}=0;${ctx.CV}=void 0;return _rv2;}break;`
+		),
+	];
 }
 
 // --- Guard handlers ---
@@ -112,9 +114,11 @@ function END_FINALLY(ctx: HandlerCtx): JsNode[] {
  * Peeks at the stack top without consuming it.
  */
 function THROW_IF_NOT_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var v=${ctx.Y}();if(typeof v!=='object'||v===null)throw new TypeError('Value is not an object');break;`
-	)];
+	return [
+		raw(
+			`var v=${ctx.Y}();if(typeof v!=='object'||v===null)throw new TypeError('Value is not an object');break;`
+		),
+	];
 }
 
 // --- Error constructor handlers ---
@@ -123,27 +127,23 @@ function THROW_IF_NOT_OBJECT(ctx: HandlerCtx): JsNode[] {
  * THROW_REF_ERROR: throw a ReferenceError with message from constant pool.
  */
 function THROW_REF_ERROR(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`throw new ReferenceError(${ctx.C}[${ctx.O}]||'not defined');`
-	)];
+	return [
+		raw(`throw new ReferenceError(${ctx.C}[${ctx.O}]||'not defined');`),
+	];
 }
 
 /**
  * THROW_TYPE_ERROR: throw a TypeError with message from constant pool.
  */
 function THROW_TYPE_ERROR(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`throw new TypeError(${ctx.C}[${ctx.O}]||'type error');`
-	)];
+	return [raw(`throw new TypeError(${ctx.C}[${ctx.O}]||'type error');`)];
 }
 
 /**
  * THROW_SYNTAX_ERROR: throw a SyntaxError with message from constant pool.
  */
 function THROW_SYNTAX_ERROR(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`throw new SyntaxError(${ctx.C}[${ctx.O}]||'syntax error');`
-	)];
+	return [raw(`throw new SyntaxError(${ctx.C}[${ctx.O}]||'syntax error');`)];
 }
 
 // --- Registration ---

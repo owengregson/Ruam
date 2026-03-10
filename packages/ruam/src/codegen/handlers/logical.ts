@@ -2,8 +2,17 @@
 
 import { Op } from "../../compiler/opcodes.js";
 import {
-	id, index, lit, bin, un, assign, update,
-	varDecl, exprStmt, ifStmt, breakStmt,
+	id,
+	index,
+	lit,
+	bin,
+	un,
+	assign,
+	update,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	breakStmt,
 } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
@@ -14,7 +23,12 @@ import { registry } from "./registry.js";
  * `S[P]=!S[P];break;`
  */
 registry.set(Op.NOT, (ctx: HandlerCtx) => [
-	exprStmt(assign(index(id(ctx.S), id(ctx.P)), un('!', index(id(ctx.S), id(ctx.P))))),
+	exprStmt(
+		assign(
+			index(id(ctx.S), id(ctx.P)),
+			un("!", index(id(ctx.S), id(ctx.P)))
+		)
+	),
 	breakStmt(),
 ]);
 
@@ -26,11 +40,11 @@ registry.set(Op.NOT, (ctx: HandlerCtx) => [
  * Short-circuit: if falsy, jump to operand target; otherwise pop TOS and continue.
  */
 registry.set(Op.LOGICAL_AND, (ctx: HandlerCtx) => [
-	varDecl('v', index(id(ctx.S), id(ctx.P))),
+	varDecl("v", index(id(ctx.S), id(ctx.P))),
 	ifStmt(
-		un('!', id('v')),
-		[exprStmt(assign(id(ctx.IP), bin('*', id(ctx.O), lit(2))))],
-		[exprStmt(update('--', false, id(ctx.P)))],
+		un("!", id("v")),
+		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
+		[exprStmt(update("--", false, id(ctx.P)))]
 	),
 	breakStmt(),
 ]);
@@ -43,11 +57,11 @@ registry.set(Op.LOGICAL_AND, (ctx: HandlerCtx) => [
  * Short-circuit: if truthy, jump to operand target; otherwise pop TOS and continue.
  */
 registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
-	varDecl('v', index(id(ctx.S), id(ctx.P))),
+	varDecl("v", index(id(ctx.S), id(ctx.P))),
 	ifStmt(
-		id('v'),
-		[exprStmt(assign(id(ctx.IP), bin('*', id(ctx.O), lit(2))))],
-		[exprStmt(update('--', false, id(ctx.P)))],
+		id("v"),
+		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
+		[exprStmt(update("--", false, id(ctx.P)))]
 	),
 	breakStmt(),
 ]);
@@ -60,11 +74,15 @@ registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
  * Short-circuit: if non-nullish (not null and not undefined), jump; otherwise pop and continue.
  */
 registry.set(Op.NULLISH_COALESCE, (ctx: HandlerCtx) => [
-	varDecl('v', index(id(ctx.S), id(ctx.P))),
+	varDecl("v", index(id(ctx.S), id(ctx.P))),
 	ifStmt(
-		bin('&&', bin('!==', id('v'), lit(null)), bin('!==', id('v'), un('void', lit(0)))),
-		[exprStmt(assign(id(ctx.IP), bin('*', id(ctx.O), lit(2))))],
-		[exprStmt(update('--', false, id(ctx.P)))],
+		bin(
+			"&&",
+			bin("!==", id("v"), lit(null)),
+			bin("!==", id("v"), un("void", lit(0)))
+		),
+		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
+		[exprStmt(update("--", false, id(ctx.P)))]
 	),
 	breakStmt(),
 ]);

@@ -14,10 +14,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	breakStmt, raw,
-} from "../nodes.js";
+import { type JsNode, breakStmt, raw } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple handler ---
@@ -37,9 +34,11 @@ function DESTRUCTURE_BIND(_ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function DESTRUCTURE_DEFAULT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var v=${ctx.Y}();if(v===void 0){${ctx.P}--;var def=${ctx.C}[${ctx.O}];${ctx.W}(def);}break;`
-	)];
+	return [
+		raw(
+			`var v=${ctx.Y}();if(v===void 0){${ctx.P}--;var def=${ctx.C}[${ctx.O}];${ctx.W}(def);}break;`
+		),
+	];
 }
 
 /**
@@ -53,12 +52,14 @@ function DESTRUCTURE_DEFAULT(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var iterObj=${ctx.X}();var rest=[];` +
-		`while(!iterObj._done){rest.push(iterObj._value);` +
-		`var nxt=iterObj._iter.next();iterObj._done=!!nxt.done;iterObj._value=nxt.value;}` +
-		`${ctx.W}(rest);break;`
-	)];
+	return [
+		raw(
+			`var iterObj=${ctx.X}();var rest=[];` +
+				`while(!iterObj._done){rest.push(iterObj._value);` +
+				`var nxt=iterObj._iter.next();iterObj._done=!!nxt.done;iterObj._value=nxt.value;}` +
+				`${ctx.W}(rest);break;`
+		),
+	];
 }
 
 /**
@@ -73,13 +74,15 @@ function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function DESTRUCTURE_REST_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var excludeKeys=${ctx.X}();var src=${ctx.X}();var rest={};` +
-		`var keys=Object.keys(src);` +
-		`for(var ki=0;ki<keys.length;ki++){` +
-		`if(excludeKeys.indexOf(keys[ki])<0)rest[keys[ki]]=src[keys[ki]];}` +
-		`${ctx.W}(rest);break;`
-	)];
+	return [
+		raw(
+			`var excludeKeys=${ctx.X}();var src=${ctx.X}();var rest={};` +
+				`var keys=Object.keys(src);` +
+				`for(var ki=0;ki<keys.length;ki++){` +
+				`if(excludeKeys.indexOf(keys[ki])<0)rest[keys[ki]]=src[keys[ki]];}` +
+				`${ctx.W}(rest);break;`
+		),
+	];
 }
 
 /**
@@ -92,11 +95,13 @@ function DESTRUCTURE_REST_OBJECT(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var arr=${ctx.X}();var iter=arr[Symbol.iterator]();` +
-		`var first=iter.next();` +
-		`${ctx.W}({_iter:iter,_done:!!first.done,_value:first.value});break;`
-	)];
+	return [
+		raw(
+			`var arr=${ctx.X}();var iter=arr[Symbol.iterator]();` +
+				`var first=iter.next();` +
+				`${ctx.W}({_iter:iter,_done:!!first.done,_value:first.value});break;`
+		),
+	];
 }
 
 /**
@@ -107,9 +112,7 @@ function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function OBJECT_PATTERN_GET(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var obj=${ctx.Y}();${ctx.W}(obj[${ctx.C}[${ctx.O}]]);break;`
-	)];
+	return [raw(`var obj=${ctx.Y}();${ctx.W}(obj[${ctx.C}[${ctx.O}]]);break;`)];
 }
 
 // --- Registration ---

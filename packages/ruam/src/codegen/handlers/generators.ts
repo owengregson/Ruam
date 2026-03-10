@@ -19,7 +19,13 @@
 import { Op } from "../../compiler/opcodes.js";
 import {
 	type JsNode,
-	exprStmt, breakStmt, call, id, un, lit, raw,
+	exprStmt,
+	breakStmt,
+	call,
+	id,
+	un,
+	lit,
+	raw,
 } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
@@ -32,10 +38,7 @@ import { registry } from "./registry.js";
  * `W(void 0);break;`
  */
 function YIELD_HANDLER(ctx: HandlerCtx): JsNode[] {
-	return [
-		exprStmt(call(id(ctx.W), [un('void', lit(0))])),
-		breakStmt(),
-	];
+	return [exprStmt(call(id(ctx.W), [un("void", lit(0))])), breakStmt()];
 }
 
 // --- Await handler ---
@@ -48,10 +51,13 @@ function YIELD_HANDLER(ctx: HandlerCtx): JsNode[] {
  */
 function AWAIT(ctx: HandlerCtx): JsNode[] {
 	if (ctx.isAsync) {
-		return [raw(
-			(ctx.debug ? `${ctx.dbg}('AWAIT','awaiting:',typeof ${ctx.S}[${ctx.P}]==='object'?'[Promise]':${ctx.S}[${ctx.P}]);` : '') +
-			`${ctx.S}[${ctx.P}]=await ${ctx.S}[${ctx.P}];break;`
-		)];
+		return [
+			raw(
+				(ctx.debug
+					? `${ctx.dbg}('AWAIT','awaiting:',typeof ${ctx.S}[${ctx.P}]==='object'?'[Promise]':${ctx.S}[${ctx.P}]);`
+					: "") + `${ctx.S}[${ctx.P}]=await ${ctx.S}[${ctx.P}];break;`
+			),
+		];
 	}
 	return [raw(`${ctx.S}[${ctx.P}]=void 0;break;`)];
 }

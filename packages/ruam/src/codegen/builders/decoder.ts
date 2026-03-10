@@ -29,18 +29,18 @@ export function buildDecoderSource(names: RuntimeNames): JsNode[] {
 	return [
 		raw(
 			`function ${names.rc4}(data,key){` +
-			`var S=new Array(256);var j=0;var i;` +
-			`for(i=0;i<256;i++)S[i]=i;` +
-			`for(i=0;i<256;i++){j=(j+S[i]+key.charCodeAt(i%key.length))&255;var t=S[i];S[i]=S[j];S[j]=t;}` +
-			`i=0;j=0;var out=new Uint8Array(data.length);` +
-			`for(var k=0;k<data.length;k++){i=(i+1)&255;j=(j+S[i])&255;var t=S[i];S[i]=S[j];S[j]=t;out[k]=data[k]^S[(S[i]+S[j])&255];}` +
-			`return out;}`
+				`var S=new Array(256);var j=0;var i;` +
+				`for(i=0;i<256;i++)S[i]=i;` +
+				`for(i=0;i<256;i++){j=(j+S[i]+key.charCodeAt(i%key.length))&255;var t=S[i];S[i]=S[j];S[j]=t;}` +
+				`i=0;j=0;var out=new Uint8Array(data.length);` +
+				`for(var k=0;k<data.length;k++){i=(i+1)&255;j=(j+S[i])&255;var t=S[i];S[i]=S[j];S[j]=t;out[k]=data[k]^S[(S[i]+S[j])&255];}` +
+				`return out;}`
 		),
 		raw(
 			`function ${names.b64}(str){` +
-			`if(typeof atob==='function'){var bin=atob(str);var bytes=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return bytes;}` +
-			`else{return new Uint8Array(Buffer.from(str,'base64'));}` +
-			`;}`
+				`if(typeof atob==='function'){var bin=atob(str);var bytes=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return bytes;}` +
+				`else{return new Uint8Array(Buffer.from(str,'base64'));}` +
+				`;}`
 		),
 	];
 }
@@ -73,9 +73,9 @@ export function buildStringDecoderSource(
 		return [
 			raw(
 				`function ${names.strDec}(mk,b,x){` +
-				`var k=(mk^(x*0x9E3779B9))>>>0;var s='';` +
-				`for(var i=0;i<b.length;i++){k=(k*1664525+1013904223)>>>0;s+=String.fromCharCode(b[i]^(k&65535));}` +
-				`return s;}`
+					`var k=(mk^(x*0x9E3779B9))>>>0;var s='';` +
+					`for(var i=0;i<b.length;i++){k=(k*1664525+1013904223)>>>0;s+=String.fromCharCode(b[i]^(k&65535));}` +
+					`return s;}`
 			),
 		];
 	}
@@ -83,9 +83,9 @@ export function buildStringDecoderSource(
 	return [
 		raw(
 			`function ${names.strDec}(b,x){` +
-			`var k=(${stringKey >>> 0}^(x*0x9E3779B9))>>>0;var s='';` +
-			`for(var i=0;i<b.length;i++){k=(k*1664525+1013904223)>>>0;s+=String.fromCharCode(b[i]^(k&65535));}` +
-			`return s;}`
+				`var k=(${stringKey >>> 0}^(x*0x9E3779B9))>>>0;var s='';` +
+				`for(var i=0;i<b.length;i++){k=(k*1664525+1013904223)>>>0;s+=String.fromCharCode(b[i]^(k&65535));}` +
+				`return s;}`
 		),
 	];
 }

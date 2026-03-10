@@ -18,9 +18,18 @@
 import { Op } from "../../compiler/opcodes.js";
 import {
 	type JsNode,
-	id, lit, bin, un,
-	exprStmt, assign, index, update,
-	ifStmt, varDecl, breakStmt, raw,
+	id,
+	lit,
+	bin,
+	un,
+	exprStmt,
+	assign,
+	index,
+	update,
+	ifStmt,
+	varDecl,
+	breakStmt,
+	raw,
 } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
@@ -33,50 +42,42 @@ function sP(ctx: HandlerCtx): JsNode {
 
 /** `S[P--]` — pop stack top */
 function sPdec(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), update('--', false, id(ctx.P)));
+	return index(id(ctx.S), update("--", false, id(ctx.P)));
 }
 
 /** `IP=O*2;` — standard jump target assignment */
 function ipAssign(ctx: HandlerCtx): JsNode {
-	return exprStmt(assign(id(ctx.IP), bin('*', id(ctx.O), lit(2))));
+	return exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))));
 }
 
 // --- Jump handlers ---
 
 /** `IP=O*2;break;` */
 function JMP(ctx: HandlerCtx): JsNode[] {
-	return [
-		ipAssign(ctx),
-		breakStmt(),
-	];
+	return [ipAssign(ctx), breakStmt()];
 }
 
 /** `if(S[P--])IP=O*2;break;` */
 function JMP_TRUE(ctx: HandlerCtx): JsNode[] {
-	return [
-		ifStmt(sPdec(ctx), [ipAssign(ctx)]),
-		breakStmt(),
-	];
+	return [ifStmt(sPdec(ctx), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `if(!S[P--])IP=O*2;break;` */
 function JMP_FALSE(ctx: HandlerCtx): JsNode[] {
-	return [
-		ifStmt(un('!', sPdec(ctx)), [ipAssign(ctx)]),
-		breakStmt(),
-	];
+	return [ifStmt(un("!", sPdec(ctx)), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `{var v=S[P--];if(v===null||v===void 0)IP=O*2;break;}` */
 function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl('v', sPdec(ctx)),
+		varDecl("v", sPdec(ctx)),
 		ifStmt(
-			bin('||',
-				bin('===', id('v'), lit(null)),
-				bin('===', id('v'), un('void', lit(0))),
+			bin(
+				"||",
+				bin("===", id("v"), lit(null)),
+				bin("===", id("v"), un("void", lit(0)))
 			),
-			[ipAssign(ctx)],
+			[ipAssign(ctx)]
 		),
 		breakStmt(),
 	];
@@ -85,41 +86,33 @@ function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 /** `{var v=S[P--];if(v===void 0)IP=O*2;break;}` */
 function JMP_UNDEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl('v', sPdec(ctx)),
-		ifStmt(
-			bin('===', id('v'), un('void', lit(0))),
-			[ipAssign(ctx)],
-		),
+		varDecl("v", sPdec(ctx)),
+		ifStmt(bin("===", id("v"), un("void", lit(0))), [ipAssign(ctx)]),
 		breakStmt(),
 	];
 }
 
 /** `if(S[P])IP=O*2;break;` — keeps value on stack */
 function JMP_TRUE_KEEP(ctx: HandlerCtx): JsNode[] {
-	return [
-		ifStmt(sP(ctx), [ipAssign(ctx)]),
-		breakStmt(),
-	];
+	return [ifStmt(sP(ctx), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `if(!S[P])IP=O*2;break;` — keeps value on stack */
 function JMP_FALSE_KEEP(ctx: HandlerCtx): JsNode[] {
-	return [
-		ifStmt(un('!', sP(ctx)), [ipAssign(ctx)]),
-		breakStmt(),
-	];
+	return [ifStmt(un("!", sP(ctx)), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `{var v=S[P];if(v===null||v===void 0)IP=O*2;break;}` — keeps value on stack */
 function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl('v', sP(ctx)),
+		varDecl("v", sP(ctx)),
 		ifStmt(
-			bin('||',
-				bin('===', id('v'), lit(null)),
-				bin('===', id('v'), un('void', lit(0))),
+			bin(
+				"||",
+				bin("===", id("v"), lit(null)),
+				bin("===", id("v"), un("void", lit(0)))
 			),
-			[ipAssign(ctx)],
+			[ipAssign(ctx)]
 		),
 		breakStmt(),
 	];
@@ -138,13 +131,15 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function RETURN(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var _rv=${ctx.S}[${ctx.P}--];` +
-		(ctx.debug ? `${ctx.dbg}('RETURN','value=',_rv);` : '') +
-		`if(${ctx.EX}&&${ctx.EX}.length>0){var _h=${ctx.EX}[${ctx.EX}.length-1];` +
-		`if(_h.finallyIp>=0){${ctx.CT}=1;${ctx.CV}=_rv;${ctx.EX}.pop();` +
-		`${ctx.P}=_h.sp;${ctx.IP}=_h.finallyIp*2;break;}}return _rv;`
-	)];
+	return [
+		raw(
+			`var _rv=${ctx.S}[${ctx.P}--];` +
+				(ctx.debug ? `${ctx.dbg}('RETURN','value=',_rv);` : "") +
+				`if(${ctx.EX}&&${ctx.EX}.length>0){var _h=${ctx.EX}[${ctx.EX}.length-1];` +
+				`if(_h.finallyIp>=0){${ctx.CT}=1;${ctx.CV}=_rv;${ctx.EX}.pop();` +
+				`${ctx.P}=_h.sp;${ctx.IP}=_h.finallyIp*2;break;}}return _rv;`
+		),
+	];
 }
 
 /**
@@ -157,12 +152,14 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		(ctx.debug ? `${ctx.dbg}('RETURN_VOID');` : '') +
-		`if(${ctx.EX}&&${ctx.EX}.length>0){var _h=${ctx.EX}[${ctx.EX}.length-1];` +
-		`if(_h.finallyIp>=0){${ctx.CT}=1;${ctx.CV}=void 0;${ctx.EX}.pop();` +
-		`${ctx.P}=_h.sp;${ctx.IP}=_h.finallyIp*2;break;}}return void 0;`
-	)];
+	return [
+		raw(
+			(ctx.debug ? `${ctx.dbg}('RETURN_VOID');` : "") +
+				`if(${ctx.EX}&&${ctx.EX}.length>0){var _h=${ctx.EX}[${ctx.EX}.length-1];` +
+				`if(_h.finallyIp>=0){${ctx.CT}=1;${ctx.CV}=void 0;${ctx.EX}.pop();` +
+				`${ctx.P}=_h.sp;${ctx.IP}=_h.finallyIp*2;break;}}return void 0;`
+		),
+	];
 }
 
 /**
@@ -175,11 +172,13 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function THROW(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var _te=${ctx.S}[${ctx.P}--];` +
-		(ctx.debug ? `${ctx.dbg}('THROW','value=',_te);` : '') +
-		`throw _te;`
-	)];
+	return [
+		raw(
+			`var _te=${ctx.S}[${ctx.P}--];` +
+				(ctx.debug ? `${ctx.dbg}('THROW','value=',_te);` : "") +
+				`throw _te;`
+		),
+	];
 }
 
 /**
@@ -190,9 +189,11 @@ function THROW(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function RETHROW(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`if(${ctx.HPE}){var ex=${ctx.PE};${ctx.PE}=null;${ctx.HPE}=false;throw ex;}break;`
-	)];
+	return [
+		raw(
+			`if(${ctx.HPE}){var ex=${ctx.PE};${ctx.PE}=null;${ctx.HPE}=false;throw ex;}break;`
+		),
+	];
 }
 
 // --- Misc handlers ---
@@ -207,10 +208,7 @@ function NOP(_ctx: HandlerCtx): JsNode[] {
  * a JMP target. The handler just sets IP=O*2.
  */
 function SWITCH_JMP(ctx: HandlerCtx): JsNode[] {
-	return [
-		ipAssign(ctx),
-		breakStmt(),
-	];
+	return [ipAssign(ctx), breakStmt()];
 }
 
 // --- Registration ---

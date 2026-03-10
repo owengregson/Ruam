@@ -16,7 +16,14 @@
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../runtime/names.js";
 import {
-	fn, varDecl, id, raw, assign, bin, member, exprStmt,
+	fn,
+	varDecl,
+	id,
+	raw,
+	assign,
+	bin,
+	member,
+	exprStmt,
 } from "../nodes.js";
 
 // --- Probe table ---
@@ -70,9 +77,7 @@ export function buildFingerprintSource(names: RuntimeNames): JsNode[] {
 	// h ^= <probe>.length << <shift>;
 	for (const [chain, shift] of PROBES) {
 		body.push(
-			exprStmt(
-				assign(h, bin("<<", dotChain(chain), hex(shift)), "^")
-			)
+			exprStmt(assign(h, bin("<<", dotChain(chain), hex(shift)), "^"))
 		);
 	}
 

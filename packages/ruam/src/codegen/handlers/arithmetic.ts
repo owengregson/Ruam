@@ -10,7 +10,16 @@
 
 import { Op } from "../../compiler/opcodes.js";
 import {
-	id, index, update, varDecl, exprStmt, assign, bin, un, lit, breakStmt,
+	id,
+	index,
+	update,
+	varDecl,
+	exprStmt,
+	assign,
+	bin,
+	un,
+	lit,
+	breakStmt,
 	type JsNode,
 } from "../nodes.js";
 import { registry, type HandlerCtx, type HandlerFn } from "./registry.js";
@@ -24,7 +33,7 @@ function sTop(ctx: HandlerCtx): JsNode {
 
 /** Pop-into-b expression: `S[P--]` */
 function sPop(ctx: HandlerCtx): JsNode {
-	return index(id(ctx.S), update('--', false, id(ctx.P)));
+	return index(id(ctx.S), update("--", false, id(ctx.P)));
 }
 
 /**
@@ -35,8 +44,8 @@ function sPop(ctx: HandlerCtx): JsNode {
  */
 function binaryHandler(op: string): HandlerFn {
 	return (ctx) => [
-		varDecl('b', sPop(ctx)),
-		exprStmt(assign(sTop(ctx), bin(op, sTop(ctx), id('b')))),
+		varDecl("b", sPop(ctx)),
+		exprStmt(assign(sTop(ctx), bin(op, sTop(ctx), id("b")))),
 		breakStmt(),
 	];
 }
@@ -56,34 +65,34 @@ function unaryHandler(op: string): HandlerFn {
 
 // --- Arithmetic handlers ---
 
-registry.set(Op.ADD, binaryHandler('+'));
-registry.set(Op.SUB, binaryHandler('-'));
-registry.set(Op.MUL, binaryHandler('*'));
-registry.set(Op.DIV, binaryHandler('/'));
-registry.set(Op.MOD, binaryHandler('%'));
-registry.set(Op.POW, binaryHandler('**'));
+registry.set(Op.ADD, binaryHandler("+"));
+registry.set(Op.SUB, binaryHandler("-"));
+registry.set(Op.MUL, binaryHandler("*"));
+registry.set(Op.DIV, binaryHandler("/"));
+registry.set(Op.MOD, binaryHandler("%"));
+registry.set(Op.POW, binaryHandler("**"));
 
-registry.set(Op.NEG, unaryHandler('-'));
-registry.set(Op.UNARY_PLUS, unaryHandler('+'));
+registry.set(Op.NEG, unaryHandler("-"));
+registry.set(Op.UNARY_PLUS, unaryHandler("+"));
 
 /** INC: `S[P]=+S[P]+1;break;` -- unary `+` for ToNumber coercion */
 registry.set(Op.INC, (ctx) => [
-	exprStmt(assign(sTop(ctx), bin('+', un('+', sTop(ctx)), lit(1)))),
+	exprStmt(assign(sTop(ctx), bin("+", un("+", sTop(ctx)), lit(1)))),
 	breakStmt(),
 ]);
 
 /** DEC: `S[P]=+S[P]-1;break;` -- unary `+` for ToNumber coercion */
 registry.set(Op.DEC, (ctx) => [
-	exprStmt(assign(sTop(ctx), bin('-', un('+', sTop(ctx)), lit(1)))),
+	exprStmt(assign(sTop(ctx), bin("-", un("+", sTop(ctx)), lit(1)))),
 	breakStmt(),
 ]);
 
 // --- Bitwise handlers ---
 
-registry.set(Op.BIT_AND, binaryHandler('&'));
-registry.set(Op.BIT_OR, binaryHandler('|'));
-registry.set(Op.BIT_XOR, binaryHandler('^'));
-registry.set(Op.BIT_NOT, unaryHandler('~'));
-registry.set(Op.SHL, binaryHandler('<<'));
-registry.set(Op.SHR, binaryHandler('>>'));
-registry.set(Op.USHR, binaryHandler('>>>'));
+registry.set(Op.BIT_AND, binaryHandler("&"));
+registry.set(Op.BIT_OR, binaryHandler("|"));
+registry.set(Op.BIT_XOR, binaryHandler("^"));
+registry.set(Op.BIT_NOT, unaryHandler("~"));
+registry.set(Op.SHL, binaryHandler("<<"));
+registry.set(Op.SHR, binaryHandler(">>"));
+registry.set(Op.USHR, binaryHandler(">>>"));

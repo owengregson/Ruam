@@ -18,8 +18,15 @@
 import { Op } from "../../compiler/opcodes.js";
 import {
 	type JsNode,
-	id, index, lit, un, assign, call,
-	exprStmt, breakStmt, raw,
+	id,
+	index,
+	lit,
+	un,
+	assign,
+	call,
+	exprStmt,
+	breakStmt,
+	raw,
 } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
@@ -34,24 +41,18 @@ function sTop(ctx: HandlerCtx): JsNode {
 
 /** `S[P]=typeof S[P];break;` */
 function TYPEOF(ctx: HandlerCtx): JsNode[] {
-	return [
-		exprStmt(assign(sTop(ctx), un('typeof', sTop(ctx)))),
-		breakStmt(),
-	];
+	return [exprStmt(assign(sTop(ctx), un("typeof", sTop(ctx)))), breakStmt()];
 }
 
 /** `S[P]=void 0;break;` */
 function VOID(ctx: HandlerCtx): JsNode[] {
-	return [
-		exprStmt(assign(sTop(ctx), un('void', lit(0)))),
-		breakStmt(),
-	];
+	return [exprStmt(assign(sTop(ctx), un("void", lit(0)))), breakStmt()];
 }
 
 /** `S[P]=Number(S[P]);break;` */
 function TO_NUMBER(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), call(id('Number'), [sTop(ctx)]))),
+		exprStmt(assign(sTop(ctx), call(id("Number"), [sTop(ctx)]))),
 		breakStmt(),
 	];
 }
@@ -59,7 +60,7 @@ function TO_NUMBER(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=String(S[P]);break;` */
 function TO_STRING(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), call(id('String'), [sTop(ctx)]))),
+		exprStmt(assign(sTop(ctx), call(id("String"), [sTop(ctx)]))),
 		breakStmt(),
 	];
 }
@@ -67,7 +68,7 @@ function TO_STRING(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=Boolean(S[P]);break;` */
 function TO_BOOLEAN(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), call(id('Boolean'), [sTop(ctx)]))),
+		exprStmt(assign(sTop(ctx), call(id("Boolean"), [sTop(ctx)]))),
 		breakStmt(),
 	];
 }
@@ -75,7 +76,7 @@ function TO_BOOLEAN(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=Object(S[P]);break;` */
 function TO_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(sTop(ctx), call(id('Object'), [sTop(ctx)]))),
+		exprStmt(assign(sTop(ctx), call(id("Object"), [sTop(ctx)]))),
 		breakStmt(),
 	];
 }
@@ -86,18 +87,22 @@ function TO_OBJECT(ctx: HandlerCtx): JsNode[] {
  * TO_PROPERTY_KEY: `{var v=S[P];S[P]=typeof v==='symbol'?v:String(v);break;}`
  */
 function TO_PROPERTY_KEY(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var v=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=typeof v==='symbol'?v:String(v);break;`
-	)];
+	return [
+		raw(
+			`var v=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=typeof v==='symbol'?v:String(v);break;`
+		),
+	];
 }
 
 /**
  * TO_NUMERIC: `{var v=S[P];S[P]=typeof v==='bigint'?v:Number(v);break;}`
  */
 function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var v=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=typeof v==='bigint'?v:Number(v);break;`
-	)];
+	return [
+		raw(
+			`var v=${ctx.S}[${ctx.P}];${ctx.S}[${ctx.P}]=typeof v==='bigint'?v:Number(v);break;`
+		),
+	];
 }
 
 // --- Template handlers (raw — complex loops and string building) ---
@@ -113,12 +118,14 @@ function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var exprCount=${ctx.O};var parts=[];` +
-		`for(var ti=exprCount*2;ti>=0;ti--)parts.unshift(${ctx.X}());` +
-		`var result='';for(var ti=0;ti<parts.length;ti++)result+=String(parts[ti]!=null?parts[ti]:'');` +
-		`${ctx.W}(result);break;`
-	)];
+	return [
+		raw(
+			`var exprCount=${ctx.O};var parts=[];` +
+				`for(var ti=exprCount*2;ti>=0;ti--)parts.unshift(${ctx.X}());` +
+				`var result='';for(var ti=0;ti<parts.length;ti++)result+=String(parts[ti]!=null?parts[ti]:'');` +
+				`${ctx.W}(result);break;`
+		),
+	];
 }
 
 /**
@@ -131,11 +138,13 @@ function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var argc=${ctx.O};var callArgs=[];` +
-		`for(var ai=0;ai<argc;ai++)callArgs.unshift(${ctx.X}());` +
-		`var fn=${ctx.X}();${ctx.W}(fn.apply(void 0,callArgs));break;`
-	)];
+	return [
+		raw(
+			`var argc=${ctx.O};var callArgs=[];` +
+				`for(var ai=0;ai<argc;ai++)callArgs.unshift(${ctx.X}());` +
+				`var fn=${ctx.X}();${ctx.W}(fn.apply(void 0,callArgs));break;`
+		),
+	];
 }
 
 /**
@@ -148,11 +157,13 @@ function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
  * ```
  */
 function CREATE_RAW_STRINGS(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var count=${ctx.O};var raw=[];` +
-		`for(var ri=0;ri<count;ri++)raw.unshift(${ctx.X}());` +
-		`Object.freeze(raw);${ctx.W}(raw);break;`
-	)];
+	return [
+		raw(
+			`var count=${ctx.O};var raw=[];` +
+				`for(var ri=0;ri<count;ri++)raw.unshift(${ctx.X}());` +
+				`Object.freeze(raw);${ctx.W}(raw);break;`
+		),
+	];
 }
 
 // --- No-op handlers (AST nodes — just break) ---
@@ -177,7 +188,7 @@ function SOURCE_MAP(_ctx: HandlerCtx): JsNode[] {
 /** `W({});break;` — import.meta stub */
 function IMPORT_META(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(call(id(ctx.W), [{ type: 'ObjectExpr', entries: [] }])),
+		exprStmt(call(id(ctx.W), [{ type: "ObjectExpr", entries: [] }])),
 		breakStmt(),
 	];
 }
@@ -186,9 +197,7 @@ function IMPORT_META(ctx: HandlerCtx): JsNode[] {
  * DYNAMIC_IMPORT: `{var spec=X();W(import(spec));break;}`
  */
 function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var spec=${ctx.X}();${ctx.W}(import(spec));break;`
-	)];
+	return [raw(`var spec=${ctx.X}();${ctx.W}(import(spec));break;`)];
 }
 
 // --- Assertion handlers (raw — conditional throw) ---
@@ -197,18 +206,22 @@ function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
  * ASSERT_DEFINED: `{var v=Y();if(v===void 0)throw new TypeError('Cannot read properties of undefined');break;}`
  */
 function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var v=${ctx.Y}();if(v===void 0)throw new TypeError('Cannot read properties of undefined');break;`
-	)];
+	return [
+		raw(
+			`var v=${ctx.Y}();if(v===void 0)throw new TypeError('Cannot read properties of undefined');break;`
+		),
+	];
 }
 
 /**
  * ASSERT_FUNCTION: `{var v=Y();if(typeof v!=='function')throw new TypeError(v+' is not a function');break;}`
  */
 function ASSERT_FUNCTION(ctx: HandlerCtx): JsNode[] {
-	return [raw(
-		`var v=${ctx.Y}();if(typeof v!=='function')throw new TypeError(v+' is not a function');break;`
-	)];
+	return [
+		raw(
+			`var v=${ctx.Y}();if(typeof v!=='function')throw new TypeError(v+' is not a function');break;`
+		),
+	];
 }
 
 // --- Registration ---
