@@ -6,7 +6,7 @@ JS VM obfuscator — compiles JavaScript functions into custom bytecode executed
 
 - **Build**: `npm run build` (tsup, ESM-only)
 - **Typecheck**: `npm run typecheck` (tsc --noEmit)
-- **Test**: `npm run test` (vitest, 1657 tests)
+- **Test**: `npm run test` (vitest, 1714 tests)
 - **Test watch**: `npm run test:watch`
 - **Node**: >= 18, **Module**: ESM (`"type": "module"`)
 
@@ -48,7 +48,7 @@ src/
       loader.ts             Bytecode loader, cache, depth tracking, _ru4m watermark
       runners.ts            VM dispatch functions (run/runAsync) + shielding router
       deserializer.ts       Binary bytecode deserializer
-      debug-protection.ts   Anti-debugger timing side-channel
+      debug-protection.ts   Multi-layered anti-debugger (6 detection layers + escalating response)
       debug-logging.ts      Debug trace infrastructure
       globals.ts            Global exposure (globalThis binding)
 
@@ -85,6 +85,7 @@ docs/
 - **CSPRNG seed**: Per-file opcode shuffle seed uses `crypto.randomBytes(4)` instead of `Date.now() ^ Math.random()`.
 - **Babel compat layer**: Shared `babel-compat.ts` normalizes ESM/CJS dual-export shapes for `@babel/traverse` and `@babel/generator`.
 - **Auto-enable rollingCipher**: `resolveOptions()` automatically enables `rollingCipher` when `integrityBinding` is set.
+- **Debug protection** (`debugProtection` option): Multi-layered anti-debugger system with 6 independent detection layers: (1) polymorphic debugger invocation with dual-clock timing, (2) statistical jitter analysis, (3) environment analysis (--inspect flags, stack traces), (4) function integrity self-verification (FNV-1a checksum), (5) native API integrity (console methods + Function.prototype.toString), (6) global property trap canary (browser DevTools enumeration). Escalating response: silent bytecode corruption → cache/constants wipe → infinite debugger loop. Uses recursive setTimeout with jitter and `.unref()` for Node.js compatibility. Error messages mimic native V8 messages. Implemented in `runtime/templates/debug-protection.ts`.
 
 ## Code Conventions
 

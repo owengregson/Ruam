@@ -358,7 +358,7 @@ ${fnDecl}(${U},${A},${OS},${TV},${NT},${HO}){
   ${n.depth}++;
   var _uid_=(${U}._dbgId||'?');
   ${n.callStack}.push(_uid_);
-  if(${n.depth}>${VM_MAX_RECURSION_DEPTH}){var _last20=${n.callStack}.slice(-20).join(' > ');${n.depth}--;${n.callStack}.pop();throw new RangeError(${WM}+'\\x20'+${n.depth});}
+  if(${n.depth}>${VM_MAX_RECURSION_DEPTH}){${n.depth}--;${n.callStack}.pop();throw new RangeError('Maximum call '+'s'+'tack size exceeded');}
   try{
   var ${S}=[];
   var ${R}=new Array(${U}.r);
