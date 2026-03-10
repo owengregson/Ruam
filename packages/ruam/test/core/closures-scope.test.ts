@@ -4,8 +4,8 @@ import { assertEquivalent } from "../helpers.js";
 // ─── 1. Lexical scoping ────────────────────────────────────────────────────
 
 describe("closures & scope – lexical scoping", () => {
-  it("inner function accesses outer variable", () => {
-    assertEquivalent(`
+	it("inner function accesses outer variable", () => {
+		assertEquivalent(`
       function test() {
         var x = 10;
         function inner() { return x; }
@@ -13,10 +13,10 @@ describe("closures & scope – lexical scoping", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("inner function does not see variables declared after it runs", () => {
-    assertEquivalent(`
+	it("inner function does not see variables declared after it runs", () => {
+		assertEquivalent(`
       function test() {
         var x = 1;
         function inner() { return x; }
@@ -26,10 +26,10 @@ describe("closures & scope – lexical scoping", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("block scoping with let", () => {
-    assertEquivalent(`
+	it("block scoping with let", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         {
@@ -44,14 +44,14 @@ describe("closures & scope – lexical scoping", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 2. Closure over loop variable (var vs let) ────────────────────────────
 
 describe("closures & scope – closure over loop variable", () => {
-  it("var in loop – all closures see final value", () => {
-    assertEquivalent(`
+	it("var in loop – all closures see final value", () => {
+		assertEquivalent(`
       function test() {
         var fns = [];
         for (var i = 0; i < 5; i++) {
@@ -61,10 +61,10 @@ describe("closures & scope – closure over loop variable", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("let in loop – each closure captures its own value", () => {
-    assertEquivalent(`
+	it("let in loop – each closure captures its own value", () => {
+		assertEquivalent(`
       function test() {
         var fns = [];
         for (let i = 0; i < 5; i++) {
@@ -74,14 +74,14 @@ describe("closures & scope – closure over loop variable", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 3. IIFE to capture loop variable ──────────────────────────────────────
 
 describe("closures & scope – IIFE", () => {
-  it("IIFE captures loop variable correctly", () => {
-    assertEquivalent(`
+	it("IIFE captures loop variable correctly", () => {
+		assertEquivalent(`
       function test() {
         var fns = [];
         for (var i = 0; i < 5; i++) {
@@ -93,10 +93,10 @@ describe("closures & scope – IIFE", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("IIFE with multiple captured values", () => {
-    assertEquivalent(`
+	it("IIFE with multiple captured values", () => {
+		assertEquivalent(`
       function test() {
         var fns = [];
         for (var i = 0; i < 3; i++) {
@@ -110,14 +110,14 @@ describe("closures & scope – IIFE", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 4. Module pattern (revealing module) ──────────────────────────────────
 
 describe("closures & scope – module pattern", () => {
-  it("revealing module with private state", () => {
-    assertEquivalent(`
+	it("revealing module with private state", () => {
+		assertEquivalent(`
       function test() {
         var mod = (function() {
           var _private = "secret";
@@ -134,14 +134,14 @@ describe("closures & scope – module pattern", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 5. Factory functions with private state ───────────────────────────────
 
 describe("closures & scope – factory functions", () => {
-  it("factory creates independent instances", () => {
-    assertEquivalent(`
+	it("factory creates independent instances", () => {
+		assertEquivalent(`
       function createStack() {
         var items = [];
         return {
@@ -160,10 +160,10 @@ describe("closures & scope – factory functions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("factory with configurable behavior", () => {
-    assertEquivalent(`
+	it("factory with configurable behavior", () => {
+		assertEquivalent(`
       function createMultiplier(factor) {
         return {
           multiply: function(x) { return x * factor; },
@@ -180,14 +180,14 @@ describe("closures & scope – factory functions", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 6. Counter with increment/decrement/reset ─────────────────────────────
 
 describe("closures & scope – counter", () => {
-  it("full counter with inc/dec/reset/get", () => {
-    assertEquivalent(`
+	it("full counter with inc/dec/reset/get", () => {
+		assertEquivalent(`
       function makeCounter(initial) {
         var value = initial || 0;
         return {
@@ -211,14 +211,14 @@ describe("closures & scope – counter", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 7. Memoization pattern ────────────────────────────────────────────────
 
 describe("closures & scope – memoization", () => {
-  it("closure-based caching with array indexing", () => {
-    assertEquivalent(`
+	it("closure-based caching with array indexing", () => {
+		assertEquivalent(`
       function makeCachedSquare() {
         var results = [];
         var computed = false;
@@ -240,10 +240,10 @@ describe("closures & scope – memoization", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("fibonacci via iterative approach with closure", () => {
-    assertEquivalent(`
+	it("fibonacci via iterative approach with closure", () => {
+		assertEquivalent(`
       function makeFib() {
         return function(n) {
           if (n <= 1) return n;
@@ -262,14 +262,14 @@ describe("closures & scope – memoization", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 8. Event handler simulation (callback closures) ───────────────────────
 
 describe("closures & scope – callback closures", () => {
-  it("callbacks capture context at registration time", () => {
-    assertEquivalent(`
+	it("callbacks capture context at registration time", () => {
+		assertEquivalent(`
       function test() {
         var handlers = [];
         function on(name, cb) {
@@ -295,10 +295,10 @@ describe("closures & scope – callback closures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure-based once wrapper", () => {
-    assertEquivalent(`
+	it("closure-based once wrapper", () => {
+		assertEquivalent(`
       function once(fn) {
         var called = false;
         var result;
@@ -321,14 +321,14 @@ describe("closures & scope – callback closures", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 9. Currying ────────────────────────────────────────────────────────────
 
 describe("closures & scope – currying", () => {
-  it("manual currying of a three-argument function", () => {
-    assertEquivalent(`
+	it("manual currying of a three-argument function", () => {
+		assertEquivalent(`
       function curry3(fn) {
         return function(a) {
           return function(b) {
@@ -344,10 +344,10 @@ describe("closures & scope – currying", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("curried comparison functions", () => {
-    assertEquivalent(`
+	it("curried comparison functions", () => {
+		assertEquivalent(`
       function test() {
         function greaterThan(threshold) {
           return function(value) { return value > threshold; };
@@ -358,14 +358,14 @@ describe("closures & scope – currying", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 10. Partial application ────────────────────────────────────────────────
 
 describe("closures & scope – partial application", () => {
-  it("partial application of first argument", () => {
-    assertEquivalent(`
+	it("partial application of first argument", () => {
+		assertEquivalent(`
       function partial(fn, first) {
         return function() {
           var args = [first];
@@ -381,10 +381,10 @@ describe("closures & scope – partial application", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("partial application preserves remaining arity", () => {
-    assertEquivalent(`
+	it("partial application preserves remaining arity", () => {
+		assertEquivalent(`
       function test() {
         function format(prefix, separator, suffix, value) {
           return prefix + value + separator + suffix;
@@ -397,14 +397,14 @@ describe("closures & scope – partial application", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 11. Multiple closures sharing same scope ──────────────────────────────
 
 describe("closures & scope – shared scope", () => {
-  it("getter and setter share the same variable", () => {
-    assertEquivalent(`
+	it("getter and setter share the same variable", () => {
+		assertEquivalent(`
       function test() {
         var shared = "initial";
         var getter = function() { return shared; };
@@ -419,10 +419,10 @@ describe("closures & scope – shared scope", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("multiple operations on shared array", () => {
-    assertEquivalent(`
+	it("multiple operations on shared array", () => {
+		assertEquivalent(`
       function test() {
         var data = [];
         var add = function(v) { data.push(v); };
@@ -441,14 +441,14 @@ describe("closures & scope – shared scope", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 12. Nested closures (closure over closure) ────────────────────────────
 
 describe("closures & scope – nested closures", () => {
-  it("three levels of closure nesting", () => {
-    assertEquivalent(`
+	it("three levels of closure nesting", () => {
+		assertEquivalent(`
       function level1(a) {
         return function level2(b) {
           return function level3(c) {
@@ -467,10 +467,10 @@ describe("closures & scope – nested closures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested closures each modify their own state", () => {
-    assertEquivalent(`
+	it("nested closures each modify their own state", () => {
+		assertEquivalent(`
       function test() {
         function outer() {
           var outerCount = 0;
@@ -490,14 +490,14 @@ describe("closures & scope – nested closures", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 13. Closure preserving references not values ──────────────────────────
 
 describe("closures & scope – reference preservation", () => {
-  it("closure sees mutations to outer primitive variable", () => {
-    assertEquivalent(`
+	it("closure sees mutations to outer primitive variable", () => {
+		assertEquivalent(`
       function test() {
         var count = 0;
         var increment = function() { count = count + 1; };
@@ -515,10 +515,10 @@ describe("closures & scope – reference preservation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure over reassigned variable gets latest value", () => {
-    assertEquivalent(`
+	it("closure over reassigned variable gets latest value", () => {
+		assertEquivalent(`
       function test() {
         var x = 1;
         var getX = function() { return x; };
@@ -532,10 +532,10 @@ describe("closures & scope – reference preservation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closures share reference to same array via function scope", () => {
-    assertEquivalent(`
+	it("closures share reference to same array via function scope", () => {
+		assertEquivalent(`
       function makeShared() {
         var arr = [1, 2, 3];
         return {
@@ -554,14 +554,14 @@ describe("closures & scope – reference preservation", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 14. Scope chain ───────────────────────────────────────────────────────
 
 describe("closures & scope – scope chain", () => {
-  it("inner function accesses outer outer function variables", () => {
-    assertEquivalent(`
+	it("inner function accesses outer outer function variables", () => {
+		assertEquivalent(`
       function test() {
         var a = "global-a";
         function outer() {
@@ -579,10 +579,10 @@ describe("closures & scope – scope chain", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("shadowed variables resolve to nearest scope", () => {
-    assertEquivalent(`
+	it("shadowed variables resolve to nearest scope", () => {
+		assertEquivalent(`
       function test() {
         var x = "outer";
         function f1() {
@@ -597,10 +597,10 @@ describe("closures & scope – scope chain", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("variable shadowing with partial override", () => {
-    assertEquivalent(`
+	it("variable shadowing with partial override", () => {
+		assertEquivalent(`
       function test() {
         var a = 1, b = 2, c = 3;
         function level1() {
@@ -618,10 +618,10 @@ describe("closures & scope – scope chain", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure captures correct scope across sibling functions", () => {
-    assertEquivalent(`
+	it("closure captures correct scope across sibling functions", () => {
+		assertEquivalent(`
       function test() {
         var shared = 0;
         function inc() { shared++; return shared; }
@@ -638,10 +638,10 @@ describe("closures & scope – scope chain", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure in returned object method accesses enclosing scope", () => {
-    assertEquivalent(`
+	it("closure in returned object method accesses enclosing scope", () => {
+		assertEquivalent(`
       function createPerson(name, age) {
         return {
           greet: function() {
@@ -664,5 +664,5 @@ describe("closures & scope – scope chain", () => {
       }
       test();
     `);
-  });
+	});
 });

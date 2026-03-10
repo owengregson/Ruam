@@ -6,6 +6,7 @@
  * averaging over many iterations to produce a stable multiplier.
  */
 
+import { describe, it, expect } from "vitest";
 import { obfuscateCode } from "../../src/index.js";
 
 // ---------------------------------------------------------------------------
@@ -14,7 +15,7 @@ import { obfuscateCode } from "../../src/index.js";
 
 /** High-resolution timer (ms). */
 function now(): number {
-  return performance.now();
+	return performance.now();
 }
 
 /**
@@ -22,21 +23,21 @@ function now(): number {
  * Uses median instead of mean to reject outlier GC pauses.
  */
 function benchmark(fn: () => unknown, iterations: number): number {
-  // Warm up (JIT + caches)
-  for (let i = 0; i < Math.min(iterations, 20); i++) fn();
+	// Warm up (JIT + caches)
+	for (let i = 0; i < Math.min(iterations, 20); i++) fn();
 
-  const times: number[] = [];
-  for (let i = 0; i < iterations; i++) {
-    const start = now();
-    fn();
-    times.push(now() - start);
-  }
-  times.sort((a, b) => a - b);
+	const times: number[] = [];
+	for (let i = 0; i < iterations; i++) {
+		const start = now();
+		fn();
+		times.push(now() - start);
+	}
+	times.sort((a, b) => a - b);
 
-  // Trim top/bottom 10% and take mean of the middle 80%
-  const trimCount = Math.floor(times.length * 0.1);
-  const trimmed = times.slice(trimCount, times.length - trimCount);
-  return trimmed.reduce((s, t) => s + t, 0) / trimmed.length;
+	// Trim top/bottom 10% and take mean of the middle 80%
+	const trimCount = Math.floor(times.length * 0.1);
+	const trimmed = times.slice(trimCount, times.length - trimCount);
+	return trimmed.reduce((s, t) => s + t, 0) / trimmed.length;
 }
 
 /**
@@ -44,10 +45,10 @@ function benchmark(fn: () => unknown, iterations: number): number {
  * Uses indirect eval so each call re-executes the full code.
  */
 function makeRunner(code: string): () => unknown {
-  // Use vm.Script for fast repeated execution without re-parsing
-  const { Script } = require("node:vm");
-  const script = new Script(code, { filename: "bench.js" });
-  return () => script.runInThisContext();
+	// Use vm.Script for fast repeated execution without re-parsing
+	const { Script } = require("node:vm");
+	const script = new Script(code, { filename: "bench.js" });
+	return () => script.runInThisContext();
 }
 
 /**
@@ -55,24 +56,24 @@ function makeRunner(code: string): () => unknown {
  * Returns the slowdown multiplier (VM time / native time).
  */
 function measureOverhead(
-  code: string,
-  iterations: number,
+	code: string,
+	iterations: number
 ): { nativeMs: number; vmMs: number; multiplier: number } {
-  const obfuscated = obfuscateCode(code);
+	const obfuscated = obfuscateCode(code);
 
-  const nativeFn = makeRunner(code);
-  const vmFn = makeRunner(obfuscated);
+	const nativeFn = makeRunner(code);
+	const vmFn = makeRunner(obfuscated);
 
-  // Verify correctness first
-  const nativeResult = nativeFn();
-  const vmResult = vmFn();
-  expect(JSON.stringify(vmResult)).toBe(JSON.stringify(nativeResult));
+	// Verify correctness first
+	const nativeResult = nativeFn();
+	const vmResult = vmFn();
+	expect(JSON.stringify(vmResult)).toBe(JSON.stringify(nativeResult));
 
-  const nativeMs = benchmark(nativeFn, iterations);
-  const vmMs = benchmark(vmFn, iterations);
-  const multiplier = vmMs / nativeMs;
+	const nativeMs = benchmark(nativeFn, iterations);
+	const vmMs = benchmark(vmFn, iterations);
+	const multiplier = vmMs / nativeMs;
 
-  return { nativeMs, vmMs, multiplier };
+	return { nativeMs, vmMs, multiplier };
 }
 
 // ---------------------------------------------------------------------------
@@ -80,9 +81,9 @@ function measureOverhead(
 // ---------------------------------------------------------------------------
 
 const WORKLOADS: { name: string; code: string }[] = [
-  {
-    name: "arithmetic loop (10k iterations)",
-    code: `
+	{
+		name: "arithmetic loop (10k iterations)",
+		code: `
       function work() {
         var sum = 0;
         for (var i = 0; i < 10000; i++) {
@@ -92,20 +93,20 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
-  {
-    name: "fibonacci (recursive, n=20)",
-    code: `
+	},
+	{
+		name: "fibonacci (recursive, n=20)",
+		code: `
       function fib(n) {
         if (n <= 1) return n;
         return fib(n - 1) + fib(n - 2);
       }
       fib(20);
     `,
-  },
-  {
-    name: "array manipulation (sort + map + reduce)",
-    code: `
+	},
+	{
+		name: "array manipulation (sort + map + reduce)",
+		code: `
       function work() {
         var arr = [];
         for (var i = 0; i < 500; i++) arr.push((i * 17) % 100);
@@ -115,10 +116,10 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
-  {
-    name: "string operations (concatenation + manipulation)",
-    code: `
+	},
+	{
+		name: "string operations (concatenation + manipulation)",
+		code: `
       function work() {
         var s = "";
         for (var i = 0; i < 500; i++) {
@@ -132,10 +133,10 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
-  {
-    name: "object creation + property access",
-    code: `
+	},
+	{
+		name: "object creation + property access",
+		code: `
       function work() {
         var results = [];
         for (var i = 0; i < 500; i++) {
@@ -146,10 +147,10 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
-  {
-    name: "closures + higher-order functions",
-    code: `
+	},
+	{
+		name: "closures + higher-order functions",
+		code: `
       function work() {
         function makeAdder(n) { return function(x) { return x + n; }; }
         var adders = [];
@@ -160,10 +161,10 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
-  {
-    name: "class instantiation + method calls",
-    code: `
+	},
+	{
+		name: "class instantiation + method calls",
+		code: `
       function work() {
         class Point {
           constructor(x, y) { this.x = x; this.y = y; }
@@ -181,10 +182,10 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
-  {
-    name: "try/catch in loop",
-    code: `
+	},
+	{
+		name: "try/catch in loop",
+		code: `
       function work() {
         var caught = 0;
         for (var i = 0; i < 500; i++) {
@@ -199,10 +200,10 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
-  {
-    name: "nested loops with conditionals",
-    code: `
+	},
+	{
+		name: "nested loops with conditionals",
+		code: `
       function work() {
         var count = 0;
         for (var i = 0; i < 100; i++) {
@@ -216,10 +217,10 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
-  {
-    name: "switch statement dispatch",
-    code: `
+	},
+	{
+		name: "switch statement dispatch",
+		code: `
       function work() {
         var sum = 0;
         for (var i = 0; i < 2000; i++) {
@@ -236,7 +237,7 @@ const WORKLOADS: { name: string; code: string }[] = [
       }
       work();
     `,
-  },
+	},
 ];
 
 // ---------------------------------------------------------------------------
@@ -246,50 +247,68 @@ const WORKLOADS: { name: string; code: string }[] = [
 const ITERATIONS = 100; // Per-workload iteration count for stable averaging
 
 describe("VM performance benchmarks", () => {
-  const results: { name: string; nativeMs: number; vmMs: number; multiplier: number }[] = [];
+	const results: {
+		name: string;
+		nativeMs: number;
+		vmMs: number;
+		multiplier: number;
+	}[] = [];
 
-  for (const workload of WORKLOADS) {
-    it(`benchmark: ${workload.name}`, () => {
-      const result = measureOverhead(workload.code, ITERATIONS);
-      results.push({ name: workload.name, ...result });
+	for (const workload of WORKLOADS) {
+		it(`benchmark: ${workload.name}`, () => {
+			const result = measureOverhead(workload.code, ITERATIONS);
+			results.push({ name: workload.name, ...result });
 
-      // Log individual result
-      console.log(
-        `  ${workload.name}: ${result.multiplier.toFixed(1)}x ` +
-        `(native: ${result.nativeMs.toFixed(3)}ms, VM: ${result.vmMs.toFixed(3)}ms)`,
-      );
+			// Log individual result
+			console.log(
+				`  ${workload.name}: ${result.multiplier.toFixed(1)}x ` +
+					`(native: ${result.nativeMs.toFixed(
+						3
+					)}ms, VM: ${result.vmMs.toFixed(3)}ms)`
+			);
 
-      // Sanity check: VM should produce correct results (already verified in measureOverhead)
-      // We don't assert on speed — this is informational
-      expect(result.multiplier).toBeGreaterThan(0);
-    });
-  }
+			// Sanity check: VM should produce correct results (already verified in measureOverhead)
+			// We don't assert on speed — this is informational
+			expect(result.multiplier).toBeGreaterThan(0);
+		});
+	}
 
-  it("summary: overall VM overhead", () => {
-    expect(results.length).toBe(WORKLOADS.length);
+	it("summary: overall VM overhead", () => {
+		expect(results.length).toBe(WORKLOADS.length);
 
-    // Compute weighted average (weight by native time to emphasize heavier workloads)
-    const totalNative = results.reduce((s, r) => s + r.nativeMs, 0);
-    const weightedSum = results.reduce((s, r) => s + r.multiplier * (r.nativeMs / totalNative), 0);
+		// Compute weighted average (weight by native time to emphasize heavier workloads)
+		const totalNative = results.reduce((s, r) => s + r.nativeMs, 0);
+		const weightedSum = results.reduce(
+			(s, r) => s + r.multiplier * (r.nativeMs / totalNative),
+			0
+		);
 
-    // Also compute simple median
-    const sorted = [...results].sort((a, b) => a.multiplier - b.multiplier);
-    const median = sorted[Math.floor(sorted.length / 2)]!.multiplier;
+		// Also compute simple median
+		const sorted = [...results].sort((a, b) => a.multiplier - b.multiplier);
+		const median = sorted[Math.floor(sorted.length / 2)]!.multiplier;
 
-    // Min and max
-    const min = sorted[0]!;
-    const max = sorted[sorted.length - 1]!;
+		// Min and max
+		const min = sorted[0]!;
+		const max = sorted[sorted.length - 1]!;
 
-    console.log("\n  ═══════════════════════════════════════════════════");
-    console.log("  VM PERFORMANCE SUMMARY");
-    console.log("  ═══════════════════════════════════════════════════");
-    console.log(`  Weighted average overhead: ${weightedSum.toFixed(1)}x`);
-    console.log(`  Median overhead:           ${median.toFixed(1)}x`);
-    console.log(`  Fastest workload:          ${min.multiplier.toFixed(1)}x (${min.name})`);
-    console.log(`  Slowest workload:          ${max.multiplier.toFixed(1)}x (${max.name})`);
-    console.log("  ═══════════════════════════════════════════════════\n");
+		console.log("\n  ═══════════════════════════════════════════════════");
+		console.log("  VM PERFORMANCE SUMMARY");
+		console.log("  ═══════════════════════════════════════════════════");
+		console.log(`  Weighted average overhead: ${weightedSum.toFixed(1)}x`);
+		console.log(`  Median overhead:           ${median.toFixed(1)}x`);
+		console.log(
+			`  Fastest workload:          ${min.multiplier.toFixed(1)}x (${
+				min.name
+			})`
+		);
+		console.log(
+			`  Slowest workload:          ${max.multiplier.toFixed(1)}x (${
+				max.name
+			})`
+		);
+		console.log("  ═══════════════════════════════════════════════════\n");
 
-    // This test always passes — it's purely informational
-    expect(true).toBe(true);
-  });
+		// This test always passes — it's purely informational
+		expect(true).toBe(true);
+	});
 });

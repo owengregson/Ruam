@@ -2,18 +2,18 @@ import { describe, it } from "vitest";
 import { assertEquivalent } from "../helpers.js";
 
 describe("closures", () => {
-  it("basic closure captures variable", () => {
-    assertEquivalent(`
+	it("basic closure captures variable", () => {
+		assertEquivalent(`
       function makeAdder(x) {
         return function(y) { return x + y; };
       }
       var add5 = makeAdder(5);
       add5(3);
     `);
-  });
+	});
 
-  it("counter factory", () => {
-    assertEquivalent(`
+	it("counter factory", () => {
+		assertEquivalent(`
       function makeCounter() {
         var count = 0;
         return function() { return ++count; };
@@ -21,10 +21,10 @@ describe("closures", () => {
       var c = makeCounter();
       [c(), c(), c()];
     `);
-  });
+	});
 
-  it("closure in loop (var)", () => {
-    assertEquivalent(`
+	it("closure in loop (var)", () => {
+		assertEquivalent(`
       function makeArray() {
         var fns = [];
         for (var i = 0; i < 3; i++) {
@@ -34,10 +34,10 @@ describe("closures", () => {
       }
       makeArray();
     `);
-  });
+	});
 
-  it("multiple closures sharing scope", () => {
-    assertEquivalent(`
+	it("multiple closures sharing scope", () => {
+		assertEquivalent(`
       function makeState(init) {
         var val = init;
         return {
@@ -49,10 +49,10 @@ describe("closures", () => {
       s.set(42);
       s.get();
     `);
-  });
+	});
 
-  it("nested closures", () => {
-    assertEquivalent(`
+	it("nested closures", () => {
+		assertEquivalent(`
       function outer(a) {
         return function middle(b) {
           return function inner(c) {
@@ -62,5 +62,5 @@ describe("closures", () => {
       }
       outer(1)(2)(3);
     `);
-  });
+	});
 });

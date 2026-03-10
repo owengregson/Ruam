@@ -2,8 +2,8 @@ import { describe, it } from "vitest";
 import { assertEquivalent } from "../helpers.js";
 
 describe("exceptions", () => {
-  it("try/catch basic", () => {
-    assertEquivalent(`
+	it("try/catch basic", () => {
+		assertEquivalent(`
       function test() {
         try {
           throw new Error("oops");
@@ -13,10 +13,10 @@ describe("exceptions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("try/catch/finally", () => {
-    assertEquivalent(`
+	it("try/catch/finally", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         try {
@@ -31,10 +31,10 @@ describe("exceptions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("try without error", () => {
-    assertEquivalent(`
+	it("try without error", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         try {
@@ -47,10 +47,10 @@ describe("exceptions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("re-throw", () => {
-    assertEquivalent(`
+	it("re-throw", () => {
+		assertEquivalent(`
       function test() {
         try {
           try {
@@ -64,10 +64,10 @@ describe("exceptions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("error type check", () => {
-    assertEquivalent(`
+	it("error type check", () => {
+		assertEquivalent(`
       function test() {
         try {
           null.property;
@@ -77,5 +77,5 @@ describe("exceptions", () => {
       }
       test();
     `);
-  });
+	});
 });

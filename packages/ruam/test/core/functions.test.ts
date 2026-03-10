@@ -2,28 +2,28 @@ import { describe, it } from "vitest";
 import { assertEquivalent } from "../helpers.js";
 
 describe("function declarations and expressions", () => {
-  it("function declaration basic", () => {
-    assertEquivalent(`
+	it("function declaration basic", () => {
+		assertEquivalent(`
       function double(x) { return x * 2; }
       function test() {
         return double(5);
       }
       test();
     `);
-  });
+	});
 
-  it("function expression assigned to variable", () => {
-    assertEquivalent(`
+	it("function expression assigned to variable", () => {
+		assertEquivalent(`
       function test() {
         var square = function(x) { return x * x; };
         return square(7);
       }
       test();
     `);
-  });
+	});
 
-  it("function expression used as recursive via variable", () => {
-    assertEquivalent(`
+	it("function expression used as recursive via variable", () => {
+		assertEquivalent(`
       function test() {
         var countdown = function(n) {
           if (n <= 0) return [];
@@ -35,10 +35,10 @@ describe("function declarations and expressions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("multiple function declarations coexist", () => {
-    assertEquivalent(`
+	it("multiple function declarations coexist", () => {
+		assertEquivalent(`
       function add(a, b) { return a + b; }
       function mul(a, b) { return a * b; }
       function test() {
@@ -46,22 +46,22 @@ describe("function declarations and expressions", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("arrow functions", () => {
-  it("arrow function with expression body", () => {
-    assertEquivalent(`
+	it("arrow function with expression body", () => {
+		assertEquivalent(`
       function test() {
         var double = function(x) { return x * 2; };
         return double(21);
       }
       test();
     `);
-  });
+	});
 
-  it("arrow function with block body", () => {
-    assertEquivalent(`
+	it("arrow function with block body", () => {
+		assertEquivalent(`
       function test() {
         var compute = function(a, b) {
           var sum = a + b;
@@ -72,10 +72,10 @@ describe("arrow functions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("arrow function does not have own this", () => {
-    assertEquivalent(`
+	it("arrow function does not have own this", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           value: 10,
@@ -90,10 +90,10 @@ describe("arrow functions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("arrow function in array methods", () => {
-    assertEquivalent(`
+	it("arrow function in array methods", () => {
+		assertEquivalent(`
       function test() {
         var nums = [1, 2, 3, 4, 5];
         var doubled = nums.map(function(n) { return n * 2; });
@@ -103,22 +103,22 @@ describe("arrow functions", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("default parameters", () => {
-  it("uses default when argument is undefined", () => {
-    assertEquivalent(`
+	it("uses default when argument is undefined", () => {
+		assertEquivalent(`
       function greet(name, greeting) {
         if (greeting === undefined) greeting = "Hello";
         return greeting + ", " + name + "!";
       }
       [greet("Alice"), greet("Bob", "Hi")];
     `);
-  });
+	});
 
-  it("default parameter with expression", () => {
-    assertEquivalent(`
+	it("default parameter with expression", () => {
+		assertEquivalent(`
       function createArray(length, fill) {
         if (length === undefined) length = 5;
         if (fill === undefined) fill = 0;
@@ -128,22 +128,22 @@ describe("default parameters", () => {
       }
       [createArray(), createArray(3), createArray(3, 1)];
     `);
-  });
+	});
 
-  it("default parameter does not apply for null or falsy", () => {
-    assertEquivalent(`
+	it("default parameter does not apply for null or falsy", () => {
+		assertEquivalent(`
       function test(val) {
         if (val === undefined) val = "default";
         return val;
       }
       [test(), test(null), test(0), test(""), test(false)];
     `);
-  });
+	});
 });
 
 describe("rest parameters", () => {
-  it("collects remaining arguments into an array", () => {
-    assertEquivalent(`
+	it("collects remaining arguments into an array", () => {
+		assertEquivalent(`
       function test() {
         function sum() {
           var args = Array.prototype.slice.call(arguments);
@@ -155,10 +155,10 @@ describe("rest parameters", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("rest parameters after named params", () => {
-    assertEquivalent(`
+	it("rest parameters after named params", () => {
+		assertEquivalent(`
       function test() {
         function format(prefix) {
           var rest = Array.prototype.slice.call(arguments, 1);
@@ -168,10 +168,10 @@ describe("rest parameters", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("rest parameter is a real array", () => {
-    assertEquivalent(`
+	it("rest parameter is a real array", () => {
+		assertEquivalent(`
       function test() {
         function checkType() {
           var args = Array.prototype.slice.call(arguments);
@@ -185,21 +185,21 @@ describe("rest parameters", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("arguments object", () => {
-  it("arguments.length reflects actual call arguments", () => {
-    assertEquivalent(`
+	it("arguments.length reflects actual call arguments", () => {
+		assertEquivalent(`
       function test(a, b) {
         return arguments.length;
       }
       [test(), test(1), test(1, 2), test(1, 2, 3)];
     `);
-  });
+	});
 
-  it("arguments can be accessed by index", () => {
-    assertEquivalent(`
+	it("arguments can be accessed by index", () => {
+		assertEquivalent(`
       function test() {
         function getArgs() {
           var result = [];
@@ -212,10 +212,10 @@ describe("arguments object", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("converting arguments to a real array", () => {
-    assertEquivalent(`
+	it("converting arguments to a real array", () => {
+		assertEquivalent(`
       function test() {
         function toArr() {
           return Array.prototype.slice.call(arguments).reverse();
@@ -224,30 +224,30 @@ describe("arguments object", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("IIFE", () => {
-  it("immediately invoked function expression returns a value", () => {
-    assertEquivalent(`
+	it("immediately invoked function expression returns a value", () => {
+		assertEquivalent(`
       var result = (function() {
         return 42;
       })();
       result;
     `);
-  });
+	});
 
-  it("IIFE with arguments", () => {
-    assertEquivalent(`
+	it("IIFE with arguments", () => {
+		assertEquivalent(`
       var result = (function(a, b) {
         return a + b;
       })(10, 20);
       result;
     `);
-  });
+	});
 
-  it("IIFE creates private scope", () => {
-    assertEquivalent(`
+	it("IIFE creates private scope", () => {
+		assertEquivalent(`
       var counter = (function() {
         var count = 0;
         return {
@@ -260,12 +260,12 @@ describe("IIFE", () => {
       counter.inc();
       counter.get();
     `);
-  });
+	});
 });
 
 describe("higher-order functions", () => {
-  it("function returning a function", () => {
-    assertEquivalent(`
+	it("function returning a function", () => {
+		assertEquivalent(`
       function test() {
         function multiplier(factor) {
           return function(x) { return x * factor; };
@@ -276,10 +276,10 @@ describe("higher-order functions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("function accepting a function as argument", () => {
-    assertEquivalent(`
+	it("function accepting a function as argument", () => {
+		assertEquivalent(`
       function test() {
         function applyTwice(fn, x) {
           return fn(fn(x));
@@ -289,10 +289,10 @@ describe("higher-order functions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("compose two functions", () => {
-    assertEquivalent(`
+	it("compose two functions", () => {
+		assertEquivalent(`
       function test() {
         function compose(f, g) {
           return function(x) { return f(g(x)); };
@@ -304,10 +304,10 @@ describe("higher-order functions", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("function that creates specialized validators", () => {
-    assertEquivalent(`
+	it("function that creates specialized validators", () => {
+		assertEquivalent(`
       function test() {
         function rangeValidator(min, max) {
           return function(val) {
@@ -323,22 +323,22 @@ describe("higher-order functions", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("recursion", () => {
-  it("computes factorial recursively", () => {
-    assertEquivalent(`
+	it("computes factorial recursively", () => {
+		assertEquivalent(`
       function factorial(n) {
         if (n <= 1) return 1;
         return n * factorial(n - 1);
       }
       [factorial(0), factorial(1), factorial(5), factorial(8)];
     `);
-  });
+	});
 
-  it("computes fibonacci recursively", () => {
-    assertEquivalent(`
+	it("computes fibonacci recursively", () => {
+		assertEquivalent(`
       function fib(n) {
         if (n <= 0) return 0;
         if (n === 1) return 1;
@@ -346,10 +346,10 @@ describe("recursion", () => {
       }
       [fib(0), fib(1), fib(2), fib(5), fib(10)];
     `);
-  });
+	});
 
-  it("flattens a nested array recursively", () => {
-    assertEquivalent(`
+	it("flattens a nested array recursively", () => {
+		assertEquivalent(`
       function flatten(arr) {
         var result = [];
         for (var i = 0; i < arr.length; i++) {
@@ -364,22 +364,22 @@ describe("recursion", () => {
       }
       flatten([1, [2, [3, 4], 5], [6, 7]]);
     `);
-  });
+	});
 
-  it("computes greatest common divisor recursively", () => {
-    assertEquivalent(`
+	it("computes greatest common divisor recursively", () => {
+		assertEquivalent(`
       function gcd(a, b) {
         if (b === 0) return a;
         return gcd(b, a % b);
       }
       [gcd(12, 8), gcd(100, 75), gcd(17, 13)];
     `);
-  });
+	});
 });
 
 describe("closures", () => {
-  it("closure preserves variable after outer function returns", () => {
-    assertEquivalent(`
+	it("closure preserves variable after outer function returns", () => {
+		assertEquivalent(`
       function test() {
         function makeGreeter(greeting) {
           return function(name) {
@@ -392,10 +392,10 @@ describe("closures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure-based accumulator", () => {
-    assertEquivalent(`
+	it("closure-based accumulator", () => {
+		assertEquivalent(`
       function test() {
         function makeAccumulator(initial) {
           var total = initial;
@@ -413,10 +413,10 @@ describe("closures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure captures and modifies shared state", () => {
-    assertEquivalent(`
+	it("closure captures and modifies shared state", () => {
+		assertEquivalent(`
       function test() {
         function makeStack() {
           var items = [];
@@ -436,12 +436,12 @@ describe("closures", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("Function.prototype methods", () => {
-  it("Function.prototype.call sets this context", () => {
-    assertEquivalent(`
+	it("Function.prototype.call sets this context", () => {
+		assertEquivalent(`
       function test() {
         function getInfo() {
           return this.name + " is " + this.age;
@@ -451,10 +451,10 @@ describe("Function.prototype methods", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Function.prototype.apply with argument array", () => {
-    assertEquivalent(`
+	it("Function.prototype.apply with argument array", () => {
+		assertEquivalent(`
       function test() {
         function sum() {
           var total = 0;
@@ -465,10 +465,10 @@ describe("Function.prototype methods", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Function.prototype.bind creates a bound function", () => {
-    assertEquivalent(`
+	it("Function.prototype.bind creates a bound function", () => {
+		assertEquivalent(`
       function test() {
         function greet(greeting) {
           return greeting + ", " + this.name;
@@ -479,10 +479,10 @@ describe("Function.prototype methods", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("bind with partial application", () => {
-    assertEquivalent(`
+	it("bind with partial application", () => {
+		assertEquivalent(`
       function test() {
         function multiply(a, b) { return a * b; }
         var double = multiply.bind(null, 2);
@@ -491,12 +491,12 @@ describe("Function.prototype methods", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("nested function scopes", () => {
-  it("inner function accesses outer variables", () => {
-    assertEquivalent(`
+	it("inner function accesses outer variables", () => {
+		assertEquivalent(`
       function test() {
         var outerVar = "outer";
         function inner() {
@@ -507,10 +507,10 @@ describe("nested function scopes", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("three levels of nesting with variable shadowing", () => {
-    assertEquivalent(`
+	it("three levels of nesting with variable shadowing", () => {
+		assertEquivalent(`
       function test() {
         var x = "level0";
         function level1() {
@@ -525,10 +525,10 @@ describe("nested function scopes", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("inner function modifies outer variable", () => {
-    assertEquivalent(`
+	it("inner function modifies outer variable", () => {
+		assertEquivalent(`
       function test() {
         var count = 0;
         function increment() { count++; }
@@ -540,12 +540,12 @@ describe("nested function scopes", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("multiple return paths", () => {
-  it("returns different types based on input", () => {
-    assertEquivalent(`
+	it("returns different types based on input", () => {
+		assertEquivalent(`
       function classify(val) {
         if (val === null) return "null";
         if (val === undefined) return "undefined";
@@ -556,10 +556,10 @@ describe("multiple return paths", () => {
       }
       [classify(null), classify(undefined), classify(5), classify("hi"), classify([1,2]), classify(true)];
     `);
-  });
+	});
 
-  it("early return pattern for guard clauses", () => {
-    assertEquivalent(`
+	it("early return pattern for guard clauses", () => {
+		assertEquivalent(`
       function divide(a, b) {
         if (typeof a !== "number") return "error: a not number";
         if (typeof b !== "number") return "error: b not number";
@@ -568,12 +568,12 @@ describe("multiple return paths", () => {
       }
       [divide(10, 2), divide(10, 0), divide("x", 2), divide(10, "y")];
     `);
-  });
+	});
 });
 
 describe("functions as object methods", () => {
-  it("method accesses object properties via this", () => {
-    assertEquivalent(`
+	it("method accesses object properties via this", () => {
+		assertEquivalent(`
       function test() {
         var rect = {
           width: 10,
@@ -585,10 +585,10 @@ describe("functions as object methods", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("method that returns this for chaining", () => {
-    assertEquivalent(`
+	it("method that returns this for chaining", () => {
+		assertEquivalent(`
       function test() {
         var builder = {
           parts: [],
@@ -599,10 +599,10 @@ describe("functions as object methods", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("dynamically adding methods to an object", () => {
-    assertEquivalent(`
+	it("dynamically adding methods to an object", () => {
+		assertEquivalent(`
       function test() {
         var obj = { val: 10 };
         obj.double = function() { return this.val * 2; };
@@ -611,12 +611,12 @@ describe("functions as object methods", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("callback patterns", () => {
-  it("forEach-like callback invocation", () => {
-    assertEquivalent(`
+	it("forEach-like callback invocation", () => {
+		assertEquivalent(`
       function test() {
         function myForEach(arr, callback) {
           for (var i = 0; i < arr.length; i++) {
@@ -631,10 +631,10 @@ describe("callback patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("map-like callback transformation", () => {
-    assertEquivalent(`
+	it("map-like callback transformation", () => {
+		assertEquivalent(`
       function test() {
         function myMap(arr, fn) {
           var result = [];
@@ -647,10 +647,10 @@ describe("callback patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("filter-like callback predicate", () => {
-    assertEquivalent(`
+	it("filter-like callback predicate", () => {
+		assertEquivalent(`
       function test() {
         function myFilter(arr, pred) {
           var result = [];
@@ -663,10 +663,10 @@ describe("callback patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("reduce-like callback accumulation", () => {
-    assertEquivalent(`
+	it("reduce-like callback accumulation", () => {
+		assertEquivalent(`
       function test() {
         function myReduce(arr, fn, initial) {
           var acc = initial;
@@ -679,10 +679,10 @@ describe("callback patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("callback with error-first pattern", () => {
-    assertEquivalent(`
+	it("callback with error-first pattern", () => {
+		assertEquivalent(`
       function test() {
         function safeDivide(a, b, callback) {
           if (b === 0) {
@@ -702,5 +702,5 @@ describe("callback patterns", () => {
       }
       test();
     `);
-  });
+	});
 });

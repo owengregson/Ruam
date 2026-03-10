@@ -14,8 +14,8 @@ import { assertEquivalent, evalOriginal, evalObfuscated } from "../helpers.js";
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: this binding", () => {
-  it("arrow function captures enclosing this, not call-site this", () => {
-    assertEquivalent(`
+	it("arrow function captures enclosing this, not call-site this", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           val: 10,
@@ -28,10 +28,10 @@ describe("vm-breaker: this binding", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested arrow functions preserve outer this", () => {
-    assertEquivalent(`
+	it("nested arrow functions preserve outer this", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           x: 5,
@@ -47,10 +47,10 @@ describe("vm-breaker: this binding", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("method shorthand this differs from arrow this in callbacks", () => {
-    assertEquivalent(`
+	it("method shorthand this differs from arrow this in callbacks", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           items: [1, 2, 3],
@@ -63,10 +63,10 @@ describe("vm-breaker: this binding", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("this in constructor vs prototype method vs arrow", () => {
-    assertEquivalent(`
+	it("this in constructor vs prototype method vs arrow", () => {
+		assertEquivalent(`
       function test() {
         function Foo(v) {
           this.v = v;
@@ -87,10 +87,10 @@ describe("vm-breaker: this binding", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("call/apply with null/undefined this in sloppy mode", () => {
-    assertEquivalent(`
+	it("call/apply with null/undefined this in sloppy mode", () => {
+		assertEquivalent(`
       function test() {
         function getThis() { return typeof this; }
         var r1 = getThis.call(null);
@@ -100,10 +100,10 @@ describe("vm-breaker: this binding", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("this inside nested object method calls", () => {
-    assertEquivalent(`
+	it("this inside nested object method calls", () => {
+		assertEquivalent(`
       function test() {
         var a = {
           x: 1,
@@ -119,7 +119,7 @@ describe("vm-breaker: this binding", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -127,8 +127,8 @@ describe("vm-breaker: this binding", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: closure scope tricks", () => {
-  it("closure survives after creator returns and is called much later", () => {
-    assertEquivalent(`
+	it("closure survives after creator returns and is called much later", () => {
+		assertEquivalent(`
       function test() {
         var closures = [];
         for (var i = 0; i < 5; i++) {
@@ -144,10 +144,10 @@ describe("vm-breaker: closure scope tricks", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure over let in for-of with mutation", () => {
-    assertEquivalent(`
+	it("closure over let in for-of with mutation", () => {
+		assertEquivalent(`
       function test() {
         var arr = [10, 20, 30];
         var fns = [];
@@ -159,10 +159,10 @@ describe("vm-breaker: closure scope tricks", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure modifying shared state in complex order", () => {
-    assertEquivalent(`
+	it("closure modifying shared state in complex order", () => {
+		assertEquivalent(`
       function test() {
         var state = { count: 0, log: [] };
         function inc() { state.count++; state.log.push("inc:" + state.count); }
@@ -174,10 +174,10 @@ describe("vm-breaker: closure scope tricks", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("immediately re-assigned closure variable", () => {
-    assertEquivalent(`
+	it("immediately re-assigned closure variable", () => {
+		assertEquivalent(`
       function test() {
         var x = "original";
         var getX = function() { return x; };
@@ -189,10 +189,10 @@ describe("vm-breaker: closure scope tricks", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure in catch block scope", () => {
-    assertEquivalent(`
+	it("closure in catch block scope", () => {
+		assertEquivalent(`
       function test() {
         var fns = [];
         for (var i = 0; i < 3; i++) {
@@ -208,10 +208,10 @@ describe("vm-breaker: closure scope tricks", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("recursive closure with shared accumulator", () => {
-    assertEquivalent(`
+	it("recursive closure with shared accumulator", () => {
+		assertEquivalent(`
       function test() {
         var acc = [];
         function walk(tree, depth) {
@@ -229,7 +229,7 @@ describe("vm-breaker: closure scope tricks", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -237,8 +237,8 @@ describe("vm-breaker: closure scope tricks", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: exception flow", () => {
-  it("throw in ternary expression", () => {
-    assertEquivalent(`
+	it("throw in ternary expression", () => {
+		assertEquivalent(`
       function test() {
         function check(x) {
           try {
@@ -251,10 +251,10 @@ describe("vm-breaker: exception flow", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("exception in array/object initializer", () => {
-    assertEquivalent(`
+	it("exception in array/object initializer", () => {
+		assertEquivalent(`
       function test() {
         function boom() { throw "bang"; }
         try {
@@ -266,10 +266,10 @@ describe("vm-breaker: exception flow", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("exception in function argument evaluation", () => {
-    assertEquivalent(`
+	it("exception in function argument evaluation", () => {
+		assertEquivalent(`
       function test() {
         function add(a, b) { return a + b; }
         function explode() { throw "kaboom"; }
@@ -281,10 +281,10 @@ describe("vm-breaker: exception flow", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("try/catch/finally with return in try and finally side-effect", () => {
-    assertEquivalent(`
+	it("try/catch/finally with return in try and finally side-effect", () => {
+		assertEquivalent(`
       function test() {
         var sideEffect = [];
         function inner() {
@@ -303,10 +303,10 @@ describe("vm-breaker: exception flow", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested try-catch with multiple exception types", () => {
-    assertEquivalent(`
+	it("nested try-catch with multiple exception types", () => {
+		assertEquivalent(`
       function test() {
         var results = [];
         var errors = [
@@ -331,10 +331,10 @@ describe("vm-breaker: exception flow", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("exception during for-of iteration", () => {
-    assertEquivalent(`
+	it("exception during for-of iteration", () => {
+		assertEquivalent(`
       function test() {
         var results = [];
         var items = [1, 2, 3, 4, 5];
@@ -350,10 +350,10 @@ describe("vm-breaker: exception flow", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("exception from method call in chain", () => {
-    assertEquivalent(`
+	it("exception from method call in chain", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           data: [1, 2, 3],
@@ -372,7 +372,7 @@ describe("vm-breaker: exception flow", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -380,8 +380,8 @@ describe("vm-breaker: exception flow", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: class patterns", () => {
-  it("class with static methods and instance interaction", () => {
-    assertEquivalent(`
+	it("class with static methods and instance interaction", () => {
+		assertEquivalent(`
       function test() {
         class Counter {
           static count = 0;
@@ -396,10 +396,10 @@ describe("vm-breaker: class patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("multi-level inheritance with super in methods", () => {
-    assertEquivalent(`
+	it("multi-level inheritance with super in methods", () => {
+		assertEquivalent(`
       function test() {
         class A {
           constructor(x) { this.x = x; }
@@ -417,10 +417,10 @@ describe("vm-breaker: class patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("class with computed method names", () => {
-    assertEquivalent(`
+	it("class with computed method names", () => {
+		assertEquivalent(`
       function test() {
         var methodName = "greet";
         class Greeter {
@@ -430,10 +430,10 @@ describe("vm-breaker: class patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("class with getter and setter interplay", () => {
-    assertEquivalent(`
+	it("class with getter and setter interplay", () => {
+		assertEquivalent(`
       function test() {
         class Temperature {
           constructor(celsius) { this._c = celsius; }
@@ -448,10 +448,10 @@ describe("vm-breaker: class patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("instanceof through inheritance chain", () => {
-    assertEquivalent(`
+	it("instanceof through inheritance chain", () => {
+		assertEquivalent(`
       function test() {
         class Base {}
         class Mid extends Base {}
@@ -467,10 +467,10 @@ describe("vm-breaker: class patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("class methods returning this for chaining", () => {
-    assertEquivalent(`
+	it("class methods returning this for chaining", () => {
+		assertEquivalent(`
       function test() {
         class Builder {
           constructor() { this.parts = []; }
@@ -481,10 +481,10 @@ describe("vm-breaker: class patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("class with symbol-like computed properties", () => {
-    assertEquivalent(`
+	it("class with symbol-like computed properties", () => {
+		assertEquivalent(`
       function test() {
         var key1 = "prop_" + 1;
         var key2 = "prop_" + 2;
@@ -505,7 +505,7 @@ describe("vm-breaker: class patterns", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -513,8 +513,8 @@ describe("vm-breaker: class patterns", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: evaluation order", () => {
-  it("side effects in property access key computation", () => {
-    assertEquivalent(`
+	it("side effects in property access key computation", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         var obj = { a: 1, b: 2, c: 3 };
@@ -526,10 +526,10 @@ describe("vm-breaker: evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("short-circuit evaluation with side effects in all branches", () => {
-    assertEquivalent(`
+	it("short-circuit evaluation with side effects in all branches", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         function t(label, val) { log.push(label); return val; }
@@ -540,10 +540,10 @@ describe("vm-breaker: evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("function call argument evaluation order", () => {
-    assertEquivalent(`
+	it("function call argument evaluation order", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         function track(label, val) { log.push(label); return val; }
@@ -553,10 +553,10 @@ describe("vm-breaker: evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("comma operator in return position", () => {
-    assertEquivalent(`
+	it("comma operator in return position", () => {
+		assertEquivalent(`
       function test() {
         var x = 0;
         function side() { x++; return x; }
@@ -565,10 +565,10 @@ describe("vm-breaker: evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("conditional assignment with complex conditions", () => {
-    assertEquivalent(`
+	it("conditional assignment with complex conditions", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: null, b: undefined, c: 0, d: "", e: false, f: "ok" };
         var results = [];
@@ -582,10 +582,10 @@ describe("vm-breaker: evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested ternary with side effects", () => {
-    assertEquivalent(`
+	it("nested ternary with side effects", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         function classify(n) {
@@ -600,10 +600,10 @@ describe("vm-breaker: evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("postfix vs prefix increment in expressions", () => {
-    assertEquivalent(`
+	it("postfix vs prefix increment in expressions", () => {
+		assertEquivalent(`
       function test() {
         var a = 1, b = 1;
         var r1 = a++ + a++;
@@ -614,7 +614,7 @@ describe("vm-breaker: evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -622,8 +622,8 @@ describe("vm-breaker: evaluation order", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: complex data structures", () => {
-  it("linked list operations", () => {
-    assertEquivalent(`
+	it("linked list operations", () => {
+		assertEquivalent(`
       function test() {
         function Node(val, next) { this.val = val; this.next = next || null; }
         function toArray(head) {
@@ -648,10 +648,10 @@ describe("vm-breaker: complex data structures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("graph traversal with cycle detection", () => {
-    assertEquivalent(`
+	it("graph traversal with cycle detection", () => {
+		assertEquivalent(`
       function test() {
         var graph = {
           A: ["B", "C"],
@@ -680,10 +680,10 @@ describe("vm-breaker: complex data structures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("priority queue (min-heap) implementation", () => {
-    assertEquivalent(`
+	it("priority queue (min-heap) implementation", () => {
+		assertEquivalent(`
       function test() {
         function MinHeap() { this.data = []; }
         MinHeap.prototype.push = function(val) {
@@ -726,10 +726,10 @@ describe("vm-breaker: complex data structures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Map and Set operations", () => {
-    assertEquivalent(`
+	it("Map and Set operations", () => {
+		assertEquivalent(`
       function test() {
         var m = new Map();
         m.set("a", 1);
@@ -746,10 +746,10 @@ describe("vm-breaker: complex data structures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("complex reduce building nested structure", () => {
-    assertEquivalent(`
+	it("complex reduce building nested structure", () => {
+		assertEquivalent(`
       function test() {
         var paths = ["a.b.c", "a.b.d", "a.e", "f.g"];
         var tree = paths.reduce(function(acc, path) {
@@ -765,7 +765,7 @@ describe("vm-breaker: complex data structures", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -773,8 +773,8 @@ describe("vm-breaker: complex data structures", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: string edge cases", () => {
-  it("regex with capture groups and backreferences", () => {
-    assertEquivalent(`
+	it("regex with capture groups and backreferences", () => {
+		assertEquivalent(`
       function test() {
         var str = "2023-12-25";
         var match = str.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
@@ -782,10 +782,10 @@ describe("vm-breaker: string edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("recursive string replacement", () => {
-    assertEquivalent(`
+	it("recursive string replacement", () => {
+		assertEquivalent(`
       function test() {
         function expandTemplate(template, vars) {
           var result = template;
@@ -804,10 +804,10 @@ describe("vm-breaker: string edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("complex string parsing (CSV-like)", () => {
-    assertEquivalent(`
+	it("complex string parsing (CSV-like)", () => {
+		assertEquivalent(`
       function test() {
         function parseCSV(text) {
           var rows = text.split("\\n");
@@ -824,10 +824,10 @@ describe("vm-breaker: string edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("string encoding/decoding round-trip", () => {
-    assertEquivalent(`
+	it("string encoding/decoding round-trip", () => {
+		assertEquivalent(`
       function test() {
         function encode(str) {
           var result = [];
@@ -850,7 +850,7 @@ describe("vm-breaker: string edge cases", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -858,8 +858,8 @@ describe("vm-breaker: string edge cases", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: complex assignments", () => {
-  it("chained assignment", () => {
-    assertEquivalent(`
+	it("chained assignment", () => {
+		assertEquivalent(`
       function test() {
         var a, b, c;
         a = b = c = 42;
@@ -867,10 +867,10 @@ describe("vm-breaker: complex assignments", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("destructuring assignment in complex positions", () => {
-    assertEquivalent(`
+	it("destructuring assignment in complex positions", () => {
+		assertEquivalent(`
       function test() {
         function getData() {
           return { x: 10, y: 20, nested: { a: 1, b: 2 } };
@@ -880,10 +880,10 @@ describe("vm-breaker: complex assignments", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("array destructuring with rest and skip", () => {
-    assertEquivalent(`
+	it("array destructuring with rest and skip", () => {
+		assertEquivalent(`
       function test() {
         var arr = [1, 2, 3, 4, 5, 6, 7];
         var [first, , third, ...rest] = arr;
@@ -891,20 +891,20 @@ describe("vm-breaker: complex assignments", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("destructuring with defaults", () => {
-    assertEquivalent(`
+	it("destructuring with defaults", () => {
+		assertEquivalent(`
       function test() {
         var { a = 1, b = 2, c = 3 } = { a: 10, c: 30 };
         return [a, b, c];
       }
       test();
     `);
-  });
+	});
 
-  it("swap via destructuring", () => {
-    assertEquivalent(`
+	it("swap via destructuring", () => {
+		assertEquivalent(`
       function test() {
         var a = "first", b = "second";
         [a, b] = [b, a];
@@ -912,10 +912,10 @@ describe("vm-breaker: complex assignments", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("computed property in destructuring", () => {
-    assertEquivalent(`
+	it("computed property in destructuring", () => {
+		assertEquivalent(`
       function test() {
         var key = "dynamic";
         var { [key]: value } = { dynamic: 42, other: 99 };
@@ -923,10 +923,10 @@ describe("vm-breaker: complex assignments", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("destructuring in for-of", () => {
-    assertEquivalent(`
+	it("destructuring in for-of", () => {
+		assertEquivalent(`
       function test() {
         var pairs = [[1, "a"], [2, "b"], [3, "c"]];
         var result = [];
@@ -937,10 +937,10 @@ describe("vm-breaker: complex assignments", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested destructuring with array inside object", () => {
-    assertEquivalent(`
+	it("nested destructuring with array inside object", () => {
+		assertEquivalent(`
       function test() {
         var data = {
           users: [
@@ -953,7 +953,7 @@ describe("vm-breaker: complex assignments", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -961,8 +961,8 @@ describe("vm-breaker: complex assignments", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: real-world patterns", () => {
-  it("event emitter implementation", () => {
-    assertEquivalent(`
+	it("event emitter implementation", () => {
+		assertEquivalent(`
       function test() {
         function EventEmitter() {
           this._handlers = {};
@@ -996,10 +996,10 @@ describe("vm-breaker: real-world patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("promise-like chain (synchronous mock)", () => {
-    assertEquivalent(`
+	it("promise-like chain (synchronous mock)", () => {
+		assertEquivalent(`
       function test() {
         function SyncPromise(val) { this._val = val; }
         SyncPromise.prototype.then = function(fn) {
@@ -1016,10 +1016,10 @@ describe("vm-breaker: real-world patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("dependency injection pattern", () => {
-    assertEquivalent(`
+	it("dependency injection pattern", () => {
+		assertEquivalent(`
       function test() {
         function createApp(deps) {
           return {
@@ -1040,10 +1040,10 @@ describe("vm-breaker: real-world patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("LRU cache implementation", () => {
-    assertEquivalent(`
+	it("LRU cache implementation", () => {
+		assertEquivalent(`
       function test() {
         function LRU(capacity) {
           this.capacity = capacity;
@@ -1087,10 +1087,10 @@ describe("vm-breaker: real-world patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("complex sorting with custom comparator", () => {
-    assertEquivalent(`
+	it("complex sorting with custom comparator", () => {
+		assertEquivalent(`
       function test() {
         var data = [
           { name: "Charlie", age: 30, score: 85 },
@@ -1108,10 +1108,10 @@ describe("vm-breaker: real-world patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("interpreter pattern (mini expression evaluator)", () => {
-    assertEquivalent(`
+	it("interpreter pattern (mini expression evaluator)", () => {
+		assertEquivalent(`
       function test() {
         function evaluate(expr) {
           if (typeof expr === "number") return expr;
@@ -1131,7 +1131,7 @@ describe("vm-breaker: real-world patterns", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -1139,8 +1139,8 @@ describe("vm-breaker: real-world patterns", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: generator-like state machines", () => {
-  it("manual iterator with state", () => {
-    assertEquivalent(`
+	it("manual iterator with state", () => {
+		assertEquivalent(`
       function test() {
         function rangeIterator(start, end, step) {
           var current = start;
@@ -1163,10 +1163,10 @@ describe("vm-breaker: generator-like state machines", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("lazy evaluation chain", () => {
-    assertEquivalent(`
+	it("lazy evaluation chain", () => {
+		assertEquivalent(`
       function test() {
         function LazyList(arr) {
           this._data = arr;
@@ -1204,10 +1204,10 @@ describe("vm-breaker: generator-like state machines", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("coroutine-like cooperative scheduling", () => {
-    assertEquivalent(`
+	it("coroutine-like cooperative scheduling", () => {
+		assertEquivalent(`
       function test() {
         var tasks = [];
         var log = [];
@@ -1245,7 +1245,7 @@ describe("vm-breaker: generator-like state machines", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -1253,8 +1253,8 @@ describe("vm-breaker: generator-like state machines", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: tricky operators", () => {
-  it("logical assignment operators", () => {
-    assertEquivalent(`
+	it("logical assignment operators", () => {
+		assertEquivalent(`
       function test() {
         var a = null;
         a ??= 42;
@@ -1268,10 +1268,10 @@ describe("vm-breaker: tricky operators", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("optional chaining with method calls", () => {
-    assertEquivalent(`
+	it("optional chaining with method calls", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           a: {
@@ -1287,10 +1287,10 @@ describe("vm-breaker: tricky operators", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("delete on various targets", () => {
-    assertEquivalent(`
+	it("delete on various targets", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 1, b: 2, c: 3 };
         var r1 = delete obj.a;
@@ -1303,10 +1303,10 @@ describe("vm-breaker: tricky operators", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("in operator with various values", () => {
-    assertEquivalent(`
+	it("in operator with various values", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 1, b: undefined, c: null, d: 0, e: false };
         return [
@@ -1320,10 +1320,10 @@ describe("vm-breaker: tricky operators", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("bitwise operations for flag management", () => {
-    assertEquivalent(`
+	it("bitwise operations for flag management", () => {
+		assertEquivalent(`
       function test() {
         var READ = 1, WRITE = 2, EXEC = 4;
         var perms = 0;
@@ -1338,7 +1338,7 @@ describe("vm-breaker: tricky operators", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -1346,8 +1346,8 @@ describe("vm-breaker: tricky operators", () => {
 // ---------------------------------------------------------------------------
 
 describe("vm-breaker: value edge cases", () => {
-  it("NaN comparisons and propagation", () => {
-    assertEquivalent(`
+	it("NaN comparisons and propagation", () => {
+		assertEquivalent(`
       function test() {
         return [
           NaN === NaN,
@@ -1364,10 +1364,10 @@ describe("vm-breaker: value edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("null/undefined arithmetic and coercion", () => {
-    assertEquivalent(`
+	it("null/undefined arithmetic and coercion", () => {
+		assertEquivalent(`
       function test() {
         return [
           null + 1,
@@ -1383,10 +1383,10 @@ describe("vm-breaker: value edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("negative zero behavior", () => {
-    assertEquivalent(`
+	it("negative zero behavior", () => {
+		assertEquivalent(`
       function test() {
         var nz = -0;
         return [
@@ -1400,10 +1400,10 @@ describe("vm-breaker: value edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("type coercion in equality", () => {
-    assertEquivalent(`
+	it("type coercion in equality", () => {
+		assertEquivalent(`
       function test() {
         return [
           0 == false,
@@ -1422,10 +1422,10 @@ describe("vm-breaker: value edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("valueOf and toString in type coercion", () => {
-    assertEquivalent(`
+	it("valueOf and toString in type coercion", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           valueOf: function() { return 10; },
@@ -1438,10 +1438,10 @@ describe("vm-breaker: value edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("sparse array behavior", () => {
-    assertEquivalent(`
+	it("sparse array behavior", () => {
+		assertEquivalent(`
       function test() {
         var arr = [1, , , 4, , 6];
         var mapped = arr.map(function(x) { return x === undefined ? "U" : x; });
@@ -1452,5 +1452,5 @@ describe("vm-breaker: value edge cases", () => {
       }
       test();
     `);
-  });
+	});
 });

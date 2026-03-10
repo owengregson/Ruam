@@ -2,29 +2,29 @@ import { describe, it } from "vitest";
 import { assertEquivalent } from "../helpers.js";
 
 describe("control flow", () => {
-  it("if/else - true branch", () => {
-    assertEquivalent(`
+	it("if/else - true branch", () => {
+		assertEquivalent(`
       function check(x) { if (x > 5) return "big"; else return "small"; }
       check(10);
     `);
-  });
+	});
 
-  it("if/else - false branch", () => {
-    assertEquivalent(`
+	it("if/else - false branch", () => {
+		assertEquivalent(`
       function check(x) { if (x > 5) return "big"; else return "small"; }
       check(2);
     `);
-  });
+	});
 
-  it("if without else", () => {
-    assertEquivalent(`
+	it("if without else", () => {
+		assertEquivalent(`
       function check(x) { var r = "none"; if (x > 5) r = "big"; return r; }
       check(10);
     `);
-  });
+	});
 
-  it("nested if/else", () => {
-    assertEquivalent(`
+	it("nested if/else", () => {
+		assertEquivalent(`
       function classify(x) {
         if (x < 0) return "negative";
         else if (x === 0) return "zero";
@@ -32,10 +32,10 @@ describe("control flow", () => {
       }
       classify(-3);
     `);
-  });
+	});
 
-  it("for loop", () => {
-    assertEquivalent(`
+	it("for loop", () => {
+		assertEquivalent(`
       function sum(n) {
         var total = 0;
         for (var i = 1; i <= n; i++) total += i;
@@ -43,10 +43,10 @@ describe("control flow", () => {
       }
       sum(10);
     `);
-  });
+	});
 
-  it("for loop with let", () => {
-    assertEquivalent(`
+	it("for loop with let", () => {
+		assertEquivalent(`
       function sum(n) {
         let total = 0;
         for (let i = 1; i <= n; i++) { total += i; }
@@ -54,10 +54,10 @@ describe("control flow", () => {
       }
       sum(10);
     `);
-  });
+	});
 
-  it("while loop", () => {
-    assertEquivalent(`
+	it("while loop", () => {
+		assertEquivalent(`
       function countdown(n) {
         var result = [];
         while (n > 0) { result.push(n); n--; }
@@ -65,10 +65,10 @@ describe("control flow", () => {
       }
       countdown(5);
     `);
-  });
+	});
 
-  it("do-while loop", () => {
-    assertEquivalent(`
+	it("do-while loop", () => {
+		assertEquivalent(`
       function doLoop(n) {
         var result = 0;
         do { result += n; n--; } while (n > 0);
@@ -76,10 +76,10 @@ describe("control flow", () => {
       }
       doLoop(5);
     `);
-  });
+	});
 
-  it("break in for loop", () => {
-    assertEquivalent(`
+	it("break in for loop", () => {
+		assertEquivalent(`
       function findFirst(arr, target) {
         for (var i = 0; i < arr.length; i++) {
           if (arr[i] === target) return i;
@@ -88,10 +88,10 @@ describe("control flow", () => {
       }
       findFirst([1, 2, 3, 4, 5], 3);
     `);
-  });
+	});
 
-  it("continue in for loop", () => {
-    assertEquivalent(`
+	it("continue in for loop", () => {
+		assertEquivalent(`
       function sumEvens(n) {
         var total = 0;
         for (var i = 0; i <= n; i++) {
@@ -102,10 +102,10 @@ describe("control flow", () => {
       }
       sumEvens(10);
     `);
-  });
+	});
 
-  it("switch statement", () => {
-    assertEquivalent(`
+	it("switch statement", () => {
+		assertEquivalent(`
       function dayName(d) {
         switch(d) {
           case 0: return "Sun";
@@ -116,10 +116,10 @@ describe("control flow", () => {
       }
       [dayName(0), dayName(1), dayName(5)];
     `);
-  });
+	});
 
-  it("switch with fallthrough", () => {
-    assertEquivalent(`
+	it("switch with fallthrough", () => {
+		assertEquivalent(`
       function test(x) {
         var result = [];
         switch(x) {
@@ -131,38 +131,38 @@ describe("control flow", () => {
       }
       test(1);
     `);
-  });
+	});
 
-  it("ternary expression", () => {
-    assertEquivalent(`
+	it("ternary expression", () => {
+		assertEquivalent(`
       function abs(x) { return x >= 0 ? x : -x; }
       [abs(5), abs(-3)];
     `);
-  });
+	});
 
-  it("logical AND short-circuit", () => {
-    assertEquivalent(`
+	it("logical AND short-circuit", () => {
+		assertEquivalent(`
       function test(a, b) { return a && b; }
       [test(1, 2), test(0, 2), test(null, "x")];
     `);
-  });
+	});
 
-  it("logical OR short-circuit", () => {
-    assertEquivalent(`
+	it("logical OR short-circuit", () => {
+		assertEquivalent(`
       function test(a, b) { return a || b; }
       [test(1, 2), test(0, 2), test("", "default")];
     `);
-  });
+	});
 
-  it("nullish coalescing", () => {
-    assertEquivalent(`
+	it("nullish coalescing", () => {
+		assertEquivalent(`
       function test(a, b) { return a ?? b; }
       [test(1, 2), test(null, "fallback"), test(undefined, "fallback"), test(0, "fallback")];
     `);
-  });
+	});
 
-  it("for...in loop", () => {
-    assertEquivalent(`
+	it("for...in loop", () => {
+		assertEquivalent(`
       function keys(obj) {
         var result = [];
         for (var k in obj) result.push(k);
@@ -170,10 +170,10 @@ describe("control flow", () => {
       }
       keys({a: 1, b: 2, c: 3});
     `);
-  });
+	});
 
-  it("for...of loop", () => {
-    assertEquivalent(`
+	it("for...of loop", () => {
+		assertEquivalent(`
       function sum(arr) {
         var total = 0;
         for (var x of arr) total += x;
@@ -181,5 +181,5 @@ describe("control flow", () => {
       }
       sum([1, 2, 3, 4, 5]);
     `);
-  });
+	});
 });

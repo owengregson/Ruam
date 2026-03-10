@@ -1,84 +1,87 @@
 import { describe, it, expect } from "vitest";
 import { assertEquivalent, evalObfuscated, evalOriginal } from "../helpers.js";
 import { obfuscateCode } from "../../src/transform.js";
-import { deriveImplicitKey, rollingEncrypt } from "../../src/runtime/rolling-cipher.js";
+import {
+	deriveImplicitKey,
+	rollingEncrypt,
+} from "../../src/runtime/rolling-cipher.js";
 
 // ---------------------------------------------------------------------------
 // Build-time rolling cipher unit tests
 // ---------------------------------------------------------------------------
 
 describe("rolling cipher build-time", () => {
-  describe("deriveImplicitKey", () => {
-    it("produces a 32-bit unsigned integer", () => {
-      const key = deriveImplicitKey(10, 5, 2, 8);
-      expect(key).toBeGreaterThanOrEqual(0);
-      expect(key).toBeLessThanOrEqual(0xFFFFFFFF);
-    });
+	describe("deriveImplicitKey", () => {
+		it("produces a 32-bit unsigned integer", () => {
+			const key = deriveImplicitKey(10, 5, 2, 8);
+			expect(key).toBeGreaterThanOrEqual(0);
+			expect(key).toBeLessThanOrEqual(0xffffffff);
+		});
 
-    it("same inputs produce same key", () => {
-      const k1 = deriveImplicitKey(10, 5, 2, 8);
-      const k2 = deriveImplicitKey(10, 5, 2, 8);
-      expect(k1).toBe(k2);
-    });
+		it("same inputs produce same key", () => {
+			const k1 = deriveImplicitKey(10, 5, 2, 8);
+			const k2 = deriveImplicitKey(10, 5, 2, 8);
+			expect(k1).toBe(k2);
+		});
 
-    it("different inputs produce different keys", () => {
-      const k1 = deriveImplicitKey(10, 5, 2, 8);
-      const k2 = deriveImplicitKey(11, 5, 2, 8);
-      const k3 = deriveImplicitKey(10, 6, 2, 8);
-      const k4 = deriveImplicitKey(10, 5, 3, 8);
-      const k5 = deriveImplicitKey(10, 5, 2, 9);
-      expect(new Set([k1, k2, k3, k4, k5]).size).toBe(5);
-    });
-  });
+		it("different inputs produce different keys", () => {
+			const k1 = deriveImplicitKey(10, 5, 2, 8);
+			const k2 = deriveImplicitKey(11, 5, 2, 8);
+			const k3 = deriveImplicitKey(10, 6, 2, 8);
+			const k4 = deriveImplicitKey(10, 5, 3, 8);
+			const k5 = deriveImplicitKey(10, 5, 2, 9);
+			expect(new Set([k1, k2, k3, k4, k5]).size).toBe(5);
+		});
+	});
 
-  describe("rollingEncrypt", () => {
-    it("modifies instruction array in place", () => {
-      const instrs = [100, 5, 200, 10, 50, 0];
-      const original = [...instrs];
-      const key = deriveImplicitKey(3, 2, 1, 4);
-      rollingEncrypt(instrs, key);
-      expect(instrs).not.toEqual(original);
-    });
+	describe("rollingEncrypt", () => {
+		it("modifies instruction array in place", () => {
+			const instrs = [100, 5, 200, 10, 50, 0];
+			const original = [...instrs];
+			const key = deriveImplicitKey(3, 2, 1, 4);
+			rollingEncrypt(instrs, key);
+			expect(instrs).not.toEqual(original);
+		});
 
-    it("same key and data produce same encryption", () => {
-      const instrs1 = [100, 5, 200, 10];
-      const instrs2 = [100, 5, 200, 10];
-      const key = deriveImplicitKey(2, 2, 1, 4);
-      rollingEncrypt(instrs1, key);
-      rollingEncrypt(instrs2, key);
-      expect(instrs1).toEqual(instrs2);
-    });
+		it("same key and data produce same encryption", () => {
+			const instrs1 = [100, 5, 200, 10];
+			const instrs2 = [100, 5, 200, 10];
+			const key = deriveImplicitKey(2, 2, 1, 4);
+			rollingEncrypt(instrs1, key);
+			rollingEncrypt(instrs2, key);
+			expect(instrs1).toEqual(instrs2);
+		});
 
-    it("different keys produce different encryption", () => {
-      const instrs1 = [100, 5, 200, 10];
-      const instrs2 = [100, 5, 200, 10];
-      rollingEncrypt(instrs1, 12345);
-      rollingEncrypt(instrs2, 67890);
-      expect(instrs1).not.toEqual(instrs2);
-    });
+		it("different keys produce different encryption", () => {
+			const instrs1 = [100, 5, 200, 10];
+			const instrs2 = [100, 5, 200, 10];
+			rollingEncrypt(instrs1, 12345);
+			rollingEncrypt(instrs2, 67890);
+			expect(instrs1).not.toEqual(instrs2);
+		});
 
-    it("integrity hash changes encryption", () => {
-      const instrs1 = [100, 5, 200, 10];
-      const instrs2 = [100, 5, 200, 10];
-      const key = 12345;
-      rollingEncrypt(instrs1, key, 0xAABBCCDD);
-      rollingEncrypt(instrs2, key, 0x11223344);
-      expect(instrs1).not.toEqual(instrs2);
-    });
+		it("integrity hash changes encryption", () => {
+			const instrs1 = [100, 5, 200, 10];
+			const instrs2 = [100, 5, 200, 10];
+			const key = 12345;
+			rollingEncrypt(instrs1, key, 0xaabbccdd);
+			rollingEncrypt(instrs2, key, 0x11223344);
+			expect(instrs1).not.toEqual(instrs2);
+		});
 
-    it("handles empty instruction array", () => {
-      const instrs: number[] = [];
-      rollingEncrypt(instrs, 12345);
-      expect(instrs).toEqual([]);
-    });
+		it("handles empty instruction array", () => {
+			const instrs: number[] = [];
+			rollingEncrypt(instrs, 12345);
+			expect(instrs).toEqual([]);
+		});
 
-    it("handles single instruction", () => {
-      const instrs = [42, 7];
-      const original = [...instrs];
-      rollingEncrypt(instrs, 12345);
-      expect(instrs).not.toEqual(original);
-    });
-  });
+		it("handles single instruction", () => {
+			const instrs = [42, 7];
+			const original = [...instrs];
+			rollingEncrypt(instrs, 12345);
+			expect(instrs).not.toEqual(original);
+		});
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -88,34 +91,44 @@ describe("rolling cipher build-time", () => {
 const rcOpts = { rollingCipher: true };
 
 describe("rolling cipher end-to-end correctness", () => {
-  it("simple function", () => {
-    assertEquivalent(`
+	it("simple function", () => {
+		assertEquivalent(
+			`
       function add(a, b) { return a + b; }
       add(3, 4);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("fibonacci", () => {
-    assertEquivalent(`
+	it("fibonacci", () => {
+		assertEquivalent(
+			`
       function fibonacci(n) {
         if (n <= 1) return n;
         return fibonacci(n - 1) + fibonacci(n - 2);
       }
       fibonacci(10);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("string operations", () => {
-    assertEquivalent(`
+	it("string operations", () => {
+		assertEquivalent(
+			`
       function greet(name) {
         return "Hello, " + name + "!";
       }
       greet("World");
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("closures", () => {
-    assertEquivalent(`
+	it("closures", () => {
+		assertEquivalent(
+			`
       function makeCounter(label) {
         var count = 0;
         return function() {
@@ -125,11 +138,14 @@ describe("rolling cipher end-to-end correctness", () => {
       }
       var c = makeCounter("items");
       [c(), c(), c()];
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("classes", () => {
-    assertEquivalent(`
+	it("classes", () => {
+		assertEquivalent(
+			`
       function test() {
         class Calculator {
           constructor(val) { this.value = val; }
@@ -140,11 +156,14 @@ describe("rolling cipher end-to-end correctness", () => {
         return new Calculator(5).add(3).multiply(2).getResult();
       }
       test();
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("try/catch", () => {
-    assertEquivalent(`
+	it("try/catch", () => {
+		assertEquivalent(
+			`
       function safe(input) {
         try {
           if (input < 0) throw new Error("negative");
@@ -154,31 +173,40 @@ describe("rolling cipher end-to-end correctness", () => {
         }
       }
       [safe(5), safe(-1)];
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("async functions", () => {
-    assertEquivalent(`
+	it("async functions", () => {
+		assertEquivalent(
+			`
       async function fetchData(url) {
         return "data:" + url;
       }
       fetchData("https://example.com");
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("for loops", () => {
-    assertEquivalent(`
+	it("for loops", () => {
+		assertEquivalent(
+			`
       function sumRange(n) {
         var total = 0;
         for (var i = 1; i <= n; i++) total += i;
         return total;
       }
       sumRange(100);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("while loops", () => {
-    assertEquivalent(`
+	it("while loops", () => {
+		assertEquivalent(
+			`
       function collatz(n) {
         var steps = 0;
         while (n !== 1) {
@@ -188,11 +216,14 @@ describe("rolling cipher end-to-end correctness", () => {
         return steps;
       }
       collatz(27);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("switch statements", () => {
-    assertEquivalent(`
+	it("switch statements", () => {
+		assertEquivalent(
+			`
       function classify(x) {
         switch(x) {
           case "alpha": return 1;
@@ -202,11 +233,14 @@ describe("rolling cipher end-to-end correctness", () => {
         }
       }
       [classify("alpha"), classify("beta"), classify("delta")];
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("nested functions", () => {
-    assertEquivalent(`
+	it("nested functions", () => {
+		assertEquivalent(
+			`
       function outer(x) {
         function inner(y) {
           return x + y;
@@ -214,21 +248,27 @@ describe("rolling cipher end-to-end correctness", () => {
         return inner(10) + inner(20);
       }
       outer(5);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("destructuring", () => {
-    assertEquivalent(`
+	it("destructuring", () => {
+		assertEquivalent(
+			`
       function extract(obj) {
         var { username, email } = obj;
         return username + " <" + email + ">";
       }
       extract({ username: "admin", email: "admin@test.com" });
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("array operations", () => {
-    assertEquivalent(`
+	it("array operations", () => {
+		assertEquivalent(
+			`
       function process(arr) {
         return arr
           .filter(function(n) { return n > 2; })
@@ -236,29 +276,38 @@ describe("rolling cipher end-to-end correctness", () => {
           .reduce(function(a, b) { return a + b; }, 0);
       }
       process([1, 2, 3, 4, 5]);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("regex", () => {
-    assertEquivalent(`
+	it("regex", () => {
+		assertEquivalent(
+			`
       function matchEmail(str) {
         return /^[a-zA-Z0-9]+@[a-zA-Z0-9]+\\.[a-zA-Z]{2,}$/.test(str);
       }
       [matchEmail("test@example.com"), matchEmail("invalid")];
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("template-style concatenation", () => {
-    assertEquivalent(`
+	it("template-style concatenation", () => {
+		assertEquivalent(
+			`
       function format(x, y) {
         return x + " + " + y + " = " + (x + y);
       }
       format(3, 4);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("object methods", () => {
-    assertEquivalent(`
+	it("object methods", () => {
+		assertEquivalent(
+			`
       function test() {
         var obj = {
           data: [1, 2, 3],
@@ -271,22 +320,28 @@ describe("rolling cipher end-to-end correctness", () => {
         return obj.sum();
       }
       test();
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("ternary and logical operators", () => {
-    assertEquivalent(`
+	it("ternary and logical operators", () => {
+		assertEquivalent(
+			`
       function classify(n) {
         var sign = n > 0 ? "positive" : n < 0 ? "negative" : "zero";
         var parity = n % 2 === 0 ? "even" : "odd";
         return sign + " " + parity;
       }
       [classify(7), classify(-4), classify(0)];
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("complex: multiple interacting functions", () => {
-    assertEquivalent(`
+	it("complex: multiple interacting functions", () => {
+		assertEquivalent(
+			`
       function compose(f, g) {
         return function(x) { return f(g(x)); };
       }
@@ -294,8 +349,10 @@ describe("rolling cipher end-to-end correctness", () => {
       function addOne(x) { return x + 1; }
       var doubleAndAdd = compose(addOne, double);
       [doubleAndAdd(3), doubleAndAdd(5), doubleAndAdd(10)];
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -303,7 +360,7 @@ describe("rolling cipher end-to-end correctness", () => {
 // ---------------------------------------------------------------------------
 
 describe("rolling cipher anti-reversing", () => {
-  const sampleCode = `
+	const sampleCode = `
     function fibonacci(n) {
       if (n <= 1) return n;
       return fibonacci(n - 1) + fibonacci(n - 2);
@@ -311,65 +368,71 @@ describe("rolling cipher anti-reversing", () => {
     fibonacci(10);
   `;
 
-  it("no plaintext seed literal (0x9E3779B9 pattern)", () => {
-    const out = obfuscateCode(sampleCode, rcOpts);
-    // The old string decoder embedded the seed next to 0x9E3779B9
-    // With rolling cipher, no seed literal should appear near this constant
-    // Actually, the golden ratio constant itself should not appear as a key source
-    const seedPattern = /\(\d{5,}\^?\(/;
-    // There should be no large numeric literal used as a direct XOR seed
-    // that isn't part of known constants like the FNV/mix primes
-    const knownPrimes = ["0x811C9DC5", "0x01000193", "0x45D9F3B", "0x85EBCA6B", "0xC2B2AE35"];
-    // Check that the golden ratio constant, if present, doesn't have an adjacent raw seed
-    const matches = [...out.matchAll(/\((\d{5,})\^/g)];
-    for (const m of matches) {
-      // The matched number should not be a unique-per-build seed
-      // It should be a known algorithmic constant
-      const hex = "0x" + parseInt(m[1]!, 10).toString(16).toUpperCase();
-      const isKnown = knownPrimes.some(p => p.toUpperCase() === hex);
-      // If it's not a known constant, it shouldn't be the shuffle seed
-      if (!isKnown) {
-        // Verify the same "seed" doesn't appear in a second build (it should differ)
-        const out2 = obfuscateCode(sampleCode, rcOpts);
-        expect(out2).not.toContain(m[1]!);
-      }
-    }
-  });
+	it("no plaintext seed literal (0x9E3779B9 pattern)", () => {
+		const out = obfuscateCode(sampleCode, rcOpts);
+		// The old string decoder embedded the seed next to 0x9E3779B9
+		// With rolling cipher, no seed literal should appear near this constant
+		// Actually, the golden ratio constant itself should not appear as a key source
+		const seedPattern = /\(\d{5,}\^?\(/;
+		// There should be no large numeric literal used as a direct XOR seed
+		// that isn't part of known constants like the FNV/mix primes
+		const knownPrimes = [
+			"0x811C9DC5",
+			"0x01000193",
+			"0x45D9F3B",
+			"0x85EBCA6B",
+			"0xC2B2AE35",
+		];
+		// Check that the golden ratio constant, if present, doesn't have an adjacent raw seed
+		const matches = [...out.matchAll(/\((\d{5,})\^/g)];
+		for (const m of matches) {
+			// The matched number should not be a unique-per-build seed
+			// It should be a known algorithmic constant
+			const hex = "0x" + parseInt(m[1]!, 10).toString(16).toUpperCase();
+			const isKnown = knownPrimes.some((p) => p.toUpperCase() === hex);
+			// If it's not a known constant, it shouldn't be the shuffle seed
+			if (!isKnown) {
+				// Verify the same "seed" doesn't appear in a second build (it should differ)
+				const out2 = obfuscateCode(sampleCode, rcOpts);
+				expect(out2).not.toContain(m[1]!);
+			}
+		}
+	});
 
-  it("string decoder does not embed a plaintext key literal", () => {
-    const out = obfuscateCode(sampleCode, rcOpts);
-    // Old pattern: function _xx(b,x){var k=(SEED^(x*0x9E3779B9))>>>0;
-    // New pattern: function _xx(mk,b,x){var k=(mk^(x*0x9E3779B9))>>>0;
-    // The function should take mk as parameter, not have a numeric literal
-    const oldPattern = /function\s+\w+\(b,x\)\{var\s+\w+=\(\d+\^/;
-    expect(oldPattern.test(out)).toBe(false);
-  });
+	it("string decoder does not embed a plaintext key literal", () => {
+		const out = obfuscateCode(sampleCode, rcOpts);
+		// Old pattern: function _xx(b,x){var k=(SEED^(x*0x9E3779B9))>>>0;
+		// New pattern: function _xx(mk,b,x){var k=(mk^(x*0x9E3779B9))>>>0;
+		// The function should take mk as parameter, not have a numeric literal
+		const oldPattern = /function\s+\w+\(b,x\)\{var\s+\w+=\(\d+\^/;
+		expect(oldPattern.test(out)).toBe(false);
+	});
 
-  it("two rolling cipher builds produce different instruction encodings", () => {
-    const out1 = obfuscateCode(sampleCode, rcOpts);
-    const out2 = obfuscateCode(sampleCode, rcOpts);
-    const instrPattern = /"i":\s*\[([^\]]+)\]/;
-    const match1 = out1.match(instrPattern);
-    const match2 = out2.match(instrPattern);
-    expect(match1).not.toBeNull();
-    expect(match2).not.toBeNull();
-    expect(match1![1]).not.toBe(match2![1]);
-  });
+	it("two rolling cipher builds produce different instruction encodings", () => {
+		const out1 = obfuscateCode(sampleCode, rcOpts);
+		const out2 = obfuscateCode(sampleCode, rcOpts);
+		const instrPattern = /"i":\s*\[([^\]]+)\]/;
+		const match1 = out1.match(instrPattern);
+		const match2 = out2.match(instrPattern);
+		expect(match1).not.toBeNull();
+		expect(match2).not.toBeNull();
+		expect(match1![1]).not.toBe(match2![1]);
+	});
 
-  it("strings are still encoded (not plaintext)", () => {
-    const code = `
+	it("strings are still encoded (not plaintext)", () => {
+		const code = `
       function getSecret() {
         return "SuperSecretPassword123";
       }
       getSecret();
     `;
-    const out = obfuscateCode(code, rcOpts);
-    expect(out).not.toContain("SuperSecretPassword123");
-  });
+		const out = obfuscateCode(code, rcOpts);
+		expect(out).not.toContain("SuperSecretPassword123");
+	});
 
-  it("output still executes correctly", () => {
-    assertEquivalent(sampleCode, rcOpts);
-  });
+	it("output still executes correctly", () => {
+		assertEquivalent(sampleCode, rcOpts);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -379,45 +442,58 @@ describe("rolling cipher anti-reversing", () => {
 const ibOpts = { rollingCipher: true, integrityBinding: true };
 
 describe("integrity binding end-to-end", () => {
-  it("simple function works", () => {
-    assertEquivalent(`
+	it("simple function works", () => {
+		assertEquivalent(
+			`
       function add(a, b) { return a + b; }
       add(3, 4);
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("fibonacci works", () => {
-    assertEquivalent(`
+	it("fibonacci works", () => {
+		assertEquivalent(
+			`
       function fibonacci(n) {
         if (n <= 1) return n;
         return fibonacci(n - 1) + fibonacci(n - 2);
       }
       fibonacci(10);
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("string operations work", () => {
-    assertEquivalent(`
+	it("string operations work", () => {
+		assertEquivalent(
+			`
       function greet(name) {
         return "Hello, " + name + "!";
       }
       greet("World");
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("closures work", () => {
-    assertEquivalent(`
+	it("closures work", () => {
+		assertEquivalent(
+			`
       function makeCounter() {
         var count = 0;
         return function() { return ++count; };
       }
       var c = makeCounter();
       [c(), c(), c()];
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("classes work", () => {
-    assertEquivalent(`
+	it("classes work", () => {
+		assertEquivalent(
+			`
       function test() {
         class Point {
           constructor(x, y) { this.x = x; this.y = y; }
@@ -430,11 +506,14 @@ describe("integrity binding end-to-end", () => {
         return new Point(3, 4).distanceTo(new Point(0, 0));
       }
       test();
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("try/catch works", () => {
-    assertEquivalent(`
+	it("try/catch works", () => {
+		assertEquivalent(
+			`
       function safe(x) {
         try {
           if (x < 0) throw new Error("neg");
@@ -444,18 +523,24 @@ describe("integrity binding end-to-end", () => {
         }
       }
       [safe(5), safe(-1)];
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("async works", () => {
-    assertEquivalent(`
+	it("async works", () => {
+		assertEquivalent(
+			`
       async function getData() { return 42; }
       getData();
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("nested functions work", () => {
-    assertEquivalent(`
+	it("nested functions work", () => {
+		assertEquivalent(
+			`
       function outer(x) {
         function middle(y) {
           function inner(z) { return x + y + z; }
@@ -464,32 +549,41 @@ describe("integrity binding end-to-end", () => {
         return middle(2);
       }
       outer(1);
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("loops work", () => {
-    assertEquivalent(`
+	it("loops work", () => {
+		assertEquivalent(
+			`
       function factorial(n) {
         var result = 1;
         for (var i = 2; i <= n; i++) result *= i;
         return result;
       }
       factorial(10);
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("array operations work", () => {
-    assertEquivalent(`
+	it("array operations work", () => {
+		assertEquivalent(
+			`
       function sumEven(arr) {
         return arr.filter(function(n) { return n % 2 === 0; })
                   .reduce(function(a, b) { return a + b; }, 0);
       }
       sumEven([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 
-  it("complex: recursive with closures", () => {
-    assertEquivalent(`
+	it("complex: recursive with closures", () => {
+		assertEquivalent(
+			`
       function buildTree(depth) {
         if (depth === 0) return { value: 1 };
         return {
@@ -503,8 +597,10 @@ describe("integrity binding end-to-end", () => {
         return 1 + countNodes(node.left) + countNodes(node.right);
       }
       countNodes(buildTree(4));
-    `, ibOpts);
-  });
+    `,
+			ibOpts
+		);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -512,62 +608,100 @@ describe("integrity binding end-to-end", () => {
 // ---------------------------------------------------------------------------
 
 describe("integrity binding anti-reversing", () => {
-  const sampleCode = `
+	const sampleCode = `
     function add(a, b) { return a + b; }
     add(1, 2);
   `;
 
-  it("output contains integrity binding infrastructure", () => {
-    const out = obfuscateCode(sampleCode, ibOpts);
-    // The rolling cipher mix primes should be present
-    expect(out).toContain("0x85EBCA6B");
-    expect(out).toContain("0xC2B2AE35");
-    // The FNV offset basis (used in rcDeriveKey)
-    expect(out).toContain("0x811C9DC5");
-  });
+	it("output contains integrity binding infrastructure", () => {
+		const out = obfuscateCode(sampleCode, ibOpts);
+		// The rolling cipher mix primes should be present
+		expect(out).toContain("0x85EBCA6B");
+		expect(out).toContain("0xC2B2AE35");
+		// The FNV offset basis (used in rcDeriveKey)
+		expect(out).toContain("0x811C9DC5");
+	});
 
-  it("modifying the embedded integrity hash breaks execution", () => {
-    const out = obfuscateCode(sampleCode, ibOpts);
-    // Find the embedded integrity hash (a large numeric literal in a var assignment)
-    // and change it — this simulates an attacker trying to neutralize integrity binding
-    // by modifying the hash value
-    const modified = out.replace(
-      /var\s+(_\w+)=(\d{6,});/,
-      (match, name, num) => `var ${name}=${parseInt(num, 10) + 1};`,
-    );
-    // With a wrong integrity hash, decryption should produce garbage opcodes
-    const vm = require("node:vm");
-    expect(() => {
-      vm.runInContext(modified, vm.createContext({
-        console,
-        Array, Object, String, Number, Boolean, Symbol, Math, JSON, Date,
-        RegExp, Error, TypeError, RangeError, SyntaxError, ReferenceError,
-        Map, Set, WeakMap, WeakSet, Promise, Proxy, Reflect,
-        parseInt, parseFloat, isNaN, isFinite, undefined, NaN, Infinity,
-        setTimeout, setInterval, clearTimeout, clearInterval, queueMicrotask,
-        Uint8Array, Int8Array, Float64Array, ArrayBuffer, DataView,
-        TextEncoder, TextDecoder, Buffer,
-        globalThis,
-      }));
-    }).toThrow();
-  });
+	it("modifying the embedded integrity hash breaks execution", () => {
+		const out = obfuscateCode(sampleCode, ibOpts);
+		// Find the embedded integrity hash (a large numeric literal in a var assignment)
+		// and change it — this simulates an attacker trying to neutralize integrity binding
+		// by modifying the hash value
+		const modified = out.replace(
+			/var\s+(_\w+)=(\d{6,});/,
+			(match, name, num) => `var ${name}=${parseInt(num, 10) + 1};`
+		);
+		// With a wrong integrity hash, decryption should produce garbage opcodes
+		const vm = require("node:vm");
+		expect(() => {
+			vm.runInContext(
+				modified,
+				vm.createContext({
+					console,
+					Array,
+					Object,
+					String,
+					Number,
+					Boolean,
+					Symbol,
+					Math,
+					JSON,
+					Date,
+					RegExp,
+					Error,
+					TypeError,
+					RangeError,
+					SyntaxError,
+					ReferenceError,
+					Map,
+					Set,
+					WeakMap,
+					WeakSet,
+					Promise,
+					Proxy,
+					Reflect,
+					parseInt,
+					parseFloat,
+					isNaN,
+					isFinite,
+					undefined,
+					NaN,
+					Infinity,
+					setTimeout,
+					setInterval,
+					clearTimeout,
+					clearInterval,
+					queueMicrotask,
+					Uint8Array,
+					Int8Array,
+					Float64Array,
+					ArrayBuffer,
+					DataView,
+					TextEncoder,
+					TextDecoder,
+					Buffer,
+					globalThis,
+				})
+			);
+		}).toThrow();
+	});
 
-  it("unmodified output executes correctly", () => {
-    assertEquivalent(sampleCode, ibOpts);
-  });
+	it("unmodified output executes correctly", () => {
+		assertEquivalent(sampleCode, ibOpts);
+	});
 
-  it("two builds with integrity binding produce different hashes", () => {
-    const out1 = obfuscateCode(sampleCode, ibOpts);
-    const out2 = obfuscateCode(sampleCode, ibOpts);
-    // The integrity hash depends on the interpreter source which depends
-    // on randomized names, so it should differ between builds
-    const instrPattern = /"i":\s*\[([^\]]+)\]/;
-    const m1 = out1.match(instrPattern);
-    const m2 = out2.match(instrPattern);
-    expect(m1).not.toBeNull();
-    expect(m2).not.toBeNull();
-    expect(m1![1]).not.toBe(m2![1]);
-  });
+	it("two builds with integrity binding produce different hashes", () => {
+		const out1 = obfuscateCode(sampleCode, ibOpts);
+		const out2 = obfuscateCode(sampleCode, ibOpts);
+		// The integrity hash depends on the interpreter source which depends
+		// on randomized names, so it should differ between builds
+		const instrPattern = /"i":\s*\[([^\]]+)\]/;
+		const m1 = out1.match(instrPattern);
+		const m2 = out2.match(instrPattern);
+		expect(m1).not.toBeNull();
+		expect(m2).not.toBeNull();
+		expect(m1![1]).not.toBe(m2![1]);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -575,36 +709,48 @@ describe("integrity binding anti-reversing", () => {
 // ---------------------------------------------------------------------------
 
 describe("rolling cipher with other features", () => {
-  it("works with preprocessIdentifiers", () => {
-    assertEquivalent(`
+	it("works with preprocessIdentifiers", () => {
+		assertEquivalent(
+			`
       function processData(inputValue) {
         var intermediateResult = inputValue * 2;
         return intermediateResult + 100;
       }
       processData(21);
-    `, { rollingCipher: true, preprocessIdentifiers: true });
-  });
+    `,
+			{ rollingCipher: true, preprocessIdentifiers: true }
+		);
+	});
 
-  it("works with debugProtection", () => {
-    assertEquivalent(`
+	it("works with debugProtection", () => {
+		assertEquivalent(
+			`
       function add(a, b) { return a + b; }
       add(1, 2);
-    `, { rollingCipher: true, debugProtection: true });
-  });
+    `,
+			{ rollingCipher: true, debugProtection: true }
+		);
+	});
 
-  it("works with medium preset (auto-enables rolling cipher)", () => {
-    assertEquivalent(`
+	it("works with medium preset (auto-enables rolling cipher)", () => {
+		assertEquivalent(
+			`
       function add(a, b) { return a + b; }
       add(1, 2);
-    `, { preset: "medium" });
-  });
+    `,
+			{ preset: "medium" }
+		);
+	});
 
-  it("works with max preset (auto-enables both)", () => {
-    assertEquivalent(`
+	it("works with max preset (auto-enables both)", () => {
+		assertEquivalent(
+			`
       function add(a, b) { return a + b; }
       add(1, 2);
-    `, { preset: "max" });
-  });
+    `,
+			{ preset: "max" }
+		);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -612,39 +758,53 @@ describe("rolling cipher with other features", () => {
 // ---------------------------------------------------------------------------
 
 const binaryRcOpts = { encryptBytecode: true, rollingCipher: true };
-const binaryIbOpts = { encryptBytecode: true, rollingCipher: true, integrityBinding: true };
+const binaryIbOpts = {
+	encryptBytecode: true,
+	rollingCipher: true,
+	integrityBinding: true,
+};
 
 describe("binary encoding with rolling cipher", () => {
-  it("simple function", () => {
-    assertEquivalent(`
+	it("simple function", () => {
+		assertEquivalent(
+			`
       function add(a, b) { return a + b; }
       add(3, 4);
-    `, binaryRcOpts);
-  });
+    `,
+			binaryRcOpts
+		);
+	});
 
-  it("fibonacci", () => {
-    assertEquivalent(`
+	it("fibonacci", () => {
+		assertEquivalent(
+			`
       function fibonacci(n) {
         if (n <= 1) return n;
         return fibonacci(n - 1) + fibonacci(n - 2);
       }
       fibonacci(10);
-    `, binaryRcOpts);
-  });
+    `,
+			binaryRcOpts
+		);
+	});
 
-  it("closures", () => {
-    assertEquivalent(`
+	it("closures", () => {
+		assertEquivalent(
+			`
       function makeCounter() {
         var count = 0;
         return function() { return ++count; };
       }
       var c = makeCounter();
       [c(), c(), c()];
-    `, binaryRcOpts);
-  });
+    `,
+			binaryRcOpts
+		);
+	});
 
-  it("classes", () => {
-    assertEquivalent(`
+	it("classes", () => {
+		assertEquivalent(
+			`
       function test() {
         class Foo {
           constructor(x) { this.x = x; }
@@ -653,11 +813,14 @@ describe("binary encoding with rolling cipher", () => {
         return new Foo(42).getX();
       }
       test();
-    `, binaryRcOpts);
-  });
+    `,
+			binaryRcOpts
+		);
+	});
 
-  it("try/catch", () => {
-    assertEquivalent(`
+	it("try/catch", () => {
+		assertEquivalent(
+			`
       function safe(x) {
         try {
           if (x < 0) throw new Error("neg");
@@ -667,44 +830,58 @@ describe("binary encoding with rolling cipher", () => {
         }
       }
       [safe(5), safe(-1)];
-    `, binaryRcOpts);
-  });
+    `,
+			binaryRcOpts
+		);
+	});
 
-  it("loops", () => {
-    assertEquivalent(`
+	it("loops", () => {
+		assertEquivalent(
+			`
       function sum(n) {
         var t = 0;
         for (var i = 1; i <= n; i++) t += i;
         return t;
       }
       sum(100);
-    `, binaryRcOpts);
-  });
+    `,
+			binaryRcOpts
+		);
+	});
 
-  it("async function", () => {
-    assertEquivalent(`
+	it("async function", () => {
+		assertEquivalent(
+			`
       async function getData() { return 42; }
       getData();
-    `, binaryRcOpts);
-  });
+    `,
+			binaryRcOpts
+		);
+	});
 
-  it("with integrity binding", () => {
-    assertEquivalent(`
+	it("with integrity binding", () => {
+		assertEquivalent(
+			`
       function add(a, b) { return a + b; }
       add(3, 4);
-    `, binaryIbOpts);
-  });
+    `,
+			binaryIbOpts
+		);
+	});
 
-  it("full high preset (encryptBytecode not overridden)", () => {
-    // Explicitly pass encryptBytecode: true to override the test helper default
-    assertEquivalent(`
+	it("full high preset (encryptBytecode not overridden)", () => {
+		// Explicitly pass encryptBytecode: true to override the test helper default
+		assertEquivalent(
+			`
       function fibonacci(n) {
         if (n <= 1) return n;
         return fibonacci(n - 1) + fibonacci(n - 2);
       }
       fibonacci(10);
-    `, { preset: "max", encryptBytecode: true });
-  });
+    `,
+			{ preset: "max", encryptBytecode: true }
+		);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -712,26 +889,33 @@ describe("binary encoding with rolling cipher", () => {
 // ---------------------------------------------------------------------------
 
 describe("rolling cipher edge cases", () => {
-  it("empty function", () => {
-    assertEquivalent(`
+	it("empty function", () => {
+		assertEquivalent(
+			`
       function noop() {}
       noop();
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("function with no return value", () => {
-    assertEquivalent(`
+	it("function with no return value", () => {
+		assertEquivalent(
+			`
       function sideEffect(arr) {
         arr.push(42);
       }
       var a = [1, 2, 3];
       sideEffect(a);
       a;
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("deeply nested closures", () => {
-    assertEquivalent(`
+	it("deeply nested closures", () => {
+		assertEquivalent(
+			`
       function a(x) {
         return function(y) {
           return function(z) {
@@ -740,50 +924,65 @@ describe("rolling cipher edge cases", () => {
         };
       }
       a(1)(2)(3);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("recursive function with many calls", () => {
-    assertEquivalent(`
+	it("recursive function with many calls", () => {
+		assertEquivalent(
+			`
       function fib(n) {
         if (n <= 1) return n;
         return fib(n-1) + fib(n-2);
       }
       fib(15);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("multiple independent functions", () => {
-    assertEquivalent(`
+	it("multiple independent functions", () => {
+		assertEquivalent(
+			`
       function square(x) { return x * x; }
       function cube(x) { return x * x * x; }
       function sum(a, b) { return a + b; }
       sum(square(3), cube(2));
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("function with many parameters", () => {
-    assertEquivalent(`
+	it("function with many parameters", () => {
+		assertEquivalent(
+			`
       function many(a, b, c, d, e, f) {
         return a + b + c + d + e + f;
       }
       many(1, 2, 3, 4, 5, 6);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("function with rest arguments", () => {
-    assertEquivalent(`
+	it("function with rest arguments", () => {
+		assertEquivalent(
+			`
       function sum() {
         var total = 0;
         for (var i = 0; i < arguments.length; i++) total += arguments[i];
         return total;
       }
       sum(1, 2, 3, 4, 5);
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("function that throws", () => {
-    assertEquivalent(`
+	it("function that throws", () => {
+		assertEquivalent(
+			`
       function mustThrow() {
         try {
           throw new Error("test error");
@@ -792,11 +991,14 @@ describe("rolling cipher edge cases", () => {
         }
       }
       mustThrow();
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 
-  it("class inheritance with rolling cipher", () => {
-    assertEquivalent(`
+	it("class inheritance with rolling cipher", () => {
+		assertEquivalent(
+			`
       function test() {
         class Animal {
           constructor(name) { this.name = name; }
@@ -810,8 +1012,10 @@ describe("rolling cipher edge cases", () => {
         return d.speak();
       }
       test();
-    `, rcOpts);
-  });
+    `,
+			rcOpts
+		);
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -822,15 +1026,19 @@ const deadCodeOpts = { deadCodeInjection: true };
 const highPresetOpts = { preset: "max" as const, encryptBytecode: false };
 
 describe("dead code injection", () => {
-  it("simple function", () => {
-    assertEquivalent(`
+	it("simple function", () => {
+		assertEquivalent(
+			`
       function add(a, b) { return a + b; }
       add(3, 4);
-    `, deadCodeOpts);
-  });
+    `,
+			deadCodeOpts
+		);
+	});
 
-  it("try/catch", () => {
-    assertEquivalent(`
+	it("try/catch", () => {
+		assertEquivalent(
+			`
       function safe(x) {
         try {
           if (x < 0) throw new Error("neg");
@@ -840,11 +1048,14 @@ describe("dead code injection", () => {
         }
       }
       [safe(5), safe(-1)];
-    `, deadCodeOpts);
-  });
+    `,
+			deadCodeOpts
+		);
+	});
 
-  it("try/catch/finally", () => {
-    assertEquivalent(`
+	it("try/catch/finally", () => {
+		assertEquivalent(
+			`
       function test(x) {
         var result = [];
         try {
@@ -859,11 +1070,14 @@ describe("dead code injection", () => {
         return result;
       }
       [test(false), test(true)];
-    `, deadCodeOpts);
-  });
+    `,
+			deadCodeOpts
+		);
+	});
 
-  it("nested try/catch", () => {
-    assertEquivalent(`
+	it("nested try/catch", () => {
+		assertEquivalent(
+			`
       function test() {
         var r = [];
         try {
@@ -884,11 +1098,14 @@ describe("dead code injection", () => {
         return r;
       }
       test();
-    `, deadCodeOpts);
-  });
+    `,
+			deadCodeOpts
+		);
+	});
 
-  it("loops with multiple returns", () => {
-    assertEquivalent(`
+	it("loops with multiple returns", () => {
+		assertEquivalent(
+			`
       function findFirst(arr, pred) {
         for (var i = 0; i < arr.length; i++) {
           if (pred(arr[i])) return arr[i];
@@ -896,11 +1113,14 @@ describe("dead code injection", () => {
         return null;
       }
       findFirst([1, 2, 3, 4, 5], function(x) { return x > 3; });
-    `, deadCodeOpts);
-  });
+    `,
+			deadCodeOpts
+		);
+	});
 
-  it("switch with returns", () => {
-    assertEquivalent(`
+	it("switch with returns", () => {
+		assertEquivalent(
+			`
       function classify(n) {
         switch(true) {
           case n < 0: return "negative";
@@ -910,11 +1130,14 @@ describe("dead code injection", () => {
         }
       }
       [classify(-5), classify(0), classify(200), classify(42)];
-    `, deadCodeOpts);
-  });
+    `,
+			deadCodeOpts
+		);
+	});
 
-  it("with rolling cipher + integrity binding", () => {
-    assertEquivalent(`
+	it("with rolling cipher + integrity binding", () => {
+		assertEquivalent(
+			`
       function test() {
         try {
           var obj = { a: 1, b: 2 };
@@ -924,11 +1147,18 @@ describe("dead code injection", () => {
         }
       }
       test();
-    `, { deadCodeInjection: true, rollingCipher: true, integrityBinding: true });
-  });
+    `,
+			{
+				deadCodeInjection: true,
+				rollingCipher: true,
+				integrityBinding: true,
+			}
+		);
+	});
 
-  it("full high preset with try/catch", () => {
-    assertEquivalent(`
+	it("full high preset with try/catch", () => {
+		assertEquivalent(
+			`
       function safeGet(obj, key) {
         try {
           return obj[key];
@@ -937,11 +1167,14 @@ describe("dead code injection", () => {
         }
       }
       [safeGet({x: 1}, "x"), safeGet(null, "x")];
-    `, highPresetOpts);
-  });
+    `,
+			highPresetOpts
+		);
+	});
 
-  it("complex: optional access pattern (Chrome extension style)", () => {
-    assertEquivalent(`
+	it("complex: optional access pattern (Chrome extension style)", () => {
+		assertEquivalent(
+			`
       function test() {
         var win = { sessionStorage: { getItem: function(k) { return 'v_' + k; } } };
         var winNull = {};
@@ -959,6 +1192,8 @@ describe("dead code injection", () => {
         return [r1, r2];
       }
       test();
-    `, highPresetOpts);
-  });
+    `,
+			highPresetOpts
+		);
+	});
 });

@@ -5,6 +5,7 @@
  * catch variable isolation, and typeof through the scope chain.
  */
 
+import { describe, it, expect } from "vitest";
 import { assertEquivalent } from "../helpers.js";
 
 // ---------------------------------------------------------------------------
@@ -12,8 +13,8 @@ import { assertEquivalent } from "../helpers.js";
 // ---------------------------------------------------------------------------
 
 describe("indexed slots: basic closure reads", () => {
-  it("inner function reads captured var", () => {
-    assertEquivalent(`
+	it("inner function reads captured var", () => {
+		assertEquivalent(`
       function test() {
         var x = 42;
         function inner() { return x; }
@@ -21,20 +22,20 @@ describe("indexed slots: basic closure reads", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("inner function reads captured parameter", () => {
-    assertEquivalent(`
+	it("inner function reads captured parameter", () => {
+		assertEquivalent(`
       function test(a) {
         function inner() { return a; }
         return inner();
       }
       test(99);
     `);
-  });
+	});
 
-  it("arrow function reads captured var", () => {
-    assertEquivalent(`
+	it("arrow function reads captured var", () => {
+		assertEquivalent(`
       function test() {
         var msg = "hello";
         var fn = function() { return msg; };
@@ -42,10 +43,10 @@ describe("indexed slots: basic closure reads", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("multiple captured vars", () => {
-    assertEquivalent(`
+	it("multiple captured vars", () => {
+		assertEquivalent(`
       function test() {
         var a = 1, b = 2, c = 3;
         function sum() { return a + b + c; }
@@ -53,10 +54,10 @@ describe("indexed slots: basic closure reads", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("captured var with non-captured locals (mixed register/slot)", () => {
-    assertEquivalent(`
+	it("captured var with non-captured locals (mixed register/slot)", () => {
+		assertEquivalent(`
       function test() {
         var captured = 10;
         var local = 20;
@@ -65,7 +66,7 @@ describe("indexed slots: basic closure reads", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -73,8 +74,8 @@ describe("indexed slots: basic closure reads", () => {
 // ---------------------------------------------------------------------------
 
 describe("indexed slots: mutation visibility", () => {
-  it("outer writes visible to inner", () => {
-    assertEquivalent(`
+	it("outer writes visible to inner", () => {
+		assertEquivalent(`
       function test() {
         var x = 1;
         function get() { return x; }
@@ -83,10 +84,10 @@ describe("indexed slots: mutation visibility", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("inner writes visible to outer", () => {
-    assertEquivalent(`
+	it("inner writes visible to outer", () => {
+		assertEquivalent(`
       function test() {
         var x = 1;
         function set(v) { x = v; }
@@ -95,10 +96,10 @@ describe("indexed slots: mutation visibility", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("inner increment visible to outer", () => {
-    assertEquivalent(`
+	it("inner increment visible to outer", () => {
+		assertEquivalent(`
       function test() {
         var count = 0;
         function inc() { count++; }
@@ -107,10 +108,10 @@ describe("indexed slots: mutation visibility", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("outer increment visible to inner", () => {
-    assertEquivalent(`
+	it("outer increment visible to inner", () => {
+		assertEquivalent(`
       function test() {
         var x = 0;
         function get() { return x; }
@@ -120,10 +121,10 @@ describe("indexed slots: mutation visibility", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("compound assignment visible across closures", () => {
-    assertEquivalent(`
+	it("compound assignment visible across closures", () => {
+		assertEquivalent(`
       function test() {
         var total = 0;
         function add(n) { total += n; }
@@ -132,10 +133,10 @@ describe("indexed slots: mutation visibility", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("multiple closures share same captured var", () => {
-    assertEquivalent(`
+	it("multiple closures share same captured var", () => {
+		assertEquivalent(`
       function test() {
         var x = 0;
         function inc() { x++; }
@@ -148,7 +149,7 @@ describe("indexed slots: mutation visibility", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -156,8 +157,8 @@ describe("indexed slots: mutation visibility", () => {
 // ---------------------------------------------------------------------------
 
 describe("indexed slots: closures in loops", () => {
-  it("closure captures loop counter (var)", () => {
-    assertEquivalent(`
+	it("closure captures loop counter (var)", () => {
+		assertEquivalent(`
       function test() {
         var fns = [];
         for (var i = 0; i < 3; i++) {
@@ -169,10 +170,10 @@ describe("indexed slots: closures in loops", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure modifies captured var in loop", () => {
-    assertEquivalent(`
+	it("closure modifies captured var in loop", () => {
+		assertEquivalent(`
       function test() {
         var sum = 0;
         var adders = [];
@@ -184,10 +185,10 @@ describe("indexed slots: closures in loops", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("forEach callback reads captured var", () => {
-    assertEquivalent(`
+	it("forEach callback reads captured var", () => {
+		assertEquivalent(`
       function test() {
         var result = [];
         var prefix = "item_";
@@ -198,10 +199,10 @@ describe("indexed slots: closures in loops", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("map callback reads and writes captured var", () => {
-    assertEquivalent(`
+	it("map callback reads and writes captured var", () => {
+		assertEquivalent(`
       function test() {
         var count = 0;
         var result = [10, 20, 30].map(function(n) {
@@ -212,10 +213,10 @@ describe("indexed slots: closures in loops", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for-let destructuring gets per-iteration bindings", () => {
-    assertEquivalent(`
+	it("for-let destructuring gets per-iteration bindings", () => {
+		assertEquivalent(`
       function test() {
         var items = [{v:10},{v:20},{v:30}];
         var fns = [];
@@ -226,7 +227,7 @@ describe("indexed slots: closures in loops", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -234,8 +235,8 @@ describe("indexed slots: closures in loops", () => {
 // ---------------------------------------------------------------------------
 
 describe("indexed slots: deep nesting", () => {
-  it("3-level deep closure read", () => {
-    assertEquivalent(`
+	it("3-level deep closure read", () => {
+		assertEquivalent(`
       function test() {
         var x = 42;
         function mid() {
@@ -246,10 +247,10 @@ describe("indexed slots: deep nesting", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("3-level deep closure write", () => {
-    assertEquivalent(`
+	it("3-level deep closure write", () => {
+		assertEquivalent(`
       function test() {
         var x = 0;
         function mid() {
@@ -261,10 +262,10 @@ describe("indexed slots: deep nesting", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("each level has its own captured vars", () => {
-    assertEquivalent(`
+	it("each level has its own captured vars", () => {
+		assertEquivalent(`
       function test() {
         var a = 1;
         function level1() {
@@ -278,10 +279,10 @@ describe("indexed slots: deep nesting", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("deep mutation chain", () => {
-    assertEquivalent(`
+	it("deep mutation chain", () => {
+		assertEquivalent(`
       function test() {
         var x = 0;
         function a() {
@@ -298,7 +299,7 @@ describe("indexed slots: deep nesting", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -306,8 +307,8 @@ describe("indexed slots: deep nesting", () => {
 // ---------------------------------------------------------------------------
 
 describe("indexed slots: classes", () => {
-  it("class constructor reads captured var", () => {
-    assertEquivalent(`
+	it("class constructor reads captured var", () => {
+		assertEquivalent(`
       function test() {
         var defaultName = "world";
         class Greeter {
@@ -318,10 +319,10 @@ describe("indexed slots: classes", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("class method modifies captured var", () => {
-    assertEquivalent(`
+	it("class method modifies captured var", () => {
+		assertEquivalent(`
       function test() {
         var count = 0;
         class Counter {
@@ -334,10 +335,10 @@ describe("indexed slots: classes", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("class with computed property keys from captured vars", () => {
-    assertEquivalent(`
+	it("class with computed property keys from captured vars", () => {
+		assertEquivalent(`
       function test() {
         var key1 = "prop_" + 1;
         var key2 = "prop_" + 2;
@@ -358,10 +359,10 @@ describe("indexed slots: classes", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("class factory with captured state", () => {
-    assertEquivalent(`
+	it("class factory with captured state", () => {
+		assertEquivalent(`
       function test() {
         var instances = 0;
         class Tracked {
@@ -372,7 +373,7 @@ describe("indexed slots: classes", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -380,8 +381,8 @@ describe("indexed slots: classes", () => {
 // ---------------------------------------------------------------------------
 
 describe("indexed slots: edge cases", () => {
-  it("captured var initialized to undefined", () => {
-    assertEquivalent(`
+	it("captured var initialized to undefined", () => {
+		assertEquivalent(`
       function test() {
         var x;
         function set(v) { x = v; }
@@ -392,10 +393,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("captured var with default parameter", () => {
-    assertEquivalent(`
+	it("captured var with default parameter", () => {
+		assertEquivalent(`
       function test(x) {
         if (x === undefined) x = 10;
         function get() { return x; }
@@ -403,10 +404,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("IIFE captures outer var", () => {
-    assertEquivalent(`
+	it("IIFE captures outer var", () => {
+		assertEquivalent(`
       function test() {
         var x = 5;
         var result = (function() { return x * 2; })();
@@ -414,10 +415,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure survives after outer function returns", () => {
-    assertEquivalent(`
+	it("closure survives after outer function returns", () => {
+		assertEquivalent(`
       function test() {
         function makeCounter() {
           var n = 0;
@@ -428,10 +429,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("two independent closures from same factory", () => {
-    assertEquivalent(`
+	it("two independent closures from same factory", () => {
+		assertEquivalent(`
       function test() {
         function makeCounter() {
           var n = 0;
@@ -445,10 +446,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("captured var used in try/catch", () => {
-    assertEquivalent(`
+	it("captured var used in try/catch", () => {
+		assertEquivalent(`
       function test() {
         var result = "none";
         function setResult(v) { result = v; }
@@ -461,10 +462,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("typeof captured var in inner function", () => {
-    assertEquivalent(`
+	it("typeof captured var in inner function", () => {
+		assertEquivalent(`
       function test() {
         var x = 42;
         function inner() { return typeof x; }
@@ -472,10 +473,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("typeof undefined captured var in inner function", () => {
-    assertEquivalent(`
+	it("typeof undefined captured var in inner function", () => {
+		assertEquivalent(`
       function test() {
         var x;
         function inner() { return typeof x; }
@@ -483,10 +484,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("captured var as object property value", () => {
-    assertEquivalent(`
+	it("captured var as object property value", () => {
+		assertEquivalent(`
       function test() {
         var name = "Alice";
         var age = 30;
@@ -495,10 +496,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("rest parameter captured by closure", () => {
-    assertEquivalent(`
+	it("rest parameter captured by closure", () => {
+		assertEquivalent(`
       function test() {
         function collect() {
           var items = [];
@@ -512,10 +513,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("captured var in conditional branches", () => {
-    assertEquivalent(`
+	it("captured var in conditional branches", () => {
+		assertEquivalent(`
       function test() {
         var x = 0;
         function inc() { x++; }
@@ -525,10 +526,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("captured var with destructuring assignment in inner", () => {
-    assertEquivalent(`
+	it("captured var with destructuring assignment in inner", () => {
+		assertEquivalent(`
       function test() {
         var a = 0, b = 0;
         function swap() {
@@ -542,10 +543,10 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("recursive function with captured accumulator", () => {
-    assertEquivalent(`
+	it("recursive function with captured accumulator", () => {
+		assertEquivalent(`
       function test() {
         var calls = 0;
         function fib(n) {
@@ -558,7 +559,7 @@ describe("indexed slots: edge cases", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -566,8 +567,8 @@ describe("indexed slots: edge cases", () => {
 // ---------------------------------------------------------------------------
 
 describe("indexed slots: block scope interaction", () => {
-  it("captured var accessed through block scope", () => {
-    assertEquivalent(`
+	it("captured var accessed through block scope", () => {
+		assertEquivalent(`
       function test() {
         var x = 1;
         {
@@ -578,10 +579,10 @@ describe("indexed slots: block scope interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("captured var with for-loop block scope", () => {
-    assertEquivalent(`
+	it("captured var with for-loop block scope", () => {
+		assertEquivalent(`
       function test() {
         var sum = 0;
         for (var i = 0; i < 5; i++) {
@@ -591,10 +592,10 @@ describe("indexed slots: block scope interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("let in bare block shadows outer var", () => {
-    assertEquivalent(`
+	it("let in bare block shadows outer var", () => {
+		assertEquivalent(`
       function test() {
         var x = 1;
         {
@@ -605,10 +606,10 @@ describe("indexed slots: block scope interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("const in bare block shadows outer var", () => {
-    assertEquivalent(`
+	it("const in bare block shadows outer var", () => {
+		assertEquivalent(`
       function test() {
         var x = 1;
         {
@@ -618,10 +619,10 @@ describe("indexed slots: block scope interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("multiple nested blocks with let shadowing", () => {
-    assertEquivalent(`
+	it("multiple nested blocks with let shadowing", () => {
+		assertEquivalent(`
       function test() {
         let x = 1;
         {
@@ -634,10 +635,10 @@ describe("indexed slots: block scope interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("let in block visible to closure within block", () => {
-    assertEquivalent(`
+	it("let in block visible to closure within block", () => {
+		assertEquivalent(`
       function test() {
         var result;
         {
@@ -648,7 +649,7 @@ describe("indexed slots: block scope interaction", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -656,8 +657,8 @@ describe("indexed slots: block scope interaction", () => {
 // ---------------------------------------------------------------------------
 
 describe("catch variable scoping", () => {
-  it("catch variable does not leak to outer scope", () => {
-    assertEquivalent(`
+	it("catch variable does not leak to outer scope", () => {
+		assertEquivalent(`
       function test() {
         var e = "outer";
         try { throw "err"; } catch(e) { }
@@ -665,10 +666,10 @@ describe("catch variable scoping", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("catch variable shadows outer with same name", () => {
-    assertEquivalent(`
+	it("catch variable shadows outer with same name", () => {
+		assertEquivalent(`
       function test() {
         var x = "original";
         try { throw "caught"; } catch(x) { x = "modified"; }
@@ -676,7 +677,7 @@ describe("catch variable scoping", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -684,8 +685,8 @@ describe("catch variable scoping", () => {
 // ---------------------------------------------------------------------------
 
 describe("typeof in closures", () => {
-  it("typeof scoped var in inner function", () => {
-    assertEquivalent(`
+	it("typeof scoped var in inner function", () => {
+		assertEquivalent(`
       function test() {
         var x = 42;
         function inner() { return typeof x; }
@@ -693,10 +694,10 @@ describe("typeof in closures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("typeof undefined scoped var", () => {
-    assertEquivalent(`
+	it("typeof undefined scoped var", () => {
+		assertEquivalent(`
       function test() {
         var x;
         function inner() { return typeof x; }
@@ -704,10 +705,10 @@ describe("typeof in closures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("typeof string scoped var", () => {
-    assertEquivalent(`
+	it("typeof string scoped var", () => {
+		assertEquivalent(`
       function test() {
         var s = "hello";
         function inner() { return typeof s; }
@@ -715,16 +716,16 @@ describe("typeof in closures", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("typeof nonexistent global still returns undefined", () => {
-    assertEquivalent(`
+	it("typeof nonexistent global still returns undefined", () => {
+		assertEquivalent(`
       function test() {
         return typeof someNonexistentGlobalVar123;
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -732,8 +733,8 @@ describe("typeof in closures", () => {
 // ---------------------------------------------------------------------------
 
 describe("switch let/const scoping", () => {
-  it("let in switch case does not leak outside", () => {
-    assertEquivalent(`
+	it("let in switch case does not leak outside", () => {
+		assertEquivalent(`
       function test() {
         var x = "outer";
         switch (1) {
@@ -743,10 +744,10 @@ describe("switch let/const scoping", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("let in switch with braces per case", () => {
-    assertEquivalent(`
+	it("let in switch with braces per case", () => {
+		assertEquivalent(`
       function test() {
         var result = [];
         switch (2) {
@@ -758,7 +759,7 @@ describe("switch let/const scoping", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -766,8 +767,8 @@ describe("switch let/const scoping", () => {
 // ---------------------------------------------------------------------------
 
 describe("for-in destructuring", () => {
-  it("for-in with simple variable", () => {
-    assertEquivalent(`
+	it("for-in with simple variable", () => {
+		assertEquivalent(`
       function test() {
         var obj = {a: 1, b: 2, c: 3};
         var keys = [];
@@ -776,5 +777,5 @@ describe("for-in destructuring", () => {
       }
       test();
     `);
-  });
+	});
 });

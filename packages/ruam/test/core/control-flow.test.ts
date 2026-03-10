@@ -4,8 +4,8 @@ import { assertEquivalent } from "../helpers.js";
 // ─── 1. if/else ───────────────────────────────────────────────────────────────
 
 describe("comprehensive control flow – if/else", () => {
-  it("simple if true branch", () => {
-    assertEquivalent(`
+	it("simple if true branch", () => {
+		assertEquivalent(`
       function test() {
         var x = 10;
         if (x > 5) return "yes";
@@ -13,10 +13,10 @@ describe("comprehensive control flow – if/else", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("simple if false branch", () => {
-    assertEquivalent(`
+	it("simple if false branch", () => {
+		assertEquivalent(`
       function test() {
         var x = 2;
         if (x > 5) return "yes";
@@ -24,10 +24,10 @@ describe("comprehensive control flow – if/else", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested if/else three levels deep", () => {
-    assertEquivalent(`
+	it("nested if/else three levels deep", () => {
+		assertEquivalent(`
       function classify(x, y) {
         if (x > 0) {
           if (y > 0) {
@@ -42,10 +42,10 @@ describe("comprehensive control flow – if/else", () => {
       }
       [classify(1, 2), classify(1, 0), classify(1, -1), classify(-1, 5)];
     `);
-  });
+	});
 
-  it("chained else-if with multiple conditions", () => {
-    assertEquivalent(`
+	it("chained else-if with multiple conditions", () => {
+		assertEquivalent(`
       function grade(score) {
         if (score >= 90) return "A";
         else if (score >= 80) return "B";
@@ -55,10 +55,10 @@ describe("comprehensive control flow – if/else", () => {
       }
       [grade(95), grade(85), grade(75), grade(65), grade(50)];
     `);
-  });
+	});
 
-  it("if/else without braces, multiline effect", () => {
-    assertEquivalent(`
+	it("if/else without braces, multiline effect", () => {
+		assertEquivalent(`
       function test(x) {
         var a = 0, b = 0;
         if (x > 0)
@@ -69,40 +69,40 @@ describe("comprehensive control flow – if/else", () => {
       }
       [test(5), test(-5)];
     `);
-  });
+	});
 
-  it("if with complex boolean expression", () => {
-    assertEquivalent(`
+	it("if with complex boolean expression", () => {
+		assertEquivalent(`
       function test(a, b, c) {
         if (a > 0 && (b < 10 || c === true)) return "match";
         return "no match";
       }
       [test(1, 5, false), test(1, 15, true), test(-1, 5, true), test(1, 15, false)];
     `);
-  });
+	});
 });
 
 // ─── 2. Ternary ──────────────────────────────────────────────────────────────
 
 describe("comprehensive control flow – ternary", () => {
-  it("simple ternary", () => {
-    assertEquivalent(`
+	it("simple ternary", () => {
+		assertEquivalent(`
       function test(x) { return x > 0 ? "pos" : "non-pos"; }
       [test(5), test(-3), test(0)];
     `);
-  });
+	});
 
-  it("nested ternary", () => {
-    assertEquivalent(`
+	it("nested ternary", () => {
+		assertEquivalent(`
       function sign(x) {
         return x > 0 ? 1 : x < 0 ? -1 : 0;
       }
       [sign(10), sign(-7), sign(0)];
     `);
-  });
+	});
 
-  it("chained ternary for classification", () => {
-    assertEquivalent(`
+	it("chained ternary for classification", () => {
+		assertEquivalent(`
       function classify(n) {
         return n < 0 ? "negative"
              : n === 0 ? "zero"
@@ -112,23 +112,23 @@ describe("comprehensive control flow – ternary", () => {
       }
       [classify(-5), classify(0), classify(3), classify(50), classify(200)];
     `);
-  });
+	});
 
-  it("ternary as function argument", () => {
-    assertEquivalent(`
+	it("ternary as function argument", () => {
+		assertEquivalent(`
       function pick(flag) {
         return [1, 2, 3].concat(flag ? [4, 5] : []);
       }
       [pick(true), pick(false)];
     `);
-  });
+	});
 });
 
 // ─── 3. switch ───────────────────────────────────────────────────────────────
 
 describe("comprehensive control flow – switch", () => {
-  it("switch with break on every case", () => {
-    assertEquivalent(`
+	it("switch with break on every case", () => {
+		assertEquivalent(`
       function color(c) {
         var result;
         switch (c) {
@@ -141,10 +141,10 @@ describe("comprehensive control flow – switch", () => {
       }
       [color("r"), color("g"), color("b"), color("x")];
     `);
-  });
+	});
 
-  it("switch with fall-through across multiple cases", () => {
-    assertEquivalent(`
+	it("switch with fall-through across multiple cases", () => {
+		assertEquivalent(`
       function test(x) {
         var r = [];
         switch (x) {
@@ -158,10 +158,10 @@ describe("comprehensive control flow – switch", () => {
       }
       [test(1), test(2), test(3), test(4), test(5)];
     `);
-  });
+	});
 
-  it("switch with default in the middle", () => {
-    assertEquivalent(`
+	it("switch with default in the middle", () => {
+		assertEquivalent(`
       function test(x) {
         var r = "";
         switch (x) {
@@ -173,10 +173,10 @@ describe("comprehensive control flow – switch", () => {
       }
       [test(1), test(2), test(3)];
     `);
-  });
+	});
 
-  it("switch with complex expression cases", () => {
-    assertEquivalent(`
+	it("switch with complex expression cases", () => {
+		assertEquivalent(`
       function test(x) {
         var a = 2, b = 3;
         switch (x) {
@@ -188,10 +188,10 @@ describe("comprehensive control flow – switch", () => {
       }
       [test(5), test(6), test(4), test(1)];
     `);
-  });
+	});
 
-  it("switch with return from each case", () => {
-    assertEquivalent(`
+	it("switch with return from each case", () => {
+		assertEquivalent(`
       function fibonacci(n) {
         switch (n) {
           case 0: return 0;
@@ -205,10 +205,10 @@ describe("comprehensive control flow – switch", () => {
       }
       [fibonacci(0), fibonacci(1), fibonacci(3), fibonacci(5), fibonacci(10)];
     `);
-  });
+	});
 
-  it("switch on string values", () => {
-    assertEquivalent(`
+	it("switch on string values", () => {
+		assertEquivalent(`
       function command(cmd) {
         switch (cmd.toLowerCase()) {
           case "start": return 1;
@@ -219,14 +219,14 @@ describe("comprehensive control flow – switch", () => {
       }
       [command("START"), command("stop"), command("PAUSE"), command("other")];
     `);
-  });
+	});
 });
 
 // ─── 4. for loop ─────────────────────────────────────────────────────────────
 
 describe("comprehensive control flow – for loop", () => {
-  it("standard ascending for loop", () => {
-    assertEquivalent(`
+	it("standard ascending for loop", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0; i < 5; i++) r.push(i);
@@ -234,10 +234,10 @@ describe("comprehensive control flow – for loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("descending for loop", () => {
-    assertEquivalent(`
+	it("descending for loop", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 5; i > 0; i--) r.push(i);
@@ -245,10 +245,10 @@ describe("comprehensive control flow – for loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for loop with empty parts (infinite-style with break)", () => {
-    assertEquivalent(`
+	it("for loop with empty parts (infinite-style with break)", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         var i = 0;
@@ -261,10 +261,10 @@ describe("comprehensive control flow – for loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for loop with only condition", () => {
-    assertEquivalent(`
+	it("for loop with only condition", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         var i = 0;
@@ -276,10 +276,10 @@ describe("comprehensive control flow – for loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested for loops – matrix", () => {
-    assertEquivalent(`
+	it("nested for loops – matrix", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0; i < 3; i++) {
@@ -291,10 +291,10 @@ describe("comprehensive control flow – for loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for loop with continue", () => {
-    assertEquivalent(`
+	it("for loop with continue", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0; i < 10; i++) {
@@ -305,10 +305,10 @@ describe("comprehensive control flow – for loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for loop with break", () => {
-    assertEquivalent(`
+	it("for loop with break", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0; i < 100; i++) {
@@ -319,10 +319,10 @@ describe("comprehensive control flow – for loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for loop with multiple initializers and updates", () => {
-    assertEquivalent(`
+	it("for loop with multiple initializers and updates", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0, j = 10; i < j; i++, j--) {
@@ -332,14 +332,14 @@ describe("comprehensive control flow – for loop", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 5. while loop ───────────────────────────────────────────────────────────
 
 describe("comprehensive control flow – while loop", () => {
-  it("standard while loop", () => {
-    assertEquivalent(`
+	it("standard while loop", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         var i = 0;
@@ -351,10 +351,10 @@ describe("comprehensive control flow – while loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("while loop with break", () => {
-    assertEquivalent(`
+	it("while loop with break", () => {
+		assertEquivalent(`
       function test() {
         var i = 0;
         while (true) {
@@ -365,10 +365,10 @@ describe("comprehensive control flow – while loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("while loop with continue", () => {
-    assertEquivalent(`
+	it("while loop with continue", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         var i = 0;
@@ -381,10 +381,10 @@ describe("comprehensive control flow – while loop", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("while loop used for digit extraction", () => {
-    assertEquivalent(`
+	it("while loop used for digit extraction", () => {
+		assertEquivalent(`
       function digits(n) {
         var r = [];
         while (n > 0) {
@@ -395,14 +395,14 @@ describe("comprehensive control flow – while loop", () => {
       }
       digits(12345);
     `);
-  });
+	});
 });
 
 // ─── 6. do-while ─────────────────────────────────────────────────────────────
 
 describe("comprehensive control flow – do-while", () => {
-  it("standard do-while accumulates", () => {
-    assertEquivalent(`
+	it("standard do-while accumulates", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         var i = 0;
@@ -414,10 +414,10 @@ describe("comprehensive control flow – do-while", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("do-while executes at least once even if condition false", () => {
-    assertEquivalent(`
+	it("do-while executes at least once even if condition false", () => {
+		assertEquivalent(`
       function test() {
         var ran = false;
         do {
@@ -427,10 +427,10 @@ describe("comprehensive control flow – do-while", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("do-while with break in the middle", () => {
-    assertEquivalent(`
+	it("do-while with break in the middle", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         var i = 0;
@@ -444,14 +444,14 @@ describe("comprehensive control flow – do-while", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 7. for...in ─────────────────────────────────────────────────────────────
 
 describe("comprehensive control flow – for...in", () => {
-  it("iterates object keys", () => {
-    assertEquivalent(`
+	it("iterates object keys", () => {
+		assertEquivalent(`
       function test() {
         var obj = {a: 1, b: 2, c: 3};
         var keys = [];
@@ -460,10 +460,10 @@ describe("comprehensive control flow – for...in", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for...in with hasOwnProperty guard", () => {
-    assertEquivalent(`
+	it("for...in with hasOwnProperty guard", () => {
+		assertEquivalent(`
       function test() {
         var parent = {inherited: true};
         var child = Object.create(parent);
@@ -476,10 +476,10 @@ describe("comprehensive control flow – for...in", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for...in collects values", () => {
-    assertEquivalent(`
+	it("for...in collects values", () => {
+		assertEquivalent(`
       function test() {
         var obj = {x: 10, y: 20, z: 30};
         var sum = 0;
@@ -490,14 +490,14 @@ describe("comprehensive control flow – for...in", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 8. for...of ─────────────────────────────────────────────────────────────
 
 describe("comprehensive control flow – for...of", () => {
-  it("iterates over array", () => {
-    assertEquivalent(`
+	it("iterates over array", () => {
+		assertEquivalent(`
       function test() {
         var r = 0;
         for (var x of [10, 20, 30]) r += x;
@@ -505,10 +505,10 @@ describe("comprehensive control flow – for...of", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("iterates over string characters", () => {
-    assertEquivalent(`
+	it("iterates over string characters", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var ch of "hello") r.push(ch);
@@ -516,10 +516,10 @@ describe("comprehensive control flow – for...of", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for...of with break", () => {
-    assertEquivalent(`
+	it("for...of with break", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var x of [1, 2, 3, 4, 5, 6, 7]) {
@@ -530,10 +530,10 @@ describe("comprehensive control flow – for...of", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for...of with continue", () => {
-    assertEquivalent(`
+	it("for...of with continue", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var x of [1, 2, 3, 4, 5, 6]) {
@@ -544,14 +544,14 @@ describe("comprehensive control flow – for...of", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 9. break with labels ───────────────────────────────────────────────────
 
 describe("comprehensive control flow – labeled break", () => {
-  it("break out of outer loop with label", () => {
-    assertEquivalent(`
+	it("break out of outer loop with label", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         outer: for (var i = 0; i < 5; i++) {
@@ -564,10 +564,10 @@ describe("comprehensive control flow – labeled break", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("labeled break on while loop", () => {
-    assertEquivalent(`
+	it("labeled break on while loop", () => {
+		assertEquivalent(`
       function test() {
         var count = 0;
         search: while (true) {
@@ -582,14 +582,14 @@ describe("comprehensive control flow – labeled break", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 10. continue with labels ───────────────────────────────────────────────
 
 describe("comprehensive control flow – labeled continue", () => {
-  it("continue outer loop with label", () => {
-    assertEquivalent(`
+	it("continue outer loop with label", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         outer: for (var i = 0; i < 4; i++) {
@@ -602,10 +602,10 @@ describe("comprehensive control flow – labeled continue", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("labeled continue skips rest of outer iteration", () => {
-    assertEquivalent(`
+	it("labeled continue skips rest of outer iteration", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         loop: for (var i = 0; i < 5; i++) {
@@ -616,14 +616,14 @@ describe("comprehensive control flow – labeled continue", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 11. Nested loops with break/continue ───────────────────────────────────
 
 describe("comprehensive control flow – nested loops with break/continue", () => {
-  it("inner break does not affect outer loop", () => {
-    assertEquivalent(`
+	it("inner break does not affect outer loop", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0; i < 3; i++) {
@@ -636,10 +636,10 @@ describe("comprehensive control flow – nested loops with break/continue", () =
       }
       test();
     `);
-  });
+	});
 
-  it("inner continue does not affect outer loop", () => {
-    assertEquivalent(`
+	it("inner continue does not affect outer loop", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0; i < 3; i++) {
@@ -652,10 +652,10 @@ describe("comprehensive control flow – nested loops with break/continue", () =
       }
       test();
     `);
-  });
+	});
 
-  it("triple nested loop with early exit", () => {
-    assertEquivalent(`
+	it("triple nested loop with early exit", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0; i < 3; i++) {
@@ -670,14 +670,14 @@ describe("comprehensive control flow – nested loops with break/continue", () =
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 12. Short-circuit evaluation ───────────────────────────────────────────
 
 describe("comprehensive control flow – short-circuit evaluation", () => {
-  it("&& returns first falsy or last truthy", () => {
-    assertEquivalent(`
+	it("&& returns first falsy or last truthy", () => {
+		assertEquivalent(`
       function test() {
         return [
           1 && 2 && 3,
@@ -689,10 +689,10 @@ describe("comprehensive control flow – short-circuit evaluation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("|| returns first truthy or last falsy", () => {
-    assertEquivalent(`
+	it("|| returns first truthy or last falsy", () => {
+		assertEquivalent(`
       function test() {
         return [
           0 || "" || null || "found",
@@ -703,10 +703,10 @@ describe("comprehensive control flow – short-circuit evaluation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("&& used for conditional execution (side effects)", () => {
-    assertEquivalent(`
+	it("&& used for conditional execution (side effects)", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         var flag = true;
@@ -717,34 +717,34 @@ describe("comprehensive control flow – short-circuit evaluation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("|| used for default value pattern", () => {
-    assertEquivalent(`
+	it("|| used for default value pattern", () => {
+		assertEquivalent(`
       function withDefault(val) {
         var v = val || "default";
         return v;
       }
       [withDefault("hello"), withDefault(""), withDefault(0), withDefault(null)];
     `);
-  });
+	});
 });
 
 // ─── 13. Comma operator ─────────────────────────────────────────────────────
 
 describe("comprehensive control flow – comma operator", () => {
-  it("comma operator evaluates all, returns last", () => {
-    assertEquivalent(`
+	it("comma operator evaluates all, returns last", () => {
+		assertEquivalent(`
       function test() {
         var a = (1, 2, 3);
         return a;
       }
       test();
     `);
-  });
+	});
 
-  it("comma operator with side effects", () => {
-    assertEquivalent(`
+	it("comma operator with side effects", () => {
+		assertEquivalent(`
       function test() {
         var x = 0;
         var y = (x++, x++, x++, x);
@@ -752,10 +752,10 @@ describe("comprehensive control flow – comma operator", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("comma operator in for loop update", () => {
-    assertEquivalent(`
+	it("comma operator in for loop update", () => {
+		assertEquivalent(`
       function test() {
         var r = [];
         for (var i = 0, j = 10; i < 5; i++, j -= 2) {
@@ -765,14 +765,14 @@ describe("comprehensive control flow – comma operator", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 14. try/catch/finally ──────────────────────────────────────────────────
 
 describe("comprehensive control flow – try/catch/finally", () => {
-  it("basic try/catch", () => {
-    assertEquivalent(`
+	it("basic try/catch", () => {
+		assertEquivalent(`
       function test() {
         try {
           throw new Error("boom");
@@ -782,10 +782,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("try/catch/finally – all execute in order", () => {
-    assertEquivalent(`
+	it("try/catch/finally – all execute in order", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         try {
@@ -801,10 +801,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("finally runs even when no error", () => {
-    assertEquivalent(`
+	it("finally runs even when no error", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         try {
@@ -818,10 +818,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("finally runs even after return in try", () => {
-    assertEquivalent(`
+	it("finally runs even after return in try", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         function inner() {
@@ -837,10 +837,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("finally runs even after return in catch", () => {
-    assertEquivalent(`
+	it("finally runs even after return in catch", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         function inner() {
@@ -858,10 +858,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested try/catch", () => {
-    assertEquivalent(`
+	it("nested try/catch", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         try {
@@ -880,10 +880,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("rethrow preserves original error", () => {
-    assertEquivalent(`
+	it("rethrow preserves original error", () => {
+		assertEquivalent(`
       function test() {
         try {
           try {
@@ -897,10 +897,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("catch with type checking via instanceof", () => {
-    assertEquivalent(`
+	it("catch with type checking via instanceof", () => {
+		assertEquivalent(`
       function test() {
         var results = [];
 
@@ -917,10 +917,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("try/finally without catch", () => {
-    assertEquivalent(`
+	it("try/finally without catch", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         try {
@@ -932,10 +932,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("finally overrides return value when it also returns", () => {
-    assertEquivalent(`
+	it("finally overrides return value when it also returns", () => {
+		assertEquivalent(`
       function test() {
         function inner() {
           try {
@@ -948,10 +948,10 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("error in catch block is catchable by outer try", () => {
-    assertEquivalent(`
+	it("error in catch block is catchable by outer try", () => {
+		assertEquivalent(`
       function test() {
         try {
           try {
@@ -965,14 +965,14 @@ describe("comprehensive control flow – try/catch/finally", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 // ─── 15. throw custom errors ────────────────────────────────────────────────
 
 describe("comprehensive control flow – throw", () => {
-  it("throw string", () => {
-    assertEquivalent(`
+	it("throw string", () => {
+		assertEquivalent(`
       function test() {
         try {
           throw "custom string error";
@@ -982,10 +982,10 @@ describe("comprehensive control flow – throw", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("throw number", () => {
-    assertEquivalent(`
+	it("throw number", () => {
+		assertEquivalent(`
       function test() {
         try {
           throw 42;
@@ -995,10 +995,10 @@ describe("comprehensive control flow – throw", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("throw object with custom properties", () => {
-    assertEquivalent(`
+	it("throw object with custom properties", () => {
+		assertEquivalent(`
       function test() {
         try {
           throw {code: 404, message: "not found"};
@@ -1008,10 +1008,10 @@ describe("comprehensive control flow – throw", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("throw Error subclass", () => {
-    assertEquivalent(`
+	it("throw Error subclass", () => {
+		assertEquivalent(`
       function test() {
         try {
           throw new RangeError("out of bounds");
@@ -1021,10 +1021,10 @@ describe("comprehensive control flow – throw", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("conditional throw based on input", () => {
-    assertEquivalent(`
+	it("conditional throw based on input", () => {
+		assertEquivalent(`
       function safeDivide(a, b) {
         if (b === 0) throw new Error("division by zero");
         return a / b;
@@ -1041,5 +1041,5 @@ describe("comprehensive control flow – throw", () => {
       }
       test();
     `);
-  });
+	});
 });

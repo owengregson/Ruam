@@ -2,28 +2,28 @@ import { describe, it } from "vitest";
 import { assertEquivalent } from "../helpers.js";
 
 describe("object creation", () => {
-  it("creates an empty object literal", () => {
-    assertEquivalent(`
+	it("creates an empty object literal", () => {
+		assertEquivalent(`
       function test() {
         var obj = {};
         return typeof obj;
       }
       test();
     `);
-  });
+	});
 
-  it("creates an object with properties via literal", () => {
-    assertEquivalent(`
+	it("creates an object with properties via literal", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 1, b: "two", c: true, d: null };
         return [obj.a, obj.b, obj.c, obj.d];
       }
       test();
     `);
-  });
+	});
 
-  it("creates an object with new Object()", () => {
-    assertEquivalent(`
+	it("creates an object with new Object()", () => {
+		assertEquivalent(`
       function test() {
         var obj = new Object();
         obj.x = 10;
@@ -32,10 +32,10 @@ describe("object creation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("creates an object with Object.create(null)", () => {
-    assertEquivalent(`
+	it("creates an object with Object.create(null)", () => {
+		assertEquivalent(`
       function test() {
         var obj = Object.create(null);
         obj.name = "bare";
@@ -43,10 +43,10 @@ describe("object creation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("creates an object with Object.create and a prototype", () => {
-    assertEquivalent(`
+	it("creates an object with Object.create and a prototype", () => {
+		assertEquivalent(`
       function test() {
         var proto = { greet: function() { return "hello from " + this.name; } };
         var obj = Object.create(proto);
@@ -55,32 +55,32 @@ describe("object creation", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("property access", () => {
-  it("accesses properties via dot notation", () => {
-    assertEquivalent(`
+	it("accesses properties via dot notation", () => {
+		assertEquivalent(`
       function test() {
         var obj = { foo: 42, bar: "baz" };
         return obj.foo + obj.bar;
       }
       test();
     `);
-  });
+	});
 
-  it("accesses properties via bracket notation with string", () => {
-    assertEquivalent(`
+	it("accesses properties via bracket notation with string", () => {
+		assertEquivalent(`
       function test() {
         var obj = { "hello world": 99, "a-b": 7 };
         return [obj["hello world"], obj["a-b"]];
       }
       test();
     `);
-  });
+	});
 
-  it("accesses properties via computed bracket notation", () => {
-    assertEquivalent(`
+	it("accesses properties via computed bracket notation", () => {
+		assertEquivalent(`
       function test() {
         var obj = { alpha: 1, beta: 2, gamma: 3 };
         var keys = ["alpha", "beta", "gamma"];
@@ -92,10 +92,10 @@ describe("property access", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("accesses nested properties with mixed notation", () => {
-    assertEquivalent(`
+	it("accesses nested properties with mixed notation", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: { b: { c: [10, 20, 30] } } };
         var key = "c";
@@ -103,22 +103,22 @@ describe("property access", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("returns undefined for missing properties", () => {
-    assertEquivalent(`
+	it("returns undefined for missing properties", () => {
+		assertEquivalent(`
       function test() {
         var obj = { x: 1 };
         return [obj.y, obj["z"]];
       }
       test();
     `);
-  });
+	});
 });
 
 describe("property manipulation", () => {
-  it("uses Object.defineProperty to create a non-writable property", () => {
-    assertEquivalent(`
+	it("uses Object.defineProperty to create a non-writable property", () => {
+		assertEquivalent(`
       function test() {
         var obj = {};
         Object.defineProperty(obj, "readOnly", {
@@ -131,10 +131,10 @@ describe("property manipulation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("uses Object.defineProperty to create a non-enumerable property", () => {
-    assertEquivalent(`
+	it("uses Object.defineProperty to create a non-enumerable property", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 1, b: 2 };
         Object.defineProperty(obj, "hidden", {
@@ -145,10 +145,10 @@ describe("property manipulation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("uses Object.assign to merge objects", () => {
-    assertEquivalent(`
+	it("uses Object.assign to merge objects", () => {
+		assertEquivalent(`
       function test() {
         var target = { a: 1, b: 2 };
         var source1 = { b: 3, c: 4 };
@@ -158,30 +158,30 @@ describe("property manipulation", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("uses Object.keys to list enumerable own keys", () => {
-    assertEquivalent(`
+	it("uses Object.keys to list enumerable own keys", () => {
+		assertEquivalent(`
       function test() {
         var obj = { z: 3, a: 1, m: 2 };
         return Object.keys(obj).sort();
       }
       test();
     `);
-  });
+	});
 
-  it("uses Object.values to list values", () => {
-    assertEquivalent(`
+	it("uses Object.values to list values", () => {
+		assertEquivalent(`
       function test() {
         var obj = { x: 10, y: 20, z: 30 };
         return Object.values(obj).sort(function(a, b) { return a - b; });
       }
       test();
     `);
-  });
+	});
 
-  it("uses Object.entries to list key-value pairs", () => {
-    assertEquivalent(`
+	it("uses Object.entries to list key-value pairs", () => {
+		assertEquivalent(`
       function test() {
         var obj = { name: "Alice", age: 30 };
         var entries = Object.entries(obj).sort(function(a, b) {
@@ -191,12 +191,12 @@ describe("property manipulation", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("object spread", () => {
-  it("spreads one object into another", () => {
-    assertEquivalent(`
+	it("spreads one object into another", () => {
+		assertEquivalent(`
       function test() {
         var original = { a: 1, b: 2 };
         var copy = Object.assign({}, original, { c: 3 });
@@ -204,10 +204,10 @@ describe("object spread", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("later spread properties override earlier ones", () => {
-    assertEquivalent(`
+	it("later spread properties override earlier ones", () => {
+		assertEquivalent(`
       function test() {
         var obj1 = { a: 1, b: 2 };
         var obj2 = { b: 99, c: 3 };
@@ -216,10 +216,10 @@ describe("object spread", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("spread creates a shallow copy", () => {
-    assertEquivalent(`
+	it("spread creates a shallow copy", () => {
+		assertEquivalent(`
       function test() {
         var inner = { val: 42 };
         var obj1 = { nested: inner };
@@ -229,12 +229,12 @@ describe("object spread", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("object destructuring", () => {
-  it("destructures with matching variable names", () => {
-    assertEquivalent(`
+	it("destructures with matching variable names", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 10, b: 20, c: 30 };
         var a = obj.a, b = obj.b, c = obj.c;
@@ -242,10 +242,10 @@ describe("object destructuring", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("destructures with renaming", () => {
-    assertEquivalent(`
+	it("destructures with renaming", () => {
+		assertEquivalent(`
       function test() {
         var obj = { firstName: "John", lastName: "Doe" };
         var x = obj.firstName, y = obj.lastName;
@@ -253,10 +253,10 @@ describe("object destructuring", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("destructures with defaults for missing properties", () => {
-    assertEquivalent(`
+	it("destructures with defaults for missing properties", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 1 };
         var a = obj.a;
@@ -265,10 +265,10 @@ describe("object destructuring", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("destructures nested objects", () => {
-    assertEquivalent(`
+	it("destructures nested objects", () => {
+		assertEquivalent(`
       function test() {
         var data = {
           user: {
@@ -283,12 +283,12 @@ describe("object destructuring", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("property shorthand and computed properties", () => {
-  it("uses shorthand property names", () => {
-    assertEquivalent(`
+	it("uses shorthand property names", () => {
+		assertEquivalent(`
       function test() {
         var x = 10, y = 20;
         var point = { x: x, y: y };
@@ -296,10 +296,10 @@ describe("property shorthand and computed properties", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("uses computed property names via bracket access", () => {
-    assertEquivalent(`
+	it("uses computed property names via bracket access", () => {
+		assertEquivalent(`
       function test() {
         var obj = { dynamic: "value", other: "stuff" };
         var key = "dynamic";
@@ -307,10 +307,10 @@ describe("property shorthand and computed properties", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("reads multiple computed properties in a loop", () => {
-    assertEquivalent(`
+	it("reads multiple computed properties in a loop", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 10, b: 20, c: 30 };
         var keys = Object.keys(obj).sort();
@@ -322,12 +322,12 @@ describe("property shorthand and computed properties", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("getters and setters", () => {
-  it("defines a getter with Object.defineProperty", () => {
-    assertEquivalent(`
+	it("defines a getter with Object.defineProperty", () => {
+		assertEquivalent(`
       function test() {
         var obj = { _temp: 100 };
         Object.defineProperty(obj, "tempF", {
@@ -338,10 +338,10 @@ describe("getters and setters", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("defines a setter with Object.defineProperty", () => {
-    assertEquivalent(`
+	it("defines a setter with Object.defineProperty", () => {
+		assertEquivalent(`
       function test() {
         var obj = { _name: "" };
         Object.defineProperty(obj, "name", {
@@ -354,10 +354,10 @@ describe("getters and setters", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("getter and setter interact correctly", () => {
-    assertEquivalent(`
+	it("getter and setter interact correctly", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         var obj = { _val: 0 };
@@ -371,12 +371,12 @@ describe("getters and setters", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("property enumeration", () => {
-  it("for...in enumerates own and inherited properties", () => {
-    assertEquivalent(`
+	it("for...in enumerates own and inherited properties", () => {
+		assertEquivalent(`
       function test() {
         var parent = { a: 1 };
         var child = Object.create(parent);
@@ -388,10 +388,10 @@ describe("property enumeration", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Object.keys returns only own enumerable properties", () => {
-    assertEquivalent(`
+	it("Object.keys returns only own enumerable properties", () => {
+		assertEquivalent(`
       function test() {
         var parent = { inherited: true };
         var child = Object.create(parent);
@@ -400,10 +400,10 @@ describe("property enumeration", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Object.values returns only own enumerable values", () => {
-    assertEquivalent(`
+	it("Object.values returns only own enumerable values", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 1, b: 2, c: 3 };
         Object.defineProperty(obj, "hidden", { value: 999, enumerable: false });
@@ -411,10 +411,10 @@ describe("property enumeration", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Object.getOwnPropertyNames includes non-enumerable properties", () => {
-    assertEquivalent(`
+	it("Object.getOwnPropertyNames includes non-enumerable properties", () => {
+		assertEquivalent(`
       function test() {
         var obj = { visible: 1 };
         Object.defineProperty(obj, "hidden", { value: 2, enumerable: false });
@@ -422,12 +422,12 @@ describe("property enumeration", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("Object.freeze, Object.seal, Object.isFrozen", () => {
-  it("Object.freeze prevents modifications", () => {
-    assertEquivalent(`
+	it("Object.freeze prevents modifications", () => {
+		assertEquivalent(`
       function test() {
         "use strict";
         var obj = { a: 1, b: 2 };
@@ -438,10 +438,10 @@ describe("Object.freeze, Object.seal, Object.isFrozen", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Object.isFrozen detects frozen objects", () => {
-    assertEquivalent(`
+	it("Object.isFrozen detects frozen objects", () => {
+		assertEquivalent(`
       function test() {
         var obj1 = { x: 1 };
         var obj2 = { y: 2 };
@@ -450,10 +450,10 @@ describe("Object.freeze, Object.seal, Object.isFrozen", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Object.seal prevents adding and deleting but allows modification", () => {
-    assertEquivalent(`
+	it("Object.seal prevents adding and deleting but allows modification", () => {
+		assertEquivalent(`
       function test() {
         "use strict";
         var obj = { a: 1, b: 2 };
@@ -467,12 +467,12 @@ describe("Object.freeze, Object.seal, Object.isFrozen", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("prototype chain", () => {
-  it("hasOwnProperty distinguishes own from inherited", () => {
-    assertEquivalent(`
+	it("hasOwnProperty distinguishes own from inherited", () => {
+		assertEquivalent(`
       function test() {
         var parent = { inherited: true };
         var child = Object.create(parent);
@@ -485,10 +485,10 @@ describe("prototype chain", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("in operator checks full prototype chain", () => {
-    assertEquivalent(`
+	it("in operator checks full prototype chain", () => {
+		assertEquivalent(`
       function test() {
         var proto = { shared: "yes" };
         var obj = Object.create(proto);
@@ -497,10 +497,10 @@ describe("prototype chain", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("instanceof checks the prototype chain", () => {
-    assertEquivalent(`
+	it("instanceof checks the prototype chain", () => {
+		assertEquivalent(`
       function test() {
         function Animal(name) { this.name = name; }
         function Dog(name) { Animal.call(this, name); }
@@ -511,10 +511,10 @@ describe("prototype chain", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("Object.getPrototypeOf returns the prototype", () => {
-    assertEquivalent(`
+	it("Object.getPrototypeOf returns the prototype", () => {
+		assertEquivalent(`
       function test() {
         var proto = { type: "parent" };
         var obj = Object.create(proto);
@@ -522,12 +522,12 @@ describe("prototype chain", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("optional chaining", () => {
-  it("optional chaining on existing property returns value", () => {
-    assertEquivalent(`
+	it("optional chaining on existing property returns value", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: { b: { c: 42 } } };
         var result = obj && obj.a && obj.a.b && obj.a.b.c;
@@ -535,10 +535,10 @@ describe("optional chaining", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("optional chaining on null returns undefined", () => {
-    assertEquivalent(`
+	it("optional chaining on null returns undefined", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: null };
         var result = obj.a && obj.a.b;
@@ -546,10 +546,10 @@ describe("optional chaining", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("optional chaining on method call", () => {
-    assertEquivalent(`
+	it("optional chaining on method call", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           greet: function() { return "hello"; }
@@ -561,10 +561,10 @@ describe("optional chaining", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("deeply nested optional chaining safety", () => {
-    assertEquivalent(`
+	it("deeply nested optional chaining safety", () => {
+		assertEquivalent(`
       function test() {
         var data = { level1: { level2: null } };
         var safe = data && data.level1 && data.level1.level2 && data.level1.level2.level3;
@@ -572,10 +572,10 @@ describe("optional chaining", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("optional call on property: obj.prop?.method?.()", () => {
-    assertEquivalent(`
+	it("optional call on property: obj.prop?.method?.()", () => {
+		assertEquivalent(`
       function test() {
         var win = { sessionStorage: { getItem: function(k) { return 'v_' + k; } } };
         var winNull = { sessionStorage: null };
@@ -587,10 +587,10 @@ describe("optional chaining", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("optional call with nullish coalescing: obj.prop?.method?.() ?? fallback", () => {
-    assertEquivalent(`
+	it("optional call with nullish coalescing: obj.prop?.method?.() ?? fallback", () => {
+		assertEquivalent(`
       function test() {
         var win = { sessionStorage: { getItem: function(k) { return 'v_' + k; } } };
         var winNull = { sessionStorage: null };
@@ -600,10 +600,10 @@ describe("optional chaining", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("optional call inside try/catch", () => {
-    assertEquivalent(`
+	it("optional call inside try/catch", () => {
+		assertEquivalent(`
       function test() {
         var obj = null;
         try {
@@ -614,12 +614,12 @@ describe("optional chaining", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("nullish coalescing with objects", () => {
-  it("returns object when not null or undefined", () => {
-    assertEquivalent(`
+	it("returns object when not null or undefined", () => {
+		assertEquivalent(`
       function test() {
         var obj = { val: 10 };
         var fallback = { val: 99 };
@@ -628,10 +628,10 @@ describe("nullish coalescing with objects", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("returns default when property is null", () => {
-    assertEquivalent(`
+	it("returns default when property is null", () => {
+		assertEquivalent(`
       function test() {
         var config = { timeout: null, retries: 3 };
         var timeout = config.timeout !== null && config.timeout !== undefined ? config.timeout : 5000;
@@ -640,10 +640,10 @@ describe("nullish coalescing with objects", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("distinguishes null/undefined from falsy values", () => {
-    assertEquivalent(`
+	it("distinguishes null/undefined from falsy values", () => {
+		assertEquivalent(`
       function test() {
         var obj = { a: 0, b: "", c: false, d: null, e: undefined };
         var results = [];
@@ -656,5 +656,5 @@ describe("nullish coalescing with objects", () => {
       }
       test();
     `);
-  });
+	});
 });

@@ -10,8 +10,8 @@ import { assertEquivalent, evalOriginal, evalObfuscated } from "../helpers.js";
  */
 
 describe("stress: deep closure chains", () => {
-  it("10-level nested closure accessing all outer vars", () => {
-    assertEquivalent(`
+	it("10-level nested closure accessing all outer vars", () => {
+		assertEquivalent(`
       function build() {
         var a = 1;
         return function() {
@@ -38,10 +38,10 @@ describe("stress: deep closure chains", () => {
       }
       build()()()()()()()();
     `);
-  });
+	});
 
-  it("closure mutation across 5 levels", () => {
-    assertEquivalent(`
+	it("closure mutation across 5 levels", () => {
+		assertEquivalent(`
       function outer() {
         var x = 0;
         function mid1() {
@@ -61,10 +61,10 @@ describe("stress: deep closure chains", () => {
       }
       outer();
     `);
-  });
+	});
 
-  it("many closures capturing same variable with interleaved mutations", () => {
-    assertEquivalent(`
+	it("many closures capturing same variable with interleaved mutations", () => {
+		assertEquivalent(`
       function test() {
         var shared = 0;
         var fns = [];
@@ -79,12 +79,12 @@ describe("stress: deep closure chains", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: this binding edge cases", () => {
-  it("method call vs detached call", () => {
-    assertEquivalent(`
+	it("method call vs detached call", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           val: 42,
@@ -96,10 +96,10 @@ describe("stress: this binding edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested method calls with different this", () => {
-    assertEquivalent(`
+	it("nested method calls with different this", () => {
+		assertEquivalent(`
       function test() {
         var a = {
           val: 10,
@@ -112,10 +112,10 @@ describe("stress: this binding edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("call/apply/bind with closures", () => {
-    assertEquivalent(`
+	it("call/apply/bind with closures", () => {
+		assertEquivalent(`
       function test() {
         function greet(greeting) {
           return greeting + " " + this.name;
@@ -129,10 +129,10 @@ describe("stress: this binding edge cases", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("constructor with prototype methods accessing this", () => {
-    assertEquivalent(`
+	it("constructor with prototype methods accessing this", () => {
+		assertEquivalent(`
       function test() {
         function Counter(start) {
           this.val = start;
@@ -145,12 +145,12 @@ describe("stress: this binding edge cases", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: exception + closure interaction", () => {
-  it("catch block closure captures error", () => {
-    assertEquivalent(`
+	it("catch block closure captures error", () => {
+		assertEquivalent(`
       function test() {
         var captured;
         try {
@@ -162,10 +162,10 @@ describe("stress: exception + closure interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("finally modifies closed-over variable", () => {
-    assertEquivalent(`
+	it("finally modifies closed-over variable", () => {
+		assertEquivalent(`
       function test() {
         var x = "initial";
         var getter;
@@ -181,10 +181,10 @@ describe("stress: exception + closure interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("exception inside closure inside loop", () => {
-    assertEquivalent(`
+	it("exception inside closure inside loop", () => {
+		assertEquivalent(`
       function test() {
         var results = [];
         for (var i = 0; i < 5; i++) {
@@ -199,10 +199,10 @@ describe("stress: exception + closure interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("nested try-catch with rethrow and finally", () => {
-    assertEquivalent(`
+	it("nested try-catch with rethrow and finally", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         try {
@@ -225,10 +225,10 @@ describe("stress: exception + closure interaction", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("exception during iteration with cleanup", () => {
-    assertEquivalent(`
+	it("exception during iteration with cleanup", () => {
+		assertEquivalent(`
       function test() {
         var processed = [];
         var items = [1, 2, "bad", 4, 5];
@@ -244,12 +244,12 @@ describe("stress: exception + closure interaction", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: complex assignment targets", () => {
-  it("chained property assignment", () => {
-    assertEquivalent(`
+	it("chained property assignment", () => {
+		assertEquivalent(`
       function test() {
         var o = {a: {b: {c: 0}}};
         o.a.b.c = 42;
@@ -257,10 +257,10 @@ describe("stress: complex assignment targets", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("computed property compound assignment", () => {
-    assertEquivalent(`
+	it("computed property compound assignment", () => {
+		assertEquivalent(`
       function test() {
         var arr = [10, 20, 30];
         var key = 1;
@@ -270,10 +270,10 @@ describe("stress: complex assignment targets", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("assignment in condition", () => {
-    assertEquivalent(`
+	it("assignment in condition", () => {
+		assertEquivalent(`
       function test() {
         var x;
         if (x = 42) {
@@ -283,10 +283,10 @@ describe("stress: complex assignment targets", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("property increment on returned object", () => {
-    assertEquivalent(`
+	it("property increment on returned object", () => {
+		assertEquivalent(`
       function test() {
         function getObj() { return {count: 0}; }
         var o = getObj();
@@ -297,10 +297,10 @@ describe("stress: complex assignment targets", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("dynamic property increment", () => {
-    assertEquivalent(`
+	it("dynamic property increment", () => {
+		assertEquivalent(`
       function test() {
         var o = {a: 1, b: 2, c: 3};
         var keys = Object.keys(o);
@@ -311,12 +311,12 @@ describe("stress: complex assignment targets", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: recursive algorithms", () => {
-  it("mutual recursion (isEven/isOdd)", () => {
-    assertEquivalent(`
+	it("mutual recursion (isEven/isOdd)", () => {
+		assertEquivalent(`
       function test() {
         function isEven(n) { return n === 0 ? true : isOdd(n - 1); }
         function isOdd(n) { return n === 0 ? false : isEven(n - 1); }
@@ -324,10 +324,10 @@ describe("stress: recursive algorithms", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("tree traversal with accumulator", () => {
-    assertEquivalent(`
+	it("tree traversal with accumulator", () => {
+		assertEquivalent(`
       function test() {
         var tree = {
           val: 1,
@@ -350,10 +350,10 @@ describe("stress: recursive algorithms", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("tower of hanoi count", () => {
-    assertEquivalent(`
+	it("tower of hanoi count", () => {
+		assertEquivalent(`
       function test() {
         var moves = 0;
         function hanoi(n, from, to, aux) {
@@ -367,10 +367,10 @@ describe("stress: recursive algorithms", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("recursive merge sort", () => {
-    assertEquivalent(`
+	it("recursive merge sort", () => {
+		assertEquivalent(`
       function test() {
         function merge(left, right) {
           var result = [];
@@ -392,10 +392,10 @@ describe("stress: recursive algorithms", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("recursive JSON-like stringify", () => {
-    assertEquivalent(`
+	it("recursive JSON-like stringify", () => {
+		assertEquivalent(`
       function test() {
         function myStringify(val) {
           if (val === null) return "null";
@@ -420,12 +420,12 @@ describe("stress: recursive algorithms", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: complex iteration patterns", () => {
-  it("nested for...of with break", () => {
-    assertEquivalent(`
+	it("nested for...of with break", () => {
+		assertEquivalent(`
       function test() {
         var matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
         var found = -1;
@@ -442,10 +442,10 @@ describe("stress: complex iteration patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("for...of with object values iteration", () => {
-    assertEquivalent(`
+	it("for...of with object values iteration", () => {
+		assertEquivalent(`
       function test() {
         var obj = {x: 10, y: 20, z: 30};
         var vals = Object.values(obj);
@@ -455,10 +455,10 @@ describe("stress: complex iteration patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("reducing over computed keys", () => {
-    assertEquivalent(`
+	it("reducing over computed keys", () => {
+		assertEquivalent(`
       function test() {
         var data = {};
         for (var i = 0; i < 10; i++) {
@@ -473,10 +473,10 @@ describe("stress: complex iteration patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("iterator protocol simulation", () => {
-    assertEquivalent(`
+	it("iterator protocol simulation", () => {
+		assertEquivalent(`
       function test() {
         function range(start, end) {
           var values = [];
@@ -489,12 +489,12 @@ describe("stress: complex iteration patterns", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: complex expression evaluation order", () => {
-  it("multiple side effects in single expression", () => {
-    assertEquivalent(`
+	it("multiple side effects in single expression", () => {
+		assertEquivalent(`
       function test() {
         var log = [];
         function track(label, val) { log.push(label); return val; }
@@ -503,10 +503,10 @@ describe("stress: complex expression evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("short-circuit with side effects in complex expression", () => {
-    assertEquivalent(`
+	it("short-circuit with side effects in complex expression", () => {
+		assertEquivalent(`
       function test() {
         var calls = [];
         function f(n) { calls.push(n); return n; }
@@ -515,10 +515,10 @@ describe("stress: complex expression evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("ternary chains with function calls", () => {
-    assertEquivalent(`
+	it("ternary chains with function calls", () => {
+		assertEquivalent(`
       function test() {
         function classify(n) {
           return n < 0 ? "negative"
@@ -531,10 +531,10 @@ describe("stress: complex expression evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("comma operator in complex positions", () => {
-    assertEquivalent(`
+	it("comma operator in complex positions", () => {
+		assertEquivalent(`
       function test() {
         var a = 0, b = 0, c = 0;
         for (a = 1, b = 2; a < 5; a++, b *= 2) {
@@ -544,12 +544,12 @@ describe("stress: complex expression evaluation order", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: prototype and constructor patterns", () => {
-  it("prototype chain with overrides", () => {
-    assertEquivalent(`
+	it("prototype chain with overrides", () => {
+		assertEquivalent(`
       function test() {
         function Animal(name) { this.name = name; }
         Animal.prototype.type = "animal";
@@ -573,10 +573,10 @@ describe("stress: prototype and constructor patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("mixin pattern", () => {
-    assertEquivalent(`
+	it("mixin pattern", () => {
+		assertEquivalent(`
       function test() {
         function mixin(target, source) {
           var keys = Object.keys(source);
@@ -603,12 +603,12 @@ describe("stress: prototype and constructor patterns", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: complex state machines", () => {
-  it("state machine with transitions and guards", () => {
-    assertEquivalent(`
+	it("state machine with transitions and guards", () => {
+		assertEquivalent(`
       function test() {
         function createFSM(initial, transitions) {
           var state = initial;
@@ -649,10 +649,10 @@ describe("stress: complex state machines", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("observable pattern with multiple subscribers", () => {
-    assertEquivalent(`
+	it("observable pattern with multiple subscribers", () => {
+		assertEquivalent(`
       function test() {
         function createObservable(initial) {
           var value = initial;
@@ -686,12 +686,12 @@ describe("stress: complex state machines", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: complex data transformations", () => {
-  it("group by with reduce", () => {
-    assertEquivalent(`
+	it("group by with reduce", () => {
+		assertEquivalent(`
       function test() {
         var data = [
           {name: "Alice", dept: "eng"},
@@ -709,10 +709,10 @@ describe("stress: complex data transformations", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("deep object merge with conflict resolution", () => {
-    assertEquivalent(`
+	it("deep object merge with conflict resolution", () => {
+		assertEquivalent(`
       function test() {
         function deepMerge(target, source) {
           var keys = Object.keys(source);
@@ -735,10 +735,10 @@ describe("stress: complex data transformations", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("matrix operations", () => {
-    assertEquivalent(`
+	it("matrix operations", () => {
+		assertEquivalent(`
       function test() {
         function matMul(a, b) {
           var rows = a.length, cols = b[0].length, inner = b.length;
@@ -762,12 +762,12 @@ describe("stress: complex data transformations", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: tricky scoping", () => {
-  it("function declaration hoisting inside if block", () => {
-    assertEquivalent(`
+	it("function declaration hoisting inside if block", () => {
+		assertEquivalent(`
       function test() {
         var x = foo();
         function foo() { return 42; }
@@ -775,10 +775,10 @@ describe("stress: tricky scoping", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("var in for-loop shared across closures", () => {
-    assertEquivalent(`
+	it("var in for-loop shared across closures", () => {
+		assertEquivalent(`
       function test() {
         var fns = [];
         for (var i = 0; i < 5; i++) {
@@ -790,10 +790,10 @@ describe("stress: tricky scoping", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("arguments object interaction with named params", () => {
-    assertEquivalent(`
+	it("arguments object interaction with named params", () => {
+		assertEquivalent(`
       function test() {
         function f(a, b) {
           var args = [];
@@ -804,10 +804,10 @@ describe("stress: tricky scoping", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("closure over catch variable", () => {
-    assertEquivalent(`
+	it("closure over catch variable", () => {
+		assertEquivalent(`
       function test() {
         var fns = [];
         for (var i = 0; i < 3; i++) {
@@ -823,12 +823,12 @@ describe("stress: tricky scoping", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: complex string building", () => {
-  it("template-like string building with expressions", () => {
-    assertEquivalent(`
+	it("template-like string building with expressions", () => {
+		assertEquivalent(`
       function test() {
         function template(strings) {
           var values = [];
@@ -846,10 +846,10 @@ describe("stress: complex string building", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("recursive string processing", () => {
-    assertEquivalent(`
+	it("recursive string processing", () => {
+		assertEquivalent(`
       function test() {
         function camelToSnake(str) {
           var result = "";
@@ -872,12 +872,12 @@ describe("stress: complex string building", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: complex return value patterns", () => {
-  it("function returning different types based on input", () => {
-    assertEquivalent(`
+	it("function returning different types based on input", () => {
+		assertEquivalent(`
       function test() {
         function parse(input) {
           if (input === "null") return null;
@@ -899,10 +899,10 @@ describe("stress: complex return value patterns", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("early return in nested loops", () => {
-    assertEquivalent(`
+	it("early return in nested loops", () => {
+		assertEquivalent(`
       function test() {
         function findPair(arr, target) {
           for (var i = 0; i < arr.length; i++) {
@@ -918,12 +918,12 @@ describe("stress: complex return value patterns", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: interleaved closures and objects", () => {
-  it("builder pattern with method chaining", () => {
-    assertEquivalent(`
+	it("builder pattern with method chaining", () => {
+		assertEquivalent(`
       function test() {
         function QueryBuilder() {
           var parts = {table: "", conditions: [], fields: "*", limit: null};
@@ -954,10 +954,10 @@ describe("stress: interleaved closures and objects", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("middleware pipeline pattern", () => {
-    assertEquivalent(`
+	it("middleware pipeline pattern", () => {
+		assertEquivalent(`
       function test() {
         function createPipeline() {
           var middlewares = [];
@@ -981,12 +981,12 @@ describe("stress: interleaved closures and objects", () => {
       }
       test();
     `);
-  });
+	});
 });
 
 describe("stress: edge case value handling", () => {
-  it("sparse array operations", () => {
-    assertEquivalent(`
+	it("sparse array operations", () => {
+		assertEquivalent(`
       function test() {
         var arr = [1, , 3, , 5];
         var r1 = arr.length;
@@ -996,10 +996,10 @@ describe("stress: edge case value handling", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("property access on primitives via autoboxing", () => {
-    assertEquivalent(`
+	it("property access on primitives via autoboxing", () => {
+		assertEquivalent(`
       function test() {
         var s = "hello";
         var r1 = s.length;
@@ -1010,20 +1010,20 @@ describe("stress: edge case value handling", () => {
       }
       test();
     `);
-  });
+	});
 
-  it("complex truthiness checks", () => {
-    assertEquivalent(`
+	it("complex truthiness checks", () => {
+		assertEquivalent(`
       function test() {
         var values = [0, 1, -1, "", "0", null, undefined, NaN, Infinity, true, false, [], {}];
         return values.map(function(v) { return v ? "T" : "F"; }).join("");
       }
       test();
     `);
-  });
+	});
 
-  it("object with Symbol.toPrimitive-like behavior via valueOf", () => {
-    assertEquivalent(`
+	it("object with Symbol.toPrimitive-like behavior via valueOf", () => {
+		assertEquivalent(`
       function test() {
         var obj = {
           valueOf: function() { return 42; },
@@ -1035,5 +1035,5 @@ describe("stress: edge case value handling", () => {
       }
       test();
     `);
-  });
+	});
 });

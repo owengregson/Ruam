@@ -2,65 +2,65 @@ import { describe, it } from "vitest";
 import { assertEquivalent } from "../helpers.js";
 
 describe("comprehensive array operations", () => {
-  // === 1. Array creation ===
+	// === 1. Array creation ===
 
-  it("creates array with literal syntax", () => {
-    assertEquivalent(`
+	it("creates array with literal syntax", () => {
+		assertEquivalent(`
       function f() { return [1, 2, 3, 4, 5]; }
       f();
     `);
-  });
+	});
 
-  it("creates array with new Array and fill method", () => {
-    assertEquivalent(`
+	it("creates array with new Array and fill method", () => {
+		assertEquivalent(`
       function f() {
         var arr = new Array(5).fill(0);
         return arr.map(function(_, i) { return i * 2; });
       }
       f();
     `);
-  });
+	});
 
-  it("creates array with Array.from on array-like", () => {
-    assertEquivalent(`
+	it("creates array with Array.from on array-like", () => {
+		assertEquivalent(`
       function f() {
         return Array.from({length: 5}, function(_, i) { return i + 1; });
       }
       f();
     `);
-  });
+	});
 
-  it("creates array with Array.from on string", () => {
-    assertEquivalent(`
+	it("creates array with Array.from on string", () => {
+		assertEquivalent(`
       function f() {
         return Array.from("hello");
       }
       f();
     `);
-  });
+	});
 
-  it("creates array with Array.of", () => {
-    assertEquivalent(`
+	it("creates array with Array.of", () => {
+		assertEquivalent(`
       function f() {
         return Array.of(1, 2, 3, 4);
       }
       f();
     `);
-  });
+	});
 
-  it("Array.of vs Array constructor difference", () => {
-    assertEquivalent(`
+	it("Array.of vs Array constructor difference", () => {
+		assertEquivalent(`
       function f() {
         return [Array.of(3).length, Array.of(3)[0]];
       }
       f();
     `);
-  });
+	});
 
-  // === 2. Array methods: push, pop, shift, unshift, splice, slice ===
+	// === 2. Array methods: push, pop, shift, unshift, splice, slice ===
 
-  it("push appends elements and returns new length", () => {
-    assertEquivalent(`
+	it("push appends elements and returns new length", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2];
         var len = arr.push(3, 4, 5);
@@ -68,10 +68,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("pop removes and returns last element", () => {
-    assertEquivalent(`
+	it("pop removes and returns last element", () => {
+		assertEquivalent(`
       function f() {
         var arr = [10, 20, 30];
         var last = arr.pop();
@@ -79,10 +79,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("shift removes and returns first element", () => {
-    assertEquivalent(`
+	it("shift removes and returns first element", () => {
+		assertEquivalent(`
       function f() {
         var arr = [10, 20, 30];
         var first = arr.shift();
@@ -90,10 +90,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("unshift prepends elements and returns new length", () => {
-    assertEquivalent(`
+	it("unshift prepends elements and returns new length", () => {
+		assertEquivalent(`
       function f() {
         var arr = [3, 4];
         var len = arr.unshift(1, 2);
@@ -101,10 +101,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("splice removes elements from middle", () => {
-    assertEquivalent(`
+	it("splice removes elements from middle", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         var removed = arr.splice(1, 2);
@@ -112,10 +112,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("splice inserts elements at position", () => {
-    assertEquivalent(`
+	it("splice inserts elements at position", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 4, 5];
         arr.splice(1, 0, 2, 3);
@@ -123,10 +123,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("splice replaces elements", () => {
-    assertEquivalent(`
+	it("splice replaces elements", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         var removed = arr.splice(2, 1, 30, 40);
@@ -134,22 +134,22 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("slice extracts a portion without mutation", () => {
-    assertEquivalent(`
+	it("slice extracts a portion without mutation", () => {
+		assertEquivalent(`
       function f() {
         var arr = [10, 20, 30, 40, 50];
         return [arr.slice(1, 3), arr.slice(-2), arr.slice(0), arr];
       }
       f();
     `);
-  });
+	});
 
-  // === 3. Array iteration: forEach, map, filter, reduce, reduceRight, every, some, find, findIndex ===
+	// === 3. Array iteration: forEach, map, filter, reduce, reduceRight, every, some, find, findIndex ===
 
-  it("forEach iterates and accumulates side effects", () => {
-    assertEquivalent(`
+	it("forEach iterates and accumulates side effects", () => {
+		assertEquivalent(`
       function f() {
         var result = [];
         [1, 2, 3].forEach(function(x) { result.push(x * 10); });
@@ -157,64 +157,64 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("map transforms each element", () => {
-    assertEquivalent(`
+	it("map transforms each element", () => {
+		assertEquivalent(`
       function f() {
         return [1, 2, 3, 4].map(function(x) { return x * x; });
       }
       f();
     `);
-  });
+	});
 
-  it("map passes index as second argument", () => {
-    assertEquivalent(`
+	it("map passes index as second argument", () => {
+		assertEquivalent(`
       function f() {
         return ["a", "b", "c"].map(function(val, idx) { return idx + ":" + val; });
       }
       f();
     `);
-  });
+	});
 
-  it("filter selects matching elements", () => {
-    assertEquivalent(`
+	it("filter selects matching elements", () => {
+		assertEquivalent(`
       function f() {
         return [1, 2, 3, 4, 5, 6].filter(function(x) { return x % 2 === 0; });
       }
       f();
     `);
-  });
+	});
 
-  it("reduce accumulates a single value left-to-right", () => {
-    assertEquivalent(`
+	it("reduce accumulates a single value left-to-right", () => {
+		assertEquivalent(`
       function f() {
         return [1, 2, 3, 4, 5].reduce(function(acc, x) { return acc + x; }, 0);
       }
       f();
     `);
-  });
+	});
 
-  it("reduce without initial value uses first element", () => {
-    assertEquivalent(`
+	it("reduce without initial value uses first element", () => {
+		assertEquivalent(`
       function f() {
         return [10, 20, 30].reduce(function(acc, x) { return acc + x; });
       }
       f();
     `);
-  });
+	});
 
-  it("reduceRight accumulates right-to-left", () => {
-    assertEquivalent(`
+	it("reduceRight accumulates right-to-left", () => {
+		assertEquivalent(`
       function f() {
         return [[1, 2], [3, 4], [5, 6]].reduceRight(function(acc, x) { return acc.concat(x); }, []);
       }
       f();
     `);
-  });
+	});
 
-  it("every checks all elements satisfy predicate", () => {
-    assertEquivalent(`
+	it("every checks all elements satisfy predicate", () => {
+		assertEquivalent(`
       function f() {
         return [
           [2, 4, 6, 8].every(function(x) { return x % 2 === 0; }),
@@ -223,10 +223,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("some checks at least one element satisfies predicate", () => {
-    assertEquivalent(`
+	it("some checks at least one element satisfies predicate", () => {
+		assertEquivalent(`
       function f() {
         return [
           [1, 3, 5, 6].some(function(x) { return x % 2 === 0; }),
@@ -235,78 +235,78 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("find returns first matching element", () => {
-    assertEquivalent(`
+	it("find returns first matching element", () => {
+		assertEquivalent(`
       function f() {
         var arr = [5, 12, 8, 130, 44];
         return arr.find(function(x) { return x > 10; });
       }
       f();
     `);
-  });
+	});
 
-  it("find returns undefined when no match", () => {
-    assertEquivalent(`
+	it("find returns undefined when no match", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3];
         return arr.find(function(x) { return x > 100; });
       }
       f();
     `);
-  });
+	});
 
-  it("findIndex returns index of first match", () => {
-    assertEquivalent(`
+	it("findIndex returns index of first match", () => {
+		assertEquivalent(`
       function f() {
         var arr = [5, 12, 8, 130, 44];
         return arr.findIndex(function(x) { return x > 10; });
       }
       f();
     `);
-  });
+	});
 
-  it("findIndex returns -1 when no match", () => {
-    assertEquivalent(`
+	it("findIndex returns -1 when no match", () => {
+		assertEquivalent(`
       function f() {
         return [1, 2, 3].findIndex(function(x) { return x > 100; });
       }
       f();
     `);
-  });
+	});
 
-  // === 4. Array transformation: flat, flatMap, concat, reverse, sort ===
+	// === 4. Array transformation: flat, flatMap, concat, reverse, sort ===
 
-  it("flat flattens one level by default", () => {
-    assertEquivalent(`
+	it("flat flattens one level by default", () => {
+		assertEquivalent(`
       function f() {
         return [1, [2, 3], [4, [5]]].flat();
       }
       f();
     `);
-  });
+	});
 
-  it("flat with depth parameter", () => {
-    assertEquivalent(`
+	it("flat with depth parameter", () => {
+		assertEquivalent(`
       function f() {
         return [1, [2, [3, [4]]]].flat(2);
       }
       f();
     `);
-  });
+	});
 
-  it("flatMap maps then flattens one level", () => {
-    assertEquivalent(`
+	it("flatMap maps then flattens one level", () => {
+		assertEquivalent(`
       function f() {
         return [1, 2, 3].flatMap(function(x) { return [x, x * 2]; });
       }
       f();
     `);
-  });
+	});
 
-  it("concat merges arrays without mutation", () => {
-    assertEquivalent(`
+	it("concat merges arrays without mutation", () => {
+		assertEquivalent(`
       function f() {
         var a = [1, 2];
         var b = [3, 4];
@@ -315,10 +315,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("reverse mutates and returns the array", () => {
-    assertEquivalent(`
+	it("reverse mutates and returns the array", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         var reversed = arr.reverse();
@@ -326,39 +326,39 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("sort with numeric comparator", () => {
-    assertEquivalent(`
+	it("sort with numeric comparator", () => {
+		assertEquivalent(`
       function f() {
         return [30, 1, 4, 15, 9, 2].sort(function(a, b) { return a - b; });
       }
       f();
     `);
-  });
+	});
 
-  it("sort with descending comparator", () => {
-    assertEquivalent(`
+	it("sort with descending comparator", () => {
+		assertEquivalent(`
       function f() {
         return [30, 1, 4, 15, 9, 2].sort(function(a, b) { return b - a; });
       }
       f();
     `);
-  });
+	});
 
-  it("sort strings lexicographically by default", () => {
-    assertEquivalent(`
+	it("sort strings lexicographically by default", () => {
+		assertEquivalent(`
       function f() {
         return ["banana", "apple", "cherry", "date"].sort();
       }
       f();
     `);
-  });
+	});
 
-  // === 5. Array spread ===
+	// === 5. Array spread ===
 
-  it("spread copies array", () => {
-    assertEquivalent(`
+	it("spread copies array", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3];
         var copy = [].concat(arr);
@@ -367,10 +367,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("spread merges two arrays", () => {
-    assertEquivalent(`
+	it("spread merges two arrays", () => {
+		assertEquivalent(`
       function f() {
         var a = [1, 2, 3];
         var b = [4, 5, 6];
@@ -378,12 +378,12 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  // === 6. Array destructuring ===
+	// === 6. Array destructuring ===
 
-  it("destructuring assigns first elements", () => {
-    assertEquivalent(`
+	it("destructuring assigns first elements", () => {
+		assertEquivalent(`
       function f() {
         var arr = [10, 20, 30];
         var a = arr[0], b = arr[1], c = arr[2];
@@ -391,10 +391,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("destructuring with rest via slice", () => {
-    assertEquivalent(`
+	it("destructuring with rest via slice", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         var first = arr[0];
@@ -403,10 +403,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("destructuring skips elements", () => {
-    assertEquivalent(`
+	it("destructuring skips elements", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         var a = arr[0], c = arr[2], e = arr[4];
@@ -414,12 +414,12 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  // === 7. Array.isArray ===
+	// === 7. Array.isArray ===
 
-  it("Array.isArray distinguishes arrays from non-arrays", () => {
-    assertEquivalent(`
+	it("Array.isArray distinguishes arrays from non-arrays", () => {
+		assertEquivalent(`
       function f() {
         return [
           Array.isArray([]),
@@ -432,22 +432,22 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  // === 8. Nested arrays and multi-dimensional operations ===
+	// === 8. Nested arrays and multi-dimensional operations ===
 
-  it("accesses elements of nested arrays", () => {
-    assertEquivalent(`
+	it("accesses elements of nested arrays", () => {
+		assertEquivalent(`
       function f() {
         var matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
         return [matrix[0][0], matrix[1][1], matrix[2][2]];
       }
       f();
     `);
-  });
+	});
 
-  it("maps over nested arrays", () => {
-    assertEquivalent(`
+	it("maps over nested arrays", () => {
+		assertEquivalent(`
       function f() {
         var matrix = [[1, 2], [3, 4], [5, 6]];
         return matrix.map(function(row) {
@@ -456,22 +456,22 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("flattens a 2D array with reduce and concat", () => {
-    assertEquivalent(`
+	it("flattens a 2D array with reduce and concat", () => {
+		assertEquivalent(`
       function f() {
         var nested = [[1, 2], [3, 4], [5, 6]];
         return nested.reduce(function(acc, row) { return acc.concat(row); }, []);
       }
       f();
     `);
-  });
+	});
 
-  // === 9. Chaining: arr.filter(...).map(...).reduce(...) ===
+	// === 9. Chaining: arr.filter(...).map(...).reduce(...) ===
 
-  it("chains filter then map", () => {
-    assertEquivalent(`
+	it("chains filter then map", () => {
+		assertEquivalent(`
       function f() {
         return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
           .filter(function(x) { return x % 3 === 0; })
@@ -479,10 +479,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("chains filter, map, and reduce", () => {
-    assertEquivalent(`
+	it("chains filter, map, and reduce", () => {
+		assertEquivalent(`
       function f() {
         return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
           .filter(function(x) { return x % 2 === 0; })
@@ -491,10 +491,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("chains map then sort then join", () => {
-    assertEquivalent(`
+	it("chains map then sort then join", () => {
+		assertEquivalent(`
       function f() {
         return [3, 1, 4, 1, 5, 9]
           .map(function(x) { return x * 2; })
@@ -503,52 +503,52 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  // === 10. Additional array operations ===
+	// === 10. Additional array operations ===
 
-  it("indexOf finds element position", () => {
-    assertEquivalent(`
+	it("indexOf finds element position", () => {
+		assertEquivalent(`
       function f() {
         var arr = [10, 20, 30, 20, 10];
         return [arr.indexOf(20), arr.indexOf(50), arr.indexOf(20, 2)];
       }
       f();
     `);
-  });
+	});
 
-  it("lastIndexOf finds last occurrence", () => {
-    assertEquivalent(`
+	it("lastIndexOf finds last occurrence", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 2, 1];
         return [arr.lastIndexOf(2), arr.lastIndexOf(1), arr.lastIndexOf(5)];
       }
       f();
     `);
-  });
+	});
 
-  it("includes checks for element presence", () => {
-    assertEquivalent(`
+	it("includes checks for element presence", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         return [arr.includes(3), arr.includes(6), arr.includes(1)];
       }
       f();
     `);
-  });
+	});
 
-  it("join with various separators", () => {
-    assertEquivalent(`
+	it("join with various separators", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3];
         return [arr.join(","), arr.join(" - "), arr.join(""), arr.join()];
       }
       f();
     `);
-  });
+	});
 
-  it("fill fills elements with a static value", () => {
-    assertEquivalent(`
+	it("fill fills elements with a static value", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         arr.fill(0, 2, 4);
@@ -556,10 +556,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("copyWithin copies within the array", () => {
-    assertEquivalent(`
+	it("copyWithin copies within the array", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         arr.copyWithin(0, 3);
@@ -567,10 +567,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("entries returns index-value pairs", () => {
-    assertEquivalent(`
+	it("entries returns index-value pairs", () => {
+		assertEquivalent(`
       function f() {
         var arr = ["a", "b", "c"];
         var result = [];
@@ -584,10 +584,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("keys returns array indices", () => {
-    assertEquivalent(`
+	it("keys returns array indices", () => {
+		assertEquivalent(`
       function f() {
         var arr = ["x", "y", "z"];
         var result = [];
@@ -601,10 +601,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("values returns array elements via iterator", () => {
-    assertEquivalent(`
+	it("values returns array elements via iterator", () => {
+		assertEquivalent(`
       function f() {
         var arr = [10, 20, 30];
         var result = [];
@@ -618,10 +618,10 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 
-  it("array length property and truncation", () => {
-    assertEquivalent(`
+	it("array length property and truncation", () => {
+		assertEquivalent(`
       function f() {
         var arr = [1, 2, 3, 4, 5];
         arr.length = 3;
@@ -629,5 +629,5 @@ describe("comprehensive array operations", () => {
       }
       f();
     `);
-  });
+	});
 });

@@ -9,73 +9,77 @@ import vm from "node:vm";
  */
 
 function makeContext(extraGlobals: Record<string, unknown> = {}): vm.Context {
-  return vm.createContext({
-    console,
-    Array,
-    Object,
-    String,
-    Number,
-    Boolean,
-    Symbol,
-    Math,
-    JSON,
-    Date,
-    RegExp,
-    Error,
-    TypeError,
-    RangeError,
-    SyntaxError,
-    ReferenceError,
-    Map,
-    Set,
-    WeakMap,
-    WeakSet,
-    Promise,
-    Proxy,
-    Reflect,
-    parseInt,
-    parseFloat,
-    isNaN,
-    isFinite,
-    undefined,
-    NaN,
-    Infinity,
-    setTimeout,
-    clearTimeout,
-    queueMicrotask,
-    Uint8Array,
-    Int8Array,
-    Float64Array,
-    ArrayBuffer,
-    DataView,
-    TextEncoder,
-    TextDecoder,
-    Buffer,
-    ...extraGlobals,
-  });
+	return vm.createContext({
+		console,
+		Array,
+		Object,
+		String,
+		Number,
+		Boolean,
+		Symbol,
+		Math,
+		JSON,
+		Date,
+		RegExp,
+		Error,
+		TypeError,
+		RangeError,
+		SyntaxError,
+		ReferenceError,
+		Map,
+		Set,
+		WeakMap,
+		WeakSet,
+		Promise,
+		Proxy,
+		Reflect,
+		parseInt,
+		parseFloat,
+		isNaN,
+		isFinite,
+		undefined,
+		NaN,
+		Infinity,
+		setTimeout,
+		clearTimeout,
+		queueMicrotask,
+		Uint8Array,
+		Int8Array,
+		Float64Array,
+		ArrayBuffer,
+		DataView,
+		TextEncoder,
+		TextDecoder,
+		Buffer,
+		...extraGlobals,
+	});
 }
 
-function runObfuscated(source: string, options = {}, extraGlobals = {}): unknown {
-  const obfuscated = obfuscateCode(source, {
-    targetMode: "root",
-    encryptBytecode: false,
-    preprocessIdentifiers: false,
-    debugLogging: true,
-    ...options,
-  });
-  try {
-    return vm.runInContext(obfuscated, makeContext(extraGlobals));
-  } catch (e) {
-    console.error("OBFUSCATED ERROR:", (e as Error).message);
-    console.error("--- first 50 lines ---");
-    console.error(obfuscated.split("\n").slice(0, 50).join("\n"));
-    throw e;
-  }
+function runObfuscated(
+	source: string,
+	options = {},
+	extraGlobals = {}
+): unknown {
+	const obfuscated = obfuscateCode(source, {
+		targetMode: "root",
+		encryptBytecode: false,
+		preprocessIdentifiers: false,
+		debugLogging: true,
+		...options,
+	});
+	try {
+		return vm.runInContext(obfuscated, makeContext(extraGlobals));
+	} catch (e) {
+		console.error("OBFUSCATED ERROR:", (e as Error).message);
+		console.error("--- first 50 lines ---");
+		console.error(obfuscated.split("\n").slice(0, 50).join("\n"));
+		throw e;
+	}
 }
 
 describe("Chrome extension patterns", () => {
-  it("async method .catch() chain", async () => {
-    const src = `(function() {
+	it("async method .catch() chain", async () => {
+		const src = `(function() {
       var obj = {
         async enqueue(type, data) {
           return { type: type, data: data, ts: Date.now() };
@@ -83,12 +87,12 @@ describe("Chrome extension patterns", () => {
       };
       return obj.enqueue("session.start", {}).catch(function() { return "error"; });
     })()`;
-    const result = await runObfuscated(src);
-    expect(result).toHaveProperty("type", "session.start");
-  });
+		const result = await runObfuscated(src);
+		expect(result).toHaveProperty("type", "session.start");
+	});
 
-  it("async method .then().catch() chain", async () => {
-    const src = `(function() {
+	it("async method .then().catch() chain", async () => {
+		const src = `(function() {
       var obj = {
         async flush() {
           return "flushed";
@@ -98,11 +102,11 @@ describe("Chrome extension patterns", () => {
         .then(function(v) { return v + "!"; })
         .catch(function() { return "error"; });
     })()`;
-    expect(await runObfuscated(src)).toBe("flushed!");
-  });
+		expect(await runObfuscated(src)).toBe("flushed!");
+	});
 
-  it("class with async methods and .catch()", async () => {
-    const src = `(function() {
+	it("class with async methods and .catch()", async () => {
+		const src = `(function() {
       class EventQueue {
         constructor() {
           this.items = [];
@@ -123,11 +127,11 @@ describe("Chrome extension patterns", () => {
         .then(function(items) { return items.length; })
         .catch(function() { return -1; });
     })()`;
-    expect(await runObfuscated(src)).toBe(1);
-  });
+		expect(await runObfuscated(src)).toBe(1);
+	});
 
-  it("class with name instance property", async () => {
-    const src = `(function() {
+	it("class with name instance property", async () => {
+		const src = `(function() {
       class Stage {
         name = "UnnamedStage";
         process(input) { return input; }
@@ -139,11 +143,14 @@ describe("Chrome extension patterns", () => {
       var s = new DifficultyStage();
       return [s.name, s.process("test")];
     })()`;
-    expect(await runObfuscated(src)).toEqual(["DifficultyStage", "test (difficult)"]);
-  });
+		expect(await runObfuscated(src)).toEqual([
+			"DifficultyStage",
+			"test (difficult)",
+		]);
+	});
 
-  it("multiple async methods with .catch() on each", async () => {
-    const src = `(function() {
+	it("multiple async methods with .catch() on each", async () => {
+		const src = `(function() {
       class Manager {
         async start() { return "started"; }
         async stop() { return "stopped"; }
@@ -156,11 +163,15 @@ describe("Chrome extension patterns", () => {
         m.handleAlarm("test").catch(function(e) { return "err:" + e; })
       ]);
     })()`;
-    expect(await runObfuscated(src)).toEqual(["started", "stopped", "alarm:test"]);
-  });
+		expect(await runObfuscated(src)).toEqual([
+			"started",
+			"stopped",
+			"alarm:test",
+		]);
+	});
 
-  it("async IIFE with await and .catch()", async () => {
-    const src = `(function() {
+	it("async IIFE with await and .catch()", async () => {
+		const src = `(function() {
       var result = [];
       async function doWork() {
         var a = await Promise.resolve(1);
@@ -171,13 +182,13 @@ describe("Chrome extension patterns", () => {
       doWork().catch(function() { result.push("error"); });
       return result;
     })()`;
-    // Note: result may be empty since the async work hasn't completed yet
-    // but the key test is that .catch() doesn't throw
-    runObfuscated(src); // should not throw
-  });
+		// Note: result may be empty since the async work hasn't completed yet
+		// but the key test is that .catch() doesn't throw
+		runObfuscated(src); // should not throw
+	});
 
-  it("class inheritance with super() and async methods", async () => {
-    const src = `(function() {
+	it("class inheritance with super() and async methods", async () => {
+		const src = `(function() {
       class Base {
         constructor(x) { this.x = x; }
         async getX() { return await Promise.resolve(this.x); }
@@ -195,11 +206,11 @@ describe("Chrome extension patterns", () => {
       var c = new Child(10, 20);
       return c.getSum();
     })()`;
-    expect(await runObfuscated(src)).toBe(30);
-  });
+		expect(await runObfuscated(src)).toBe(30);
+	});
 
-  it("typeof result.catch === 'function' pattern", async () => {
-    const src = `(function() {
+	it("typeof result.catch === 'function' pattern", async () => {
+		const src = `(function() {
       async function doSomething() { return 42; }
       var result = doSomething();
       if (result && typeof result.catch === "function") {
@@ -207,11 +218,11 @@ describe("Chrome extension patterns", () => {
       }
       return "no catch";
     })()`;
-    expect(await runObfuscated(src)).toBe(42);
-  });
+		expect(await runObfuscated(src)).toBe(42);
+	});
 
-  it("state machine with async restore", async () => {
-    const src = `(function() {
+	it("state machine with async restore", async () => {
+		const src = `(function() {
       class StateMachine {
         constructor() {
           this.state = "idle";
@@ -230,11 +241,11 @@ describe("Chrome extension patterns", () => {
         .then(function(state) { return state; })
         .catch(function(err) { return "error:" + err; });
     })()`;
-    expect(await runObfuscated(src)).toBe("restored");
-  });
+		expect(await runObfuscated(src)).toBe("restored");
+	});
 
-  it("promise chain: method().then().catch()", async () => {
-    const src = `(function() {
+	it("promise chain: method().then().catch()", async () => {
+		const src = `(function() {
       var storage = {
         data: {},
         async get(key) {
@@ -250,11 +261,11 @@ describe("Chrome extension patterns", () => {
         .then(function(val) { return val; })
         .catch(function(err) { return "error:" + err; });
     })()`;
-    expect(await runObfuscated(src)).toBe(42);
-  });
+		expect(await runObfuscated(src)).toBe(42);
+	});
 
-  it("class with multiple instance properties and methods", async () => {
-    const src = `(function() {
+	it("class with multiple instance properties and methods", async () => {
+		const src = `(function() {
       class Pipeline {
         name = "Pipeline";
         stages = [];
@@ -280,6 +291,6 @@ describe("Chrome extension patterns", () => {
        .addStage(function(x) { return x + 1; });
       return p.run(5);
     })()`;
-    expect(await runObfuscated(src)).toBe(11);
-  });
+		expect(await runObfuscated(src)).toBe(11);
+	});
 });

@@ -2,54 +2,54 @@ import { describe, it } from "vitest";
 import { assertEquivalent } from "../helpers.js";
 
 describe("comprehensive advanced patterns", () => {
-  // ── 1. Type coercion edge cases ──────────────────────────────────
+	// ── 1. Type coercion edge cases ──────────────────────────────────
 
-  it("type coercion: {} + []", () => {
-    assertEquivalent(`
+	it("type coercion: {} + []", () => {
+		assertEquivalent(`
       (function() {
         var a = {} + [];
         return String(a);
       })();
     `);
-  });
+	});
 
-  it("type coercion: [] + {}", () => {
-    assertEquivalent(`
+	it("type coercion: [] + {}", () => {
+		assertEquivalent(`
       (function() {
         var a = [] + {};
         return String(a);
       })();
     `);
-  });
+	});
 
-  it("type coercion: null == undefined", () => {
-    assertEquivalent(`
+	it("type coercion: null == undefined", () => {
+		assertEquivalent(`
       (function() {
         return [null == undefined, null === undefined, undefined == null];
       })();
     `);
-  });
+	});
 
-  it("type coercion: NaN !== NaN", () => {
-    assertEquivalent(`
+	it("type coercion: NaN !== NaN", () => {
+		assertEquivalent(`
       (function() {
         return [NaN === NaN, NaN !== NaN, NaN == NaN, NaN != NaN];
       })();
     `);
-  });
+	});
 
-  it("type coercion: [] == false and [] == 0", () => {
-    assertEquivalent(`
+	it("type coercion: [] == false and [] == 0", () => {
+		assertEquivalent(`
       (function() {
         return [[] == false, [] == 0, "" == false, "" == 0, "0" == false];
       })();
     `);
-  });
+	});
 
-  // ── 2. Comparison operators with mixed types ─────────────────────
+	// ── 2. Comparison operators with mixed types ─────────────────────
 
-  it("comparison: == and === with mixed types", () => {
-    assertEquivalent(`
+	it("comparison: == and === with mixed types", () => {
+		assertEquivalent(`
       (function() {
         return [
           1 == "1", 1 === "1",
@@ -60,10 +60,10 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  it("comparison: <, >, <=, >= with mixed types", () => {
-    assertEquivalent(`
+	it("comparison: <, >, <=, >= with mixed types", () => {
+		assertEquivalent(`
       (function() {
         return [
           "10" > 9, "10" < 9,
@@ -73,10 +73,10 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  it("comparison: != and !== with mixed types", () => {
-    assertEquivalent(`
+	it("comparison: != and !== with mixed types", () => {
+		assertEquivalent(`
       (function() {
         return [
           1 != "1", 1 !== "1",
@@ -85,67 +85,67 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  // ── 3. typeof with all types ─────────────────────────────────────
+	// ── 3. typeof with all types ─────────────────────────────────────
 
-  it("typeof: number, string, boolean", () => {
-    assertEquivalent(`
+	it("typeof: number, string, boolean", () => {
+		assertEquivalent(`
       (function() {
         return [typeof 42, typeof "hello", typeof true];
       })();
     `);
-  });
+	});
 
-  it("typeof: undefined, object, function", () => {
-    assertEquivalent(`
+	it("typeof: undefined, object, function", () => {
+		assertEquivalent(`
       (function() {
         return [typeof undefined, typeof null, typeof {}, typeof [], typeof function(){}];
       })();
     `);
-  });
+	});
 
-  it("typeof: NaN and Infinity", () => {
-    assertEquivalent(`
+	it("typeof: NaN and Infinity", () => {
+		assertEquivalent(`
       (function() {
         return [typeof NaN, typeof Infinity, typeof -Infinity];
       })();
     `);
-  });
+	});
 
-  // ── 4. void operator ─────────────────────────────────────────────
+	// ── 4. void operator ─────────────────────────────────────────────
 
-  it("void operator: various expressions", () => {
-    assertEquivalent(`
+	it("void operator: various expressions", () => {
+		assertEquivalent(`
       (function() {
         return [void 0, void "hello", void (1 + 2), void 0 === undefined];
       })();
     `);
-  });
+	});
 
-  it("void operator: in conditional", () => {
-    assertEquivalent(`
+	it("void operator: in conditional", () => {
+		assertEquivalent(`
       (function() {
         var x = void 0;
         return x === undefined ? "yes" : "no";
       })();
     `);
-  });
+	});
 
-  // ── 5. delete operator ───────────────────────────────────────────
+	// ── 5. delete operator ───────────────────────────────────────────
 
-  it("delete: removes property and returns true", () => {
-    assertEquivalent(`
+	it("delete: removes property and returns true", () => {
+		assertEquivalent(`
       (function() {
         var obj = {a: 1, b: 2, c: 3};
         var r1 = delete obj.b;
         return [r1, "b" in obj, obj.b, Object.keys(obj)];
       })();
     `);
-  });
+	});
 
-  it("delete: nested property and non-existent property", () => {
-    assertEquivalent(`
+	it("delete: nested property and non-existent property", () => {
+		assertEquivalent(`
       (function() {
         var obj = {x: {y: {z: 42}}};
         delete obj.x.y.z;
@@ -153,32 +153,32 @@ describe("comprehensive advanced patterns", () => {
         return [r, JSON.stringify(obj)];
       })();
     `);
-  });
+	});
 
-  // ── 6. in operator ───────────────────────────────────────────────
+	// ── 6. in operator ───────────────────────────────────────────────
 
-  it("in operator: with objects and inherited properties", () => {
-    assertEquivalent(`
+	it("in operator: with objects and inherited properties", () => {
+		assertEquivalent(`
       (function() {
         var obj = {a: 1, b: undefined};
         return ["a" in obj, "b" in obj, "c" in obj, "toString" in obj];
       })();
     `);
-  });
+	});
 
-  it("in operator: with arrays (index check)", () => {
-    assertEquivalent(`
+	it("in operator: with arrays (index check)", () => {
+		assertEquivalent(`
       (function() {
         var arr = [10, 20, 30];
         return [0 in arr, 1 in arr, 5 in arr, "length" in arr];
       })();
     `);
-  });
+	});
 
-  // ── 7. instanceof with custom constructors ───────────────────────
+	// ── 7. instanceof with custom constructors ───────────────────────
 
-  it("instanceof: custom constructor function", () => {
-    assertEquivalent(`
+	it("instanceof: custom constructor function", () => {
+		assertEquivalent(`
       (function() {
         function Foo() { this.x = 1; }
         function Bar() { this.y = 2; }
@@ -186,10 +186,10 @@ describe("comprehensive advanced patterns", () => {
         return [f instanceof Foo, f instanceof Bar, f instanceof Object];
       })();
     `);
-  });
+	});
 
-  it("instanceof: prototype chain", () => {
-    assertEquivalent(`
+	it("instanceof: prototype chain", () => {
+		assertEquivalent(`
       (function() {
         function Animal(name) { this.name = name; }
         function Dog(name) { Animal.call(this, name); }
@@ -199,22 +199,22 @@ describe("comprehensive advanced patterns", () => {
         return [d instanceof Dog, d instanceof Animal, d instanceof Object, d.name];
       })();
     `);
-  });
+	});
 
-  // ── 8. Comma operator ────────────────────────────────────────────
+	// ── 8. Comma operator ────────────────────────────────────────────
 
-  it("comma operator: evaluates all, returns last", () => {
-    assertEquivalent(`
+	it("comma operator: evaluates all, returns last", () => {
+		assertEquivalent(`
       (function() {
         var x = 0;
         var r = (x += 1, x += 10, x += 100, x);
         return [r, x];
       })();
     `);
-  });
+	});
 
-  it("comma operator: in for loop", () => {
-    assertEquivalent(`
+	it("comma operator: in for loop", () => {
+		assertEquivalent(`
       (function() {
         var result = [];
         for (var i = 0, j = 10; i < 5; i++, j--) {
@@ -223,12 +223,12 @@ describe("comprehensive advanced patterns", () => {
         return result;
       })();
     `);
-  });
+	});
 
-  // ── 9. Logical assignment operators ──────────────────────────────
+	// ── 9. Logical assignment operators ──────────────────────────────
 
-  it("logical OR assignment: ||=", () => {
-    assertEquivalent(`
+	it("logical OR assignment: ||=", () => {
+		assertEquivalent(`
       (function() {
         var a = 0;
         var b = 5;
@@ -239,10 +239,10 @@ describe("comprehensive advanced patterns", () => {
         return [a, b, c];
       })();
     `);
-  });
+	});
 
-  it("logical AND assignment: &&=", () => {
-    assertEquivalent(`
+	it("logical AND assignment: &&=", () => {
+		assertEquivalent(`
       (function() {
         var a = 0;
         var b = 5;
@@ -251,10 +251,10 @@ describe("comprehensive advanced patterns", () => {
         return [a, b];
       })();
     `);
-  });
+	});
 
-  it("nullish coalescing assignment: ??=", () => {
-    assertEquivalent(`
+	it("nullish coalescing assignment: ??=", () => {
+		assertEquivalent(`
       (function() {
         var a = null;
         var b = undefined;
@@ -267,12 +267,12 @@ describe("comprehensive advanced patterns", () => {
         return [a, b, c, d];
       })();
     `);
-  });
+	});
 
-  // ── 10. Property accessors: computed properties ──────────────────
+	// ── 10. Property accessors: computed properties ──────────────────
 
-  it("computed property access with expressions", () => {
-    assertEquivalent(`
+	it("computed property access with expressions", () => {
+		assertEquivalent(`
       (function() {
         var obj = {a: 1, b: 2, c: 3};
         var key = "b";
@@ -280,10 +280,10 @@ describe("comprehensive advanced patterns", () => {
         return [obj[key], obj[prefix], obj["c"], obj["a" + ""]];
       })();
     `);
-  });
+	});
 
-  it("computed property names in object literal", () => {
-    assertEquivalent(`
+	it("computed property names in object literal", () => {
+		assertEquivalent(`
       (function() {
         var k1 = "x";
         var k2 = "y";
@@ -294,12 +294,12 @@ describe("comprehensive advanced patterns", () => {
         return obj;
       })();
     `);
-  });
+	});
 
-  // ── 11. Complex nested data structures ───────────────────────────
+	// ── 11. Complex nested data structures ───────────────────────────
 
-  it("objects in arrays in objects", () => {
-    assertEquivalent(`
+	it("objects in arrays in objects", () => {
+		assertEquivalent(`
       (function() {
         var data = {
           users: [
@@ -311,10 +311,10 @@ describe("comprehensive advanced patterns", () => {
         return [data.users[0].name, data.users[1].scores[2], data.meta.count];
       })();
     `);
-  });
+	});
 
-  it("deeply nested access and mutation", () => {
-    assertEquivalent(`
+	it("deeply nested access and mutation", () => {
+		assertEquivalent(`
       (function() {
         var root = {a: {b: {c: {d: {e: 42}}}}};
         root.a.b.c.d.e = 99;
@@ -322,12 +322,12 @@ describe("comprehensive advanced patterns", () => {
         return [root.a.b.c.d.e, root.a.b.x[1][1][0]];
       })();
     `);
-  });
+	});
 
-  // ── 12. Self-referencing objects ──────────────────────────────────
+	// ── 12. Self-referencing objects ──────────────────────────────────
 
-  it("self-referencing object via post-creation assignment", () => {
-    assertEquivalent(`
+	it("self-referencing object via post-creation assignment", () => {
+		assertEquivalent(`
       (function() {
         var obj = {name: "root", children: []};
         var child = {name: "child", parent: obj};
@@ -335,12 +335,12 @@ describe("comprehensive advanced patterns", () => {
         return [obj.children[0].parent.name, child.parent.children[0].name];
       })();
     `);
-  });
+	});
 
-  // ── 13. Method chaining patterns ─────────────────────────────────
+	// ── 13. Method chaining patterns ─────────────────────────────────
 
-  it("method chaining: array methods", () => {
-    assertEquivalent(`
+	it("method chaining: array methods", () => {
+		assertEquivalent(`
       (function() {
         return [5, 3, 8, 1, 9, 2, 7]
           .filter(function(x) { return x > 3; })
@@ -349,39 +349,39 @@ describe("comprehensive advanced patterns", () => {
           .slice(0, 3);
       })();
     `);
-  });
+	});
 
-  it("method chaining: string methods", () => {
-    assertEquivalent(`
+	it("method chaining: string methods", () => {
+		assertEquivalent(`
       (function() {
         return "  Hello, World!  ".trim().toLowerCase().split(" ").join("-");
       })();
     `);
-  });
+	});
 
-  // ── 14. Immediately invoked with arguments ───────────────────────
+	// ── 14. Immediately invoked with arguments ───────────────────────
 
-  it("IIFE with arguments", () => {
-    assertEquivalent(`
+	it("IIFE with arguments", () => {
+		assertEquivalent(`
       (function(a, b, c) {
         return a + b + c;
       })(10, 20, 30);
     `);
-  });
+	});
 
-  it("IIFE with closure over passed values", () => {
-    assertEquivalent(`
+	it("IIFE with closure over passed values", () => {
+		assertEquivalent(`
       (function(multiplier) {
         var fn = function(x) { return x * multiplier; };
         return [fn(1), fn(2), fn(3)];
       })(5);
     `);
-  });
+	});
 
-  // ── 15. Variable hoisting ────────────────────────────────────────
+	// ── 15. Variable hoisting ────────────────────────────────────────
 
-  it("var hoisting: used before assignment", () => {
-    assertEquivalent(`
+	it("var hoisting: used before assignment", () => {
+		assertEquivalent(`
       (function() {
         var before = x;
         var x = 10;
@@ -389,10 +389,10 @@ describe("comprehensive advanced patterns", () => {
         return [before, after];
       })();
     `);
-  });
+	});
 
-  it("var hoisting: in conditional block", () => {
-    assertEquivalent(`
+	it("var hoisting: in conditional block", () => {
+		assertEquivalent(`
       (function() {
         var result = typeof y;
         if (true) {
@@ -401,43 +401,43 @@ describe("comprehensive advanced patterns", () => {
         return [result, y];
       })();
     `);
-  });
+	});
 
-  // ── 16. Function hoisting ────────────────────────────────────────
+	// ── 16. Function hoisting ────────────────────────────────────────
 
-  it("function declaration hoisting: call before definition", () => {
-    assertEquivalent(`
+	it("function declaration hoisting: call before definition", () => {
+		assertEquivalent(`
       (function() {
         var r = hoisted(5);
         function hoisted(n) { return n * n; }
         return r;
       })();
     `);
-  });
+	});
 
-  it("function hoisting: mutual references", () => {
-    assertEquivalent(`
+	it("function hoisting: mutual references", () => {
+		assertEquivalent(`
       (function() {
         function isEven(n) { return n === 0 ? true : isOdd(n - 1); }
         function isOdd(n) { return n === 0 ? false : isEven(n - 1); }
         return [isEven(4), isOdd(5), isEven(3), isOdd(2)];
       })();
     `);
-  });
+	});
 
-  // ── 17. Multiple var declarations ────────────────────────────────
+	// ── 17. Multiple var declarations ────────────────────────────────
 
-  it("multiple var declarations in one statement", () => {
-    assertEquivalent(`
+	it("multiple var declarations in one statement", () => {
+		assertEquivalent(`
       (function() {
         var a = 1, b = 2, c = a + b, d = c * 2;
         return [a, b, c, d];
       })();
     `);
-  });
+	});
 
-  it("multiple var declarations with mixed initialization", () => {
-    assertEquivalent(`
+	it("multiple var declarations with mixed initialization", () => {
+		assertEquivalent(`
       (function() {
         var x, y = 10, z;
         x = 5;
@@ -445,12 +445,12 @@ describe("comprehensive advanced patterns", () => {
         return [x, y, z];
       })();
     `);
-  });
+	});
 
-  // ── 18. Complex ternary expressions ──────────────────────────────
+	// ── 18. Complex ternary expressions ──────────────────────────────
 
-  it("nested ternary: a ? b ? c : d : e ? f : g", () => {
-    assertEquivalent(`
+	it("nested ternary: a ? b ? c : d : e ? f : g", () => {
+		assertEquivalent(`
       (function() {
         function classify(x) {
           return x > 0 ? x > 100 ? "big" : "small" : x === 0 ? "zero" : "negative";
@@ -458,10 +458,10 @@ describe("comprehensive advanced patterns", () => {
         return [classify(200), classify(50), classify(0), classify(-5)];
       })();
     `);
-  });
+	});
 
-  it("ternary as function argument", () => {
-    assertEquivalent(`
+	it("ternary as function argument", () => {
+		assertEquivalent(`
       (function() {
         function pick(flag) {
           return [].concat(flag ? [1, 2] : [3, 4]);
@@ -469,12 +469,12 @@ describe("comprehensive advanced patterns", () => {
         return [pick(true), pick(false)];
       })();
     `);
-  });
+	});
 
-  // ── 19. Short-circuit side effects ───────────────────────────────
+	// ── 19. Short-circuit side effects ───────────────────────────────
 
-  it("short-circuit AND/OR with side effects", () => {
-    assertEquivalent(`
+	it("short-circuit AND/OR with side effects", () => {
+		assertEquivalent(`
       (function() {
         var log = [];
         function track(val) { log.push(val); return val; }
@@ -484,10 +484,10 @@ describe("comprehensive advanced patterns", () => {
         return [r1, r2, r3, log];
       })();
     `);
-  });
+	});
 
-  it("short-circuit evaluation order", () => {
-    assertEquivalent(`
+	it("short-circuit evaluation order", () => {
+		assertEquivalent(`
       (function() {
         var x = 0;
         false && (x = 1);
@@ -499,12 +499,12 @@ describe("comprehensive advanced patterns", () => {
         return [a, b, c];
       })();
     `);
-  });
+	});
 
-  // ── 20. Strict vs loose equality edge cases ──────────────────────
+	// ── 20. Strict vs loose equality edge cases ──────────────────────
 
-  it("strict vs loose equality: all the tricky ones", () => {
-    assertEquivalent(`
+	it("strict vs loose equality: all the tricky ones", () => {
+		assertEquivalent(`
       (function() {
         return [
           "" == false,  "" === false,
@@ -518,12 +518,12 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  // ── 21. String/number comparison edge cases ──────────────────────
+	// ── 21. String/number comparison edge cases ──────────────────────
 
-  it("string and number comparison", () => {
-    assertEquivalent(`
+	it("string and number comparison", () => {
+		assertEquivalent(`
       (function() {
         return [
           "9" < "10",
@@ -536,10 +536,10 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  it("string numeric sort vs numeric sort", () => {
-    assertEquivalent(`
+	it("string numeric sort vs numeric sort", () => {
+		assertEquivalent(`
       (function() {
         var arr = [10, 9, 1, 100, 2, 20];
         var strSort = arr.slice().sort();
@@ -547,12 +547,12 @@ describe("comprehensive advanced patterns", () => {
         return [strSort, numSort];
       })();
     `);
-  });
+	});
 
-  // ── 22. Boolean conversion: !! and Boolean() ────────────────────
+	// ── 22. Boolean conversion: !! and Boolean() ────────────────────
 
-  it("double-bang boolean conversion", () => {
-    assertEquivalent(`
+	it("double-bang boolean conversion", () => {
+		assertEquivalent(`
       (function() {
         return [
           !!0, !!1, !!"", !!"hello",
@@ -561,21 +561,21 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  it("Boolean() constructor vs !!", () => {
-    assertEquivalent(`
+	it("Boolean() constructor vs !!", () => {
+		assertEquivalent(`
       (function() {
         var vals = [0, 1, -1, "", "0", null, undefined, NaN, {}, [], false, true];
         return vals.map(function(v) { return Boolean(v); });
       })();
     `);
-  });
+	});
 
-  // ── 23. Numeric string operations ────────────────────────────────
+	// ── 23. Numeric string operations ────────────────────────────────
 
-  it("numeric string arithmetic", () => {
-    assertEquivalent(`
+	it("numeric string arithmetic", () => {
+		assertEquivalent(`
       (function() {
         return [
           "5" * 2,
@@ -589,10 +589,10 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  it("unary plus and Number() on strings", () => {
-    assertEquivalent(`
+	it("unary plus and Number() on strings", () => {
+		assertEquivalent(`
       (function() {
         return [
           +"42", +"", +" ", +"abc", +"0xff",
@@ -600,21 +600,21 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  // ── 24. Array-like operations on strings ─────────────────────────
+	// ── 24. Array-like operations on strings ─────────────────────────
 
-  it("string indexing and length", () => {
-    assertEquivalent(`
+	it("string indexing and length", () => {
+		assertEquivalent(`
       (function() {
         var s = "hello";
         return [s[0], s[4], s.length, s[100]];
       })();
     `);
-  });
+	});
 
-  it("string iteration via index", () => {
-    assertEquivalent(`
+	it("string iteration via index", () => {
+		assertEquivalent(`
       (function() {
         var s = "abcde";
         var result = [];
@@ -624,32 +624,32 @@ describe("comprehensive advanced patterns", () => {
         return result;
       })();
     `);
-  });
+	});
 
-  // ── 25. Error creation and property access ───────────────────────
+	// ── 25. Error creation and property access ───────────────────────
 
-  it("Error: message and name properties", () => {
-    assertEquivalent(`
+	it("Error: message and name properties", () => {
+		assertEquivalent(`
       (function() {
         var e = new Error("something went wrong");
         return [e.message, e.name, e instanceof Error];
       })();
     `);
-  });
+	});
 
-  it("TypeError: creation and properties", () => {
-    assertEquivalent(`
+	it("TypeError: creation and properties", () => {
+		assertEquivalent(`
       (function() {
         var e = new TypeError("bad type");
         return [e.message, e.name, e instanceof TypeError, e instanceof Error];
       })();
     `);
-  });
+	});
 
-  // ── 26. Complex return expressions ───────────────────────────────
+	// ── 26. Complex return expressions ───────────────────────────────
 
-  it("return with complex expression", () => {
-    assertEquivalent(`
+	it("return with complex expression", () => {
+		assertEquivalent(`
       (function() {
         function compute(a, b, c) {
           return a * b + c - (a > b ? a : b) + (c % 2 === 0 ? 1 : -1);
@@ -657,10 +657,10 @@ describe("comprehensive advanced patterns", () => {
         return [compute(3, 5, 8), compute(10, 2, 7), compute(0, 0, 0)];
       })();
     `);
-  });
+	});
 
-  it("return with logical expression", () => {
-    assertEquivalent(`
+	it("return with logical expression", () => {
+		assertEquivalent(`
       (function() {
         function firstTruthy() {
           for (var i = 0; i < arguments.length; i++) {
@@ -671,12 +671,12 @@ describe("comprehensive advanced patterns", () => {
         return [firstTruthy(0, "", null, "found"), firstTruthy(0, false, null)];
       })();
     `);
-  });
+	});
 
-  // ── 27. Nested ternary with function calls ───────────────────────
+	// ── 27. Nested ternary with function calls ───────────────────────
 
-  it("nested ternary calling functions", () => {
-    assertEquivalent(`
+	it("nested ternary calling functions", () => {
+		assertEquivalent(`
       (function() {
         function double(x) { return x * 2; }
         function triple(x) { return x * 3; }
@@ -687,33 +687,33 @@ describe("comprehensive advanced patterns", () => {
         return [transform(20), transform(5), transform(-3), transform(0)];
       })();
     `);
-  });
+	});
 
-  // ── 28. Multi-level object property access ───────────────────────
+	// ── 28. Multi-level object property access ───────────────────────
 
-  it("four-level property access: a.b.c.d", () => {
-    assertEquivalent(`
+	it("four-level property access: a.b.c.d", () => {
+		assertEquivalent(`
       (function() {
         var a = {b: {c: {d: {value: 42}}}};
         return a.b.c.d.value;
       })();
     `);
-  });
+	});
 
-  it("mixed dot and bracket notation deep access", () => {
-    assertEquivalent(`
+	it("mixed dot and bracket notation deep access", () => {
+		assertEquivalent(`
       (function() {
         var data = {items: [{id: 1, tags: ["a", "b"]}, {id: 2, tags: ["c"]}]};
         var idx = 0;
         return [data.items[idx].tags[1], data["items"][1]["tags"][0]];
       })();
     `);
-  });
+	});
 
-  // ── 29. Dynamic property names with bracket notation ─────────────
+	// ── 29. Dynamic property names with bracket notation ─────────────
 
-  it("dynamic property names via concatenation", () => {
-    assertEquivalent(`
+	it("dynamic property names via concatenation", () => {
+		assertEquivalent(`
       (function() {
         var obj = {prop1: "a", prop2: "b", prop3: "c"};
         var results = [];
@@ -723,10 +723,10 @@ describe("comprehensive advanced patterns", () => {
         return results;
       })();
     `);
-  });
+	});
 
-  it("dynamic property names from array of keys", () => {
-    assertEquivalent(`
+	it("dynamic property names from array of keys", () => {
+		assertEquivalent(`
       (function() {
         var obj = {x: 10, y: 20, z: 30};
         var keys = ["x", "y", "z"];
@@ -737,12 +737,12 @@ describe("comprehensive advanced patterns", () => {
         return sum;
       })();
     `);
-  });
+	});
 
-  // ── 30. Arguments object manipulation ────────────────────────────
+	// ── 30. Arguments object manipulation ────────────────────────────
 
-  it("arguments: length and indexed access", () => {
-    assertEquivalent(`
+	it("arguments: length and indexed access", () => {
+		assertEquivalent(`
       (function() {
         function test() {
           return [arguments.length, arguments[0], arguments[1], arguments[2]];
@@ -750,10 +750,10 @@ describe("comprehensive advanced patterns", () => {
         return test("a", "b", "c");
       })();
     `);
-  });
+	});
 
-  it("arguments: convert to array and manipulate", () => {
-    assertEquivalent(`
+	it("arguments: convert to array and manipulate", () => {
+		assertEquivalent(`
       (function() {
         function toArray() {
           var arr = [];
@@ -765,10 +765,10 @@ describe("comprehensive advanced patterns", () => {
         return toArray(1, 2, 3, 4, 5);
       })();
     `);
-  });
+	});
 
-  it("arguments: passed to another function", () => {
-    assertEquivalent(`
+	it("arguments: passed to another function", () => {
+		assertEquivalent(`
       (function() {
         function sum() {
           var total = 0;
@@ -783,12 +783,12 @@ describe("comprehensive advanced patterns", () => {
         return wrapper(1, 2, 3, 4);
       })();
     `);
-  });
+	});
 
-  // ── Additional edge-case patterns ────────────────────────────────
+	// ── Additional edge-case patterns ────────────────────────────────
 
-  it("object with numeric keys", () => {
-    assertEquivalent(`
+	it("object with numeric keys", () => {
+		assertEquivalent(`
       (function() {
         var obj = {};
         obj[0] = "zero";
@@ -797,20 +797,20 @@ describe("comprehensive advanced patterns", () => {
         return [obj[0], obj["1"], Object.keys(obj)];
       })();
     `);
-  });
+	});
 
-  it("property access on primitive via autoboxing", () => {
-    assertEquivalent(`
+	it("property access on primitive via autoboxing", () => {
+		assertEquivalent(`
       (function() {
         var s = "hello";
         var n = 42;
         return [s.length, s.charAt(1), n.toString(), n.toFixed(2)];
       })();
     `);
-  });
+	});
 
-  it("chained ternary as variable initializer", () => {
-    assertEquivalent(`
+	it("chained ternary as variable initializer", () => {
+		assertEquivalent(`
       (function() {
         function grade(score) {
           var letter =
@@ -823,10 +823,10 @@ describe("comprehensive advanced patterns", () => {
         return [grade(95), grade(85), grade(75), grade(65), grade(50)];
       })();
     `);
-  });
+	});
 
-  it("switch-like behavior via object lookup", () => {
-    assertEquivalent(`
+	it("switch-like behavior via object lookup", () => {
+		assertEquivalent(`
       (function() {
         var handlers = {
           add: function(a, b) { return a + b; },
@@ -840,10 +840,10 @@ describe("comprehensive advanced patterns", () => {
         return [exec("add", 3, 4), exec("sub", 10, 3), exec("mul", 5, 6), exec("div", 1, 2)];
       })();
     `);
-  });
+	});
 
-  it("closure over loop variable via IIFE", () => {
-    assertEquivalent(`
+	it("closure over loop variable via IIFE", () => {
+		assertEquivalent(`
       (function() {
         var funcs = [];
         for (var i = 0; i < 5; i++) {
@@ -854,10 +854,10 @@ describe("comprehensive advanced patterns", () => {
         return [funcs[0](), funcs[1](), funcs[2](), funcs[3](), funcs[4]()];
       })();
     `);
-  });
+	});
 
-  it("object property shorthand-like pattern", () => {
-    assertEquivalent(`
+	it("object property shorthand-like pattern", () => {
+		assertEquivalent(`
       (function() {
         var name = "Alice";
         var age = 30;
@@ -865,10 +865,10 @@ describe("comprehensive advanced patterns", () => {
         return obj;
       })();
     `);
-  });
+	});
 
-  it("array spread equivalent via concat", () => {
-    assertEquivalent(`
+	it("array spread equivalent via concat", () => {
+		assertEquivalent(`
       (function() {
         var a = [1, 2, 3];
         var b = [4, 5, 6];
@@ -876,10 +876,10 @@ describe("comprehensive advanced patterns", () => {
         return c;
       })();
     `);
-  });
+	});
 
-  it("complex expression: bitwise operations", () => {
-    assertEquivalent(`
+	it("complex expression: bitwise operations", () => {
+		assertEquivalent(`
       (function() {
         return [
           5 & 3, 5 | 3, 5 ^ 3, ~5,
@@ -887,10 +887,10 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  it("function as object property with this", () => {
-    assertEquivalent(`
+	it("function as object property with this", () => {
+		assertEquivalent(`
       (function() {
         var counter = {
           count: 0,
@@ -902,10 +902,10 @@ describe("comprehensive advanced patterns", () => {
         return counter.value();
       })();
     `);
-  });
+	});
 
-  it("hasOwnProperty vs in operator", () => {
-    assertEquivalent(`
+	it("hasOwnProperty vs in operator", () => {
+		assertEquivalent(`
       (function() {
         var obj = {a: 1};
         return [
@@ -916,10 +916,10 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  it("Array.isArray and type checks", () => {
-    assertEquivalent(`
+	it("Array.isArray and type checks", () => {
+		assertEquivalent(`
       (function() {
         return [
           Array.isArray([]),
@@ -930,10 +930,10 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 
-  it("regex test and match", () => {
-    assertEquivalent(`
+	it("regex test and match", () => {
+		assertEquivalent(`
       (function() {
         var re = /^[a-z]+$/;
         return [
@@ -945,5 +945,5 @@ describe("comprehensive advanced patterns", () => {
         ];
       })();
     `);
-  });
+	});
 });
