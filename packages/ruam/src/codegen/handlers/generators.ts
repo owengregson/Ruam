@@ -22,10 +22,14 @@ import {
 	breakStmt,
 	un,
 	lit,
-	raw,
+	bin,
+	assign,
+	awaitExpr,
+	ternary,
 } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
+import { debugTrace } from "./helpers.js";
 
 // --- Yield handlers ---
 
@@ -49,14 +53,21 @@ function YIELD_HANDLER(ctx: HandlerCtx): JsNode[] {
 function AWAIT(ctx: HandlerCtx): JsNode[] {
 	if (ctx.isAsync) {
 		return [
-			raw(
-				(ctx.debug
-					? `${ctx.dbg}('AWAIT','awaiting:',typeof ${ctx.S}[${ctx.P}]==='object'?'[Promise]':${ctx.S}[${ctx.P}]);`
-					: "") + `${ctx.S}[${ctx.P}]=await ${ctx.S}[${ctx.P}];break;`
+			...debugTrace(
+				ctx,
+				"AWAIT",
+				lit("awaiting:"),
+				ternary(
+					bin("===", un("typeof", ctx.peek()), lit("object")),
+					lit("[Promise]"),
+					ctx.peek()
+				)
 			),
+			exprStmt(assign(ctx.peek(), awaitExpr(ctx.peek()))),
+			breakStmt(),
 		];
 	}
-	return [raw(`${ctx.S}[${ctx.P}]=void 0;break;`)];
+	return [exprStmt(assign(ctx.peek(), un("void", lit(0)))), breakStmt()];
 }
 
 // --- Stub handlers (no-op, just break) ---
