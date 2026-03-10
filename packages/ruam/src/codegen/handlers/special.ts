@@ -6,17 +6,27 @@
  *                 PUSH_WELL_KNOWN_SYMBOL
  *  - Arguments:   CREATE_UNMAPPED_ARGS, CREATE_MAPPED_ARGS, CREATE_REST_ARGS
  *
- * Simple single-expression handlers use AST nodes directly.
- * Handlers with complex array literals or multi-step patterns use raw() nodes.
+ * All handlers use pure AST nodes — no raw() escape hatch.
  *
  * @module codegen/handlers/special
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, exprStmt, breakStmt, raw } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	bin,
+	member,
+	call,
+	arr,
+	varDecl,
+	exprStmt,
+	breakStmt,
+	index,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
-// --- Simple push handlers (AST nodes) ---
+// --- Simple push handlers ---
 
 /** `S[++P]=TV;break;` — push `this` value */
 function PUSH_THIS(ctx: HandlerCtx): JsNode[] {
@@ -33,7 +43,7 @@ function PUSH_NEW_TARGET(ctx: HandlerCtx): JsNode[] {
 	return [exprStmt(ctx.push(id(ctx.NT))), breakStmt()];
 }
 
-// --- Complex push handlers (raw) ---
+// --- Complex push handlers ---
 
 /**
  * PUSH_GLOBAL_THIS: `{var g=_g;W(g);break;}`
@@ -41,7 +51,7 @@ function PUSH_NEW_TARGET(ctx: HandlerCtx): JsNode[] {
  * Uses intermediate `var g` to match the original runtime pattern.
  */
 function PUSH_GLOBAL_THIS(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var g=_g;${ctx.pushStr("g")};break;`)];
+	return [varDecl("g", id("_g")), exprStmt(ctx.push(id("g"))), breakStmt()];
 }
 
 /**
@@ -57,17 +67,37 @@ function PUSH_GLOBAL_THIS(ctx: HandlerCtx): JsNode[] {
  */
 function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var syms=[Symbol.iterator,Symbol.asyncIterator,Symbol.hasInstance,` +
-				`Symbol.toPrimitive,Symbol.toStringTag,Symbol.species,` +
-				`Symbol.isConcatSpreadable,Symbol.match,Symbol.replace,` +
-				`Symbol.search,Symbol.split,Symbol.unscopables];` +
-				`${ctx.pushStr("syms["+ctx.O+"]||Symbol.iterator")};break;`
+		varDecl(
+			"syms",
+			arr(
+				member(id("Symbol"), "iterator"),
+				member(id("Symbol"), "asyncIterator"),
+				member(id("Symbol"), "hasInstance"),
+				member(id("Symbol"), "toPrimitive"),
+				member(id("Symbol"), "toStringTag"),
+				member(id("Symbol"), "species"),
+				member(id("Symbol"), "isConcatSpreadable"),
+				member(id("Symbol"), "match"),
+				member(id("Symbol"), "replace"),
+				member(id("Symbol"), "search"),
+				member(id("Symbol"), "split"),
+				member(id("Symbol"), "unscopables")
+			)
 		),
+		exprStmt(
+			ctx.push(
+				bin(
+					"||",
+					index(id("syms"), id(ctx.O)),
+					member(id("Symbol"), "iterator")
+				)
+			)
+		),
+		breakStmt(),
 	];
 }
 
-// --- Arguments handlers (raw — method chain call) ---
+// --- Arguments handlers ---
 
 /**
  * CREATE_UNMAPPED_ARGS / CREATE_MAPPED_ARGS: `W(Array.prototype.slice.call(A));break;`
@@ -75,7 +105,20 @@ function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
  * Both opcodes produce the same handler — a sliced copy of the arguments object.
  */
 function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.pushStr("Array.prototype.slice.call("+ctx.A+")")};break;`)];
+	return [
+		exprStmt(
+			ctx.push(
+				call(
+					member(
+						member(member(id("Array"), "prototype"), "slice"),
+						"call"
+					),
+					[id(ctx.A)]
+				)
+			)
+		),
+		breakStmt(),
+	];
 }
 
 /**
@@ -85,7 +128,18 @@ function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_REST_ARGS(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(`${ctx.pushStr("Array.prototype.slice.call("+ctx.A+","+ctx.O+")")};break;`),
+		exprStmt(
+			ctx.push(
+				call(
+					member(
+						member(member(id("Array"), "prototype"), "slice"),
+						"call"
+					),
+					[id(ctx.A), id(ctx.O)]
+				)
+			)
+		),
+		breakStmt(),
 	];
 }
 
