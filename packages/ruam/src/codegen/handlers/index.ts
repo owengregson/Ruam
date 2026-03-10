@@ -11,6 +11,27 @@ import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../runtime/names.js";
 import type { Op } from "../../compiler/opcodes.js";
 
+// Side-effect imports — each file registers its handlers in the registry on import
+import './stack.js';
+import './arithmetic.js';
+import './comparison.js';
+import './logical.js';
+import './control-flow.js';
+import './registers.js';
+import './type-ops.js';
+import './special.js';
+import './destructuring.js';
+import './scope.js';
+import './compound-scoped.js';
+import './objects.js';
+import './calls.js';
+import './classes.js';
+import './exceptions.js';
+import './iterators.js';
+import './generators.js';
+import './functions.js';
+import './superinstructions.js';
+
 /**
  * Context passed to every opcode handler.
  * Contains obfuscated variable names and feature flags.
