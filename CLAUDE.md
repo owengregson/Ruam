@@ -6,7 +6,7 @@ JS VM obfuscator — compiles JavaScript functions into custom bytecode executed
 
 - **Build**: `npm run build` (tsup, ESM-only)
 - **Typecheck**: `npm run typecheck` (tsc --noEmit)
-- **Test**: `npm run test` (vitest, 1714 tests)
+- **Test**: `npm run test` (vitest, 1803 tests)
 - **Test watch**: `npm run test:watch`
 - **Node**: >= 18, **Module**: ESM (`"type": "module"`)
 
@@ -37,20 +37,51 @@ src/
       expressions.ts        Expression compilation (calls, members, operators, etc.)
       classes.ts            Class compilation (methods, properties, inheritance)
 
-  runtime/
-    vm.ts                   VM runtime orchestrator (assembles IIFE from templates, incl. shielded mode)
-    names.ts                RuntimeNames interface + per-build randomized name generation (LCG PRNG)
-    fingerprint.ts          Environment fingerprinting for encryption
-    decoder.ts              RC4 + base64 codec + string constant XOR decoder
-    rolling-cipher.ts       Rolling cipher: position-dependent instruction encryption + implicit key derivation
-    templates/
-      interpreter.ts        Main interpreter core (sync + async exec, opcode switch)
+  codegen/
+    nodes.ts                JS AST node types (~36 node kinds) + factory functions
+    emit.ts                 Recursive emitter: AST -> minified JS with precedence-aware parens
+    transforms.ts           AST tree transforms (inlineStackOps, obfuscateLocals) + string post-processing
+    builders/
+      interpreter.ts        Interpreter builder: assembles sync/async exec from handler registry
       loader.ts             Bytecode loader, cache, depth tracking, _ru4m watermark
       runners.ts            VM dispatch functions (run/runAsync) + shielding router
       deserializer.ts       Binary bytecode deserializer
+      fingerprint.ts        Environment fingerprinting runtime source
+      decoder.ts            RC4 + base64 codec + string constant XOR decoder
+      rolling-cipher.ts     Rolling cipher runtime helpers (deriveKey, mix)
       debug-protection.ts   Multi-layered anti-debugger (6 detection layers + escalating response)
       debug-logging.ts      Debug trace infrastructure
+      stack-encoding.ts     Proxy-based stack XOR encoding
       globals.ts            Global exposure (globalThis binding)
+    handlers/
+      registry.ts           Handler registry (Map<Op, HandlerFn>), HandlerCtx type, makeHandlerCtx
+      index.ts              Barrel module: re-exports + side-effect imports for 19 handler files
+      stack.ts              Stack manipulation opcodes (PUSH, POP, DUP, SWAP, etc.)
+      arithmetic.ts         Arithmetic opcodes (ADD, SUB, MUL, etc.)
+      comparison.ts         Comparison opcodes (EQ, NEQ, LT, GT, etc.)
+      logical.ts            Logical opcodes (AND, OR, NOT, etc.)
+      control-flow.ts       Control flow opcodes (JUMP, JUMP_IF_FALSE, etc.)
+      registers.ts          Register opcodes (LOAD_REG, STORE_REG, etc.)
+      type-ops.ts           Type opcodes (TYPEOF, INSTANCEOF, etc.)
+      special.ts            Special opcodes (PUSH_UNDEFINED, PUSH_NULL, etc.)
+      destructuring.ts      Destructuring opcodes (array/object patterns)
+      scope.ts              Scope opcodes (PUSH_SCOPE, POP_SCOPE, LOAD/STORE_SCOPED)
+      compound-scoped.ts    Compound scoped opcodes (INC_SCOPED, ADD_ASSIGN_SCOPED, etc.)
+      objects.ts            Object/array opcodes (NEW_OBJECT, SET_PROP, etc.)
+      calls.ts              Call opcodes (CALL, NEW, etc.)
+      classes.ts            Class opcodes (NEW_CLASS, DEFINE_METHOD, etc.)
+      exceptions.ts         Exception opcodes (THROW, TRY_PUSH, etc.)
+      iterators.ts          Iterator opcodes (FOR_IN, FOR_OF, etc.)
+      generators.ts         Generator opcodes (YIELD, YIELD_DELEGATE, etc.)
+      functions.ts          Function opcodes (CREATE_CLOSURE, RETURN, etc.)
+      superinstructions.ts  Fused superinstruction opcodes (REG_ADD, REG_LT_CONST_JF, etc.)
+
+  runtime/
+    vm.ts                   VM runtime orchestrator (assembles IIFE from AST builders, incl. shielded mode)
+    names.ts                RuntimeNames interface + per-build randomized name generation (LCG PRNG)
+    fingerprint.ts          Build-time fingerprint computation
+    decoder.ts              Build-time RC4 + base64 codec
+    rolling-cipher.ts       Build-time rolling cipher encryption + implicit key derivation
 
 test/
   helpers.ts                Test utility (wraps obfuscateCode + eval)
@@ -65,7 +96,8 @@ docs/
 
 ## Architecture Notes
 
-- **Compilation pipeline**: Source JS -> Babel parse -> identify target functions -> compile each to BytecodeUnit -> serialize -> replace function body with VM dispatch call -> generate VM runtime IIFE -> assemble output
+- **Compilation pipeline**: Source JS -> Babel parse -> identify target functions -> compile each to BytecodeUnit -> serialize -> replace function body with VM dispatch call -> build VM runtime AST -> emit IIFE -> assemble output
+- **JS AST builder system** (`codegen/`): All runtime JS is generated via a purpose-built AST with ~36 node types (`nodes.ts`), factory functions, and a recursive emitter (`emit.ts`). Builder files in `codegen/builders/` produce `JsNode[]` for each runtime component. The interpreter is assembled from a handler registry (`codegen/handlers/`) where each opcode registers a `HandlerFn` returning AST nodes. A `raw()` escape hatch wraps opaque string snippets as AST nodes for complex handlers. String-based post-processing (stack inlining, local obfuscation) runs on the emitted string before final wrapping.
 - **Direct physical dispatch**: The interpreter switch uses physical (shuffled) opcode numbers as case labels directly — no reverse opcode map is emitted in the output. Each build has unique case label assignments.
 - **Per-file opcode shuffle**: Seeded Fisher-Yates (LCG) produces different instruction encodings per build. Seed + shuffle constants live in `constants.ts`.
 - **Constant pool string encoding**: All string constants in the JSON bytecode format are XOR-encoded with an LCG key stream derived from the build seed. Decoded at load time by the `strDec` runtime function. Hides variable names, property names, and string literals.
@@ -73,19 +105,19 @@ docs/
 - **Watermark**: Every output contains `var _ru4m=!0;` — looks random but encodes "ruam" with a `4` for `a`.
 - **Rolling cipher** (`rollingCipher` option): Position-dependent XOR encryption on every instruction. The master key is derived implicitly from bytecode metadata (instruction count, register count, param count, constant count) via FNV-1a — no plaintext seed appears in the output. Each instruction is encrypted with `mixState(baseKey, index, index ^ 0x9E3779B9)`. Implemented in `runtime/rolling-cipher.ts`. When enabled, string encoding also uses the implicit key instead of a plaintext literal.
 - **Integrity binding** (`integrityBinding` option): A per-build hash (FNV-1a of the interpreter template source) is folded into the rolling cipher's base key (`baseKey = masterKey XOR integrityHash`). The hash is embedded as a numeric literal in the IIFE. If an attacker modifies the hash value, all instruction decryption produces garbage. Requires `rollingCipher`.
-- **VM Shielding** (`vmShielding` option): Each root function gets its own micro-interpreter with unique opcode shuffle, identifier names, and rolling cipher key. A shared router function maps unit IDs to group dispatch functions. Shared infrastructure (cache, fingerprint, deserializer) is emitted once. Auto-enables `rollingCipher`. Implemented in `transform.ts` (`assembleShielded()`), `runtime/vm.ts` (`generateShieldedVmRuntime()`), `runtime/names.ts` (`generateShieldedNames()`), and `runtime/templates/runners.ts` (`generateRouter()`).
+- **VM Shielding** (`vmShielding` option): Each root function gets its own micro-interpreter with unique opcode shuffle, identifier names, and rolling cipher key. A shared router function maps unit IDs to group dispatch functions. Shared infrastructure (cache, fingerprint, deserializer) is emitted once. Auto-enables `rollingCipher`. Implemented in `transform.ts` (`assembleShielded()`), `runtime/vm.ts` (`generateShieldedVmRuntime()`), `runtime/names.ts` (`generateShieldedNames()`), and `codegen/builders/runners.ts` (`buildRouterSource()`).
 - **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `high` (+debug protection, integrity binding, dead code, stack encoding, VM shielding). Defined in `presets.ts`.
 - **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
 - `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
 - **Home object (`[[HomeObject]]`)**: Class methods get `fn._ho = target` stamped at define-time. The home object is passed through the VM dispatch chain (`_vm.call` → `exec`) so `super` resolves correctly in multi-level inheritance. `GET_SUPER_PROP`, `SET_SUPER_PROP`, `CALL_SUPER_METHOD`, `SUPER_CALL` all use `Object.getPrototypeOf(homeObject)` when available.
-- **Dynamic opcodes** (`dynamicOpcodes` option): Filters unused opcode case handlers from the interpreter switch, reducing the attack surface for static analysis. Implemented in `runtime/templates/interpreter.ts` via `filterUnusedOpcodeHandlers()`.
-- **Decoy opcodes** (`decoyOpcodes` option): Injects 8-16 realistic-looking fake opcode handlers (arithmetic, stack, register, scope operations) into the interpreter switch for unused opcode slots. Implemented in `runtime/templates/interpreter.ts` via `injectDecoyHandlers()`.
+- **Dynamic opcodes** (`dynamicOpcodes` option): Filters unused opcode case handlers from the interpreter switch, reducing the attack surface for static analysis. Implemented in `codegen/builders/interpreter.ts` via `filterUnusedOpcodeHandlers()`.
+- **Decoy opcodes** (`decoyOpcodes` option): Injects 8-16 realistic-looking fake opcode handlers (arithmetic, stack, register, scope operations) into the interpreter switch for unused opcode slots. Implemented in `codegen/builders/interpreter.ts` via `injectDecoyHandlers()`.
 - **Dead code injection** (`deadCodeInjection` option): Inserts unreachable bytecode sequences after RETURN opcodes in compiled units. Jump targets are patched to maintain correctness. Implemented in `transform.ts` via `injectDeadCode()`.
-- **Stack encoding** (`stackEncoding` option): Wraps the VM stack array in a Proxy that XOR-encodes numeric values with position-dependent keys on set and decodes on get. Non-numeric values are tagged and stored transparently. Implemented in `runtime/templates/interpreter.ts` via `generateStackEncodingProxy()`.
+- **Stack encoding** (`stackEncoding` option): Wraps the VM stack array in a Proxy that XOR-encodes numeric values with position-dependent keys on set and decodes on get. Non-numeric values are tagged and stored transparently. Implemented in `codegen/builders/stack-encoding.ts` via `buildStackEncodingSource()`.
 - **CSPRNG seed**: Per-file opcode shuffle seed uses `crypto.randomBytes(4)` instead of `Date.now() ^ Math.random()`.
 - **Babel compat layer**: Shared `babel-compat.ts` normalizes ESM/CJS dual-export shapes for `@babel/traverse` and `@babel/generator`.
 - **Auto-enable rollingCipher**: `resolveOptions()` automatically enables `rollingCipher` when `integrityBinding` is set.
-- **Debug protection** (`debugProtection` option): Multi-layered anti-debugger system with 6 independent detection layers: (1) polymorphic debugger invocation with dual-clock timing, (2) statistical jitter analysis, (3) environment analysis (--inspect flags, stack traces), (4) function integrity self-verification (FNV-1a checksum), (5) native API integrity (console methods + Function.prototype.toString), (6) global property trap canary (browser DevTools enumeration). Escalating response: silent bytecode corruption → cache/constants wipe → infinite debugger loop. Uses recursive setTimeout with jitter and `.unref()` for Node.js compatibility. Error messages mimic native V8 messages. Implemented in `runtime/templates/debug-protection.ts`.
+- **Debug protection** (`debugProtection` option): Multi-layered anti-debugger system with 6 independent detection layers: (1) polymorphic debugger invocation with dual-clock timing, (2) statistical jitter analysis, (3) environment analysis (--inspect flags, stack traces), (4) function integrity self-verification (FNV-1a checksum), (5) native API integrity (console methods + Function.prototype.toString), (6) global property trap canary (browser DevTools enumeration). Escalating response: silent bytecode corruption → cache/constants wipe → infinite debugger loop. Uses recursive setTimeout with jitter and `.unref()` for Node.js compatibility. Error messages mimic native V8 messages. Implemented in `codegen/builders/debug-protection.ts`.
 
 ## Code Conventions
 
@@ -95,7 +127,7 @@ docs/
 - Test helper in `test/helpers.ts` wraps `obfuscateCode` + `eval` for round-trip verification
 - No linter/formatter configured — follow existing style
 - JSDoc: every module has `@module` tag, sections use `// --- Name ---` dividers, exported functions have `@param`/`@returns`
-- Runtime templates: each file in `runtime/templates/` exports a function accepting `RuntimeNames` and returning a JS source string
+- Runtime codegen: builder files in `codegen/builders/` export functions accepting `RuntimeNames` and returning `JsNode[]` (AST). Handler files in `codegen/handlers/` register `(ctx: HandlerCtx) => JsNode[]` functions in a shared `Map<Op, HandlerFn>` registry. `raw()` nodes wrap opaque string snippets for complex patterns.
 
 ## Known Bug Fixes (do not regress)
 
