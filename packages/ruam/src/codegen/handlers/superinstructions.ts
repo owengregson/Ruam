@@ -9,18 +9,70 @@
  *  - Property access:      REG_GET_PROP
  *  - Conditional jumps:    REG_LT_CONST_JF, REG_LT_REG_JF
  *
- * All handlers use raw() due to bit-packing extraction from the operand field
- * and multi-step control flow for conditional jump variants.
+ * All handlers use pure AST nodes with bit-packing extraction from the operand
+ * field and multi-step control flow for conditional jump variants.
  *
  * @module codegen/handlers/superinstructions
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	index,
+	assign,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	breakStmt,
+} from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 
 // --- Helpers ---
+
+/**
+ * Low 16 bits of the operand: `O & 0xFFFF`
+ *
+ * @param ctx - Handler context
+ * @returns AST expression for `O & 0xFFFF`
+ */
+function lo16(ctx: HandlerCtx): JsNode {
+	return bin("&", id(ctx.O), lit(0xffff));
+}
+
+/**
+ * High 16 bits of the operand: `(O >>> 16) & 0xFFFF`
+ *
+ * @param ctx - Handler context
+ * @returns AST expression for `(O >>> 16) & 0xFFFF`
+ */
+function hi16(ctx: HandlerCtx): JsNode {
+	return bin("&", bin(">>>", id(ctx.O), lit(16)), lit(0xffff));
+}
+
+/**
+ * Low 8 bits of the operand: `O & 0xFF`
+ *
+ * @param ctx - Handler context
+ * @returns AST expression for `O & 0xFF`
+ */
+function lo8(ctx: HandlerCtx): JsNode {
+	return bin("&", id(ctx.O), lit(0xff));
+}
+
+/**
+ * Bits 8-15 of the operand: `(O >>> 8) & 0xFF`
+ *
+ * @param ctx - Handler context
+ * @returns AST expression for `(O >>> 8) & 0xFF`
+ */
+function mid8(ctx: HandlerCtx): JsNode {
+	return bin("&", bin(">>>", id(ctx.O), lit(8)), lit(0xff));
+}
 
 /**
  * Build a dual-register binary operation handler.
@@ -35,10 +87,14 @@ import { registry } from "./registry.js";
  */
 function regBinOp(op: string): HandlerFn {
 	return (ctx) => [
-		raw(
-			`var ra=${ctx.O}&0xFFFF;var rb=(${ctx.O}>>>16)&0xFFFF;` +
-				`${ctx.pushStr(ctx.R+"[ra]"+op+ctx.R+"[rb]")};break;`
+		varDecl("ra", lo16(ctx)),
+		varDecl("rb", hi16(ctx)),
+		exprStmt(
+			ctx.push(
+				bin(op, index(id(ctx.R), id("ra")), index(id(ctx.R), id("rb")))
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -55,10 +111,19 @@ function regBinOp(op: string): HandlerFn {
  */
 function regConstOp(op: string): HandlerFn {
 	return (ctx) => [
-		raw(
-			`var r=${ctx.O}&0xFFFF;var ci=(${ctx.O}>>>16)&0xFFFF;` +
-				`${ctx.R}[r]=${ctx.R}[r]${op}${ctx.C}[ci];break;`
+		varDecl("r", lo16(ctx)),
+		varDecl("ci", hi16(ctx)),
+		exprStmt(
+			assign(
+				index(id(ctx.R), id("r")),
+				bin(
+					op,
+					index(id(ctx.R), id("r")),
+					index(id(ctx.C), id("ci"))
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -75,10 +140,14 @@ function regConstOp(op: string): HandlerFn {
  */
 function regConstPush(op: string): HandlerFn {
 	return (ctx) => [
-		raw(
-			`var r=${ctx.O}&0xFFFF;var ci=(${ctx.O}>>>16)&0xFFFF;` +
-				`${ctx.pushStr(ctx.R+"[r]"+op+ctx.C+"[ci]")};break;`
+		varDecl("r", lo16(ctx)),
+		varDecl("ci", hi16(ctx)),
+		exprStmt(
+			ctx.push(
+				bin(op, index(id(ctx.R), id("r")), index(id(ctx.C), id("ci")))
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -113,10 +182,14 @@ registry.set(Op.REG_CONST_MOD, regConstPush("%"));
  */
 function REG_GET_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var r=${ctx.O}&0xFFFF;var ni=(${ctx.O}>>>16)&0xFFFF;` +
-				`${ctx.pushStr(ctx.R+"[r]["+ctx.C+"[ni]]")};break;`
+		varDecl("r", lo16(ctx)),
+		varDecl("ni", hi16(ctx)),
+		exprStmt(
+			ctx.push(
+				index(index(id(ctx.R), id("r")), index(id(ctx.C), id("ni")))
+			)
 		),
+		breakStmt(),
 	];
 }
 registry.set(Op.REG_GET_PROP, REG_GET_PROP);
@@ -135,10 +208,14 @@ registry.set(Op.REG_GET_PROP, REG_GET_PROP);
  */
 function REG_LT_CONST_JF(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var r=${ctx.O}&0xFF;var ci=(${ctx.O}>>>8)&0xFF;var tgt=(${ctx.O}>>>16)&0xFFFF;` +
-				`if(!(${ctx.R}[r]<${ctx.C}[ci]))${ctx.IP}=tgt*2;break;`
+		varDecl("r", lo8(ctx)),
+		varDecl("ci", mid8(ctx)),
+		varDecl("tgt", hi16(ctx)),
+		ifStmt(
+			un("!", bin("<", index(id(ctx.R), id("r")), index(id(ctx.C), id("ci")))),
+			[exprStmt(assign(id(ctx.IP), bin("*", id("tgt"), lit(2))))]
 		),
+		breakStmt(),
 	];
 }
 registry.set(Op.REG_LT_CONST_JF, REG_LT_CONST_JF);
@@ -155,10 +232,14 @@ registry.set(Op.REG_LT_CONST_JF, REG_LT_CONST_JF);
  */
 function REG_LT_REG_JF(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var ra=${ctx.O}&0xFF;var rb=(${ctx.O}>>>8)&0xFF;var tgt=(${ctx.O}>>>16)&0xFFFF;` +
-				`if(!(${ctx.R}[ra]<${ctx.R}[rb]))${ctx.IP}=tgt*2;break;`
+		varDecl("ra", lo8(ctx)),
+		varDecl("rb", mid8(ctx)),
+		varDecl("tgt", hi16(ctx)),
+		ifStmt(
+			un("!", bin("<", index(id(ctx.R), id("ra")), index(id(ctx.R), id("rb")))),
+			[exprStmt(assign(id(ctx.IP), bin("*", id("tgt"), lit(2))))]
 		),
+		breakStmt(),
 	];
 }
 registry.set(Op.REG_LT_REG_JF, REG_LT_REG_JF);
