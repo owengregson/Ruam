@@ -1,7 +1,7 @@
 /**
- * Call opcode handlers in raw node form.
+ * Call opcode handlers using pure AST nodes.
  *
- * Covers 16 opcodes:
+ * Covers 14 opcodes:
  *  - Basic calls:    CALL, CALL_METHOD, CALL_NEW, SUPER_CALL
  *  - Spread:         SPREAD_ARGS
  *  - Optional:       CALL_OPTIONAL, CALL_METHOD_OPTIONAL
@@ -10,20 +10,41 @@
  *  - Super methods:  CALL_SUPER_METHOD
  *  - Fast-path:      CALL_0, CALL_1, CALL_2, CALL_3
  *
- * All handlers use raw() — spread flattening loops, debug branches, and
- * complex apply patterns are most cleanly expressed as literal JS.
+ * All handlers use pure AST nodes — no raw() escape hatch.
  *
  * @module codegen/handlers/calls
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	forStmt,
+	breakStmt,
+	newExpr,
+	ternary,
+	update,
+	arr,
+	obj,
+	seq,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
+import { debugTrace, superProto } from "./helpers.js";
 
 // --- Helpers ---
 
 /**
- * Build the common spread-flattening preamble for call handlers.
+ * Build the common spread-flattening preamble for call handlers as AST nodes.
  *
  * Generates:
  * ```
@@ -35,27 +56,106 @@ import { registry, type HandlerCtx } from "./registry.js";
  *   }else flat.push(callArgs[ai]);}callArgs=flat;}
  * ```
  */
-function spreadPreamble(ctx: HandlerCtx): string {
-	return (
-		`var argc=${ctx.O};var hasSpread=argc<0;if(hasSpread)argc=-argc;` +
-		`var callArgs=new Array(argc);for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${ctx.popStr()};` +
-		`if(hasSpread){var flat=[];for(var ai=0;ai<callArgs.length;ai++){` +
-		`if(callArgs[ai]&&callArgs[ai].__spread__){` +
-		`for(var si=0;si<callArgs[ai].items.length;si++)flat.push(callArgs[ai].items[si]);` +
-		`}else flat.push(callArgs[ai]);}callArgs=flat;}`
-	);
+function spreadPreamble(ctx: HandlerCtx): JsNode[] {
+	return [
+		// var argc=O;var hasSpread=argc<0;
+		varDecl("argc", id(ctx.O)),
+		varDecl("hasSpread", bin("<", id("argc"), lit(0))),
+		// if(hasSpread)argc=-argc;
+		ifStmt(id("hasSpread"), [
+			exprStmt(assign(id("argc"), un("-", id("argc")))),
+		]),
+		// var callArgs=new Array(argc);
+		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
+		// for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=S[P--];
+		forStmt(
+			varDecl("ai", bin("-", id("argc"), lit(1))),
+			bin(">=", id("ai"), lit(0)),
+			update("--", false, id("ai")),
+			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
+		),
+		// if(hasSpread){...flatten spread markers...}
+		ifStmt(id("hasSpread"), [
+			varDecl("flat", arr()),
+			forStmt(
+				varDecl("ai", lit(0)),
+				bin("<", id("ai"), member(id("callArgs"), "length")),
+				update("++", false, id("ai")),
+				[
+					ifStmt(
+						bin(
+							"&&",
+							index(id("callArgs"), id("ai")),
+							member(index(id("callArgs"), id("ai")), "__spread__")
+						),
+						[
+							forStmt(
+								varDecl("si", lit(0)),
+								bin(
+									"<",
+									id("si"),
+									member(
+										member(
+											index(id("callArgs"), id("ai")),
+											"items"
+										),
+										"length"
+									)
+								),
+								update("++", false, id("si")),
+								[
+									exprStmt(
+										call(member(id("flat"), "push"), [
+											index(
+												member(
+													index(
+														id("callArgs"),
+														id("ai")
+													),
+													"items"
+												),
+												id("si")
+											),
+										])
+									),
+								]
+							),
+						],
+						[
+							exprStmt(
+								call(member(id("flat"), "push"), [
+									index(id("callArgs"), id("ai")),
+								])
+							),
+						]
+					),
+				]
+			),
+			exprStmt(assign(id("callArgs"), id("flat"))),
+		]),
+	];
 }
 
 /**
- * Build a simple (no-spread) argument collection preamble.
+ * Build a simple (no-spread) argument collection preamble as AST nodes.
  *
- * Generates: `var argc=O;var callArgs=new Array(argc);for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=X();`
+ * Generates:
+ * ```
+ * var argc=O;var callArgs=new Array(argc);
+ * for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=X();
+ * ```
  */
-function simplePreamble(ctx: HandlerCtx): string {
-	return (
-		`var argc=${ctx.O};var callArgs=new Array(argc);` +
-		`for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${ctx.popStr()};`
-	);
+function simplePreamble(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("argc", id(ctx.O)),
+		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
+		forStmt(
+			varDecl("ai", bin("-", id("argc"), lit(1))),
+			bin(">=", id("ai"), lit(0)),
+			update("--", false, id("ai")),
+			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
+		),
+	];
 }
 
 // --- Call handlers ---
@@ -66,15 +166,50 @@ function simplePreamble(ctx: HandlerCtx): string {
  */
 function CALL(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			spreadPreamble(ctx) +
-				`var fn=${ctx.popStr()};` +
-				(ctx.debug
-					? `${ctx.dbg}('CALL','fn=',typeof fn,'argc='+callArgs.length,fn&&fn.name?'name='+fn.name:'');` +
-					  `if(typeof fn!=='function')${ctx.dbg}('CALL_ERR','NOT A FUNCTION:',fn,'${ctx.S} depth='+${ctx.P});`
-					: "") +
-				`${ctx.pushStr("fn.apply(void 0,callArgs)")};break;`
+		...spreadPreamble(ctx),
+		varDecl("fn", ctx.pop()),
+		...debugTrace(
+			ctx,
+			"CALL",
+			lit("fn="),
+			un("typeof", id("fn")),
+			bin("+", lit("argc="), member(id("callArgs"), "length")),
+			ternary(
+				bin("&&", id("fn"), member(id("fn"), "name")),
+				bin("+", lit("name="), member(id("fn"), "name")),
+				lit("")
+			)
 		),
+		...(ctx.debug
+			? [
+					ifStmt(
+						bin("!==", un("typeof", id("fn")), lit("function")),
+						[
+							exprStmt(
+								call(id(ctx.dbg), [
+									lit("CALL_ERR"),
+									lit("NOT A FUNCTION:"),
+									id("fn"),
+									bin(
+										"+",
+										lit(ctx.S + " depth="),
+										id(ctx.P)
+									),
+								])
+							),
+						]
+					),
+				]
+			: []),
+		exprStmt(
+			ctx.push(
+				call(member(id("fn"), "apply"), [
+					un("void", lit(0)),
+					id("callArgs"),
+				])
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -84,15 +219,47 @@ function CALL(ctx: HandlerCtx): JsNode[] {
  */
 function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			spreadPreamble(ctx) +
-				`var recv=${ctx.popStr()};var fn=${ctx.popStr()};` +
-				(ctx.debug
-					? `${ctx.dbg}('CALL_METHOD','fn=',typeof fn,'recv=',typeof recv,'argc='+callArgs.length,fn&&fn.name?'name='+fn.name:'');` +
-					  `if(typeof fn!=='function')${ctx.dbg}('CALL_METHOD_ERR','NOT A FUNCTION:',fn,'recv=',recv);`
-					: "") +
-				`${ctx.pushStr("fn.apply(recv,callArgs)")};break;`
+		...spreadPreamble(ctx),
+		varDecl("recv", ctx.pop()),
+		varDecl("fn", ctx.pop()),
+		...debugTrace(
+			ctx,
+			"CALL_METHOD",
+			lit("fn="),
+			un("typeof", id("fn")),
+			lit("recv="),
+			un("typeof", id("recv")),
+			bin("+", lit("argc="), member(id("callArgs"), "length")),
+			ternary(
+				bin("&&", id("fn"), member(id("fn"), "name")),
+				bin("+", lit("name="), member(id("fn"), "name")),
+				lit("")
+			)
 		),
+		...(ctx.debug
+			? [
+					ifStmt(
+						bin("!==", un("typeof", id("fn")), lit("function")),
+						[
+							exprStmt(
+								call(id(ctx.dbg), [
+									lit("CALL_METHOD_ERR"),
+									lit("NOT A FUNCTION:"),
+									id("fn"),
+									lit("recv="),
+									id("recv"),
+								])
+							),
+						]
+					),
+				]
+			: []),
+		exprStmt(
+			ctx.push(
+				call(member(id("fn"), "apply"), [id("recv"), id("callArgs")])
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -107,11 +274,28 @@ function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
  */
 function CALL_NEW(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			simplePreamble(ctx) +
-				`var Ctor=${ctx.popStr()};` +
-				`${ctx.pushStr("new (Ctor.bind.apply(Ctor,[null].concat(callArgs)))()")};break;`
+		...simplePreamble(ctx),
+		varDecl("Ctor", ctx.pop()),
+		exprStmt(
+			ctx.push(
+				newExpr(
+					seq(
+						call(
+							member(member(id("Ctor"), "bind"), "apply"),
+							[
+								id("Ctor"),
+								call(
+									member(arr(lit(null)), "concat"),
+									[id("callArgs")]
+								),
+							]
+						)
+					),
+					[]
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -121,26 +305,66 @@ function CALL_NEW(ctx: HandlerCtx): JsNode[] {
  */
 function SUPER_CALL(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			simplePreamble(ctx) +
-				`var superProto=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
-				(ctx.debug
-					? `${ctx.dbg}('SUPER_CALL','argc='+argc,'superProto=',!!superProto,'superCtor=',superProto&&typeof superProto.constructor);`
-					: "") +
-				`if(superProto&&superProto.constructor){superProto.constructor.apply(${ctx.TV},callArgs);}` +
-				`${ctx.pushStr(ctx.TV)};break;`
+		...simplePreamble(ctx),
+		varDecl("superProto", superProto(ctx)),
+		...debugTrace(
+			ctx,
+			"SUPER_CALL",
+			bin("+", lit("argc="), id("argc")),
+			lit("superProto="),
+			un("!", un("!", id("superProto"))),
+			lit("superCtor="),
+			bin(
+				"&&",
+				id("superProto"),
+				un("typeof", member(id("superProto"), "constructor"))
+			)
 		),
+		ifStmt(
+			bin(
+				"&&",
+				id("superProto"),
+				member(id("superProto"), "constructor")
+			),
+			[
+				exprStmt(
+					call(
+						member(
+							member(id("superProto"), "constructor"),
+							"apply"
+						),
+						[id(ctx.TV), id("callArgs")]
+					)
+				),
+			]
+		),
+		exprStmt(ctx.push(id(ctx.TV))),
+		breakStmt(),
 	];
 }
 
 // --- Spread ---
 
-/** `S[P]={__spread__:true,items:Array.from(S[P])};break;` */
+/**
+ * SPREAD_ARGS: wrap top-of-stack value in a spread marker object.
+ *
+ * `S[P]={__spread__:true,items:Array.from(S[P])};break;`
+ */
 function SPREAD_ARGS(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`${ctx.S}[${ctx.P}]={__spread__:true,items:Array.from(${ctx.S}[${ctx.P}])};break;`
+		exprStmt(
+			assign(
+				ctx.peek(),
+				obj(
+					["__spread__", lit(true)],
+					[
+						"items",
+						call(member(id("Array"), "from"), [ctx.peek()]),
+					]
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -156,10 +380,21 @@ function SPREAD_ARGS(ctx: HandlerCtx): JsNode[] {
  */
 function CALL_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			spreadPreamble(ctx) +
-				`var fn=${ctx.popStr()};${ctx.pushStr("fn==null?void 0:fn.apply(void 0,callArgs)")};break;`
+		...spreadPreamble(ctx),
+		varDecl("fn", ctx.pop()),
+		exprStmt(
+			ctx.push(
+				ternary(
+					bin("==", id("fn"), lit(null)),
+					un("void", lit(0)),
+					call(member(id("fn"), "apply"), [
+						un("void", lit(0)),
+						id("callArgs"),
+					])
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -173,10 +408,22 @@ function CALL_OPTIONAL(ctx: HandlerCtx): JsNode[] {
  */
 function CALL_METHOD_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			spreadPreamble(ctx) +
-				`var recv=${ctx.popStr()};var fn=${ctx.popStr()};${ctx.pushStr("fn==null?void 0:fn.apply(recv,callArgs)")};break;`
+		...spreadPreamble(ctx),
+		varDecl("recv", ctx.pop()),
+		varDecl("fn", ctx.pop()),
+		exprStmt(
+			ctx.push(
+				ternary(
+					bin("==", id("fn"), lit(null)),
+					un("void", lit(0)),
+					call(member(id("fn"), "apply"), [
+						id("recv"),
+						id("callArgs"),
+					])
+				)
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -184,7 +431,11 @@ function CALL_METHOD_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 
 /** `{var code=X();W(eval(code));break;}` */
 function DIRECT_EVAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var code=${ctx.popStr()};${ctx.pushStr("eval(code)")};break;`)];
+	return [
+		varDecl("code", ctx.pop()),
+		exprStmt(ctx.push(call(id("eval"), [id("code")]))),
+		breakStmt(),
+	];
 }
 
 // --- Tagged template call ---
@@ -200,10 +451,17 @@ function DIRECT_EVAL(ctx: HandlerCtx): JsNode[] {
  */
 function CALL_TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			simplePreamble(ctx) +
-				`var fn=${ctx.popStr()};${ctx.pushStr("fn.apply(void 0,callArgs)")};break;`
+		...simplePreamble(ctx),
+		varDecl("fn", ctx.pop()),
+		exprStmt(
+			ctx.push(
+				call(member(id("fn"), "apply"), [
+					un("void", lit(0)),
+					id("callArgs"),
+				])
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -222,12 +480,40 @@ function CALL_TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
  */
 function CALL_SUPER_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var argc=${ctx.O}&0xFFFF;var nameIdx=(${ctx.O}>>16)&0xFFFF;` +
-				`var callArgs=new Array(argc);for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=${ctx.popStr()};` +
-				`var sp2=${ctx.HO}?Object.getPrototypeOf(${ctx.HO}):Object.getPrototypeOf(Object.getPrototypeOf(${ctx.TV}));` +
-				`var fn=sp2?sp2[${ctx.C}[nameIdx]]:void 0;${ctx.pushStr("fn?fn.apply("+ctx.TV+",callArgs):void 0")};break;`
+		varDecl("argc", bin("&", id(ctx.O), lit(0xffff))),
+		varDecl(
+			"nameIdx",
+			bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))
 		),
+		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
+		forStmt(
+			varDecl("ai", bin("-", id("argc"), lit(1))),
+			bin(">=", id("ai"), lit(0)),
+			update("--", false, id("ai")),
+			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
+		),
+		varDecl("sp2", superProto(ctx)),
+		varDecl(
+			"fn",
+			ternary(
+				id("sp2"),
+				index(id("sp2"), index(id(ctx.C), id("nameIdx"))),
+				un("void", lit(0))
+			)
+		),
+		exprStmt(
+			ctx.push(
+				ternary(
+					id("fn"),
+					call(member(id("fn"), "apply"), [
+						id(ctx.TV),
+						id("callArgs"),
+					]),
+					un("void", lit(0))
+				)
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -235,29 +521,43 @@ function CALL_SUPER_METHOD(ctx: HandlerCtx): JsNode[] {
 
 /** `{var fn=X();W(fn());break;}` */
 function CALL_0(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var fn=${ctx.popStr()};${ctx.pushStr("fn()")};break;`)];
+	return [
+		varDecl("fn", ctx.pop()),
+		exprStmt(ctx.push(call(id("fn"), []))),
+		breakStmt(),
+	];
 }
 
 /** `{var a1=X();var fn=X();W(fn(a1));break;}` */
 function CALL_1(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var a1=${ctx.popStr()};var fn=${ctx.popStr()};${ctx.pushStr("fn(a1)")};break;`)];
+	return [
+		varDecl("a1", ctx.pop()),
+		varDecl("fn", ctx.pop()),
+		exprStmt(ctx.push(call(id("fn"), [id("a1")]))),
+		breakStmt(),
+	];
 }
 
 /** `{var a2=X();var a1=X();var fn=X();W(fn(a1,a2));break;}` */
 function CALL_2(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var a2=${ctx.popStr()};var a1=${ctx.popStr()};var fn=${ctx.popStr()};${ctx.pushStr("fn(a1,a2)")};break;`
-		),
+		varDecl("a2", ctx.pop()),
+		varDecl("a1", ctx.pop()),
+		varDecl("fn", ctx.pop()),
+		exprStmt(ctx.push(call(id("fn"), [id("a1"), id("a2")]))),
+		breakStmt(),
 	];
 }
 
 /** `{var a3=X();var a2=X();var a1=X();var fn=X();W(fn(a1,a2,a3));break;}` */
 function CALL_3(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var a3=${ctx.popStr()};var a2=${ctx.popStr()};var a1=${ctx.popStr()};var fn=${ctx.popStr()};${ctx.pushStr("fn(a1,a2,a3)")};break;`
-		),
+		varDecl("a3", ctx.pop()),
+		varDecl("a2", ctx.pop()),
+		varDecl("a1", ctx.pop()),
+		varDecl("fn", ctx.pop()),
+		exprStmt(ctx.push(call(id("fn"), [id("a1"), id("a2"), id("a3")]))),
+		breakStmt(),
 	];
 }
 
