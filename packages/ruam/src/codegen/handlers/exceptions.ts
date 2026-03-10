@@ -7,14 +7,30 @@
  *  - Guards:     THROW_IF_NOT_OBJECT
  *  - Error ctors: THROW_REF_ERROR, THROW_TYPE_ERROR, THROW_SYNTAX_ERROR
  *
- * All handlers use raw() because of multi-step control flow, conditional
- * logic with early breaks, and exception state management.
- *
  * @module codegen/handlers/exceptions
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw, breakStmt } from "../nodes.js";
+import {
+	type JsNode,
+	breakStmt,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	obj,
+	arr,
+	throwStmt,
+	newExpr,
+	returnStmt,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -34,17 +50,39 @@ import { registry } from "./registry.js";
  */
 function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var _ci=(${ctx.O}>>16)&0xFFFF;var _fi=${ctx.O}&0xFFFF;` +
-				`if(_ci===0xFFFF)_ci=-1;if(_fi===0xFFFF)_fi=-1;` +
-				`if(!${ctx.EX})${ctx.EX}=[];${ctx.EX}.push({_ci:_ci,_fi:_fi,_sp:${ctx.P}});break;`
+		varDecl(
+			"_ci",
+			bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))
 		),
+		varDecl("_fi", bin("&", id(ctx.O), lit(0xffff))),
+		ifStmt(bin("===", id("_ci"), lit(0xffff)), [
+			exprStmt(assign(id("_ci"), un("-", lit(1)))),
+		]),
+		ifStmt(bin("===", id("_fi"), lit(0xffff)), [
+			exprStmt(assign(id("_fi"), un("-", lit(1)))),
+		]),
+		ifStmt(un("!", id(ctx.EX)), [
+			exprStmt(assign(id(ctx.EX), arr())),
+		]),
+		exprStmt(
+			call(member(id(ctx.EX), "push"), [
+				obj(
+					["_ci", id("_ci")],
+					["_fi", id("_fi")],
+					["_sp", id(ctx.P)]
+				),
+			])
+		),
+		breakStmt(),
 	];
 }
 
 /** TRY_POP: pop the top exception handler frame. */
 function TRY_POP(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.EX}.pop();break;`)];
+	return [
+		exprStmt(call(member(id(ctx.EX), "pop"), [])),
+		breakStmt(),
+	];
 }
 
 /**
@@ -54,18 +92,42 @@ function TRY_POP(ctx: HandlerCtx): JsNode[] {
  * or register. Otherwise pushes the error onto the stack.
  *
  * ```
- * var err=X();if(O>=0){var cname=C[O];if(typeof cname==='string'){SC.sV[cname]=err;}else{R[O]=err;}}else{W(err);}break;
+ * var err=S[P--];if(O>=0){var cname=C[O];if(typeof cname==='string'){SC.sV[cname]=err;}else{R[O]=err;}}else{W(err);}break;
  * ```
  */
 function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var err=${ctx.popStr()};` +
-				`if(${ctx.O}>=0){var cname=${ctx.C}[${ctx.O}];` +
-				`if(typeof cname==='string'){${ctx.SC}.${ctx.sV}[cname]=err;}` +
-				`else{${ctx.R}[${ctx.O}]=err;}}` +
-				`else{${ctx.pushStr("err")};}break;`
+		varDecl("err", ctx.pop()),
+		ifStmt(
+			bin(">=", id(ctx.O), lit(0)),
+			[
+				varDecl("cname", index(id(ctx.C), id(ctx.O))),
+				ifStmt(
+					bin("===", un("typeof", id("cname")), lit("string")),
+					[
+						exprStmt(
+							assign(
+								index(
+									member(id(ctx.SC), ctx.sV),
+									id("cname")
+								),
+								id("err")
+							)
+						),
+					],
+					[
+						exprStmt(
+							assign(
+								index(id(ctx.R), id(ctx.O)),
+								id("err")
+							)
+						),
+					]
+				),
+			],
+			[exprStmt(ctx.push(id("err")))]
 		),
+		breakStmt(),
 	];
 }
 
@@ -76,7 +138,11 @@ function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
  * the stack for subsequent destructuring opcodes.
  */
 function CATCH_BIND_PATTERN(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var err=${ctx.popStr()};${ctx.pushStr("err")};break;`)];
+	return [
+		varDecl("err", ctx.pop()),
+		exprStmt(ctx.push(id("err"))),
+		breakStmt(),
+	];
 }
 
 // --- Finally handlers ---
@@ -99,10 +165,19 @@ function FINALLY_MARK(_ctx: HandlerCtx): JsNode[] {
  */
 function END_FINALLY(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`if(${ctx.HPE}){var ex=${ctx.PE};${ctx.PE}=null;${ctx.HPE}=false;throw ex;}` +
-				`if(${ctx.CT}===1){var _rv2=${ctx.CV};${ctx.CT}=0;${ctx.CV}=void 0;return _rv2;}break;`
-		),
+		ifStmt(id(ctx.HPE), [
+			varDecl("ex", id(ctx.PE)),
+			exprStmt(assign(id(ctx.PE), lit(null))),
+			exprStmt(assign(id(ctx.HPE), lit(false))),
+			throwStmt(id("ex")),
+		]),
+		ifStmt(bin("===", id(ctx.CT), lit(1)), [
+			varDecl("_rv2", id(ctx.CV)),
+			exprStmt(assign(id(ctx.CT), lit(0))),
+			exprStmt(assign(id(ctx.CV), un("void", lit(0)))),
+			returnStmt(id("_rv2")),
+		]),
+		breakStmt(),
 	];
 }
 
@@ -115,9 +190,22 @@ function END_FINALLY(ctx: HandlerCtx): JsNode[] {
  */
 function THROW_IF_NOT_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var v=${ctx.peekStr()};if(typeof v!=='object'||v===null)throw new TypeError('Value is not an object');break;`
+		varDecl("v", ctx.peek()),
+		ifStmt(
+			bin(
+				"||",
+				bin("!==", un("typeof", id("v")), lit("object")),
+				bin("===", id("v"), lit(null))
+			),
+			[
+				throwStmt(
+					newExpr(id("TypeError"), [
+						lit("Value is not an object"),
+					])
+				),
+			]
 		),
+		breakStmt(),
 	];
 }
 
@@ -128,7 +216,15 @@ function THROW_IF_NOT_OBJECT(ctx: HandlerCtx): JsNode[] {
  */
 function THROW_REF_ERROR(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(`throw new ReferenceError(${ctx.C}[${ctx.O}]||'not defined');`),
+		throwStmt(
+			newExpr(id("ReferenceError"), [
+				bin(
+					"||",
+					index(id(ctx.C), id(ctx.O)),
+					lit("not defined")
+				),
+			])
+		),
 	];
 }
 
@@ -136,14 +232,34 @@ function THROW_REF_ERROR(ctx: HandlerCtx): JsNode[] {
  * THROW_TYPE_ERROR: throw a TypeError with message from constant pool.
  */
 function THROW_TYPE_ERROR(ctx: HandlerCtx): JsNode[] {
-	return [raw(`throw new TypeError(${ctx.C}[${ctx.O}]||'type error');`)];
+	return [
+		throwStmt(
+			newExpr(id("TypeError"), [
+				bin(
+					"||",
+					index(id(ctx.C), id(ctx.O)),
+					lit("type error")
+				),
+			])
+		),
+	];
 }
 
 /**
  * THROW_SYNTAX_ERROR: throw a SyntaxError with message from constant pool.
  */
 function THROW_SYNTAX_ERROR(ctx: HandlerCtx): JsNode[] {
-	return [raw(`throw new SyntaxError(${ctx.C}[${ctx.O}]||'syntax error');`)];
+	return [
+		throwStmt(
+			newExpr(id("SyntaxError"), [
+				bin(
+					"||",
+					index(id(ctx.C), id(ctx.O)),
+					lit("syntax error")
+				),
+			])
+		),
+	];
 }
 
 // --- Registration ---
