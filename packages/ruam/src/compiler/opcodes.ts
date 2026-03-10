@@ -787,6 +787,115 @@ export enum Op {
 export const OPCODE_COUNT = Op.__COUNT;
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// Centralized opcode sets
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Simple jump opcodes whose operand is a direct IP target.
+ * Used by the peephole optimizer for jump threading.
+ */
+export const JUMP_OPS = new Set<Op>([
+	Op.JMP,
+	Op.JMP_TRUE,
+	Op.JMP_FALSE,
+	Op.JMP_NULLISH,
+	Op.JMP_UNDEFINED,
+	Op.JMP_TRUE_KEEP,
+	Op.JMP_FALSE_KEEP,
+	Op.JMP_NULLISH_KEEP,
+]);
+
+/**
+ * All opcodes whose operand encodes an IP target — includes simple jumps,
+ * switch dispatch, and logical short-circuit operators.
+ * Used by dead-code injection and jump target patching.
+ */
+export const ALL_JUMP_OPS = new Set<Op>([
+	...JUMP_OPS,
+	Op.TABLE_SWITCH,
+	Op.LOOKUP_SWITCH,
+	Op.LOGICAL_AND,
+	Op.LOGICAL_OR,
+	Op.NULLISH_COALESCE,
+]);
+
+/**
+ * Opcodes that pack a jump target into upper bits of the operand.
+ * Used by jump target patching to extract/repack IP targets.
+ */
+export const PACKED_JUMP_OPS = new Set<Op>([
+	Op.TRY_PUSH,
+	Op.REG_LT_CONST_JF,
+	Op.REG_LT_REG_JF,
+]);
+
+/**
+ * Numeric binary opcodes eligible for constant folding.
+ * Maps each foldable opcode to its JS evaluation function.
+ */
+export const FOLDABLE_BINOPS = new Map<Op, (a: number, b: number) => number | null>([
+	[Op.ADD, (a, b) => a + b],
+	[Op.SUB, (a, b) => a - b],
+	[Op.MUL, (a, b) => a * b],
+	[Op.DIV, (a, b) => (b !== 0 ? a / b : null)],
+	[Op.MOD, (a, b) => (b !== 0 ? a % b : null)],
+	[Op.BIT_AND, (a, b) => a & b],
+	[Op.BIT_OR, (a, b) => a | b],
+	[Op.BIT_XOR, (a, b) => a ^ b],
+	[Op.SHL, (a, b) => a << b],
+	[Op.SHR, (a, b) => a >> b],
+	[Op.USHR, (a, b) => a >>> b],
+]);
+
+/**
+ * Pure push opcodes — side-effect-free instructions that only push a value.
+ * Used by dead pair elimination (DUP+POP, PUSH+POP).
+ */
+export const PURE_PUSH_OPS = new Set<Op>([
+	Op.PUSH_CONST,
+	Op.PUSH_UNDEFINED,
+	Op.PUSH_NULL,
+	Op.PUSH_TRUE,
+	Op.PUSH_FALSE,
+	Op.PUSH_ZERO,
+	Op.PUSH_ONE,
+	Op.PUSH_NEG_ONE,
+	Op.PUSH_EMPTY_STRING,
+	Op.PUSH_NAN,
+	Op.PUSH_INFINITY,
+	Op.PUSH_NEG_INFINITY,
+	Op.LOAD_REG,
+]);
+
+/**
+ * Mapping from standard binary opcode to its register-register superinstruction.
+ * Used by the superinstruction fusion pass.
+ */
+export const REG_BINOP_MAP = new Map<Op, Op>([
+	[Op.ADD, Op.REG_ADD],
+	[Op.SUB, Op.REG_SUB],
+	[Op.MUL, Op.REG_MUL],
+	[Op.DIV, Op.REG_DIV],
+	[Op.MOD, Op.REG_MOD],
+	[Op.LT, Op.REG_LT],
+	[Op.LTE, Op.REG_LTE],
+	[Op.GT, Op.REG_GT],
+	[Op.GTE, Op.REG_GTE],
+	[Op.SEQ, Op.REG_SEQ],
+	[Op.SNEQ, Op.REG_SNEQ],
+]);
+
+/**
+ * Mapping from standard binary opcode to its register-constant superinstruction.
+ * Used by the superinstruction fusion pass.
+ */
+export const REG_CONST_BINOP_MAP = new Map<Op, Op>([
+	[Op.SUB, Op.REG_CONST_SUB],
+	[Op.MUL, Op.REG_CONST_MUL],
+	[Op.MOD, Op.REG_CONST_MOD],
+]);
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // Shuffle map utilities
 // ═══════════════════════════════════════════════════════════════════════════════
 

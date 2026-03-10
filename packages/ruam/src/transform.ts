@@ -18,7 +18,13 @@ import type { NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import { traverse, generate } from "./babel-compat.js";
 import { compileFunction, resetUnitCounter } from "./compiler/index.js";
-import { generateShuffleMap, OPCODE_COUNT, Op } from "./compiler/opcodes.js";
+import {
+	generateShuffleMap,
+	OPCODE_COUNT,
+	Op,
+	ALL_JUMP_OPS,
+	PACKED_JUMP_OPS,
+} from "./compiler/opcodes.js";
 import { serializeUnitToJson, encodeBytecodeUnit } from "./compiler/encode.js";
 import type { JsonSerializeOptions } from "./compiler/encode.js";
 import { generateVmRuntime, generateShieldedVmRuntime } from "./runtime/vm.js";
@@ -345,10 +351,10 @@ function injectDeadCode(unit: BytecodeUnit, seed: number): void {
 	// Collect all jump targets so we don't inject dead code where something jumps to
 	const jumpTargets = new Set<number>();
 	for (const instr of instrs) {
-		if (isJumpOpcode(instr.opcode)) {
+		if (ALL_JUMP_OPS.has(instr.opcode)) {
 			jumpTargets.add(instr.operand);
 		}
-		if (isPackedJumpOpcode(instr.opcode)) {
+		if (PACKED_JUMP_OPS.has(instr.opcode)) {
 			if (instr.opcode === Op.TRY_PUSH) {
 				// TRY_PUSH packs catchIp in bits 16-31, finallyIp in bits 0-15
 				// 0xFFFF is the sentinel for "not present" — skip it
@@ -440,10 +446,10 @@ function injectDeadCode(unit: BytecodeUnit, seed: number): void {
 
 		// Patch all jump targets that point past the insertion site
 		for (const instr of instrs) {
-			if (isJumpOpcode(instr.opcode) && instr.operand > after) {
+			if (ALL_JUMP_OPS.has(instr.opcode) && instr.operand > after) {
 				instr.operand += block.length;
 			}
-			if (isPackedJumpOpcode(instr.opcode)) {
+			if (PACKED_JUMP_OPS.has(instr.opcode)) {
 				if (instr.opcode === Op.TRY_PUSH) {
 					let catchIp = (instr.operand >> 16) & 0xffff;
 					let finallyIp = instr.operand & 0xffff;
@@ -484,33 +490,6 @@ function injectDeadCode(unit: BytecodeUnit, seed: number): void {
 	}
 }
 
-/** Check if an opcode is a simple jump instruction whose operand is an IP target. */
-function isJumpOpcode(opcode: number): boolean {
-	return (
-		opcode === Op.JMP ||
-		opcode === Op.JMP_TRUE ||
-		opcode === Op.JMP_FALSE ||
-		opcode === Op.JMP_NULLISH ||
-		opcode === Op.JMP_UNDEFINED ||
-		opcode === Op.JMP_TRUE_KEEP ||
-		opcode === Op.JMP_FALSE_KEEP ||
-		opcode === Op.JMP_NULLISH_KEEP ||
-		opcode === Op.TABLE_SWITCH ||
-		opcode === Op.LOOKUP_SWITCH ||
-		opcode === Op.LOGICAL_AND ||
-		opcode === Op.LOGICAL_OR ||
-		opcode === Op.NULLISH_COALESCE
-	);
-}
-
-/** Check if an opcode has a jump target packed into its upper bits. */
-function isPackedJumpOpcode(opcode: number): boolean {
-	return (
-		opcode === Op.TRY_PUSH ||
-		opcode === Op.REG_LT_CONST_JF ||
-		opcode === Op.REG_LT_REG_JF
-	);
-}
 
 /**
  * Collect all logical opcodes used across all compiled bytecode units.
