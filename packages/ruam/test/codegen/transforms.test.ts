@@ -1,13 +1,34 @@
 import { describe, it, expect } from "vitest";
 import { emit } from "../../src/codegen/emit.js";
-import { inlineStackOps, obfuscateLocals, KEEP } from "../../src/codegen/transforms.js";
 import {
-	fn, varDecl, exprStmt, raw, returnStmt, tryCatch,
-	id, lit, call, index, assign, update, bin, breakStmt, forIn,
+	inlineStackOps,
+	obfuscateLocals,
+	KEEP,
+} from "../../src/codegen/transforms.js";
+import {
+	fn,
+	varDecl,
+	exprStmt,
+	raw,
+	returnStmt,
+	tryCatch,
+	id,
+	lit,
+	call,
+	index,
+	assign,
+	update,
+	bin,
+	breakStmt,
+	forIn,
 } from "../../src/codegen/nodes.js";
 
 describe("inlineStackOps", () => {
-	const S = "stk", P = "sp", W = "push", X = "pop", Y = "peek";
+	const S = "stk",
+		P = "sp",
+		W = "push",
+		X = "pop",
+		Y = "peek";
 
 	it("replaces W(expr) → S[++P]=expr", () => {
 		const nodes = [exprStmt(call(id(W), [lit(42)]))];
@@ -35,7 +56,15 @@ describe("inlineStackOps", () => {
 
 	it("removes W/X/Y function declarations", () => {
 		const nodes = [
-			fn(W, ["v"], [exprStmt(assign(index(id(S), update('++', true, id(P))), id("v")))]),
+			fn(
+				W,
+				["v"],
+				[
+					exprStmt(
+						assign(index(id(S), update("++", true, id(P))), id("v"))
+					),
+				]
+			),
 			fn(X, [], []),
 			fn(Y, [], []),
 			exprStmt(call(id(W), [lit(1)])),
@@ -57,10 +86,9 @@ describe("inlineStackOps", () => {
 	it("handles binary op with Y()", () => {
 		// S[P] + b pattern
 		const nodes = [
-			exprStmt(assign(
-				call(id(Y), []),
-				bin("+", call(id(Y), []), id("b"))
-			)),
+			exprStmt(
+				assign(call(id(Y), []), bin("+", call(id(Y), []), id("b")))
+			),
 		];
 		const result = inlineStackOps(nodes, S, P, W, X, Y);
 		expect(emit(result[0]!)).toBe("stk[sp]=stk[sp]+b;");
@@ -91,10 +119,7 @@ describe("obfuscateLocals", () => {
 	const seed = 12345;
 
 	it("renames var declarations with names >= 3 chars", () => {
-		const nodes = [
-			varDecl("handler", lit(1)),
-			exprStmt(id("handler")),
-		];
+		const nodes = [varDecl("handler", lit(1)), exprStmt(id("handler"))];
 		const result = obfuscateLocals(nodes, seed);
 		// The name should be a 2-char replacement
 		const emitted = emit(result[0]!);
@@ -106,20 +131,14 @@ describe("obfuscateLocals", () => {
 	});
 
 	it("does not rename names < 3 chars", () => {
-		const nodes = [
-			varDecl("x", lit(1)),
-			varDecl("ab", lit(2)),
-		];
+		const nodes = [varDecl("x", lit(1)), varDecl("ab", lit(2))];
 		const result = obfuscateLocals(nodes, seed);
 		expect(emit(result[0]!)).toBe("var x=1");
 		expect(emit(result[1]!)).toBe("var ab=2");
 	});
 
 	it("does not rename names in KEEP set", () => {
-		const nodes = [
-			varDecl("Object", lit(1)),
-			varDecl("prototype", lit(2)),
-		];
+		const nodes = [varDecl("Object", lit(1)), varDecl("prototype", lit(2))];
 		const result = obfuscateLocals(nodes, seed);
 		expect(emit(result[0]!)).toBe("var Object=1");
 		expect(emit(result[1]!)).toBe("var prototype=2");
@@ -143,9 +162,7 @@ describe("obfuscateLocals", () => {
 	});
 
 	it("renames rest params correctly", () => {
-		const nodes = [
-			fn("foo", ["...args"], [returnStmt(id("args"))]),
-		];
+		const nodes = [fn("foo", ["...args"], [returnStmt(id("args"))])];
 		const result = obfuscateLocals(nodes, seed);
 		const emitted = emit(result[0]!);
 		expect(emitted).not.toContain("args");
@@ -153,9 +170,7 @@ describe("obfuscateLocals", () => {
 	});
 
 	it("renames for-in declarations", () => {
-		const nodes = [
-			forIn("key", id("obj"), [exprStmt(id("key"))]),
-		];
+		const nodes = [forIn("key", id("obj"), [exprStmt(id("key"))])];
 		const result = obfuscateLocals(nodes, seed);
 		const emitted = emit(result[0]!);
 		expect(emitted).not.toContain("key");
