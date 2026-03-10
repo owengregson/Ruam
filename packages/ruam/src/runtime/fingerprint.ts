@@ -23,7 +23,7 @@ const SEED = 0x5f3759df;
  * The returned string is meant to be injected verbatim into the VM IIFE.
  */
 export function generateFingerprintSource(names: RuntimeNames): string {
-  return `function ${names.fp}(){var h=0x5f3759df;h^=Array.prototype.reduce.length<<0x18;h^=String.prototype.charCodeAt.length<<0x14;h^=Math.floor.length<<0x10;h^=Object.keys.length<<0x0c;h^=JSON.stringify.length<<0x08;h^=parseInt.length<<0x04;h=(h^(h>>>16))*0x45d9f3b;h=(h^(h>>>13))*0x45d9f3b;h=h^(h>>>16);return h>>>0;}`;
+	return `function ${names.fp}(){var h=0x5f3759df;h^=Array.prototype.reduce.length<<0x18;h^=String.prototype.charCodeAt.length<<0x14;h^=Math.floor.length<<0x10;h^=Object.keys.length<<0x0c;h^=JSON.stringify.length<<0x08;h^=parseInt.length<<0x04;h=(h^(h>>>16))*0x45d9f3b;h=(h^(h>>>13))*0x45d9f3b;h=h^(h>>>16);return h>>>0;}`;
 }
 
 /**
@@ -33,15 +33,15 @@ export function generateFingerprintSource(names: RuntimeNames): string {
  * Must produce the exact same value as the runtime version.
  */
 export function computeFingerprint(): number {
-  let h = SEED;
-  h ^= Array.prototype.reduce.length << 0x18;
-  h ^= String.prototype.charCodeAt.length << 0x14;
-  h ^= Math.floor.length << 0x10;
-  h ^= Object.keys.length << 0x0c;
-  h ^= JSON.stringify.length << 0x08;
-  h ^= parseInt.length << 0x04;
-  h = (h ^ (h >>> 16)) * 0x45d9f3b;
-  h = (h ^ (h >>> 13)) * 0x45d9f3b;
-  h = h ^ (h >>> 16);
-  return h >>> 0;
+	let h = SEED;
+	h ^= Array.prototype.reduce.length << 0x18;
+	h ^= String.prototype.charCodeAt.length << 0x14;
+	h ^= Math.floor.length << 0x10;
+	h ^= Object.keys.length << 0x0c;
+	h ^= JSON.stringify.length << 0x08;
+	h ^= parseInt.length << 0x04;
+	h = (h ^ (h >>> 16)) * 0x45d9f3b;
+	h = (h ^ (h >>> 13)) * 0x45d9f3b;
+	h = h ^ (h >>> 16);
+	return h >>> 0;
 }

@@ -23,10 +23,10 @@ export { PRESETS } from "./presets.js";
  * @returns The obfuscated JavaScript source.
  */
 export function obfuscateCode(
-  source: string,
-  options?: VmObfuscationOptions,
+	source: string,
+	options?: VmObfuscationOptions
 ): string {
-  return transformCode(source, options);
+	return transformCode(source, options);
 }
 
 // --- File-Level Obfuscation ---
@@ -39,13 +39,13 @@ export function obfuscateCode(
  * @param options - Obfuscation options.
  */
 export async function obfuscateFile(
-  inputPath: string,
-  outputPath?: string,
-  options?: VmObfuscationOptions,
+	inputPath: string,
+	outputPath?: string,
+	options?: VmObfuscationOptions
 ): Promise<void> {
-  const source = await fs.readFile(inputPath, "utf-8");
-  const result = transformCode(source, options);
-  await fs.writeFile(outputPath ?? inputPath, result, "utf-8");
+	const source = await fs.readFile(inputPath, "utf-8");
+	const result = transformCode(source, options);
+	await fs.writeFile(outputPath ?? inputPath, result, "utf-8");
 }
 
 // --- Directory-Level Obfuscation ---
@@ -57,24 +57,24 @@ export async function obfuscateFile(
  * @param config - Include/exclude globs and obfuscation options.
  */
 export async function runVmObfuscation(
-  dir: string,
-  config?: {
-    include?: string[];
-    exclude?: string[];
-    options?: VmObfuscationOptions;
-  },
+	dir: string,
+	config?: {
+		include?: string[];
+		exclude?: string[];
+		options?: VmObfuscationOptions;
+	}
 ): Promise<void> {
-  const include = config?.include ?? ["**/*.js"];
-  const exclude = config?.exclude ?? ["**/node_modules/**"];
+	const include = config?.include ?? ["**/*.js"];
+	const exclude = config?.exclude ?? ["**/node_modules/**"];
 
-  const files = await globby(include, {
-    cwd: dir,
-    ignore: exclude,
-    absolute: false,
-  });
+	const files = await globby(include, {
+		cwd: dir,
+		ignore: exclude,
+		absolute: false,
+	});
 
-  for (const file of files) {
-    const filePath = path.join(dir, file);
-    await obfuscateFile(filePath, filePath, config?.options);
-  }
+	for (const file of files) {
+		const filePath = path.join(dir, file);
+		await obfuscateFile(filePath, filePath, config?.options);
+	}
 }

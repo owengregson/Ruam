@@ -11,41 +11,48 @@ import type { RuntimeNames } from "../names.js";
 import { Op, OPCODE_COUNT } from "../../compiler/opcodes.js";
 
 export function generateDebugLogging(
-  reverseMap: number[],
-  names: RuntimeNames,
+	reverseMap: number[],
+	names: RuntimeNames
 ): string {
-  // Build opcode name table: physical opcode -> name string
-  const opNames = Object.entries(Op)
-    .filter(([, v]) => typeof v === "number" && v < OPCODE_COUNT)
-    .reduce((m, [name, num]) => { m[num as number] = name; return m; }, {} as Record<number, string>);
+	// Build opcode name table: physical opcode -> name string
+	const opNames = Object.entries(Op)
+		.filter(([, v]) => typeof v === "number" && v < OPCODE_COUNT)
+		.reduce((m, [name, num]) => {
+			m[num as number] = name;
+			return m;
+		}, {} as Record<number, string>);
 
-  // Map physical opcodes to names via the reverse map
-  const nameEntries: string[] = [];
-  for (let phys = 0; phys < reverseMap.length; phys++) {
-    const logical = reverseMap[phys]!;
-    const name = opNames[logical] ?? `OP_${logical}`;
-    nameEntries.push(`${phys}:"${name}"`);
-  }
+	// Map physical opcodes to names via the reverse map
+	const nameEntries: string[] = [];
+	for (let phys = 0; phys < reverseMap.length; phys++) {
+		const logical = reverseMap[phys]!;
+		const name = opNames[logical] ?? `OP_${logical}`;
+		nameEntries.push(`${phys}:"${name}"`);
+	}
 
-  const O = names.operand;
-  const S = names.stk;
-  const P = names.stp;
-  const OP = names.opVar;
+	const O = names.operand;
+	const S = names.stk;
+	const P = names.stp;
+	const OP = names.opVar;
 
-  return `
+	return `
 var ${names.dbgCfg}={
   enabled:true,
   level:'trace',
   filter:null,
   maxLogs:10000,
   _count:0,
-  _opNames:{${nameEntries.join(',')}},
+  _opNames:{${nameEntries.join(",")}},
   levels:{trace:0,info:1,warn:2,error:3}
 };
 function ${names.dbg}(){
   if(!${names.dbgCfg}.enabled)return;
   if(${names.dbgCfg}._count>=${names.dbgCfg}.maxLogs){
-    if(${names.dbgCfg}._count===${names.dbgCfg}.maxLogs){console.warn('[VM_DBG] max logs reached ('+${names.dbgCfg}.maxLogs+'), silencing');${names.dbgCfg}._count++;}
+    if(${names.dbgCfg}._count===${
+		names.dbgCfg
+	}.maxLogs){console.warn('[VM_DBG] max logs reached ('+${
+		names.dbgCfg
+	}.maxLogs+'), silencing');${names.dbgCfg}._count++;}
     return;
   }
   ${names.dbgCfg}._count++;
@@ -53,7 +60,9 @@ function ${names.dbg}(){
   console.log.apply(console,['[VM_DBG]'].concat(args));
 }
 function ${names.dbgOp}(${OP},${O},C,${P},${S}){
-  if(!${names.dbgCfg}.enabled||${names.dbgCfg}.levels[${names.dbgCfg}.level]>0)return;
+  if(!${names.dbgCfg}.enabled||${names.dbgCfg}.levels[${
+		names.dbgCfg
+	}.level]>0)return;
   if(${names.dbgCfg}._count>=${names.dbgCfg}.maxLogs)return;
   ${names.dbgCfg}._count++;
   var name=${names.dbgCfg}._opNames[${OP}]||('OP_'+${OP});

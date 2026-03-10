@@ -30,11 +30,11 @@ import type { RuntimeNames } from "../names.js";
  * @returns JS source string for the debug protection IIFE.
  */
 export function generateDebugProtection(names: RuntimeNames): string {
-  const T = names.thresh;
-  const BT = names.bt;
-  const CA = names.cache;
+	const T = names.thresh;
+	const BT = names.bt;
+	const CA = names.cache;
 
-  return `
+	return `
 (function ${names.dbgProt}(){
 var ${T}=100;
 var _dm=[function(){debugger;},function(){try{(new Function("de"+"bu"+"gger"))();}catch(_){debugger;}},function(){try{eval("de"+"bug"+"ger");}catch(_){debugger;}},function(){try{(0,eval)("deb"+"ugger");}catch(_){debugger;}}];

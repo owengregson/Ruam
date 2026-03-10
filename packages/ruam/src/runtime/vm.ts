@@ -21,7 +21,10 @@
 import { OPCODE_COUNT } from "../compiler/opcodes.js";
 import type { RuntimeNames } from "./names.js";
 import { generateFingerprintSource } from "./fingerprint.js";
-import { generateDecoderSource, generateStringDecoderSource } from "./decoder.js";
+import {
+	generateDecoderSource,
+	generateStringDecoderSource,
+} from "./decoder.js";
 import { generateDebugProtection } from "./templates/debug-protection.js";
 import { generateDebugLogging } from "./templates/debug-logging.js";
 import { generateInterpreterCore } from "./templates/interpreter.js";
@@ -37,106 +40,120 @@ import { generateRollingCipherSource } from "./rolling-cipher.js";
  * @returns A JS source string containing the runtime IIFE.
  */
 export function generateVmRuntime(options: {
-  opcodeShuffleMap: number[];
-  names: RuntimeNames;
-  encrypt: boolean;
-  debugProtection: boolean;
-  debugLogging?: boolean;
-  dynamicOpcodes?: boolean;
-  decoyOpcodes?: boolean;
-  stackEncoding?: boolean;
-  seed: number;
-  stringKey?: number;
-  rollingCipher?: boolean;
-  integrityBinding?: boolean;
-  integrityHash?: number;
-  usedOpcodes?: Set<number>;
+	opcodeShuffleMap: number[];
+	names: RuntimeNames;
+	encrypt: boolean;
+	debugProtection: boolean;
+	debugLogging?: boolean;
+	dynamicOpcodes?: boolean;
+	decoyOpcodes?: boolean;
+	stackEncoding?: boolean;
+	seed: number;
+	stringKey?: number;
+	rollingCipher?: boolean;
+	integrityBinding?: boolean;
+	integrityHash?: number;
+	usedOpcodes?: Set<number>;
 }): string {
-  const {
-    opcodeShuffleMap,
-    names,
-    encrypt,
-    debugProtection: dbgProt,
-    debugLogging = false,
-    dynamicOpcodes = false,
-    decoyOpcodes = false,
-    stackEncoding = false,
-    seed,
-    stringKey,
-    rollingCipher = false,
-    integrityBinding = false,
-    integrityHash,
-    usedOpcodes,
-  } = options;
+	const {
+		opcodeShuffleMap,
+		names,
+		encrypt,
+		debugProtection: dbgProt,
+		debugLogging = false,
+		dynamicOpcodes = false,
+		decoyOpcodes = false,
+		stackEncoding = false,
+		seed,
+		stringKey,
+		rollingCipher = false,
+		integrityBinding = false,
+		integrityHash,
+		usedOpcodes,
+	} = options;
 
-  // Build reverse map: physical -> logical opcode
-  const reverseMap = new Array<number>(OPCODE_COUNT);
-  for (let i = 0; i < opcodeShuffleMap.length; i++) {
-    reverseMap[opcodeShuffleMap[i]!] = i;
-  }
+	// Build reverse map: physical -> logical opcode
+	const reverseMap = new Array<number>(OPCODE_COUNT);
+	for (let i = 0; i < opcodeShuffleMap.length; i++) {
+		reverseMap[opcodeShuffleMap[i]!] = i;
+	}
 
-  const parts: string[] = [];
+	const parts: string[] = [];
 
-  // IIFE open
-  parts.push(`(function(){`);
-  parts.push(`"use strict";`);
+	// IIFE open
+	parts.push(`(function(){`);
+	parts.push(`"use strict";`);
 
-  // Optional encryption support
-  if (encrypt) {
-    parts.push(generateFingerprintSource(names));
-    parts.push(generateDecoderSource(names));
-  }
+	// Optional encryption support
+	if (encrypt) {
+		parts.push(generateFingerprintSource(names));
+		parts.push(generateDecoderSource(names));
+	}
 
-  // Optional debug protection
-  if (dbgProt) {
-    parts.push(generateDebugProtection(names));
-  }
+	// Optional debug protection
+	if (dbgProt) {
+		parts.push(generateDebugProtection(names));
+	}
 
-  // Optional debug logging
-  if (debugLogging) {
-    parts.push(generateDebugLogging(reverseMap, names));
-  }
+	// Optional debug logging
+	if (debugLogging) {
+		parts.push(generateDebugLogging(reverseMap, names));
+	}
 
-  // Rolling cipher helpers (must come before interpreter)
-  if (rollingCipher) {
-    if (integrityBinding && integrityHash !== undefined) {
-      // Embed the precomputed integrity hash as a literal.
-      // This value is folded into the rolling cipher key derivation.
-      parts.push(`var ${names.ihash}=${integrityHash};`);
-    }
-    parts.push(generateRollingCipherSource(names, integrityBinding));
-  }
+	// Rolling cipher helpers (must come before interpreter)
+	if (rollingCipher) {
+		if (integrityBinding && integrityHash !== undefined) {
+			// Embed the precomputed integrity hash as a literal.
+			// This value is folded into the rolling cipher key derivation.
+			parts.push(`var ${names.ihash}=${integrityHash};`);
+		}
+		parts.push(generateRollingCipherSource(names, integrityBinding));
+	}
 
-  // Interpreter core (sync + async) — uses direct physical dispatch
-  // (no reverse opcode map emitted; case labels use physical opcodes directly)
-  parts.push(generateInterpreterCore(debugLogging, names, seed, opcodeShuffleMap, rollingCipher, integrityBinding, {
-    dynamicOpcodes,
-    decoyOpcodes,
-    stackEncoding,
-    usedOpcodes,
-  }));
+	// Interpreter core (sync + async) — uses direct physical dispatch
+	// (no reverse opcode map emitted; case labels use physical opcodes directly)
+	parts.push(
+		generateInterpreterCore(
+			debugLogging,
+			names,
+			seed,
+			opcodeShuffleMap,
+			rollingCipher,
+			integrityBinding,
+			{
+				dynamicOpcodes,
+				decoyOpcodes,
+				stackEncoding,
+				usedOpcodes,
+			}
+		)
+	);
 
-  // Runner dispatch functions
-  parts.push(generateRunners(debugLogging, names));
+	// Runner dispatch functions
+	parts.push(generateRunners(debugLogging, names));
 
-  // String constant decoder (XOR key stream)
-  if (stringKey !== undefined) {
-    parts.push(generateStringDecoderSource(names, stringKey, rollingCipher));
-  }
+	// String constant decoder (XOR key stream)
+	if (stringKey !== undefined) {
+		parts.push(
+			generateStringDecoderSource(names, stringKey, rollingCipher)
+		);
+	}
 
-  // Loader, cache, depth tracking, watermark
-  parts.push(generateLoader(encrypt, names, stringKey !== undefined, rollingCipher));
+	// Loader, cache, depth tracking, watermark
+	parts.push(
+		generateLoader(encrypt, names, stringKey !== undefined, rollingCipher)
+	);
 
-  // Binary deserializer
-  parts.push(generateDeserializer(names));
+	// Binary deserializer
+	parts.push(generateDeserializer(names));
 
-  // Global exposure
-  parts.push(generateGlobalExposure(names));
+	// Global exposure
+	parts.push(generateGlobalExposure(names));
 
-  // IIFE close
-  parts.push(`})();`);
+	// IIFE close
+	parts.push(`})();`);
 
-  return parts.join("\n");
+	return parts.join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -145,18 +162,18 @@ export function generateVmRuntime(options: {
 
 /** Per-group configuration for shielded runtime generation. */
 export interface ShieldingGroup {
-  /** Group-specific opcode shuffle map. */
-  shuffleMap: number[];
-  /** Group-specific randomized identifier names. */
-  names: RuntimeNames;
-  /** Group-specific seed (for obfuscateLocals). */
-  seed: number;
-  /** Unit IDs belonging to this group (root + children). */
-  unitIds: string[];
-  /** Opcodes used by this group's units. */
-  usedOpcodes: Set<number>;
-  /** Per-group integrity hash (if integrityBinding is on). */
-  integrityHash?: number;
+	/** Group-specific opcode shuffle map. */
+	shuffleMap: number[];
+	/** Group-specific randomized identifier names. */
+	names: RuntimeNames;
+	/** Group-specific seed (for obfuscateLocals). */
+	seed: number;
+	/** Unit IDs belonging to this group (root + children). */
+	unitIds: string[];
+	/** Opcodes used by this group's units. */
+	usedOpcodes: Set<number>;
+	/** Per-group integrity hash (if integrityBinding is on). */
+	integrityHash?: number;
 }
 
 /**
@@ -169,104 +186,119 @@ export interface ShieldingGroup {
  * @returns A JS source string containing the shielded runtime IIFE.
  */
 export function generateShieldedVmRuntime(options: {
-  groups: ShieldingGroup[];
-  sharedNames: RuntimeNames;
-  encrypt: boolean;
-  debugProtection: boolean;
-  debugLogging?: boolean;
-  decoyOpcodes?: boolean;
-  stackEncoding?: boolean;
-  integrityBinding?: boolean;
+	groups: ShieldingGroup[];
+	sharedNames: RuntimeNames;
+	encrypt: boolean;
+	debugProtection: boolean;
+	debugLogging?: boolean;
+	decoyOpcodes?: boolean;
+	stackEncoding?: boolean;
+	integrityBinding?: boolean;
 }): string {
-  const {
-    groups,
-    sharedNames,
-    encrypt,
-    debugProtection: dbgProt,
-    debugLogging = false,
-    decoyOpcodes = false,
-    stackEncoding = false,
-    integrityBinding = false,
-  } = options;
+	const {
+		groups,
+		sharedNames,
+		encrypt,
+		debugProtection: dbgProt,
+		debugLogging = false,
+		decoyOpcodes = false,
+		stackEncoding = false,
+		integrityBinding = false,
+	} = options;
 
-  const parts: string[] = [];
+	const parts: string[] = [];
 
-  // IIFE open
-  parts.push(`(function(){`);
-  parts.push(`"use strict";`);
+	// IIFE open
+	parts.push(`(function(){`);
+	parts.push(`"use strict";`);
 
-  // Shared: encryption support
-  if (encrypt) {
-    parts.push(generateFingerprintSource(sharedNames));
-    parts.push(generateDecoderSource(sharedNames));
-  }
+	// Shared: encryption support
+	if (encrypt) {
+		parts.push(generateFingerprintSource(sharedNames));
+		parts.push(generateDecoderSource(sharedNames));
+	}
 
-  // Shared: debug protection
-  if (dbgProt) {
-    parts.push(generateDebugProtection(sharedNames));
-  }
+	// Shared: debug protection
+	if (dbgProt) {
+		parts.push(generateDebugProtection(sharedNames));
+	}
 
-  // Shared: deserializer
-  parts.push(generateDeserializer(sharedNames));
+	// Shared: deserializer
+	parts.push(generateDeserializer(sharedNames));
 
-  // Per-group micro-interpreters
-  const groupRegistrations: { unitIds: string[]; dispatchName: string }[] = [];
+	// Per-group micro-interpreters
+	const groupRegistrations: { unitIds: string[]; dispatchName: string }[] =
+		[];
 
-  for (const group of groups) {
-    const gn = group.names;
+	for (const group of groups) {
+		const gn = group.names;
 
-    // Debug logging (per-group — uses shared debug function names but group's reverse map)
-    if (debugLogging) {
-      const reverseMap = new Array<number>(OPCODE_COUNT);
-      for (let i = 0; i < group.shuffleMap.length; i++) {
-        reverseMap[group.shuffleMap[i]!] = i;
-      }
-      parts.push(generateDebugLogging(reverseMap, gn));
-    }
+		// Debug logging (per-group — uses shared debug function names but group's reverse map)
+		if (debugLogging) {
+			const reverseMap = new Array<number>(OPCODE_COUNT);
+			for (let i = 0; i < group.shuffleMap.length; i++) {
+				reverseMap[group.shuffleMap[i]!] = i;
+			}
+			parts.push(generateDebugLogging(reverseMap, gn));
+		}
 
-    // Rolling cipher (always on with vmShielding)
-    if (integrityBinding && group.integrityHash !== undefined) {
-      parts.push(`var ${gn.ihash}=${group.integrityHash};`);
-    }
-    parts.push(generateRollingCipherSource(gn, integrityBinding));
+		// Rolling cipher (always on with vmShielding)
+		if (integrityBinding && group.integrityHash !== undefined) {
+			parts.push(`var ${gn.ihash}=${group.integrityHash};`);
+		}
+		parts.push(generateRollingCipherSource(gn, integrityBinding));
 
-    // Interpreter core (per-group shuffle, per-group names, per-group opcodes)
-    parts.push(generateInterpreterCore(debugLogging, gn, group.seed, group.shuffleMap, true, integrityBinding, {
-      dynamicOpcodes: true, // always strip unused opcodes in shielding mode
-      decoyOpcodes,
-      stackEncoding,
-      usedOpcodes: group.usedOpcodes,
-    }));
+		// Interpreter core (per-group shuffle, per-group names, per-group opcodes)
+		parts.push(
+			generateInterpreterCore(
+				debugLogging,
+				gn,
+				group.seed,
+				group.shuffleMap,
+				true,
+				integrityBinding,
+				{
+					dynamicOpcodes: true, // always strip unused opcodes in shielding mode
+					decoyOpcodes,
+					stackEncoding,
+					usedOpcodes: group.usedOpcodes,
+				}
+			)
+		);
 
-    // Runners (per-group dispatch function)
-    parts.push(generateRunners(debugLogging, gn));
+		// Runners (per-group dispatch function)
+		parts.push(generateRunners(debugLogging, gn));
 
-    // String decoder (per-group, rolling cipher implicit key)
-    parts.push(generateStringDecoderSource(gn, 0, true));
+		// String decoder (per-group, rolling cipher implicit key)
+		parts.push(generateStringDecoderSource(gn, 0, true));
 
-    // Loader (per-group, skips shared var declarations)
-    parts.push(generateLoader(encrypt, gn, true, true, { skipSharedDecls: true }));
+		// Loader (per-group, skips shared var declarations)
+		parts.push(
+			generateLoader(encrypt, gn, true, true, { skipSharedDecls: true })
+		);
 
-    groupRegistrations.push({
-      unitIds: group.unitIds,
-      dispatchName: gn.vm,
-    });
-  }
+		groupRegistrations.push({
+			unitIds: group.unitIds,
+			dispatchName: gn.vm,
+		});
+	}
 
-  // Shared: watermark, depth, callStack, cache (emitted once)
-  parts.push(`var _ru4m=!0;`);
-  parts.push(`var ${sharedNames.depth}=0;`);
-  parts.push(`var ${sharedNames.callStack}=[];`);
-  parts.push(`var ${sharedNames.cache}={};`);
+	// Shared: watermark, depth, callStack, cache (emitted once)
+	parts.push(`var _ru4m=!0;`);
+	parts.push(`var ${sharedNames.depth}=0;`);
+	parts.push(`var ${sharedNames.callStack}=[];`);
+	parts.push(`var ${sharedNames.cache}={};`);
 
-  // Router: maps unit IDs to group dispatch functions
-  parts.push(generateRouter(sharedNames.router, groupRegistrations, sharedNames));
+	// Router: maps unit IDs to group dispatch functions
+	parts.push(
+		generateRouter(sharedNames.router, groupRegistrations, sharedNames)
+	);
 
-  // Global exposure: expose the router
-  parts.push(generateGlobalExposure(sharedNames, sharedNames.router));
+	// Global exposure: expose the router
+	parts.push(generateGlobalExposure(sharedNames, sharedNames.router));
 
-  // IIFE close
-  parts.push(`})();`);
+	// IIFE close
+	parts.push(`})();`);
 
-  return parts.join("\n");
+	return parts.join("\n");
 }

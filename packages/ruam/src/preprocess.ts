@@ -16,7 +16,7 @@ let hexCounter = 0;
  * @returns A unique `_0x`-prefixed identifier string.
  */
 function nextHexName(): string {
-  return "_0x" + (hexCounter++).toString(16).padStart(4, "0");
+	return "_0x" + (hexCounter++).toString(16).padStart(4, "0");
 }
 
 /**
@@ -24,7 +24,7 @@ function nextHexName(): string {
  * to ensure deterministic output.
  */
 export function resetHexCounter(): void {
-  hexCounter = 0;
+	hexCounter = 0;
 }
 
 // --- Public API ---
@@ -40,38 +40,39 @@ export function resetHexCounter(): void {
  * @returns The source with local bindings renamed.
  */
 export function preprocessIdentifiers(source: string): string {
-  const ast = parse(source, {
-    sourceType: "unambiguous",
-    plugins: [...BABEL_PARSER_PLUGINS],
-  });
+	const ast = parse(source, {
+		sourceType: "unambiguous",
+		plugins: [...BABEL_PARSER_PLUGINS],
+	});
 
-  // Collect all (scope, bindingName) pairs first, then rename.
-  // This avoids iterator invalidation from renaming during traversal.
-  const toRename: { scope: any; name: string }[] = [];
+	// Collect all (scope, bindingName) pairs first, then rename.
+	// This avoids iterator invalidation from renaming during traversal.
+	const toRename: { scope: any; name: string }[] = [];
 
-  traverse(ast, {
-    Scope(path) {
-      for (const name of Object.keys(path.scope.bindings)) {
-        if ((GLOBAL_IDENTIFIERS as ReadonlySet<string>).has(name)) continue;
-        if (name.startsWith("_0x")) continue;
-        toRename.push({ scope: path.scope, name });
-      }
-    },
-  });
+	traverse(ast, {
+		Scope(path) {
+			for (const name of Object.keys(path.scope.bindings)) {
+				if ((GLOBAL_IDENTIFIERS as ReadonlySet<string>).has(name))
+					continue;
+				if (name.startsWith("_0x")) continue;
+				toRename.push({ scope: path.scope, name });
+			}
+		},
+	});
 
-  // Use a Set to track which (scope, name) pairs we've already renamed
-  // (scope.rename handles the actual AST mutation correctly)
-  const renamed = new Set<object>();
+	// Use a Set to track which (scope, name) pairs we've already renamed
+	// (scope.rename handles the actual AST mutation correctly)
+	const renamed = new Set<object>();
 
-  for (const { scope, name } of toRename) {
-    const binding = scope.bindings[name];
-    if (!binding) continue; // may have been removed by a prior rename
-    if (renamed.has(binding)) continue;
-    renamed.add(binding);
+	for (const { scope, name } of toRename) {
+		const binding = scope.bindings[name];
+		if (!binding) continue; // may have been removed by a prior rename
+		if (renamed.has(binding)) continue;
+		renamed.add(binding);
 
-    const newName = nextHexName();
-    scope.rename(name, newName);
-  }
+		const newName = nextHexName();
+		scope.rename(name, newName);
+	}
 
-  return generate(ast).code;
+	return generate(ast).code;
 }

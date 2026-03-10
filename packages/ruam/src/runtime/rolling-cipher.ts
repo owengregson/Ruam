@@ -10,12 +10,12 @@
 
 import type { RuntimeNames } from "./names.js";
 import {
-  FNV_OFFSET_BASIS,
-  FNV_PRIME,
-  GOLDEN_RATIO_PRIME,
-  MIX_PRIME1,
-  MIX_PRIME2,
-  AVALANCHE_CONSTANT,
+	FNV_OFFSET_BASIS,
+	FNV_PRIME,
+	GOLDEN_RATIO_PRIME,
+	MIX_PRIME1,
+	MIX_PRIME2,
+	AVALANCHE_CONSTANT,
 } from "../constants.js";
 
 // ---------------------------------------------------------------------------
@@ -28,31 +28,31 @@ import {
  * because the metadata is available in both contexts.
  */
 export function deriveImplicitKey(
-  instrCount: number,
-  registerCount: number,
-  paramCount: number,
-  constantCount: number,
+	instrCount: number,
+	registerCount: number,
+	paramCount: number,
+	constantCount: number
 ): number {
-  let h = FNV_OFFSET_BASIS;
-  h = Math.imul(h ^ instrCount, FNV_PRIME);
-  h = Math.imul(h ^ registerCount, FNV_PRIME);
-  h = Math.imul(h ^ paramCount, FNV_PRIME);
-  h = Math.imul(h ^ constantCount, FNV_PRIME);
-  h ^= h >>> 16;
-  h = Math.imul(h, AVALANCHE_CONSTANT);
-  h ^= h >>> 13;
-  return h >>> 0;
+	let h = FNV_OFFSET_BASIS;
+	h = Math.imul(h ^ instrCount, FNV_PRIME);
+	h = Math.imul(h ^ registerCount, FNV_PRIME);
+	h = Math.imul(h ^ paramCount, FNV_PRIME);
+	h = Math.imul(h ^ constantCount, FNV_PRIME);
+	h ^= h >>> 16;
+	h = Math.imul(h, AVALANCHE_CONSTANT);
+	h ^= h >>> 13;
+	return h >>> 0;
 }
 
 /**
  * Mix function: advance the rolling state using the decrypted values.
  */
 function mixState(state: number, opcode: number, operand: number): number {
-  let h = state;
-  h = (Math.imul(h ^ opcode, MIX_PRIME1)) >>> 0;
-  h = (Math.imul(h ^ operand, MIX_PRIME2)) >>> 0;
-  h ^= h >>> 16;
-  return h >>> 0;
+	let h = state;
+	h = Math.imul(h ^ opcode, MIX_PRIME1) >>> 0;
+	h = Math.imul(h ^ operand, MIX_PRIME2) >>> 0;
+	h ^= h >>> 16;
+	return h >>> 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -72,21 +72,22 @@ function mixState(state: number, opcode: number, operand: number): number {
  * @param integrityHash  Optional integrity hash to fold into the key.
  */
 export function rollingEncrypt(
-  instrs: number[],
-  masterKey: number,
-  integrityHash?: number,
+	instrs: number[],
+	masterKey: number,
+	integrityHash?: number
 ): void {
-  const baseKey = integrityHash !== undefined
-    ? (masterKey ^ integrityHash) >>> 0
-    : masterKey;
+	const baseKey =
+		integrityHash !== undefined
+			? (masterKey ^ integrityHash) >>> 0
+			: masterKey;
 
-  for (let i = 0; i < instrs.length; i += 2) {
-    const idx = i >>> 1;
-    // Position-dependent key stream: mix base key with instruction index
-    const keyStream = mixState(baseKey, idx, idx ^ GOLDEN_RATIO_PRIME);
-    instrs[i] = (instrs[i]! ^ (keyStream & 0xFFFF)) & 0xFFFF;
-    instrs[i + 1] = (instrs[i + 1]! ^ keyStream) | 0;
-  }
+	for (let i = 0; i < instrs.length; i += 2) {
+		const idx = i >>> 1;
+		// Position-dependent key stream: mix base key with instruction index
+		const keyStream = mixState(baseKey, idx, idx ^ GOLDEN_RATIO_PRIME);
+		instrs[i] = (instrs[i]! ^ (keyStream & 0xffff)) & 0xffff;
+		instrs[i + 1] = (instrs[i + 1]! ^ keyStream) | 0;
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -103,17 +104,14 @@ export function rollingEncrypt(
  * These are called inside the interpreter loop to decrypt each instruction.
  */
 export function generateRollingCipherSource(
-  names: RuntimeNames,
-  integrityBinding: boolean,
+	names: RuntimeNames,
+	integrityBinding: boolean
 ): string {
-  // The derive function reads the same structural fields used at build time
-  const ihashXor = integrityBinding
-    ? `k=(k^${names.ihash})>>>0;`
-    : '';
+	// The derive function reads the same structural fields used at build time
+	const ihashXor = integrityBinding ? `k=(k^${names.ihash})>>>0;` : "";
 
-  return `
+	return `
 function ${names.rcDeriveKey}(u){var h=0x811C9DC5;h=Math.imul(h^(u.i.length>>>1),0x01000193);h=Math.imul(h^u.r,0x01000193);h=Math.imul(h^u.p,0x01000193);h=Math.imul(h^u.c.length,0x01000193);h^=h>>>16;h=Math.imul(h,0x45D9F3B);h^=h>>>13;var k=h>>>0;${ihashXor}return k;}
 function ${names.rcMix}(s,a,b){var h=s;h=Math.imul(h^a,0x85EBCA6B)>>>0;h=Math.imul(h^b,0xC2B2AE35)>>>0;h^=h>>>16;return h>>>0;}
 `;
 }
-

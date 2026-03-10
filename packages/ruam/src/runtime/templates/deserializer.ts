@@ -10,7 +10,7 @@
 import type { RuntimeNames } from "../names.js";
 
 export function generateDeserializer(names: RuntimeNames): string {
-  return `
+	return `
 function ${names.deser}(bytes){
   var view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
   var offset=0;

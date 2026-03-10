@@ -9,20 +9,17 @@
 
 import type { RuntimeNames } from "../names.js";
 
-export function generateRunners(
-  debug: boolean,
-  names: RuntimeNames,
-): string {
-  const U = names.unit;
-  const A = names.args;
-  const OS = names.outer;
-  const TV = names.tVal;
-  const NT = names.nTgt;
-  const dbgEntry = debug
-    ? `${names.dbg}('VM_DISPATCH','id='+id,'async='+!!${U}.s,'params='+${U}.p);${U}._dbgId=id;`
-    : '';
-  const HO = names.ho;
-  return `
+export function generateRunners(debug: boolean, names: RuntimeNames): string {
+	const U = names.unit;
+	const A = names.args;
+	const OS = names.outer;
+	const TV = names.tVal;
+	const NT = names.nTgt;
+	const dbgEntry = debug
+		? `${names.dbg}('VM_DISPATCH','id='+id,'async='+!!${U}.s,'params='+${U}.p);${U}._dbgId=id;`
+		: "";
+	const HO = names.ho;
+	return `
 function ${names.vm}(id,${A},${OS},${TV},${NT},${HO}){
   var ${U}=${names.load}(id);
   ${dbgEntry}
@@ -51,24 +48,24 @@ ${names.vm}.call=function(${TV},id,${A},${OS},${HO}){
  * @param names - Shared RuntimeNames (for parameter names).
  */
 export function generateRouter(
-  routerName: string,
-  groupRegistrations: { unitIds: string[]; dispatchName: string }[],
-  names: RuntimeNames,
+	routerName: string,
+	groupRegistrations: { unitIds: string[]; dispatchName: string }[],
+	names: RuntimeNames
 ): string {
-  const A = names.args;
-  const OS = names.outer;
-  const TV = names.tVal;
-  const NT = names.nTgt;
-  const HO = names.ho;
+	const A = names.args;
+	const OS = names.outer;
+	const TV = names.tVal;
+	const NT = names.nTgt;
+	const HO = names.ho;
 
-  const entries: string[] = [];
-  for (const { unitIds, dispatchName } of groupRegistrations) {
-    for (const id of unitIds) {
-      entries.push(`_rm["${id}"]=${dispatchName};`);
-    }
-  }
+	const entries: string[] = [];
+	for (const { unitIds, dispatchName } of groupRegistrations) {
+		for (const id of unitIds) {
+			entries.push(`_rm["${id}"]=${dispatchName};`);
+		}
+	}
 
-  return `
+	return `
 var _rm={};
 ${entries.join("")}
 function ${routerName}(id,${A},${OS},${TV},${NT},${HO}){

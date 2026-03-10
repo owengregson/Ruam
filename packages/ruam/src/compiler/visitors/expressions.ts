@@ -21,51 +21,65 @@ import type { CompileContext } from "../index.js";
 // ---------------------------------------------------------------------------
 
 const BINARY_OP_MAP: Record<string, Op> = {
-  "+": Op.ADD, "-": Op.SUB, "*": Op.MUL, "/": Op.DIV,
-  "%": Op.MOD, "**": Op.POW,
-  "&": Op.BIT_AND, "|": Op.BIT_OR, "^": Op.BIT_XOR,
-  "<<": Op.SHL, ">>": Op.SHR, ">>>": Op.USHR,
-  "==": Op.EQ, "!=": Op.NEQ, "===": Op.SEQ, "!==": Op.SNEQ,
-  "<": Op.LT, "<=": Op.LTE, ">": Op.GT, ">=": Op.GTE,
+	"+": Op.ADD,
+	"-": Op.SUB,
+	"*": Op.MUL,
+	"/": Op.DIV,
+	"%": Op.MOD,
+	"**": Op.POW,
+	"&": Op.BIT_AND,
+	"|": Op.BIT_OR,
+	"^": Op.BIT_XOR,
+	"<<": Op.SHL,
+	">>": Op.SHR,
+	">>>": Op.USHR,
+	"==": Op.EQ,
+	"!=": Op.NEQ,
+	"===": Op.SEQ,
+	"!==": Op.SNEQ,
+	"<": Op.LT,
+	"<=": Op.LTE,
+	">": Op.GT,
+	">=": Op.GTE,
 };
 
 const UNARY_OP_MAP: Record<string, Op> = {
-  "-": Op.NEG,
-  "+": Op.UNARY_PLUS,
-  "~": Op.BIT_NOT,
-  "!": Op.NOT,
+	"-": Op.NEG,
+	"+": Op.UNARY_PLUS,
+	"~": Op.BIT_NOT,
+	"!": Op.NOT,
 };
 
 /** Mapping from compound assignment base operator to register-based fused opcode. */
 const COMPOUND_REG_OP_MAP: Record<string, Op> = {
-  "+": Op.ADD_ASSIGN_REG,
-  "-": Op.SUB_ASSIGN_REG,
-  "*": Op.MUL_ASSIGN_REG,
-  "/": Op.DIV_ASSIGN_REG,
-  "%": Op.MOD_ASSIGN_REG,
+	"+": Op.ADD_ASSIGN_REG,
+	"-": Op.SUB_ASSIGN_REG,
+	"*": Op.MUL_ASSIGN_REG,
+	"/": Op.DIV_ASSIGN_REG,
+	"%": Op.MOD_ASSIGN_REG,
 };
 
 /** Mapping from compound assignment base operator to indexed-slot fused opcode. */
 const COMPOUND_SLOT_OP_MAP: Record<string, Op> = {
-  "+": Op.ADD_ASSIGN_SLOT,
-  "-": Op.SUB_ASSIGN_SLOT,
-  "*": Op.MUL_ASSIGN_SLOT,
+	"+": Op.ADD_ASSIGN_SLOT,
+	"-": Op.SUB_ASSIGN_SLOT,
+	"*": Op.MUL_ASSIGN_SLOT,
 };
 
 /** Mapping from compound assignment base operator to its fused SCOPED opcode. */
 const COMPOUND_SCOPED_OP_MAP: Record<string, Op> = {
-  "+": Op.ADD_ASSIGN_SCOPED,
-  "-": Op.SUB_ASSIGN_SCOPED,
-  "*": Op.MUL_ASSIGN_SCOPED,
-  "/": Op.DIV_ASSIGN_SCOPED,
-  "%": Op.MOD_ASSIGN_SCOPED,
-  "**": Op.POW_ASSIGN_SCOPED,
-  "&": Op.BIT_AND_ASSIGN_SCOPED,
-  "|": Op.BIT_OR_ASSIGN_SCOPED,
-  "^": Op.BIT_XOR_ASSIGN_SCOPED,
-  "<<": Op.SHL_ASSIGN_SCOPED,
-  ">>": Op.SHR_ASSIGN_SCOPED,
-  ">>>": Op.USHR_ASSIGN_SCOPED,
+	"+": Op.ADD_ASSIGN_SCOPED,
+	"-": Op.SUB_ASSIGN_SCOPED,
+	"*": Op.MUL_ASSIGN_SCOPED,
+	"/": Op.DIV_ASSIGN_SCOPED,
+	"%": Op.MOD_ASSIGN_SCOPED,
+	"**": Op.POW_ASSIGN_SCOPED,
+	"&": Op.BIT_AND_ASSIGN_SCOPED,
+	"|": Op.BIT_OR_ASSIGN_SCOPED,
+	"^": Op.BIT_XOR_ASSIGN_SCOPED,
+	"<<": Op.SHL_ASSIGN_SCOPED,
+	">>": Op.SHR_ASSIGN_SCOPED,
+	">>>": Op.USHR_ASSIGN_SCOPED,
 };
 
 // ---------------------------------------------------------------------------
@@ -73,1225 +87,1672 @@ const COMPOUND_SCOPED_OP_MAP: Record<string, Op> = {
 // ---------------------------------------------------------------------------
 
 export function compileExpression(
-  path: NodePath<t.Expression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.Expression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const node = path.node;
+	const node = path.node;
 
-  switch (node.type) {
-    case "NumericLiteral": {
-      const idx = emitter.addNumberConstant(node.value);
-      emitter.emit(Op.PUSH_CONST, idx);
-      break;
-    }
+	switch (node.type) {
+		case "NumericLiteral": {
+			const idx = emitter.addNumberConstant(node.value);
+			emitter.emit(Op.PUSH_CONST, idx);
+			break;
+		}
 
-    case "StringLiteral": {
-      if (node.value === "") { emitter.emit(Op.PUSH_EMPTY_STRING, 0); break; }
-      const idx = emitter.addStringConstant(node.value);
-      emitter.emit(Op.PUSH_CONST, idx);
-      break;
-    }
+		case "StringLiteral": {
+			if (node.value === "") {
+				emitter.emit(Op.PUSH_EMPTY_STRING, 0);
+				break;
+			}
+			const idx = emitter.addStringConstant(node.value);
+			emitter.emit(Op.PUSH_CONST, idx);
+			break;
+		}
 
-    case "BooleanLiteral": {
-      emitter.emit(node.value ? Op.PUSH_TRUE : Op.PUSH_FALSE, 0);
-      break;
-    }
+		case "BooleanLiteral": {
+			emitter.emit(node.value ? Op.PUSH_TRUE : Op.PUSH_FALSE, 0);
+			break;
+		}
 
-    case "NullLiteral": {
-      emitter.emit(Op.PUSH_NULL, 0);
-      break;
-    }
+		case "NullLiteral": {
+			emitter.emit(Op.PUSH_NULL, 0);
+			break;
+		}
 
-    case "BigIntLiteral": {
-      const idx = emitter.addBigIntConstant(node.value);
-      emitter.emit(Op.PUSH_CONST, idx);
-      break;
-    }
+		case "BigIntLiteral": {
+			const idx = emitter.addBigIntConstant(node.value);
+			emitter.emit(Op.PUSH_CONST, idx);
+			break;
+		}
 
-    case "RegExpLiteral": {
-      const idx = emitter.addRegexConstant(node.pattern, node.flags);
-      emitter.emit(Op.PUSH_CONST, idx);
-      break;
-    }
+		case "RegExpLiteral": {
+			const idx = emitter.addRegexConstant(node.pattern, node.flags);
+			emitter.emit(Op.PUSH_CONST, idx);
+			break;
+		}
 
-    case "TemplateLiteral": {
-      compileTemplateLiteral(path as NodePath<t.TemplateLiteral>, emitter, scope, ctx);
-      break;
-    }
+		case "TemplateLiteral": {
+			compileTemplateLiteral(
+				path as NodePath<t.TemplateLiteral>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "TaggedTemplateExpression": {
-      compileTaggedTemplate(path as NodePath<t.TaggedTemplateExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "TaggedTemplateExpression": {
+			compileTaggedTemplate(
+				path as NodePath<t.TaggedTemplateExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "Identifier": {
-      compileIdentifier(node, emitter, scope, ctx);
-      break;
-    }
+		case "Identifier": {
+			compileIdentifier(node, emitter, scope, ctx);
+			break;
+		}
 
-    case "ThisExpression": {
-      emitter.emit(Op.PUSH_THIS, 0);
-      break;
-    }
+		case "ThisExpression": {
+			emitter.emit(Op.PUSH_THIS, 0);
+			break;
+		}
 
-    case "BinaryExpression": {
-      compileBinaryExpression(path as NodePath<t.BinaryExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "BinaryExpression": {
+			compileBinaryExpression(
+				path as NodePath<t.BinaryExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "LogicalExpression": {
-      compileLogicalExpression(path as NodePath<t.LogicalExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "LogicalExpression": {
+			compileLogicalExpression(
+				path as NodePath<t.LogicalExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "UnaryExpression": {
-      compileUnaryExpression(path as NodePath<t.UnaryExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "UnaryExpression": {
+			compileUnaryExpression(
+				path as NodePath<t.UnaryExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "UpdateExpression": {
-      compileUpdateExpression(path as NodePath<t.UpdateExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "UpdateExpression": {
+			compileUpdateExpression(
+				path as NodePath<t.UpdateExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "AssignmentExpression": {
-      compileAssignmentExpression(path as NodePath<t.AssignmentExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "AssignmentExpression": {
+			compileAssignmentExpression(
+				path as NodePath<t.AssignmentExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "CallExpression": {
-      compileCallExpression(path as NodePath<t.CallExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "CallExpression": {
+			compileCallExpression(
+				path as NodePath<t.CallExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "NewExpression": {
-      compileNewExpression(path as NodePath<t.NewExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "NewExpression": {
+			compileNewExpression(
+				path as NodePath<t.NewExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "MemberExpression": {
-      compileMemberExpression(path as NodePath<t.MemberExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "MemberExpression": {
+			compileMemberExpression(
+				path as NodePath<t.MemberExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "OptionalMemberExpression": {
-      compileOptionalMemberExpression(path as NodePath<t.OptionalMemberExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "OptionalMemberExpression": {
+			compileOptionalMemberExpression(
+				path as NodePath<t.OptionalMemberExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "ConditionalExpression": {
-      compileConditionalExpression(path as NodePath<t.ConditionalExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "ConditionalExpression": {
+			compileConditionalExpression(
+				path as NodePath<t.ConditionalExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "SequenceExpression": {
-      const exprs = (path as NodePath<t.SequenceExpression>).get("expressions");
-      for (let i = 0; i < exprs.length; i++) {
-        compileExpression(exprs[i]!, emitter, scope, ctx);
-        if (i < exprs.length - 1) emitter.emit(Op.POP, 0);
-      }
-      break;
-    }
+		case "SequenceExpression": {
+			const exprs = (path as NodePath<t.SequenceExpression>).get(
+				"expressions"
+			);
+			for (let i = 0; i < exprs.length; i++) {
+				compileExpression(exprs[i]!, emitter, scope, ctx);
+				if (i < exprs.length - 1) emitter.emit(Op.POP, 0);
+			}
+			break;
+		}
 
-    case "ObjectExpression": {
-      compileObjectExpression(path as NodePath<t.ObjectExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "ObjectExpression": {
+			compileObjectExpression(
+				path as NodePath<t.ObjectExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "ArrayExpression": {
-      compileArrayExpression(path as NodePath<t.ArrayExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "ArrayExpression": {
+			compileArrayExpression(
+				path as NodePath<t.ArrayExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "ArrowFunctionExpression":
-    case "FunctionExpression": {
-      ctx.compileNestedFunction(path as NodePath<t.Function>, emitter, scope);
-      break;
-    }
+		case "ArrowFunctionExpression":
+		case "FunctionExpression": {
+			ctx.compileNestedFunction(
+				path as NodePath<t.Function>,
+				emitter,
+				scope
+			);
+			break;
+		}
 
-    case "ClassExpression": {
-      ctx.compileClassExpression(path as NodePath<t.ClassExpression>, emitter, scope);
-      break;
-    }
+		case "ClassExpression": {
+			ctx.compileClassExpression(
+				path as NodePath<t.ClassExpression>,
+				emitter,
+				scope
+			);
+			break;
+		}
 
-    case "SpreadElement" as any: {
-      compileExpression((path as unknown as NodePath<t.SpreadElement>).get("argument"), emitter, scope, ctx);
-      emitter.emit(Op.SPREAD_ARRAY, 0);
-      break;
-    }
+		case "SpreadElement" as any: {
+			compileExpression(
+				(path as unknown as NodePath<t.SpreadElement>).get("argument"),
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.SPREAD_ARRAY, 0);
+			break;
+		}
 
-    case "YieldExpression": {
-      const yieldPath = path as NodePath<t.YieldExpression>;
-      if (yieldPath.node.argument) {
-        compileExpression(yieldPath.get("argument") as NodePath<t.Expression>, emitter, scope, ctx);
-      } else {
-        emitter.emit(Op.PUSH_UNDEFINED, 0);
-      }
-      emitter.emit(yieldPath.node.delegate ? Op.YIELD_DELEGATE : Op.YIELD, 0);
-      break;
-    }
+		case "YieldExpression": {
+			const yieldPath = path as NodePath<t.YieldExpression>;
+			if (yieldPath.node.argument) {
+				compileExpression(
+					yieldPath.get("argument") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+			} else {
+				emitter.emit(Op.PUSH_UNDEFINED, 0);
+			}
+			emitter.emit(
+				yieldPath.node.delegate ? Op.YIELD_DELEGATE : Op.YIELD,
+				0
+			);
+			break;
+		}
 
-    case "AwaitExpression": {
-      compileExpression((path as NodePath<t.AwaitExpression>).get("argument"), emitter, scope, ctx);
-      emitter.emit(Op.AWAIT, 0);
-      break;
-    }
+		case "AwaitExpression": {
+			compileExpression(
+				(path as NodePath<t.AwaitExpression>).get("argument"),
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.AWAIT, 0);
+			break;
+		}
 
-    case "MetaProperty": {
-      if (node.meta.name === "new" && node.property.name === "target") {
-        emitter.emit(Op.PUSH_NEW_TARGET, 0);
-      }
-      break;
-    }
+		case "MetaProperty": {
+			if (node.meta.name === "new" && node.property.name === "target") {
+				emitter.emit(Op.PUSH_NEW_TARGET, 0);
+			}
+			break;
+		}
 
-    case "ParenthesizedExpression": {
-      compileExpression((path as NodePath<t.ParenthesizedExpression>).get("expression"), emitter, scope, ctx);
-      break;
-    }
+		case "ParenthesizedExpression": {
+			compileExpression(
+				(path as NodePath<t.ParenthesizedExpression>).get("expression"),
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "TSAsExpression":
-    case "TSNonNullExpression":
-    case "TSSatisfiesExpression": {
-      compileExpression((path as any).get("expression") as NodePath<t.Expression>, emitter, scope, ctx);
-      break;
-    }
+		case "TSAsExpression":
+		case "TSNonNullExpression":
+		case "TSSatisfiesExpression": {
+			compileExpression(
+				(path as any).get("expression") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    case "OptionalCallExpression": {
-      compileOptionalCallExpression(path as NodePath<t.OptionalCallExpression>, emitter, scope, ctx);
-      break;
-    }
+		case "OptionalCallExpression": {
+			compileOptionalCallExpression(
+				path as NodePath<t.OptionalCallExpression>,
+				emitter,
+				scope,
+				ctx
+			);
+			break;
+		}
 
-    default:
-      throw new Error(`Unsupported expression type: ${node.type}`);
-  }
+		default:
+			throw new Error(`Unsupported expression type: ${node.type}`);
+	}
 }
 
-function compileIdentifier(node: t.Identifier, emitter: Emitter, _scope: ScopeAnalyzer, ctx?: CompileContext): void {
-  if (node.name === "undefined") {
-    emitter.emit(Op.PUSH_UNDEFINED, 0);
-    return;
-  }
-  if (node.name === "arguments") {
-    emitter.emit(Op.PUSH_ARGUMENTS, 0);
-    return;
-  }
+function compileIdentifier(
+	node: t.Identifier,
+	emitter: Emitter,
+	_scope: ScopeAnalyzer,
+	ctx?: CompileContext
+): void {
+	if (node.name === "undefined") {
+		emitter.emit(Op.PUSH_UNDEFINED, 0);
+		return;
+	}
+	if (node.name === "arguments") {
+		emitter.emit(Op.PUSH_ARGUMENTS, 0);
+		return;
+	}
 
-  // Tier 1: Register promotion — use LOAD_REG for non-captured locals
-  if (ctx) {
-    const reg = ctx.registerMap.get(node.name);
-    if (reg !== undefined) {
-      emitter.emit(Op.LOAD_REG, reg);
-      return;
-    }
-    // Tier 4: Indexed scope slot for captured locals
-    const slot = ctx.slotMap.get(node.name);
-    if (slot !== undefined) {
-      emitter.emit(Op.LOAD_SLOT, slot);
-      return;
-    }
-  }
+	// Tier 1: Register promotion — use LOAD_REG for non-captured locals
+	if (ctx) {
+		const reg = ctx.registerMap.get(node.name);
+		if (reg !== undefined) {
+			emitter.emit(Op.LOAD_REG, reg);
+			return;
+		}
+		// Tier 4: Indexed scope slot for captured locals
+		const slot = ctx.slotMap.get(node.name);
+		if (slot !== undefined) {
+			emitter.emit(Op.LOAD_SLOT, slot);
+			return;
+		}
+	}
 
-  const nameIdx = emitter.addStringConstant(node.name);
-  emitter.emit(Op.LOAD_SCOPED, nameIdx);
+	const nameIdx = emitter.addStringConstant(node.name);
+	emitter.emit(Op.LOAD_SCOPED, nameIdx);
 }
 
 function compileBinaryExpression(
-  path: NodePath<t.BinaryExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.BinaryExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const node = path.node;
+	const node = path.node;
 
-  if (node.operator === "in") {
-    compileExpression(path.get("left") as NodePath<t.Expression>, emitter, scope, ctx);
-    compileExpression(path.get("right"), emitter, scope, ctx);
-    emitter.emit(Op.IN_OP, 0);
-    return;
-  }
+	if (node.operator === "in") {
+		compileExpression(
+			path.get("left") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		compileExpression(path.get("right"), emitter, scope, ctx);
+		emitter.emit(Op.IN_OP, 0);
+		return;
+	}
 
-  if (node.operator === "instanceof") {
-    compileExpression(path.get("left") as NodePath<t.Expression>, emitter, scope, ctx);
-    compileExpression(path.get("right"), emitter, scope, ctx);
-    emitter.emit(Op.INSTANCEOF, 0);
-    return;
-  }
+	if (node.operator === "instanceof") {
+		compileExpression(
+			path.get("left") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		compileExpression(path.get("right"), emitter, scope, ctx);
+		emitter.emit(Op.INSTANCEOF, 0);
+		return;
+	}
 
-  compileExpression(path.get("left") as NodePath<t.Expression>, emitter, scope, ctx);
-  compileExpression(path.get("right"), emitter, scope, ctx);
+	compileExpression(
+		path.get("left") as NodePath<t.Expression>,
+		emitter,
+		scope,
+		ctx
+	);
+	compileExpression(path.get("right"), emitter, scope, ctx);
 
-  const op = BINARY_OP_MAP[node.operator];
-  if (op === undefined) throw new Error(`Unsupported binary operator: ${node.operator}`);
-  emitter.emit(op, 0);
+	const op = BINARY_OP_MAP[node.operator];
+	if (op === undefined)
+		throw new Error(`Unsupported binary operator: ${node.operator}`);
+	emitter.emit(op, 0);
 }
 
 function compileLogicalExpression(
-  path: NodePath<t.LogicalExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.LogicalExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const node = path.node;
+	const node = path.node;
 
-  compileExpression(path.get("left"), emitter, scope, ctx);
+	compileExpression(path.get("left"), emitter, scope, ctx);
 
-  if (node.operator === "&&") {
-    emitter.emit(Op.DUP, 0);
-    const jumpIdx = emitter.emit(Op.JMP_FALSE, 0);
-    emitter.emit(Op.POP, 0);
-    compileExpression(path.get("right"), emitter, scope, ctx);
-    emitter.patchJump(jumpIdx, emitter.ip);
-  } else if (node.operator === "||") {
-    emitter.emit(Op.DUP, 0);
-    const jumpIdx = emitter.emit(Op.JMP_TRUE, 0);
-    emitter.emit(Op.POP, 0);
-    compileExpression(path.get("right"), emitter, scope, ctx);
-    emitter.patchJump(jumpIdx, emitter.ip);
-  } else if (node.operator === "??") {
-    emitter.emit(Op.DUP, 0);
-    const jumpIdx = emitter.emit(Op.JMP_NULLISH, 0);
-    const skipIdx = emitter.emit(Op.JMP, 0);
-    emitter.patchJump(jumpIdx, emitter.ip);
-    emitter.emit(Op.POP, 0);
-    compileExpression(path.get("right"), emitter, scope, ctx);
-    emitter.patchJump(skipIdx, emitter.ip);
-  }
+	if (node.operator === "&&") {
+		emitter.emit(Op.DUP, 0);
+		const jumpIdx = emitter.emit(Op.JMP_FALSE, 0);
+		emitter.emit(Op.POP, 0);
+		compileExpression(path.get("right"), emitter, scope, ctx);
+		emitter.patchJump(jumpIdx, emitter.ip);
+	} else if (node.operator === "||") {
+		emitter.emit(Op.DUP, 0);
+		const jumpIdx = emitter.emit(Op.JMP_TRUE, 0);
+		emitter.emit(Op.POP, 0);
+		compileExpression(path.get("right"), emitter, scope, ctx);
+		emitter.patchJump(jumpIdx, emitter.ip);
+	} else if (node.operator === "??") {
+		emitter.emit(Op.DUP, 0);
+		const jumpIdx = emitter.emit(Op.JMP_NULLISH, 0);
+		const skipIdx = emitter.emit(Op.JMP, 0);
+		emitter.patchJump(jumpIdx, emitter.ip);
+		emitter.emit(Op.POP, 0);
+		compileExpression(path.get("right"), emitter, scope, ctx);
+		emitter.patchJump(skipIdx, emitter.ip);
+	}
 }
 
 function compileUnaryExpression(
-  path: NodePath<t.UnaryExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.UnaryExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const node = path.node;
+	const node = path.node;
 
-  if (node.operator === "typeof") {
-    const arg = path.get("argument");
-    if (arg.isIdentifier()) {
-      const resolved = scope.resolve(arg.node.name);
-      if (!resolved || resolved.isOuter) {
-        const nameIdx = emitter.addStringConstant(arg.node.name);
-        emitter.emit(Op.TYPEOF_GLOBAL, nameIdx);
-        return;
-      }
-    }
-    compileExpression(arg, emitter, scope, ctx);
-    emitter.emit(Op.TYPEOF, 0);
-    return;
-  }
+	if (node.operator === "typeof") {
+		const arg = path.get("argument");
+		if (arg.isIdentifier()) {
+			const resolved = scope.resolve(arg.node.name);
+			if (!resolved || resolved.isOuter) {
+				const nameIdx = emitter.addStringConstant(arg.node.name);
+				emitter.emit(Op.TYPEOF_GLOBAL, nameIdx);
+				return;
+			}
+		}
+		compileExpression(arg, emitter, scope, ctx);
+		emitter.emit(Op.TYPEOF, 0);
+		return;
+	}
 
-  if (node.operator === "delete") {
-    const arg = path.get("argument");
-    if (arg.isMemberExpression()) {
-      const obj = arg.get("object");
-      compileExpression(obj, emitter, scope, ctx);
-      if (arg.node.computed) {
-        compileExpression(arg.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-        emitter.emit(Op.DELETE_PROP_DYNAMIC, 0);
-      } else {
-        const nameIdx = emitter.addStringConstant((arg.node.property as t.Identifier).name);
-        emitter.emit(Op.DELETE_PROP_STATIC, nameIdx);
-      }
-    } else {
-      emitter.emit(Op.PUSH_CONST, emitter.addBooleanConstant(true));
-    }
-    return;
-  }
+	if (node.operator === "delete") {
+		const arg = path.get("argument");
+		if (arg.isMemberExpression()) {
+			const obj = arg.get("object");
+			compileExpression(obj, emitter, scope, ctx);
+			if (arg.node.computed) {
+				compileExpression(
+					arg.get("property") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				emitter.emit(Op.DELETE_PROP_DYNAMIC, 0);
+			} else {
+				const nameIdx = emitter.addStringConstant(
+					(arg.node.property as t.Identifier).name
+				);
+				emitter.emit(Op.DELETE_PROP_STATIC, nameIdx);
+			}
+		} else {
+			emitter.emit(Op.PUSH_CONST, emitter.addBooleanConstant(true));
+		}
+		return;
+	}
 
-  if (node.operator === "void") {
-    compileExpression(path.get("argument"), emitter, scope, ctx);
-    emitter.emit(Op.VOID, 0);
-    return;
-  }
+	if (node.operator === "void") {
+		compileExpression(path.get("argument"), emitter, scope, ctx);
+		emitter.emit(Op.VOID, 0);
+		return;
+	}
 
-  compileExpression(path.get("argument"), emitter, scope, ctx);
+	compileExpression(path.get("argument"), emitter, scope, ctx);
 
-  const op = UNARY_OP_MAP[node.operator];
-  if (op === undefined) throw new Error(`Unsupported unary operator: ${node.operator}`);
-  emitter.emit(op, 0);
+	const op = UNARY_OP_MAP[node.operator];
+	if (op === undefined)
+		throw new Error(`Unsupported unary operator: ${node.operator}`);
+	emitter.emit(op, 0);
 }
 
 function compileUpdateExpression(
-  path: NodePath<t.UpdateExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.UpdateExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const node = path.node;
-  const arg = path.get("argument");
+	const node = path.node;
+	const arg = path.get("argument");
 
-  if (arg.isIdentifier()) {
-    // Tier 1: Register promotion for update expressions
-    const reg = ctx.registerMap.get(arg.node.name);
-    if (reg !== undefined) {
-      if (node.prefix && node.operator === "++") {
-        emitter.emit(Op.INC_REG, reg);
-        emitter.emit(Op.LOAD_REG, reg);
-      } else if (node.prefix && node.operator === "--") {
-        emitter.emit(Op.DEC_REG, reg);
-        emitter.emit(Op.LOAD_REG, reg);
-      } else if (!node.prefix && node.operator === "++") {
-        emitter.emit(Op.POST_INC_REG, reg);
-      } else {
-        emitter.emit(Op.POST_DEC_REG, reg);
-      }
-    } else {
-      // Tier 4: Indexed scope slot
-      const slot = ctx.slotMap.get(arg.node.name);
-      if (slot !== undefined) {
-        if (node.prefix && node.operator === "++") {
-          emitter.emit(Op.INC_SLOT, slot);
-        } else if (node.prefix && node.operator === "--") {
-          emitter.emit(Op.DEC_SLOT, slot);
-        } else if (!node.prefix && node.operator === "++") {
-          emitter.emit(Op.POST_INC_SLOT, slot);
-        } else {
-          emitter.emit(Op.POST_DEC_SLOT, slot);
-        }
-      } else {
-        // Fallback: scope chain
-        const nameIdx = emitter.addStringConstant(arg.node.name);
-        if (node.prefix && node.operator === "++") {
-          emitter.emit(Op.INC_SCOPED, nameIdx);
-        } else if (node.prefix && node.operator === "--") {
-          emitter.emit(Op.DEC_SCOPED, nameIdx);
-        } else if (!node.prefix && node.operator === "++") {
-          emitter.emit(Op.POST_INC_SCOPED, nameIdx);
-        } else {
-          emitter.emit(Op.POST_DEC_SCOPED, nameIdx);
-        }
-      }
-    }
-  } else if (arg.isMemberExpression()) {
-    compileMemberExpressionForUpdate(arg, emitter, scope, ctx, node.operator, node.prefix);
-  }
+	if (arg.isIdentifier()) {
+		// Tier 1: Register promotion for update expressions
+		const reg = ctx.registerMap.get(arg.node.name);
+		if (reg !== undefined) {
+			if (node.prefix && node.operator === "++") {
+				emitter.emit(Op.INC_REG, reg);
+				emitter.emit(Op.LOAD_REG, reg);
+			} else if (node.prefix && node.operator === "--") {
+				emitter.emit(Op.DEC_REG, reg);
+				emitter.emit(Op.LOAD_REG, reg);
+			} else if (!node.prefix && node.operator === "++") {
+				emitter.emit(Op.POST_INC_REG, reg);
+			} else {
+				emitter.emit(Op.POST_DEC_REG, reg);
+			}
+		} else {
+			// Tier 4: Indexed scope slot
+			const slot = ctx.slotMap.get(arg.node.name);
+			if (slot !== undefined) {
+				if (node.prefix && node.operator === "++") {
+					emitter.emit(Op.INC_SLOT, slot);
+				} else if (node.prefix && node.operator === "--") {
+					emitter.emit(Op.DEC_SLOT, slot);
+				} else if (!node.prefix && node.operator === "++") {
+					emitter.emit(Op.POST_INC_SLOT, slot);
+				} else {
+					emitter.emit(Op.POST_DEC_SLOT, slot);
+				}
+			} else {
+				// Fallback: scope chain
+				const nameIdx = emitter.addStringConstant(arg.node.name);
+				if (node.prefix && node.operator === "++") {
+					emitter.emit(Op.INC_SCOPED, nameIdx);
+				} else if (node.prefix && node.operator === "--") {
+					emitter.emit(Op.DEC_SCOPED, nameIdx);
+				} else if (!node.prefix && node.operator === "++") {
+					emitter.emit(Op.POST_INC_SCOPED, nameIdx);
+				} else {
+					emitter.emit(Op.POST_DEC_SCOPED, nameIdx);
+				}
+			}
+		}
+	} else if (arg.isMemberExpression()) {
+		compileMemberExpressionForUpdate(
+			arg,
+			emitter,
+			scope,
+			ctx,
+			node.operator,
+			node.prefix
+		);
+	}
 }
 
 function compileMemberExpressionForUpdate(
-  path: NodePath<t.MemberExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
-  operator: "++" | "--",
-  prefix: boolean,
+	path: NodePath<t.MemberExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext,
+	operator: "++" | "--",
+	prefix: boolean
 ): void {
-  // super.prop++ / super[expr]++ — use dedicated super opcodes
-  if (path.get("object").isSuper()) {
-    if (path.node.computed) {
-      const rKey = scope.registerAllocator.alloc();
-      compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.STORE_REG, rKey);
-      emitter.emit(Op.GET_SUPER_PROP, -1);
-      if (!prefix) emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
-      emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
-      if (prefix) emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.LOAD_REG, rKey);
-      emitter.emit(Op.SWAP, 0);
-      emitter.emit(Op.SET_SUPER_PROP, -1);
-      emitter.emit(Op.POP, 0);
-    } else {
-      const nameIdx = emitter.addStringConstant((path.node.property as t.Identifier).name);
-      emitter.emit(Op.GET_SUPER_PROP, nameIdx);
-      if (!prefix) emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
-      emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
-      if (prefix) emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.SET_SUPER_PROP, nameIdx);
-      emitter.emit(Op.POP, 0);
-    }
-    return;
-  }
+	// super.prop++ / super[expr]++ — use dedicated super opcodes
+	if (path.get("object").isSuper()) {
+		if (path.node.computed) {
+			const rKey = scope.registerAllocator.alloc();
+			compileExpression(
+				path.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.STORE_REG, rKey);
+			emitter.emit(Op.GET_SUPER_PROP, -1);
+			if (!prefix) emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
+			emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
+			if (prefix) emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.LOAD_REG, rKey);
+			emitter.emit(Op.SWAP, 0);
+			emitter.emit(Op.SET_SUPER_PROP, -1);
+			emitter.emit(Op.POP, 0);
+		} else {
+			const nameIdx = emitter.addStringConstant(
+				(path.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.GET_SUPER_PROP, nameIdx);
+			if (!prefix) emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
+			emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
+			if (prefix) emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.SET_SUPER_PROP, nameIdx);
+			emitter.emit(Op.POP, 0);
+		}
+		return;
+	}
 
-  // Save obj to register to avoid deep-stack issues with SET_PROP
-  const rObj = scope.registerAllocator.alloc();
-  compileExpression(path.get("object"), emitter, scope, ctx);
-  emitter.emit(Op.STORE_REG, rObj);
+	// Save obj to register to avoid deep-stack issues with SET_PROP
+	const rObj = scope.registerAllocator.alloc();
+	compileExpression(path.get("object"), emitter, scope, ctx);
+	emitter.emit(Op.STORE_REG, rObj);
 
-  if (path.node.computed) {
-    const rKey = scope.registerAllocator.alloc();
-    const rNewVal = scope.registerAllocator.alloc();
+	if (path.node.computed) {
+		const rKey = scope.registerAllocator.alloc();
+		const rNewVal = scope.registerAllocator.alloc();
 
-    compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-    emitter.emit(Op.STORE_REG, rKey);
+		compileExpression(
+			path.get("property") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		emitter.emit(Op.STORE_REG, rKey);
 
-    // Get current value: obj[key]
-    emitter.emit(Op.LOAD_REG, rObj);
-    emitter.emit(Op.LOAD_REG, rKey);
-    emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+		// Get current value: obj[key]
+		emitter.emit(Op.LOAD_REG, rObj);
+		emitter.emit(Op.LOAD_REG, rKey);
+		emitter.emit(Op.GET_PROP_DYNAMIC, 0);
 
-    // Compute new value, keeping expression result on stack
-    if (!prefix) emitter.emit(Op.DUP, 0); // keep oldVal for postfix result
-    emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
-    emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
-    if (prefix) emitter.emit(Op.DUP, 0); // keep newVal for prefix result
+		// Compute new value, keeping expression result on stack
+		if (!prefix) emitter.emit(Op.DUP, 0); // keep oldVal for postfix result
+		emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
+		emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
+		if (prefix) emitter.emit(Op.DUP, 0); // keep newVal for prefix result
 
-    // Store back: obj[key] = newVal using registers
-    emitter.emit(Op.STORE_REG, rNewVal);
-    emitter.emit(Op.LOAD_REG, rObj);
-    emitter.emit(Op.LOAD_REG, rKey);
-    emitter.emit(Op.LOAD_REG, rNewVal);
-    emitter.emit(Op.SET_PROP_DYNAMIC, 0);
-    emitter.emit(Op.POP, 0); // remove obj pushed by SET_PROP
-  } else {
-    const nameIdx = emitter.addStringConstant((path.node.property as t.Identifier).name);
+		// Store back: obj[key] = newVal using registers
+		emitter.emit(Op.STORE_REG, rNewVal);
+		emitter.emit(Op.LOAD_REG, rObj);
+		emitter.emit(Op.LOAD_REG, rKey);
+		emitter.emit(Op.LOAD_REG, rNewVal);
+		emitter.emit(Op.SET_PROP_DYNAMIC, 0);
+		emitter.emit(Op.POP, 0); // remove obj pushed by SET_PROP
+	} else {
+		const nameIdx = emitter.addStringConstant(
+			(path.node.property as t.Identifier).name
+		);
 
-    // Get current value: obj.prop
-    emitter.emit(Op.LOAD_REG, rObj);
-    emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+		// Get current value: obj.prop
+		emitter.emit(Op.LOAD_REG, rObj);
+		emitter.emit(Op.GET_PROP_STATIC, nameIdx);
 
-    // Compute new value, keeping expression result on stack
-    if (!prefix) emitter.emit(Op.DUP, 0);
-    emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
-    emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
-    if (prefix) emitter.emit(Op.DUP, 0);
+		// Compute new value, keeping expression result on stack
+		if (!prefix) emitter.emit(Op.DUP, 0);
+		emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
+		emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
+		if (prefix) emitter.emit(Op.DUP, 0);
 
-    // Store back: obj.prop = newVal
-    emitter.emit(Op.LOAD_REG, rObj);
-    emitter.emit(Op.SWAP, 0);
-    emitter.emit(Op.SET_PROP_STATIC, nameIdx);
-    emitter.emit(Op.POP, 0); // remove obj pushed by SET_PROP
-  }
+		// Store back: obj.prop = newVal
+		emitter.emit(Op.LOAD_REG, rObj);
+		emitter.emit(Op.SWAP, 0);
+		emitter.emit(Op.SET_PROP_STATIC, nameIdx);
+		emitter.emit(Op.POP, 0); // remove obj pushed by SET_PROP
+	}
 }
 
 function compileAssignmentExpression(
-  path: NodePath<t.AssignmentExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.AssignmentExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const node = path.node;
-  const left = path.get("left");
+	const node = path.node;
+	const left = path.get("left");
 
-  if (node.operator !== "=" && node.operator !== "&&=" && node.operator !== "||=" && node.operator !== "??=") {
-    compileCompoundAssignment(path, emitter, scope, ctx);
-    return;
-  }
+	if (
+		node.operator !== "=" &&
+		node.operator !== "&&=" &&
+		node.operator !== "||=" &&
+		node.operator !== "??="
+	) {
+		compileCompoundAssignment(path, emitter, scope, ctx);
+		return;
+	}
 
-  if (node.operator === "&&=" || node.operator === "||=" || node.operator === "??=") {
-    compileLogicalAssignment(path, emitter, scope, ctx);
-    return;
-  }
+	if (
+		node.operator === "&&=" ||
+		node.operator === "||=" ||
+		node.operator === "??="
+	) {
+		compileLogicalAssignment(path, emitter, scope, ctx);
+		return;
+	}
 
-  if (left.isIdentifier()) {
-    compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-    emitter.emit(Op.DUP, 0);
-    const reg = ctx.registerMap.get(left.node.name);
-    if (reg !== undefined) {
-      emitter.emit(Op.STORE_REG, reg);
-    } else {
-      const slot = ctx.slotMap.get(left.node.name);
-      if (slot !== undefined) {
-        emitter.emit(Op.STORE_SLOT, slot);
-      } else {
-        const nameIdx = emitter.addStringConstant(left.node.name);
-        emitter.emit(Op.STORE_SCOPED, nameIdx);
-      }
-    }
-  } else if (left.isMemberExpression() && left.get("object").isSuper()) {
-    // super.prop = val / super[expr] = val
-    compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-    emitter.emit(Op.DUP, 0); // expression result stays on stack
-    if (left.node.computed) {
-      const rKey = scope.registerAllocator.alloc();
-      const rVal = scope.registerAllocator.alloc();
-      compileExpression(left.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.STORE_REG, rKey);
-      emitter.emit(Op.STORE_REG, rVal);
-      emitter.emit(Op.LOAD_REG, rKey);
-      emitter.emit(Op.LOAD_REG, rVal);
-      emitter.emit(Op.SET_SUPER_PROP, -1);
-    } else {
-      const nameIdx = emitter.addStringConstant((left.node.property as t.Identifier).name);
-      emitter.emit(Op.SET_SUPER_PROP, nameIdx);
-    }
-    emitter.emit(Op.POP, 0);
-  } else if (left.isMemberExpression()) {
-    if (left.node.computed) {
-      // Use registers for computed member to avoid deep-stack ROT3 issues
-      const rObj = scope.registerAllocator.alloc();
-      const rKey = scope.registerAllocator.alloc();
-      const rVal = scope.registerAllocator.alloc();
+	if (left.isIdentifier()) {
+		compileExpression(
+			path.get("right") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		emitter.emit(Op.DUP, 0);
+		const reg = ctx.registerMap.get(left.node.name);
+		if (reg !== undefined) {
+			emitter.emit(Op.STORE_REG, reg);
+		} else {
+			const slot = ctx.slotMap.get(left.node.name);
+			if (slot !== undefined) {
+				emitter.emit(Op.STORE_SLOT, slot);
+			} else {
+				const nameIdx = emitter.addStringConstant(left.node.name);
+				emitter.emit(Op.STORE_SCOPED, nameIdx);
+			}
+		}
+	} else if (left.isMemberExpression() && left.get("object").isSuper()) {
+		// super.prop = val / super[expr] = val
+		compileExpression(
+			path.get("right") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		emitter.emit(Op.DUP, 0); // expression result stays on stack
+		if (left.node.computed) {
+			const rKey = scope.registerAllocator.alloc();
+			const rVal = scope.registerAllocator.alloc();
+			compileExpression(
+				left.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.STORE_REG, rKey);
+			emitter.emit(Op.STORE_REG, rVal);
+			emitter.emit(Op.LOAD_REG, rKey);
+			emitter.emit(Op.LOAD_REG, rVal);
+			emitter.emit(Op.SET_SUPER_PROP, -1);
+		} else {
+			const nameIdx = emitter.addStringConstant(
+				(left.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.SET_SUPER_PROP, nameIdx);
+		}
+		emitter.emit(Op.POP, 0);
+	} else if (left.isMemberExpression()) {
+		if (left.node.computed) {
+			// Use registers for computed member to avoid deep-stack ROT3 issues
+			const rObj = scope.registerAllocator.alloc();
+			const rKey = scope.registerAllocator.alloc();
+			const rVal = scope.registerAllocator.alloc();
 
-      compileExpression(left.get("object"), emitter, scope, ctx);
-      emitter.emit(Op.STORE_REG, rObj);
-      compileExpression(left.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.STORE_REG, rKey);
-      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.DUP, 0); // expression result stays on stack
+			compileExpression(left.get("object"), emitter, scope, ctx);
+			emitter.emit(Op.STORE_REG, rObj);
+			compileExpression(
+				left.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.STORE_REG, rKey);
+			compileExpression(
+				path.get("right") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.DUP, 0); // expression result stays on stack
 
-      emitter.emit(Op.STORE_REG, rVal);
-      emitter.emit(Op.LOAD_REG, rObj);
-      emitter.emit(Op.LOAD_REG, rKey);
-      emitter.emit(Op.LOAD_REG, rVal);
-      emitter.emit(Op.SET_PROP_DYNAMIC, 0);
-    } else {
-      compileExpression(left.get("object"), emitter, scope, ctx);
-      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.ROT3, 0);
-      const nameIdx = emitter.addStringConstant((left.node.property as t.Identifier).name);
-      emitter.emit(Op.SET_PROP_STATIC, nameIdx);
-    }
-    emitter.emit(Op.POP, 0);
-  } else if (left.isArrayPattern() || left.isObjectPattern()) {
-    compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-    emitter.emit(Op.DUP, 0);
-    ctx.compileDestructuring(left as NodePath<t.LVal>, emitter, scope);
-  }
+			emitter.emit(Op.STORE_REG, rVal);
+			emitter.emit(Op.LOAD_REG, rObj);
+			emitter.emit(Op.LOAD_REG, rKey);
+			emitter.emit(Op.LOAD_REG, rVal);
+			emitter.emit(Op.SET_PROP_DYNAMIC, 0);
+		} else {
+			compileExpression(left.get("object"), emitter, scope, ctx);
+			compileExpression(
+				path.get("right") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.ROT3, 0);
+			const nameIdx = emitter.addStringConstant(
+				(left.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.SET_PROP_STATIC, nameIdx);
+		}
+		emitter.emit(Op.POP, 0);
+	} else if (left.isArrayPattern() || left.isObjectPattern()) {
+		compileExpression(
+			path.get("right") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		emitter.emit(Op.DUP, 0);
+		ctx.compileDestructuring(left as NodePath<t.LVal>, emitter, scope);
+	}
 }
 
 function compileCompoundAssignment(
-  path: NodePath<t.AssignmentExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.AssignmentExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const node = path.node;
-  const left = path.get("left");
-  const baseOp = node.operator.slice(0, -1);
-  const arithmeticOp = BINARY_OP_MAP[baseOp];
-  if (arithmeticOp === undefined) throw new Error(`Unsupported compound assignment: ${node.operator}`);
+	const node = path.node;
+	const left = path.get("left");
+	const baseOp = node.operator.slice(0, -1);
+	const arithmeticOp = BINARY_OP_MAP[baseOp];
+	if (arithmeticOp === undefined)
+		throw new Error(`Unsupported compound assignment: ${node.operator}`);
 
-  if (left.isIdentifier()) {
-    const reg = ctx.registerMap.get(left.node.name);
-    if (reg !== undefined) {
-      // Register-promoted compound assignment
-      const regCompoundOp = COMPOUND_REG_OP_MAP[baseOp];
-      if (regCompoundOp !== undefined) {
-        compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-        emitter.emit(regCompoundOp, reg);
-      } else {
-        emitter.emit(Op.LOAD_REG, reg);
-        compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-        emitter.emit(arithmeticOp, 0);
-        emitter.emit(Op.DUP, 0);
-        emitter.emit(Op.STORE_REG, reg);
-      }
-    } else {
-      const slot = ctx.slotMap.get(left.node.name);
-      if (slot !== undefined) {
-        // Indexed scope slot compound assignment
-        const slotCompoundOp = COMPOUND_SLOT_OP_MAP[baseOp];
-        if (slotCompoundOp !== undefined) {
-          compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-          emitter.emit(slotCompoundOp, slot);
-        } else {
-          emitter.emit(Op.LOAD_SLOT, slot);
-          compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-          emitter.emit(arithmeticOp, 0);
-          emitter.emit(Op.DUP, 0);
-          emitter.emit(Op.STORE_SLOT, slot);
-        }
-      } else {
-        const nameIdx = emitter.addStringConstant(left.node.name);
-        const compoundOp = COMPOUND_SCOPED_OP_MAP[baseOp];
-        if (compoundOp !== undefined) {
-          compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-          emitter.emit(compoundOp, nameIdx);
-        } else {
-          emitter.emit(Op.LOAD_SCOPED, nameIdx);
-          compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-          emitter.emit(arithmeticOp, 0);
-          emitter.emit(Op.DUP, 0);
-          emitter.emit(Op.STORE_SCOPED, nameIdx);
-        }
-      }
-    }
-  } else if (left.isMemberExpression() && left.get("object").isSuper()) {
-    // super.prop += val / super[expr] += val
-    if (left.node.computed) {
-      const rKey = scope.registerAllocator.alloc();
-      const rNewVal = scope.registerAllocator.alloc();
-      compileExpression(left.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.STORE_REG, rKey);
-      emitter.emit(Op.GET_SUPER_PROP, -1);
-      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(arithmeticOp, 0);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.STORE_REG, rNewVal);
-      emitter.emit(Op.LOAD_REG, rKey);
-      emitter.emit(Op.LOAD_REG, rNewVal);
-      emitter.emit(Op.SET_SUPER_PROP, -1);
-      emitter.emit(Op.POP, 0);
-    } else {
-      const nameIdx = emitter.addStringConstant((left.node.property as t.Identifier).name);
-      emitter.emit(Op.GET_SUPER_PROP, nameIdx);
-      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(arithmeticOp, 0);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.SET_SUPER_PROP, nameIdx);
-      emitter.emit(Op.POP, 0);
-    }
-  } else if (left.isMemberExpression()) {
-    if (left.node.computed) {
-      // Use registers for computed member to avoid deep-stack ROT3 issues
-      const rObj = scope.registerAllocator.alloc();
-      const rKey = scope.registerAllocator.alloc();
-      const rNewVal = scope.registerAllocator.alloc();
+	if (left.isIdentifier()) {
+		const reg = ctx.registerMap.get(left.node.name);
+		if (reg !== undefined) {
+			// Register-promoted compound assignment
+			const regCompoundOp = COMPOUND_REG_OP_MAP[baseOp];
+			if (regCompoundOp !== undefined) {
+				compileExpression(
+					path.get("right") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				emitter.emit(regCompoundOp, reg);
+			} else {
+				emitter.emit(Op.LOAD_REG, reg);
+				compileExpression(
+					path.get("right") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				emitter.emit(arithmeticOp, 0);
+				emitter.emit(Op.DUP, 0);
+				emitter.emit(Op.STORE_REG, reg);
+			}
+		} else {
+			const slot = ctx.slotMap.get(left.node.name);
+			if (slot !== undefined) {
+				// Indexed scope slot compound assignment
+				const slotCompoundOp = COMPOUND_SLOT_OP_MAP[baseOp];
+				if (slotCompoundOp !== undefined) {
+					compileExpression(
+						path.get("right") as NodePath<t.Expression>,
+						emitter,
+						scope,
+						ctx
+					);
+					emitter.emit(slotCompoundOp, slot);
+				} else {
+					emitter.emit(Op.LOAD_SLOT, slot);
+					compileExpression(
+						path.get("right") as NodePath<t.Expression>,
+						emitter,
+						scope,
+						ctx
+					);
+					emitter.emit(arithmeticOp, 0);
+					emitter.emit(Op.DUP, 0);
+					emitter.emit(Op.STORE_SLOT, slot);
+				}
+			} else {
+				const nameIdx = emitter.addStringConstant(left.node.name);
+				const compoundOp = COMPOUND_SCOPED_OP_MAP[baseOp];
+				if (compoundOp !== undefined) {
+					compileExpression(
+						path.get("right") as NodePath<t.Expression>,
+						emitter,
+						scope,
+						ctx
+					);
+					emitter.emit(compoundOp, nameIdx);
+				} else {
+					emitter.emit(Op.LOAD_SCOPED, nameIdx);
+					compileExpression(
+						path.get("right") as NodePath<t.Expression>,
+						emitter,
+						scope,
+						ctx
+					);
+					emitter.emit(arithmeticOp, 0);
+					emitter.emit(Op.DUP, 0);
+					emitter.emit(Op.STORE_SCOPED, nameIdx);
+				}
+			}
+		}
+	} else if (left.isMemberExpression() && left.get("object").isSuper()) {
+		// super.prop += val / super[expr] += val
+		if (left.node.computed) {
+			const rKey = scope.registerAllocator.alloc();
+			const rNewVal = scope.registerAllocator.alloc();
+			compileExpression(
+				left.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.STORE_REG, rKey);
+			emitter.emit(Op.GET_SUPER_PROP, -1);
+			compileExpression(
+				path.get("right") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(arithmeticOp, 0);
+			emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.STORE_REG, rNewVal);
+			emitter.emit(Op.LOAD_REG, rKey);
+			emitter.emit(Op.LOAD_REG, rNewVal);
+			emitter.emit(Op.SET_SUPER_PROP, -1);
+			emitter.emit(Op.POP, 0);
+		} else {
+			const nameIdx = emitter.addStringConstant(
+				(left.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.GET_SUPER_PROP, nameIdx);
+			compileExpression(
+				path.get("right") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(arithmeticOp, 0);
+			emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.SET_SUPER_PROP, nameIdx);
+			emitter.emit(Op.POP, 0);
+		}
+	} else if (left.isMemberExpression()) {
+		if (left.node.computed) {
+			// Use registers for computed member to avoid deep-stack ROT3 issues
+			const rObj = scope.registerAllocator.alloc();
+			const rKey = scope.registerAllocator.alloc();
+			const rNewVal = scope.registerAllocator.alloc();
 
-      compileExpression(left.get("object"), emitter, scope, ctx);
-      emitter.emit(Op.STORE_REG, rObj);
-      compileExpression(left.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.STORE_REG, rKey);
+			compileExpression(left.get("object"), emitter, scope, ctx);
+			emitter.emit(Op.STORE_REG, rObj);
+			compileExpression(
+				left.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.STORE_REG, rKey);
 
-      emitter.emit(Op.LOAD_REG, rObj);
-      emitter.emit(Op.LOAD_REG, rKey);
-      emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+			emitter.emit(Op.LOAD_REG, rObj);
+			emitter.emit(Op.LOAD_REG, rKey);
+			emitter.emit(Op.GET_PROP_DYNAMIC, 0);
 
-      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(arithmeticOp, 0);
-      emitter.emit(Op.DUP, 0); // expression result
+			compileExpression(
+				path.get("right") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(arithmeticOp, 0);
+			emitter.emit(Op.DUP, 0); // expression result
 
-      emitter.emit(Op.STORE_REG, rNewVal);
-      emitter.emit(Op.LOAD_REG, rObj);
-      emitter.emit(Op.LOAD_REG, rKey);
-      emitter.emit(Op.LOAD_REG, rNewVal);
-      emitter.emit(Op.SET_PROP_DYNAMIC, 0);
-      emitter.emit(Op.POP, 0);
-    } else {
-      // Static member: ROT3 works fine (only 3 items deep)
-      compileExpression(left.get("object"), emitter, scope, ctx);
-      emitter.emit(Op.DUP, 0);
-      const nameIdx = emitter.addStringConstant((left.node.property as t.Identifier).name);
-      emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+			emitter.emit(Op.STORE_REG, rNewVal);
+			emitter.emit(Op.LOAD_REG, rObj);
+			emitter.emit(Op.LOAD_REG, rKey);
+			emitter.emit(Op.LOAD_REG, rNewVal);
+			emitter.emit(Op.SET_PROP_DYNAMIC, 0);
+			emitter.emit(Op.POP, 0);
+		} else {
+			// Static member: ROT3 works fine (only 3 items deep)
+			compileExpression(left.get("object"), emitter, scope, ctx);
+			emitter.emit(Op.DUP, 0);
+			const nameIdx = emitter.addStringConstant(
+				(left.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.GET_PROP_STATIC, nameIdx);
 
-      compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(arithmeticOp, 0);
-      emitter.emit(Op.DUP, 0);
-      emitter.emit(Op.ROT3, 0);
-      emitter.emit(Op.SET_PROP_STATIC, nameIdx);
-      emitter.emit(Op.POP, 0);
-    }
-  }
+			compileExpression(
+				path.get("right") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(arithmeticOp, 0);
+			emitter.emit(Op.DUP, 0);
+			emitter.emit(Op.ROT3, 0);
+			emitter.emit(Op.SET_PROP_STATIC, nameIdx);
+			emitter.emit(Op.POP, 0);
+		}
+	}
 }
 
 function compileLogicalAssignment(
-  path: NodePath<t.AssignmentExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.AssignmentExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const node = path.node;
-  const left = path.get("left");
+	const node = path.node;
+	const left = path.get("left");
 
-  if (!left.isIdentifier()) throw new Error("Logical assignment only supported for identifiers");
+	if (!left.isIdentifier())
+		throw new Error("Logical assignment only supported for identifiers");
 
-  const varName = left.node.name;
-  const reg = ctx.registerMap.get(varName);
-  const slot = ctx.slotMap.get(varName);
+	const varName = left.node.name;
+	const reg = ctx.registerMap.get(varName);
+	const slot = ctx.slotMap.get(varName);
 
-  // Load current value
-  if (reg !== undefined) {
-    emitter.emit(Op.LOAD_REG, reg);
-  } else if (slot !== undefined) {
-    emitter.emit(Op.LOAD_SLOT, slot);
-  } else {
-    const nameIdx = emitter.addStringConstant(varName);
-    emitter.emit(Op.LOAD_SCOPED, nameIdx);
-  }
-  emitter.emit(Op.DUP, 0);
+	// Load current value
+	if (reg !== undefined) {
+		emitter.emit(Op.LOAD_REG, reg);
+	} else if (slot !== undefined) {
+		emitter.emit(Op.LOAD_SLOT, slot);
+	} else {
+		const nameIdx = emitter.addStringConstant(varName);
+		emitter.emit(Op.LOAD_SCOPED, nameIdx);
+	}
+	emitter.emit(Op.DUP, 0);
 
-  let jumpIdx: number;
-  if (node.operator === "&&=") {
-    jumpIdx = emitter.emit(Op.JMP_FALSE, 0);
-  } else if (node.operator === "||=") {
-    jumpIdx = emitter.emit(Op.JMP_TRUE, 0);
-  } else {
-    const nullJump = emitter.emit(Op.JMP_NULLISH, 0);
-    jumpIdx = emitter.emit(Op.JMP, 0);
-    emitter.patchJump(nullJump, emitter.ip);
-  }
+	let jumpIdx: number;
+	if (node.operator === "&&=") {
+		jumpIdx = emitter.emit(Op.JMP_FALSE, 0);
+	} else if (node.operator === "||=") {
+		jumpIdx = emitter.emit(Op.JMP_TRUE, 0);
+	} else {
+		const nullJump = emitter.emit(Op.JMP_NULLISH, 0);
+		jumpIdx = emitter.emit(Op.JMP, 0);
+		emitter.patchJump(nullJump, emitter.ip);
+	}
 
-  emitter.emit(Op.POP, 0);
-  compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
-  emitter.emit(Op.DUP, 0);
+	emitter.emit(Op.POP, 0);
+	compileExpression(
+		path.get("right") as NodePath<t.Expression>,
+		emitter,
+		scope,
+		ctx
+	);
+	emitter.emit(Op.DUP, 0);
 
-  // Store new value
-  if (reg !== undefined) {
-    emitter.emit(Op.STORE_REG, reg);
-  } else if (slot !== undefined) {
-    emitter.emit(Op.STORE_SLOT, slot);
-  } else {
-    const nameIdx = emitter.addStringConstant(varName);
-    emitter.emit(Op.STORE_SCOPED, nameIdx);
-  }
+	// Store new value
+	if (reg !== undefined) {
+		emitter.emit(Op.STORE_REG, reg);
+	} else if (slot !== undefined) {
+		emitter.emit(Op.STORE_SLOT, slot);
+	} else {
+		const nameIdx = emitter.addStringConstant(varName);
+		emitter.emit(Op.STORE_SCOPED, nameIdx);
+	}
 
-  emitter.patchJump(jumpIdx!, emitter.ip);
+	emitter.patchJump(jumpIdx!, emitter.ip);
 }
 
 function compileCallExpression(
-  path: NodePath<t.CallExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.CallExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const callee = path.get("callee");
-  const args = path.get("arguments");
+	const callee = path.get("callee");
+	const args = path.get("arguments");
 
-  if (callee.isMemberExpression() && callee.get("object").isSuper()) {
-    // super.method(args) / super[expr](args)
-    const hasSpread = args.some(a => a.isSpreadElement());
+	if (callee.isMemberExpression() && callee.get("object").isSuper()) {
+		// super.method(args) / super[expr](args)
+		const hasSpread = args.some((a) => a.isSpreadElement());
 
-    if (!callee.node.computed && !hasSpread) {
-      // Optimised path: static name, no spread → CALL_SUPER_METHOD
-      const nameIdx = emitter.addStringConstant((callee.node.property as t.Identifier).name);
-      for (const arg of args) {
-        compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-      }
-      emitter.emit(Op.CALL_SUPER_METHOD, (nameIdx << 16) | args.length);
-    } else {
-      // Fallback: push this as receiver, get super method, then CALL_METHOD
-      emitter.emit(Op.PUSH_THIS, 0);
-      if (callee.node.computed) {
-        compileExpression(callee.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-        emitter.emit(Op.GET_SUPER_PROP, -1);
-      } else {
-        const nameIdx = emitter.addStringConstant((callee.node.property as t.Identifier).name);
-        emitter.emit(Op.GET_SUPER_PROP, nameIdx);
-      }
-      emitter.emit(Op.SWAP, 0);
+		if (!callee.node.computed && !hasSpread) {
+			// Optimised path: static name, no spread → CALL_SUPER_METHOD
+			const nameIdx = emitter.addStringConstant(
+				(callee.node.property as t.Identifier).name
+			);
+			for (const arg of args) {
+				compileExpression(
+					arg as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+			}
+			emitter.emit(Op.CALL_SUPER_METHOD, (nameIdx << 16) | args.length);
+		} else {
+			// Fallback: push this as receiver, get super method, then CALL_METHOD
+			emitter.emit(Op.PUSH_THIS, 0);
+			if (callee.node.computed) {
+				compileExpression(
+					callee.get("property") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				emitter.emit(Op.GET_SUPER_PROP, -1);
+			} else {
+				const nameIdx = emitter.addStringConstant(
+					(callee.node.property as t.Identifier).name
+				);
+				emitter.emit(Op.GET_SUPER_PROP, nameIdx);
+			}
+			emitter.emit(Op.SWAP, 0);
 
-      for (const arg of args) {
-        if (arg.isSpreadElement()) {
-          compileExpression(arg.get("argument"), emitter, scope, ctx);
-          emitter.emit(Op.SPREAD_ARGS, 0);
-        } else {
-          compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-        }
-      }
-      emitter.emit(Op.CALL_METHOD, hasSpread ? -(args.length) : args.length);
-    }
-  } else if (callee.isMemberExpression()) {
-    compileExpression(callee.get("object"), emitter, scope, ctx);
-    emitter.emit(Op.DUP, 0);
+			for (const arg of args) {
+				if (arg.isSpreadElement()) {
+					compileExpression(arg.get("argument"), emitter, scope, ctx);
+					emitter.emit(Op.SPREAD_ARGS, 0);
+				} else {
+					compileExpression(
+						arg as NodePath<t.Expression>,
+						emitter,
+						scope,
+						ctx
+					);
+				}
+			}
+			emitter.emit(
+				Op.CALL_METHOD,
+				hasSpread ? -args.length : args.length
+			);
+		}
+	} else if (callee.isMemberExpression()) {
+		compileExpression(callee.get("object"), emitter, scope, ctx);
+		emitter.emit(Op.DUP, 0);
 
-    if (callee.node.computed) {
-      compileExpression(callee.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-    } else {
-      const nameIdx = emitter.addStringConstant((callee.node.property as t.Identifier).name);
-      emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-    }
+		if (callee.node.computed) {
+			compileExpression(
+				callee.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+		} else {
+			const nameIdx = emitter.addStringConstant(
+				(callee.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+		}
 
-    emitter.emit(Op.SWAP, 0);
+		emitter.emit(Op.SWAP, 0);
 
-    let hasSpread = false;
-    for (const arg of args) {
-      if (arg.isSpreadElement()) {
-        hasSpread = true;
-        compileExpression(arg.get("argument"), emitter, scope, ctx);
-        emitter.emit(Op.SPREAD_ARGS, 0);
-      } else {
-        compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-      }
-    }
+		let hasSpread = false;
+		for (const arg of args) {
+			if (arg.isSpreadElement()) {
+				hasSpread = true;
+				compileExpression(arg.get("argument"), emitter, scope, ctx);
+				emitter.emit(Op.SPREAD_ARGS, 0);
+			} else {
+				compileExpression(
+					arg as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+			}
+		}
 
-    emitter.emit(Op.CALL_METHOD, hasSpread ? -(args.length) : args.length);
-  } else if (callee.isSuper()) {
-    for (const arg of args) {
-      if (arg.isSpreadElement()) {
-        compileExpression(arg.get("argument"), emitter, scope, ctx);
-        emitter.emit(Op.SPREAD_ARGS, 0);
-      } else {
-        compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-      }
-    }
-    emitter.emit(Op.SUPER_CALL, args.length);
-  } else if (callee.node.type === "Import") {
-    // Dynamic import(): import(specifier)
-    if (args.length > 0) {
-      compileExpression(args[0] as NodePath<t.Expression>, emitter, scope, ctx);
-    } else {
-      emitter.emit(Op.PUSH_UNDEFINED, 0);
-    }
-    emitter.emit(Op.DYNAMIC_IMPORT, 0);
-  } else {
-    compileExpression(callee as NodePath<t.Expression>, emitter, scope, ctx);
+		emitter.emit(Op.CALL_METHOD, hasSpread ? -args.length : args.length);
+	} else if (callee.isSuper()) {
+		for (const arg of args) {
+			if (arg.isSpreadElement()) {
+				compileExpression(arg.get("argument"), emitter, scope, ctx);
+				emitter.emit(Op.SPREAD_ARGS, 0);
+			} else {
+				compileExpression(
+					arg as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+			}
+		}
+		emitter.emit(Op.SUPER_CALL, args.length);
+	} else if (callee.node.type === "Import") {
+		// Dynamic import(): import(specifier)
+		if (args.length > 0) {
+			compileExpression(
+				args[0] as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+		} else {
+			emitter.emit(Op.PUSH_UNDEFINED, 0);
+		}
+		emitter.emit(Op.DYNAMIC_IMPORT, 0);
+	} else {
+		compileExpression(
+			callee as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
 
-    let hasSpread = false;
-    for (const arg of args) {
-      if (arg.isSpreadElement()) {
-        hasSpread = true;
-        compileExpression(arg.get("argument"), emitter, scope, ctx);
-        emitter.emit(Op.SPREAD_ARGS, 0);
-      } else {
-        compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-      }
-    }
+		let hasSpread = false;
+		for (const arg of args) {
+			if (arg.isSpreadElement()) {
+				hasSpread = true;
+				compileExpression(arg.get("argument"), emitter, scope, ctx);
+				emitter.emit(Op.SPREAD_ARGS, 0);
+			} else {
+				compileExpression(
+					arg as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+			}
+		}
 
-    emitter.emit(Op.CALL, hasSpread ? -(args.length) : args.length);
-  }
+		emitter.emit(Op.CALL, hasSpread ? -args.length : args.length);
+	}
 }
 
 function compileOptionalCallExpression(
-  path: NodePath<t.OptionalCallExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.OptionalCallExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const callee = path.get("callee");
-  const args = path.get("arguments");
+	const callee = path.get("callee");
+	const args = path.get("arguments");
 
-  // If callee is a member expression, we need CALL_METHOD to preserve `this`
-  if (callee.isMemberExpression() || callee.isOptionalMemberExpression()) {
-    const obj = callee.get("object") as NodePath<t.Expression>;
-    compileExpression(obj, emitter, scope, ctx);
+	// If callee is a member expression, we need CALL_METHOD to preserve `this`
+	if (callee.isMemberExpression() || callee.isOptionalMemberExpression()) {
+		const obj = callee.get("object") as NodePath<t.Expression>;
+		compileExpression(obj, emitter, scope, ctx);
 
-    // If the member access is optional (obj?.method), check obj first
-    if ((callee.node as t.OptionalMemberExpression).optional) {
-      emitter.emit(Op.DUP, 0);
-      const objNullJump = emitter.emit(Op.JMP_NULLISH, 0);
-      const objOkJump = emitter.emit(Op.JMP, 0);
+		// If the member access is optional (obj?.method), check obj first
+		if ((callee.node as t.OptionalMemberExpression).optional) {
+			emitter.emit(Op.DUP, 0);
+			const objNullJump = emitter.emit(Op.JMP_NULLISH, 0);
+			const objOkJump = emitter.emit(Op.JMP, 0);
 
-      emitter.patchJump(objNullJump, emitter.ip);
-      emitter.emit(Op.POP, 0); // pop obj
-      emitter.emit(Op.PUSH_UNDEFINED, 0);
-      const objSkipEnd = emitter.emit(Op.JMP, 0);
+			emitter.patchJump(objNullJump, emitter.ip);
+			emitter.emit(Op.POP, 0); // pop obj
+			emitter.emit(Op.PUSH_UNDEFINED, 0);
+			const objSkipEnd = emitter.emit(Op.JMP, 0);
 
-      emitter.patchJump(objOkJump, emitter.ip);
-      // obj is not null — get the method
-      emitter.emit(Op.DUP, 0);
-      if (callee.node.computed) {
-        compileExpression(callee.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-        emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-      } else {
-        const nameIdx = emitter.addStringConstant((callee.node.property as t.Identifier).name);
-        emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-      }
+			emitter.patchJump(objOkJump, emitter.ip);
+			// obj is not null — get the method
+			emitter.emit(Op.DUP, 0);
+			if (callee.node.computed) {
+				compileExpression(
+					callee.get("property") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+			} else {
+				const nameIdx = emitter.addStringConstant(
+					(callee.node.property as t.Identifier).name
+				);
+				emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+			}
 
-      // Check if fn is nullish (for the ?. call part)
-      emitter.emit(Op.DUP, 0);
-      const fnNullJump = emitter.emit(Op.JMP_NULLISH, 0);
-      const fnOkJump = emitter.emit(Op.JMP, 0);
+			// Check if fn is nullish (for the ?. call part)
+			emitter.emit(Op.DUP, 0);
+			const fnNullJump = emitter.emit(Op.JMP_NULLISH, 0);
+			const fnOkJump = emitter.emit(Op.JMP, 0);
 
-      emitter.patchJump(fnNullJump, emitter.ip);
-      emitter.emit(Op.POP, 0); // pop fn
-      emitter.emit(Op.POP, 0); // pop obj
-      emitter.emit(Op.PUSH_UNDEFINED, 0);
-      const fnSkipEnd = emitter.emit(Op.JMP, 0);
+			emitter.patchJump(fnNullJump, emitter.ip);
+			emitter.emit(Op.POP, 0); // pop fn
+			emitter.emit(Op.POP, 0); // pop obj
+			emitter.emit(Op.PUSH_UNDEFINED, 0);
+			const fnSkipEnd = emitter.emit(Op.JMP, 0);
 
-      emitter.patchJump(fnOkJump, emitter.ip);
-      emitter.emit(Op.SWAP, 0); // [fn, obj] for CALL_METHOD
-      let hasSpread = false;
-      for (const arg of args) {
-        if (arg.isSpreadElement()) {
-          hasSpread = true;
-          compileExpression(arg.get("argument"), emitter, scope, ctx);
-          emitter.emit(Op.SPREAD_ARGS, 0);
-        } else {
-          compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-        }
-      }
-      emitter.emit(Op.CALL_METHOD, hasSpread ? -(args.length) : args.length);
+			emitter.patchJump(fnOkJump, emitter.ip);
+			emitter.emit(Op.SWAP, 0); // [fn, obj] for CALL_METHOD
+			let hasSpread = false;
+			for (const arg of args) {
+				if (arg.isSpreadElement()) {
+					hasSpread = true;
+					compileExpression(arg.get("argument"), emitter, scope, ctx);
+					emitter.emit(Op.SPREAD_ARGS, 0);
+				} else {
+					compileExpression(
+						arg as NodePath<t.Expression>,
+						emitter,
+						scope,
+						ctx
+					);
+				}
+			}
+			emitter.emit(
+				Op.CALL_METHOD,
+				hasSpread ? -args.length : args.length
+			);
 
-      emitter.patchJump(objSkipEnd, emitter.ip);
-      emitter.patchJump(fnSkipEnd, emitter.ip);
-    } else {
-      // Non-optional member (e.g., obj.method?.()), just get the method
-      emitter.emit(Op.DUP, 0);
-      if (callee.node.computed) {
-        compileExpression(callee.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-        emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-      } else {
-        const nameIdx = emitter.addStringConstant((callee.node.property as t.Identifier).name);
-        emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-      }
+			emitter.patchJump(objSkipEnd, emitter.ip);
+			emitter.patchJump(fnSkipEnd, emitter.ip);
+		} else {
+			// Non-optional member (e.g., obj.method?.()), just get the method
+			emitter.emit(Op.DUP, 0);
+			if (callee.node.computed) {
+				compileExpression(
+					callee.get("property") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+			} else {
+				const nameIdx = emitter.addStringConstant(
+					(callee.node.property as t.Identifier).name
+				);
+				emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+			}
 
-      // Check if fn is nullish
-      emitter.emit(Op.DUP, 0);
-      const fnNullJump = emitter.emit(Op.JMP_NULLISH, 0);
-      const fnOkJump = emitter.emit(Op.JMP, 0);
+			// Check if fn is nullish
+			emitter.emit(Op.DUP, 0);
+			const fnNullJump = emitter.emit(Op.JMP_NULLISH, 0);
+			const fnOkJump = emitter.emit(Op.JMP, 0);
 
-      emitter.patchJump(fnNullJump, emitter.ip);
-      emitter.emit(Op.POP, 0); // pop fn
-      emitter.emit(Op.POP, 0); // pop obj
-      emitter.emit(Op.PUSH_UNDEFINED, 0);
-      const fnSkipEnd = emitter.emit(Op.JMP, 0);
+			emitter.patchJump(fnNullJump, emitter.ip);
+			emitter.emit(Op.POP, 0); // pop fn
+			emitter.emit(Op.POP, 0); // pop obj
+			emitter.emit(Op.PUSH_UNDEFINED, 0);
+			const fnSkipEnd = emitter.emit(Op.JMP, 0);
 
-      emitter.patchJump(fnOkJump, emitter.ip);
-      emitter.emit(Op.SWAP, 0); // [fn, obj] for CALL_METHOD
-      let hasSpread = false;
-      for (const arg of args) {
-        if (arg.isSpreadElement()) {
-          hasSpread = true;
-          compileExpression(arg.get("argument"), emitter, scope, ctx);
-          emitter.emit(Op.SPREAD_ARGS, 0);
-        } else {
-          compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-        }
-      }
-      emitter.emit(Op.CALL_METHOD, hasSpread ? -(args.length) : args.length);
+			emitter.patchJump(fnOkJump, emitter.ip);
+			emitter.emit(Op.SWAP, 0); // [fn, obj] for CALL_METHOD
+			let hasSpread = false;
+			for (const arg of args) {
+				if (arg.isSpreadElement()) {
+					hasSpread = true;
+					compileExpression(arg.get("argument"), emitter, scope, ctx);
+					emitter.emit(Op.SPREAD_ARGS, 0);
+				} else {
+					compileExpression(
+						arg as NodePath<t.Expression>,
+						emitter,
+						scope,
+						ctx
+					);
+				}
+			}
+			emitter.emit(
+				Op.CALL_METHOD,
+				hasSpread ? -args.length : args.length
+			);
 
-      emitter.patchJump(fnSkipEnd, emitter.ip);
-    }
-    return;
-  }
+			emitter.patchJump(fnSkipEnd, emitter.ip);
+		}
+		return;
+	}
 
-  // Standalone optional call: fn?.(args)
-  compileExpression(callee as NodePath<t.Expression>, emitter, scope, ctx);
-  emitter.emit(Op.DUP, 0);
-  const skipJump = emitter.emit(Op.JMP_NULLISH, 0);
-  const proceedJump = emitter.emit(Op.JMP, 0);
+	// Standalone optional call: fn?.(args)
+	compileExpression(callee as NodePath<t.Expression>, emitter, scope, ctx);
+	emitter.emit(Op.DUP, 0);
+	const skipJump = emitter.emit(Op.JMP_NULLISH, 0);
+	const proceedJump = emitter.emit(Op.JMP, 0);
 
-  emitter.patchJump(skipJump, emitter.ip);
-  emitter.emit(Op.POP, 0);
-  emitter.emit(Op.PUSH_UNDEFINED, 0);
-  const endJump = emitter.emit(Op.JMP, 0);
+	emitter.patchJump(skipJump, emitter.ip);
+	emitter.emit(Op.POP, 0);
+	emitter.emit(Op.PUSH_UNDEFINED, 0);
+	const endJump = emitter.emit(Op.JMP, 0);
 
-  emitter.patchJump(proceedJump, emitter.ip);
+	emitter.patchJump(proceedJump, emitter.ip);
 
-  for (const arg of args) {
-    if (arg.isSpreadElement()) {
-      compileExpression(arg.get("argument"), emitter, scope, ctx);
-      emitter.emit(Op.SPREAD_ARGS, 0);
-    } else {
-      compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-    }
-  }
-  emitter.emit(Op.CALL, args.length);
+	for (const arg of args) {
+		if (arg.isSpreadElement()) {
+			compileExpression(arg.get("argument"), emitter, scope, ctx);
+			emitter.emit(Op.SPREAD_ARGS, 0);
+		} else {
+			compileExpression(
+				arg as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+		}
+	}
+	emitter.emit(Op.CALL, args.length);
 
-  emitter.patchJump(endJump, emitter.ip);
+	emitter.patchJump(endJump, emitter.ip);
 }
 
 function compileNewExpression(
-  path: NodePath<t.NewExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.NewExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  compileExpression(path.get("callee") as NodePath<t.Expression>, emitter, scope, ctx);
+	compileExpression(
+		path.get("callee") as NodePath<t.Expression>,
+		emitter,
+		scope,
+		ctx
+	);
 
-  const args = path.get("arguments");
-  for (const arg of args) {
-    if (arg.isSpreadElement()) {
-      compileExpression(arg.get("argument"), emitter, scope, ctx);
-      emitter.emit(Op.SPREAD_ARGS, 0);
-    } else {
-      compileExpression(arg as NodePath<t.Expression>, emitter, scope, ctx);
-    }
-  }
+	const args = path.get("arguments");
+	for (const arg of args) {
+		if (arg.isSpreadElement()) {
+			compileExpression(arg.get("argument"), emitter, scope, ctx);
+			emitter.emit(Op.SPREAD_ARGS, 0);
+		} else {
+			compileExpression(
+				arg as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+		}
+	}
 
-  emitter.emit(Op.CALL_NEW, args.length);
+	emitter.emit(Op.CALL_NEW, args.length);
 }
 
 export function compileMemberExpression(
-  path: NodePath<t.MemberExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.MemberExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  // super.prop / super[expr] — use dedicated GET_SUPER_PROP opcode
-  if (path.get("object").isSuper()) {
-    if (path.node.computed) {
-      compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.GET_SUPER_PROP, -1);
-    } else {
-      const nameIdx = emitter.addStringConstant((path.node.property as t.Identifier).name);
-      emitter.emit(Op.GET_SUPER_PROP, nameIdx);
-    }
-    return;
-  }
+	// super.prop / super[expr] — use dedicated GET_SUPER_PROP opcode
+	if (path.get("object").isSuper()) {
+		if (path.node.computed) {
+			compileExpression(
+				path.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.GET_SUPER_PROP, -1);
+		} else {
+			const nameIdx = emitter.addStringConstant(
+				(path.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.GET_SUPER_PROP, nameIdx);
+		}
+		return;
+	}
 
-  compileExpression(path.get("object"), emitter, scope, ctx);
+	compileExpression(path.get("object"), emitter, scope, ctx);
 
-  if (path.node.computed) {
-    compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-    emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-  } else {
-    const nameIdx = emitter.addStringConstant((path.node.property as t.Identifier).name);
-    emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-  }
+	if (path.node.computed) {
+		compileExpression(
+			path.get("property") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+	} else {
+		const nameIdx = emitter.addStringConstant(
+			(path.node.property as t.Identifier).name
+		);
+		emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+	}
 }
 
 function compileOptionalMemberExpression(
-  path: NodePath<t.OptionalMemberExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.OptionalMemberExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  compileExpression(path.get("object"), emitter, scope, ctx);
+	compileExpression(path.get("object"), emitter, scope, ctx);
 
-  if (path.node.optional) {
-    emitter.emit(Op.DUP, 0);
-    const nullJump = emitter.emit(Op.JMP_NULLISH, 0);
-    const proceedJump = emitter.emit(Op.JMP, 0);
+	if (path.node.optional) {
+		emitter.emit(Op.DUP, 0);
+		const nullJump = emitter.emit(Op.JMP_NULLISH, 0);
+		const proceedJump = emitter.emit(Op.JMP, 0);
 
-    emitter.patchJump(nullJump, emitter.ip);
-    emitter.emit(Op.POP, 0);
-    emitter.emit(Op.PUSH_UNDEFINED, 0);
-    const endJump = emitter.emit(Op.JMP, 0);
+		emitter.patchJump(nullJump, emitter.ip);
+		emitter.emit(Op.POP, 0);
+		emitter.emit(Op.PUSH_UNDEFINED, 0);
+		const endJump = emitter.emit(Op.JMP, 0);
 
-    emitter.patchJump(proceedJump, emitter.ip);
-    if (path.node.computed) {
-      compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-    } else {
-      const nameIdx = emitter.addStringConstant((path.node.property as t.Identifier).name);
-      emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-    }
-    emitter.patchJump(endJump, emitter.ip);
-  } else {
-    if (path.node.computed) {
-      compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-    } else {
-      const nameIdx = emitter.addStringConstant((path.node.property as t.Identifier).name);
-      emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-    }
-  }
+		emitter.patchJump(proceedJump, emitter.ip);
+		if (path.node.computed) {
+			compileExpression(
+				path.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+		} else {
+			const nameIdx = emitter.addStringConstant(
+				(path.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+		}
+		emitter.patchJump(endJump, emitter.ip);
+	} else {
+		if (path.node.computed) {
+			compileExpression(
+				path.get("property") as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+		} else {
+			const nameIdx = emitter.addStringConstant(
+				(path.node.property as t.Identifier).name
+			);
+			emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+		}
+	}
 }
 
 function compileConditionalExpression(
-  path: NodePath<t.ConditionalExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.ConditionalExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  compileExpression(path.get("test"), emitter, scope, ctx);
-  const falseJump = emitter.emit(Op.JMP_FALSE, 0);
-  compileExpression(path.get("consequent"), emitter, scope, ctx);
-  const endJump = emitter.emit(Op.JMP, 0);
-  emitter.patchJump(falseJump, emitter.ip);
-  compileExpression(path.get("alternate"), emitter, scope, ctx);
-  emitter.patchJump(endJump, emitter.ip);
+	compileExpression(path.get("test"), emitter, scope, ctx);
+	const falseJump = emitter.emit(Op.JMP_FALSE, 0);
+	compileExpression(path.get("consequent"), emitter, scope, ctx);
+	const endJump = emitter.emit(Op.JMP, 0);
+	emitter.patchJump(falseJump, emitter.ip);
+	compileExpression(path.get("alternate"), emitter, scope, ctx);
+	emitter.patchJump(endJump, emitter.ip);
 }
 
 function compileObjectExpression(
-  path: NodePath<t.ObjectExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.ObjectExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  emitter.emit(Op.NEW_OBJECT, 0);
+	emitter.emit(Op.NEW_OBJECT, 0);
 
-  for (const prop of path.get("properties")) {
-    if (prop.isObjectProperty()) {
-      emitter.emit(Op.DUP, 0);
+	for (const prop of path.get("properties")) {
+		if (prop.isObjectProperty()) {
+			emitter.emit(Op.DUP, 0);
 
-      if (prop.node.computed) {
-        compileExpression(prop.get("key") as NodePath<t.Expression>, emitter, scope, ctx);
-        compileExpression(prop.get("value") as NodePath<t.Expression>, emitter, scope, ctx);
-        emitter.emit(Op.SET_PROP_DYNAMIC, 0);
-      } else {
-        const key = prop.node.key;
-        let keyName: string;
-        if (key.type === "Identifier") keyName = key.name;
-        else if (key.type === "StringLiteral") keyName = key.value;
-        else if (key.type === "NumericLiteral") keyName = String(key.value);
-        else throw new Error(`Unsupported object key type: ${key.type}`);
+			if (prop.node.computed) {
+				compileExpression(
+					prop.get("key") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				compileExpression(
+					prop.get("value") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				emitter.emit(Op.SET_PROP_DYNAMIC, 0);
+			} else {
+				const key = prop.node.key;
+				let keyName: string;
+				if (key.type === "Identifier") keyName = key.name;
+				else if (key.type === "StringLiteral") keyName = key.value;
+				else if (key.type === "NumericLiteral")
+					keyName = String(key.value);
+				else
+					throw new Error(`Unsupported object key type: ${key.type}`);
 
-        compileExpression(prop.get("value") as NodePath<t.Expression>, emitter, scope, ctx);
-        const nameIdx = emitter.addStringConstant(keyName);
-        emitter.emit(Op.SET_PROP_STATIC, nameIdx);
-      }
+				compileExpression(
+					prop.get("value") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				const nameIdx = emitter.addStringConstant(keyName);
+				emitter.emit(Op.SET_PROP_STATIC, nameIdx);
+			}
 
-      emitter.emit(Op.POP, 0);
-    } else if (prop.isObjectMethod()) {
-      emitter.emit(Op.DUP, 0);
-      const method = prop as NodePath<t.ObjectMethod>;
-      ctx.compileNestedFunction(method as unknown as NodePath<t.Function>, emitter, scope);
+			emitter.emit(Op.POP, 0);
+		} else if (prop.isObjectMethod()) {
+			emitter.emit(Op.DUP, 0);
+			const method = prop as NodePath<t.ObjectMethod>;
+			ctx.compileNestedFunction(
+				method as unknown as NodePath<t.Function>,
+				emitter,
+				scope
+			);
 
-      const key = method.node.key;
-      let keyName: string;
-      if (key.type === "Identifier") keyName = key.name;
-      else if (key.type === "StringLiteral") keyName = key.value;
-      else throw new Error(`Unsupported method key type: ${key.type}`);
+			const key = method.node.key;
+			let keyName: string;
+			if (key.type === "Identifier") keyName = key.name;
+			else if (key.type === "StringLiteral") keyName = key.value;
+			else throw new Error(`Unsupported method key type: ${key.type}`);
 
-      const nameIdx = emitter.addStringConstant(keyName);
+			const nameIdx = emitter.addStringConstant(keyName);
 
-      if (method.node.kind === "get") {
-        emitter.emit(Op.DEFINE_GETTER, nameIdx);
-      } else if (method.node.kind === "set") {
-        emitter.emit(Op.DEFINE_SETTER, nameIdx);
-      } else {
-        emitter.emit(Op.SET_PROP_STATIC, nameIdx);
-      }
-      emitter.emit(Op.POP, 0);
-    } else if (prop.isSpreadElement()) {
-      compileExpression(prop.get("argument"), emitter, scope, ctx);
-      emitter.emit(Op.SPREAD_ARRAY, 0);
-    }
-  }
+			if (method.node.kind === "get") {
+				emitter.emit(Op.DEFINE_GETTER, nameIdx);
+			} else if (method.node.kind === "set") {
+				emitter.emit(Op.DEFINE_SETTER, nameIdx);
+			} else {
+				emitter.emit(Op.SET_PROP_STATIC, nameIdx);
+			}
+			emitter.emit(Op.POP, 0);
+		} else if (prop.isSpreadElement()) {
+			compileExpression(prop.get("argument"), emitter, scope, ctx);
+			emitter.emit(Op.SPREAD_ARRAY, 0);
+		}
+	}
 }
 
 function compileArrayExpression(
-  path: NodePath<t.ArrayExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.ArrayExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  emitter.emit(Op.NEW_ARRAY, 0);
+	emitter.emit(Op.NEW_ARRAY, 0);
 
-  for (const elem of path.get("elements")) {
-    if (elem.node === null) {
-      emitter.emit(Op.ARRAY_HOLE, 0);
-    } else if (elem.isSpreadElement()) {
-      compileExpression(elem.get("argument"), emitter, scope, ctx);
-      emitter.emit(Op.SPREAD_ARRAY, 0);
-    } else {
-      compileExpression(elem as NodePath<t.Expression>, emitter, scope, ctx);
-      emitter.emit(Op.ARRAY_PUSH, 0);
-    }
-  }
+	for (const elem of path.get("elements")) {
+		if (elem.node === null) {
+			emitter.emit(Op.ARRAY_HOLE, 0);
+		} else if (elem.isSpreadElement()) {
+			compileExpression(elem.get("argument"), emitter, scope, ctx);
+			emitter.emit(Op.SPREAD_ARRAY, 0);
+		} else {
+			compileExpression(
+				elem as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.ARRAY_PUSH, 0);
+		}
+	}
 }
 
 function compileTemplateLiteral(
-  path: NodePath<t.TemplateLiteral>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.TemplateLiteral>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  const quasis = path.get("quasis");
-  const expressions = path.get("expressions");
+	const quasis = path.get("quasis");
+	const expressions = path.get("expressions");
 
-  if (expressions.length === 0) {
-    const idx = emitter.addStringConstant(quasis[0]!.node.value.cooked ?? quasis[0]!.node.value.raw);
-    emitter.emit(Op.PUSH_CONST, idx);
-    return;
-  }
+	if (expressions.length === 0) {
+		const idx = emitter.addStringConstant(
+			quasis[0]!.node.value.cooked ?? quasis[0]!.node.value.raw
+		);
+		emitter.emit(Op.PUSH_CONST, idx);
+		return;
+	}
 
-  const firstQuasi = quasis[0]!.node.value.cooked ?? quasis[0]!.node.value.raw;
-  const idx = emitter.addStringConstant(firstQuasi);
-  emitter.emit(Op.PUSH_CONST, idx);
+	const firstQuasi =
+		quasis[0]!.node.value.cooked ?? quasis[0]!.node.value.raw;
+	const idx = emitter.addStringConstant(firstQuasi);
+	emitter.emit(Op.PUSH_CONST, idx);
 
-  for (let i = 0; i < expressions.length; i++) {
-    compileExpression(expressions[i] as NodePath<t.Expression>, emitter, scope, ctx);
-    emitter.emit(Op.ADD, 0);
-    const quasi = quasis[i + 1]!.node.value.cooked ?? quasis[i + 1]!.node.value.raw;
-    const qIdx = emitter.addStringConstant(quasi);
-    emitter.emit(Op.PUSH_CONST, qIdx);
-    emitter.emit(Op.ADD, 0);
-  }
+	for (let i = 0; i < expressions.length; i++) {
+		compileExpression(
+			expressions[i] as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		emitter.emit(Op.ADD, 0);
+		const quasi =
+			quasis[i + 1]!.node.value.cooked ?? quasis[i + 1]!.node.value.raw;
+		const qIdx = emitter.addStringConstant(quasi);
+		emitter.emit(Op.PUSH_CONST, qIdx);
+		emitter.emit(Op.ADD, 0);
+	}
 }
 
 function compileTaggedTemplate(
-  path: NodePath<t.TaggedTemplateExpression>,
-  emitter: Emitter,
-  scope: ScopeAnalyzer,
-  ctx: CompileContext,
+	path: NodePath<t.TaggedTemplateExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
 ): void {
-  compileExpression(path.get("tag"), emitter, scope, ctx);
+	compileExpression(path.get("tag"), emitter, scope, ctx);
 
-  const quasis = path.get("quasi").get("quasis");
-  const expressions = path.get("quasi").get("expressions");
+	const quasis = path.get("quasi").get("quasis");
+	const expressions = path.get("quasi").get("expressions");
 
-  emitter.emit(Op.NEW_ARRAY, 0);
-  for (const q of quasis) {
-    const val = q.node.value.cooked ?? q.node.value.raw;
-    const idx = emitter.addStringConstant(val);
-    emitter.emit(Op.PUSH_CONST, idx);
-    emitter.emit(Op.ARRAY_PUSH, 0);
-  }
+	emitter.emit(Op.NEW_ARRAY, 0);
+	for (const q of quasis) {
+		const val = q.node.value.cooked ?? q.node.value.raw;
+		const idx = emitter.addStringConstant(val);
+		emitter.emit(Op.PUSH_CONST, idx);
+		emitter.emit(Op.ARRAY_PUSH, 0);
+	}
 
-  for (const expr of expressions) {
-    compileExpression(expr as NodePath<t.Expression>, emitter, scope, ctx);
-  }
+	for (const expr of expressions) {
+		compileExpression(expr as NodePath<t.Expression>, emitter, scope, ctx);
+	}
 
-  emitter.emit(Op.CALL, 1 + expressions.length);
+	emitter.emit(Op.CALL, 1 + expressions.length);
 }
