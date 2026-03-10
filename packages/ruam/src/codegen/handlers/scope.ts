@@ -10,15 +10,34 @@
  *  - Delete:      DELETE_SCOPED
  *  - Global:      LOAD_GLOBAL, STORE_GLOBAL, TYPEOF_GLOBAL
  *
- * All handlers use raw() because scope chain walking involves while loops
- * with `break` statements that are ambiguous — the `break` exits the while
- * loop, not the enclosing switch case.
+ * All handlers use pure AST nodes — no raw() escape hatch.
+ *
+ * LOAD_SCOPED, STORE_SCOPED, and TYPEOF_GLOBAL use manual while-loop
+ * construction (not ctx.scopeWalk()) because they need a global fallback
+ * after the while loop instead of a trailing break.
  *
  * @module codegen/handlers/scope
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw, breakStmt } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	whileStmt,
+	throwStmt,
+	breakStmt,
+	obj,
+	newExpr,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -28,22 +47,33 @@ import { registry } from "./registry.js";
  * LOAD_SCOPED: walk scope chain to find variable, fall back to global.
  *
  * Fast path checks current scope first, then walks parent chain.
- * Uses sv()/curSv() for DRY scope variable references but NOT scopeWalk()
- * because the global fallback runs after the while loop.
+ * Does NOT use ctx.scopeWalk() because the global fallback runs after
+ * the while loop instead of a trailing break.
  */
 function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const csv = ctx.curSvStr();
-	const sv = ctx.svStr();
-	const curScope = `${ctx.SC}.${ctx.sV}`;
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];` +
-				`if(name in ${curScope}){${ctx.pushStr(csv)};break;}` +
-				`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
-				`while(s){if(name in s.${ctx.sV}){${ctx.pushStr(sv)};found=true;break;}s=s.${ctx.sPar};}` +
-				`if(!found){${ctx.pushStr("_g[name]")};}` +
-				`break;`
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		// Fast path: check current scope first
+		ifStmt(bin("in", id("name"), member(id(ctx.SC), ctx.sV)), [
+			exprStmt(ctx.push(ctx.curSv())),
+			breakStmt(),
+		]),
+		// Walk parent scopes
+		varDecl("s", member(id(ctx.SC), ctx.sPar)),
+		varDecl("found", lit(false)),
+		whileStmt(id("s"), [
+			ifStmt(bin("in", id("name"), member(id("s"), ctx.sV)), [
+				exprStmt(ctx.push(ctx.sv())),
+				exprStmt(assign(id("found"), lit(true))),
+				breakStmt(),
+			]),
+			exprStmt(assign(id("s"), member(id("s"), ctx.sPar))),
+		]),
+		// Global fallback
+		ifStmt(un("!", id("found")), [
+			exprStmt(ctx.push(index(id("_g"), id("name")))),
+		]),
+		breakStmt(),
 	];
 }
 
@@ -51,20 +81,34 @@ function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
  * STORE_SCOPED: walk scope chain to find variable slot, fall back to global.
  *
  * Pops value from stack, assigns to first scope that contains the name.
+ * Does NOT use ctx.scopeWalk() because the global fallback runs after
+ * the while loop instead of a trailing break.
  */
 function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const csv = ctx.curSvStr();
-	const sv = ctx.svStr();
-	const curScope = `${ctx.SC}.${ctx.sV}`;
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];var val=${ctx.S}[${ctx.P}--];` +
-				`if(name in ${curScope}){${csv}=val;break;}` +
-				`var s=${ctx.SC}.${ctx.sPar};var found=false;` +
-				`while(s){if(name in s.${ctx.sV}){${sv}=val;found=true;break;}s=s.${ctx.sPar};}` +
-				`if(!found){_g[name]=val;}` +
-				`break;`
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("val", ctx.pop()),
+		// Fast path: check current scope first
+		ifStmt(bin("in", id("name"), member(id(ctx.SC), ctx.sV)), [
+			exprStmt(assign(ctx.curSv(), id("val"))),
+			breakStmt(),
+		]),
+		// Walk parent scopes
+		varDecl("s", member(id(ctx.SC), ctx.sPar)),
+		varDecl("found", lit(false)),
+		whileStmt(id("s"), [
+			ifStmt(bin("in", id("name"), member(id("s"), ctx.sV)), [
+				exprStmt(assign(ctx.sv(), id("val"))),
+				exprStmt(assign(id("found"), lit(true))),
+				breakStmt(),
+			]),
+			exprStmt(assign(id("s"), member(id("s"), ctx.sPar))),
+		]),
+		// Global fallback
+		ifStmt(un("!", id("found")), [
+			exprStmt(assign(index(id("_g"), id("name")), id("val"))),
+		]),
+		breakStmt(),
 	];
 }
 
@@ -76,10 +120,12 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
  * Only initializes to undefined if the name is not already present.
  */
 function declareHandler(ctx: HandlerCtx): JsNode[] {
-	const curScope = `${ctx.SC}.${ctx.sV}`;
-	const csv = ctx.curSvStr();
 	return [
-		raw(`var name=${ctx.C}[${ctx.O}];if(!(name in ${curScope}))${csv}=void 0;break;`),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		ifStmt(un("!", bin("in", id("name"), member(id(ctx.SC), ctx.sV))), [
+			exprStmt(assign(ctx.curSv(), un("void", lit(0)))),
+		]),
+		breakStmt(),
 	];
 }
 
@@ -92,12 +138,28 @@ function declareHandler(ctx: HandlerCtx): JsNode[] {
  * pointer to the current scope.
  */
 function pushScopeHandler(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.SC}={${ctx.sPar}:${ctx.SC},${ctx.sV}:{}};break;`)];
+	return [
+		exprStmt(
+			assign(
+				id(ctx.SC),
+				obj([ctx.sPar, id(ctx.SC)], [ctx.sV, obj()])
+			)
+		),
+		breakStmt(),
+	];
 }
 
 /** POP_SCOPE: restore parent scope (or stay if already at root). */
 function POP_SCOPE(ctx: HandlerCtx): JsNode[] {
-	return [raw(`${ctx.SC}=${ctx.SC}.${ctx.sPar}||${ctx.SC};break;`)];
+	return [
+		exprStmt(
+			assign(
+				id(ctx.SC),
+				bin("||", member(id(ctx.SC), ctx.sPar), id(ctx.SC))
+			)
+		),
+		breakStmt(),
+	];
 }
 
 // --- TDZ (Temporal Dead Zone) ---
@@ -107,20 +169,43 @@ function POP_SCOPE(ctx: HandlerCtx): JsNode[] {
  */
 function TDZ_CHECK(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];` +
-				`if(${ctx.SC}.${ctx.sTdz}&&${ctx.SC}.${ctx.sTdz}[name])` +
-				`throw new ReferenceError("Cannot access '"+name+"' before initialization");break;`
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		ifStmt(
+			bin(
+				"&&",
+				member(id(ctx.SC), ctx.sTdz),
+				index(member(id(ctx.SC), ctx.sTdz), id("name"))
+			),
+			[
+				throwStmt(
+					newExpr(id("ReferenceError"), [
+						bin(
+							"+",
+							bin(
+								"+",
+								lit("Cannot access '"),
+								id("name")
+							),
+							lit("' before initialization")
+						),
+					])
+				),
+			]
 		),
+		breakStmt(),
 	];
 }
 
 /** TDZ_MARK: remove variable from TDZ set (it has been initialized). */
 function TDZ_MARK(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];if(${ctx.SC}.${ctx.sTdz})delete ${ctx.SC}.${ctx.sTdz}[name];break;`
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		ifStmt(member(id(ctx.SC), ctx.sTdz), [
+			exprStmt(
+				un("delete", index(member(id(ctx.SC), ctx.sTdz), id("name")))
+			),
+		]),
+		breakStmt(),
 	];
 }
 
@@ -132,9 +217,14 @@ function TDZ_MARK(ctx: HandlerCtx): JsNode[] {
  */
 function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var wObj=${ctx.popStr()};${ctx.SC}={${ctx.sPar}:${ctx.SC},${ctx.sV}:wObj};break;`
+		varDecl("wObj", ctx.pop()),
+		exprStmt(
+			assign(
+				id(ctx.SC),
+				obj([ctx.sPar, id(ctx.SC)], [ctx.sV, id("wObj")])
+			)
 		),
+		breakStmt(),
 	];
 }
 
@@ -144,14 +234,13 @@ function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
  * DELETE_SCOPED: walk scope chain to find and delete variable.
  *
  * Pushes the result of `delete` onto the stack.
+ * Uses ctx.scopeWalk() since the trailing break after the while loop is correct.
  */
 function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`${ctx.pushStr("delete "+sv)};`)
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([exprStmt(ctx.push(un("delete", ctx.sv())))]),
 	];
 }
 
@@ -159,31 +248,51 @@ function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
 
 /** LOAD_GLOBAL: load a global variable by name. */
 function LOAD_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var g=_g;${ctx.pushStr("g["+ctx.C+"["+ctx.O+"]]")};break;`)];
+	return [
+		varDecl("g", id("_g")),
+		exprStmt(ctx.push(index(id("g"), index(id(ctx.C), id(ctx.O))))),
+		breakStmt(),
+	];
 }
 
 /** STORE_GLOBAL: store a value to a global variable by name. */
 function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var g=_g;g[${ctx.C}[${ctx.O}]]=${ctx.popStr()};break;`)];
+	return [
+		varDecl("g", id("_g")),
+		exprStmt(
+			assign(
+				index(id("g"), index(id(ctx.C), id(ctx.O))),
+				ctx.pop()
+			)
+		),
+		breakStmt(),
+	];
 }
 
 /**
  * TYPEOF_GLOBAL: walk scope chain first (for closures), then fall back to
  * `typeof _g[name]` for true globals.
  *
- * Uses sv() for DRY scope variable references but NOT scopeWalk()
- * because the global fallback runs after the while loop.
+ * Does NOT use ctx.scopeWalk() because the global `typeof` fallback runs
+ * after the while loop instead of a trailing break.
  */
 function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];` +
-				`var s=${ctx.SC};var _tf=false;` +
-				`while(s){if(name in s.${ctx.sV}){${ctx.pushStr("typeof "+sv)};_tf=true;break;}s=s.${ctx.sPar};}` +
-				`if(!_tf){${ctx.pushStr("typeof _g[name]")};}` +
-				`break;`
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		varDecl("_tf", lit(false)),
+		whileStmt(id("s"), [
+			ifStmt(bin("in", id("name"), member(id("s"), ctx.sV)), [
+				exprStmt(ctx.push(un("typeof", ctx.sv()))),
+				exprStmt(assign(id("_tf"), lit(true))),
+				breakStmt(),
+			]),
+			exprStmt(assign(id("s"), member(id("s"), ctx.sPar))),
+		]),
+		ifStmt(un("!", id("_tf")), [
+			exprStmt(ctx.push(un("typeof", index(id("_g"), id("name"))))),
+		]),
+		breakStmt(),
 	];
 }
 
