@@ -180,7 +180,10 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
 	}
 
 	function genName(): string {
-		for (;;) {
+		for (let attempt = 0; ; attempt++) {
+			if (attempt > 5000) {
+				throw new Error("Runtime name pool exhausted");
+			}
 			const len = 2 + (lcg() % 2); // 2-3 chars after '_'
 			let name = "_" + ALPHA[lcg() % ALPHA.length]!;
 			for (let i = 1; i < len; i++) {
@@ -298,28 +301,32 @@ export function generateShieldedNames(
 	}
 
 	for (const groupSeed of groupSeeds) {
-		let names: RuntimeNames;
+		let names: RuntimeNames | undefined;
 		// Retry if a group name collides with shared or another group
-		let attempt = 0;
-		for (;;) {
-			names = generateRuntimeNames((groupSeed ^ groups.length) + attempt);
-			attempt++;
+		for (let attempt = 0; attempt < 1000; attempt++) {
+			const candidate = generateRuntimeNames(
+				(groupSeed ^ groups.length) + attempt
+			);
 			// Override shared fields
 			for (const key of SHARED_NAME_KEYS) {
-				(names as unknown as Record<string, string>)[key] = shared[key];
+				(candidate as unknown as Record<string, string>)[key] =
+					shared[key];
 			}
 			// Check for collisions among non-shared names
-			const groupNonShared = Object.entries(names)
+			const groupNonShared = Object.entries(candidate)
 				.filter(
 					([k]) =>
 						!(SHARED_NAME_KEYS as readonly string[]).includes(k)
 				)
 				.map(([, v]) => v);
-			const hasCollision = groupNonShared.some((n) => globalUsed.has(n));
-			if (!hasCollision) {
+			if (!groupNonShared.some((n) => globalUsed.has(n))) {
 				for (const n of groupNonShared) globalUsed.add(n);
+				names = candidate;
 				break;
 			}
+		}
+		if (!names) {
+			throw new Error("Shielded group name pool exhausted");
 		}
 		groups.push(names);
 	}

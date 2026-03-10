@@ -237,6 +237,16 @@ function parseArgs(argv: string[]): CliArgs {
 	};
 
 	let i = 0;
+
+	/** Consume the next argument or exit with an error. */
+	function nextArg(flag: string): string {
+		if (++i >= argv.length) {
+			console.error(chalk.red(`  Missing value for ${flag}`));
+			process.exit(1);
+		}
+		return argv[i]!;
+	}
+
 	while (i < argv.length) {
 		const arg = argv[i]!;
 		switch (arg) {
@@ -254,14 +264,14 @@ function parseArgs(argv: string[]): CliArgs {
 				break;
 			case "-o":
 			case "--output":
-				result.output = argv[++i];
+				result.output = nextArg(arg);
 				break;
 			case "-m":
 			case "--mode":
-				result.options.targetMode = argv[++i] as "root" | "comment";
+				result.options.targetMode = nextArg(arg) as "root" | "comment";
 				break;
 			case "--preset":
-				result.options.preset = argv[++i] as PresetName;
+				result.options.preset = nextArg(arg) as PresetName;
 				break;
 			case "-e":
 			case "--encrypt":
@@ -300,10 +310,10 @@ function parseArgs(argv: string[]): CliArgs {
 				result.options.vmShielding = true;
 				break;
 			case "--include":
-				result.include = [argv[++i]!];
+				result.include = [nextArg(arg)];
 				break;
 			case "--exclude":
-				result.exclude = [argv[++i]!];
+				result.exclude = [nextArg(arg)];
 				break;
 			default:
 				if (arg.startsWith("-")) {
