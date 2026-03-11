@@ -50,18 +50,18 @@ import { registry } from "./registry.js";
  */
 function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("_ci", bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))),
-		varDecl("_fi", bin("&", id(ctx.O), lit(0xffff))),
-		ifStmt(bin("===", id("_ci"), lit(0xffff)), [
-			exprStmt(assign(id("_ci"), un("-", lit(1)))),
+		varDecl(ctx.t("_ci"), bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))),
+		varDecl(ctx.t("_fi"), bin("&", id(ctx.O), lit(0xffff))),
+		ifStmt(bin("===", id(ctx.t("_ci")), lit(0xffff)), [
+			exprStmt(assign(id(ctx.t("_ci")), un("-", lit(1)))),
 		]),
-		ifStmt(bin("===", id("_fi"), lit(0xffff)), [
-			exprStmt(assign(id("_fi"), un("-", lit(1)))),
+		ifStmt(bin("===", id(ctx.t("_fi")), lit(0xffff)), [
+			exprStmt(assign(id(ctx.t("_fi")), un("-", lit(1)))),
 		]),
 		ifStmt(un("!", id(ctx.EX)), [exprStmt(assign(id(ctx.EX), arr()))]),
 		exprStmt(
 			call(member(id(ctx.EX), "push"), [
-				obj(["_ci", id("_ci")], ["_fi", id("_fi")], ["_sp", id(ctx.P)]),
+				obj([ctx.t("_ci"), id(ctx.t("_ci"))], [ctx.t("_fi"), id(ctx.t("_fi"))], [ctx.t("_sp"), id(ctx.P)]),
 			])
 		),
 		breakStmt(),
@@ -150,10 +150,10 @@ function END_FINALLY(ctx: HandlerCtx): JsNode[] {
 			throwStmt(id("ex")),
 		]),
 		ifStmt(bin("===", id(ctx.CT), lit(1)), [
-			varDecl("_rv2", id(ctx.CV)),
+			varDecl(ctx.t("_rv2"), id(ctx.CV)),
 			exprStmt(assign(id(ctx.CT), lit(0))),
 			exprStmt(assign(id(ctx.CV), un("void", lit(0)))),
-			returnStmt(id("_rv2")),
+			returnStmt(id(ctx.t("_rv2"))),
 		]),
 		breakStmt(),
 	];

@@ -8,7 +8,7 @@
  */
 
 import type { JsNode } from "../nodes.js";
-import type { RuntimeNames } from "../../encoding/names.js";
+import type { RuntimeNames, TempNames } from "../../encoding/names.js";
 import {
 	id,
 	lit,
@@ -41,7 +41,7 @@ import {
  * @param names - Randomized runtime identifier names.
  * @returns An array of JsNode containing the dispatch function and its .call property.
  */
-export function buildRunners(debug: boolean, names: RuntimeNames): JsNode[] {
+export function buildRunners(debug: boolean, names: RuntimeNames, temps: TempNames): JsNode[] {
 	const U = names.unit;
 	const A = names.args;
 	const OS = names.outer;
@@ -77,7 +77,7 @@ export function buildRunners(debug: boolean, names: RuntimeNames): JsNode[] {
 						bin("+", lit("params="), member(id(U), "p")),
 					])
 				),
-				exprStmt(assign(member(id(U), "_dbgId"), id("id"))),
+				exprStmt(assign(member(id(U), temps["_dbgId"]!), id("id"))),
 		  ]
 		: [];
 
@@ -110,12 +110,12 @@ export function buildRunners(debug: boolean, names: RuntimeNames): JsNode[] {
 				[exprStmt(assign(id(TV), id("globalThis")))],
 				// else: type check + box
 				[
-					varDecl("_t", un("typeof", id(TV))),
+					varDecl(temps["_t"]!, un("typeof", id(TV))),
 					ifStmt(
 						bin(
 							"&&",
-							bin("!==", id("_t"), lit("object")),
-							bin("!==", id("_t"), lit("function"))
+							bin("!==", id(temps["_t"]!), lit("object")),
+							bin("!==", id(temps["_t"]!), lit("function"))
 						),
 						[exprStmt(assign(id(TV), call(id("Object"), [id(TV)])))]
 					),

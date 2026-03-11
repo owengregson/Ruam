@@ -36,7 +36,7 @@ import {
 	generateRuntimeNames,
 	generateShieldedNames,
 } from "./encoding/names.js";
-import type { RuntimeNames } from "./encoding/names.js";
+import type { RuntimeNames, TempNames } from "./encoding/names.js";
 import { resolveOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
 import { preprocessIdentifiers, resetHexCounter } from "./preprocess.js";
@@ -107,7 +107,7 @@ export function obfuscateCode(
 	const shuffleMap = generateShuffleMap(shuffleSeed);
 
 	// -- Generate randomized runtime identifiers -----------------------------
-	const names = generateRuntimeNames(shuffleSeed);
+	const { runtime: names, temps } = generateRuntimeNames(shuffleSeed);
 
 	// -- Parse ---------------------------------------------------------------
 	const ast = parse(code, {
@@ -142,6 +142,7 @@ export function obfuscateCode(
 	if (integrityBinding) {
 		const interpNodes = buildInterpreterFunctions(
 			names,
+			temps,
 			shuffleMap,
 			debugLogging,
 			true,
@@ -172,7 +173,7 @@ export function obfuscateCode(
 	}
 
 	// -- Assemble output -----------------------------------------------------
-	return assembleOutput(ast, compiledUnits, shuffleMap, names, {
+	return assembleOutput(ast, compiledUnits, shuffleMap, names, temps, {
 		encrypt: encryptBytecode,
 		debugProtection,
 		debugLogging,
@@ -578,8 +579,12 @@ function assembleShielded(
 	const sharedSeed = generateCryptoSeed();
 
 	// Generate names: shared + per-group
-	const { shared: sharedNames, groups: groupNameSets } =
-		generateShieldedNames(sharedSeed, groupSeeds);
+	const {
+		shared: sharedNames,
+		sharedTemps,
+		groups: groupNameSets,
+		groupTemps: groupTempSets,
+	} = generateShieldedNames(sharedSeed, groupSeeds);
 
 	// Compile each target function into a shielding group
 	const groups: ShieldingGroup[] = [];
@@ -592,6 +597,7 @@ function assembleShielded(
 		const fnPath = targetPaths[gi]!;
 		const groupSeed = groupSeeds[gi]!;
 		const groupNames = groupNameSets[gi]!;
+		const groupTemps = groupTempSets[gi]!;
 		const groupShuffleMap = generateShuffleMap(groupSeed);
 
 		let unit: BytecodeUnit;
@@ -622,6 +628,7 @@ function assembleShielded(
 		if (opts.integrityBinding) {
 			const interpNodes = buildInterpreterFunctions(
 				groupNames,
+				groupTemps,
 				groupShuffleMap,
 				opts.debugLogging ?? false,
 				true,
@@ -673,6 +680,7 @@ function assembleShielded(
 		groups.push({
 			shuffleMap: groupShuffleMap,
 			names: groupNames,
+			temps: groupTemps,
 			seed: groupSeed,
 			unitIds,
 			usedOpcodes,
@@ -694,6 +702,7 @@ function assembleShielded(
 	const runtime = generateShieldedVmRuntime({
 		groups,
 		sharedNames,
+		sharedTemps,
 		encrypt: opts.encryptBytecode,
 		debugProtection: opts.debugProtection,
 		debugLogging: opts.debugLogging,
@@ -729,6 +738,7 @@ function assembleOutput(
 	compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }>,
 	shuffleMap: number[],
 	names: RuntimeNames,
+	temps: TempNames,
 	runtimeOptions: {
 		encrypt: boolean;
 		debugProtection: boolean;
@@ -752,6 +762,7 @@ function assembleOutput(
 	const runtime = generateVmRuntime({
 		opcodeShuffleMap: shuffleMap,
 		names,
+		temps,
 		encrypt: runtimeOptions.encrypt,
 		debugProtection: runtimeOptions.debugProtection,
 		debugLogging: runtimeOptions.debugLogging,

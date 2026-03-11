@@ -77,25 +77,25 @@ function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.pop()),
 		varDecl("rest", arr()),
-		whileStmt(un("!", member(id("iterObj"), "_done")), [
+		whileStmt(un("!", member(id("iterObj"), ctx.t("_done"))), [
 			exprStmt(
 				call(member(id("rest"), "push"), [
-					member(id("iterObj"), "_value"),
+					member(id("iterObj"), ctx.t("_value")),
 				])
 			),
 			varDecl(
 				"nxt",
-				call(member(member(id("iterObj"), "_iter"), "next"), [])
+				call(member(member(id("iterObj"), ctx.t("_iter")), "next"), [])
 			),
 			exprStmt(
 				assign(
-					member(id("iterObj"), "_done"),
+					member(id("iterObj"), ctx.t("_done")),
 					un("!", un("!", member(id("nxt"), "done")))
 				)
 			),
 			exprStmt(
 				assign(
-					member(id("iterObj"), "_value"),
+					member(id("iterObj"), ctx.t("_value")),
 					member(id("nxt"), "value")
 				)
 			),
@@ -171,9 +171,9 @@ function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			ctx.push(
 				obj(
-					["_iter", id("iter")],
-					["_done", un("!", un("!", member(id("first"), "done")))],
-					["_value", member(id("first"), "value")]
+					[ctx.t("_iter"), id("iter")],
+					[ctx.t("_done"), un("!", un("!", member(id("first"), "done")))],
+					[ctx.t("_value"), member(id("first"), "value")]
 				)
 			)
 		),

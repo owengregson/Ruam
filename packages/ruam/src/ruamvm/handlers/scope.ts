@@ -71,7 +71,7 @@ function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
 		]),
 		// Global fallback
 		ifStmt(un("!", id("found")), [
-			exprStmt(ctx.push(index(id("_g"), id("name")))),
+			exprStmt(ctx.push(index(id(ctx.t("_g")), id("name")))),
 		]),
 		breakStmt(),
 	];
@@ -106,7 +106,7 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
 		]),
 		// Global fallback
 		ifStmt(un("!", id("found")), [
-			exprStmt(assign(index(id("_g"), id("name")), id("val"))),
+			exprStmt(assign(index(id(ctx.t("_g")), id("name")), id("val"))),
 		]),
 		breakStmt(),
 	];
@@ -242,7 +242,7 @@ function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
 /** LOAD_GLOBAL: load a global variable by name. */
 function LOAD_GLOBAL(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("g", id("_g")),
+		varDecl("g", id(ctx.t("_g"))),
 		exprStmt(ctx.push(index(id("g"), index(id(ctx.C), id(ctx.O))))),
 		breakStmt(),
 	];
@@ -251,7 +251,7 @@ function LOAD_GLOBAL(ctx: HandlerCtx): JsNode[] {
 /** STORE_GLOBAL: store a value to a global variable by name. */
 function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("g", id("_g")),
+		varDecl("g", id(ctx.t("_g"))),
 		exprStmt(
 			assign(index(id("g"), index(id(ctx.C), id(ctx.O))), ctx.pop())
 		),
@@ -270,17 +270,17 @@ function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
 		varDecl("s", id(ctx.SC)),
-		varDecl("_tf", lit(false)),
+		varDecl(ctx.t("_tf"), lit(false)),
 		whileStmt(id("s"), [
 			ifStmt(bin("in", id("name"), member(id("s"), ctx.sV)), [
 				exprStmt(ctx.push(un("typeof", ctx.sv()))),
-				exprStmt(assign(id("_tf"), lit(true))),
+				exprStmt(assign(id(ctx.t("_tf")), lit(true))),
 				breakStmt(),
 			]),
 			exprStmt(assign(id("s"), member(id("s"), ctx.sPar))),
 		]),
-		ifStmt(un("!", id("_tf")), [
-			exprStmt(ctx.push(un("typeof", index(id("_g"), id("name"))))),
+		ifStmt(un("!", id(ctx.t("_tf"))), [
+			exprStmt(ctx.push(un("typeof", index(id(ctx.t("_g")), id("name"))))),
 		]),
 		breakStmt(),
 	];

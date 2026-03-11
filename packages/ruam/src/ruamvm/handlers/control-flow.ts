@@ -123,8 +123,8 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
  */
 function RETURN(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("_rv", ctx.pop()),
-		...debugTrace(ctx, "RETURN", lit("value="), id("_rv")),
+		varDecl(ctx.t("_rv"), ctx.pop()),
+		...debugTrace(ctx, "RETURN", lit("value="), id(ctx.t("_rv"))),
 		ifStmt(
 			bin(
 				"&&",
@@ -133,28 +133,28 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
 			),
 			[
 				varDecl(
-					"_h",
+					ctx.t("_h"),
 					index(
 						id(ctx.EX),
 						bin("-", member(id(ctx.EX), "length"), lit(1))
 					)
 				),
-				ifStmt(bin(">=", member(id("_h"), "_fi"), lit(0)), [
+				ifStmt(bin(">=", member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)), [
 					exprStmt(assign(id(ctx.CT), lit(1))),
-					exprStmt(assign(id(ctx.CV), id("_rv"))),
+					exprStmt(assign(id(ctx.CV), id(ctx.t("_rv")))),
 					exprStmt(call(member(id(ctx.EX), "pop"), [])),
-					exprStmt(assign(id(ctx.P), member(id("_h"), "_sp"))),
+					exprStmt(assign(id(ctx.P), member(id(ctx.t("_h")), ctx.t("_sp")))),
 					exprStmt(
 						assign(
 							id(ctx.IP),
-							bin("*", member(id("_h"), "_fi"), lit(2))
+							bin("*", member(id(ctx.t("_h")), ctx.t("_fi")), lit(2))
 						)
 					),
 					breakStmt(),
 				]),
 			]
 		),
-		returnStmt(id("_rv")),
+		returnStmt(id(ctx.t("_rv"))),
 	];
 }
 
@@ -178,21 +178,21 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 			),
 			[
 				varDecl(
-					"_h",
+					ctx.t("_h"),
 					index(
 						id(ctx.EX),
 						bin("-", member(id(ctx.EX), "length"), lit(1))
 					)
 				),
-				ifStmt(bin(">=", member(id("_h"), "_fi"), lit(0)), [
+				ifStmt(bin(">=", member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)), [
 					exprStmt(assign(id(ctx.CT), lit(1))),
 					exprStmt(assign(id(ctx.CV), un("void", lit(0)))),
 					exprStmt(call(member(id(ctx.EX), "pop"), [])),
-					exprStmt(assign(id(ctx.P), member(id("_h"), "_sp"))),
+					exprStmt(assign(id(ctx.P), member(id(ctx.t("_h")), ctx.t("_sp")))),
 					exprStmt(
 						assign(
 							id(ctx.IP),
-							bin("*", member(id("_h"), "_fi"), lit(2))
+							bin("*", member(id(ctx.t("_h")), ctx.t("_fi")), lit(2))
 						)
 					),
 					breakStmt(),
@@ -214,9 +214,9 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
  */
 function THROW(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("_te", ctx.pop()),
-		...debugTrace(ctx, "THROW", lit("value="), id("_te")),
-		throwStmt(id("_te")),
+		varDecl(ctx.t("_te"), ctx.pop()),
+		...debugTrace(ctx, "THROW", lit("value="), id(ctx.t("_te"))),
+		throwStmt(id(ctx.t("_te"))),
 	];
 }
 

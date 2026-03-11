@@ -63,13 +63,13 @@ function buildDebugArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 					lit(isAsync ? "async arrow uid=" : "arrow uid="),
 					id("uid")
 				),
-				bin("+", lit("args="), member(id("_a"), "length")),
+				bin("+", lit("args="), member(id(ctx.t("_a")), "length")),
 			])
 		),
 		returnStmt(
 			call(id(isAsync ? ctx.execAsync : ctx.exec), [
 				id("u"),
-				id("_a"),
+				id(ctx.t("_a")),
 				id("cs"),
 				id("ct"),
 			])
@@ -82,15 +82,15 @@ function buildDebugArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 			[
 				ifStmt(member(id("u"), "s"), [
 					returnStmt(
-						fnExpr(undefined, ["..._a"], innerBody(true), {
+						fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(true), {
 							async: true,
 						})
 					),
 				]),
-				returnStmt(fnExpr(undefined, ["..._a"], innerBody(false))),
+				returnStmt(fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))),
 			]
 		),
-		[id("_cu"), id("_cuid"), id(ctx.SC), id(ctx.TV)]
+		[id(ctx.t("_cu")), id(ctx.t("_cuid")), id(ctx.SC), id(ctx.TV)]
 	);
 }
 
@@ -109,18 +109,18 @@ function buildDebugRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 			call(id(ctx.dbg), [
 				lit("CALL_CLOSURE"),
 				bin("+", lit(isAsync ? "async uid=" : "uid="), id("uid")),
-				bin("+", lit("args="), member(id("_a"), "length")),
+				bin("+", lit("args="), member(id(ctx.t("_a")), "length")),
 			])
 		),
-		...buildThisBoxing(),
+		...buildThisBoxing(ctx),
 		returnStmt(
 			call(id(isAsync ? ctx.execAsync : ctx.exec), [
 				id("u"),
-				id("_a"),
+				id(ctx.t("_a")),
 				id("cs"),
-				id("_tv"),
+				id(ctx.t("_tv")),
 				un("void", lit(0)),
-				member(id("fn"), "_ho"),
+				member(id("fn"), ctx.t("_ho")),
 			])
 		),
 	];
@@ -132,17 +132,17 @@ function buildDebugRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 				ifStmt(member(id("u"), "s"), [
 					varDecl(
 						"fn",
-						fnExpr(undefined, ["..._a"], innerBody(true), {
+						fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(true), {
 							async: true,
 						})
 					),
 					returnStmt(id("fn")),
 				]),
-				varDecl("fn", fnExpr(undefined, ["..._a"], innerBody(false))),
+				varDecl("fn", fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))),
 				returnStmt(id("fn")),
 			]
 		),
-		[id("_cu"), id("_cuid"), id(ctx.SC)]
+		[id(ctx.t("_cu")), id(ctx.t("_cuid")), id(ctx.SC)]
 	);
 }
 
@@ -161,18 +161,18 @@ function buildDebugFunctionClosureIIFE(ctx: HandlerCtx): JsNode {
 			call(id(ctx.dbg), [
 				lit("CALL_FUNCTION"),
 				bin("+", lit(isAsync ? "async uid=" : "uid="), id("uid")),
-				bin("+", lit("args="), member(id("_a"), "length")),
+				bin("+", lit("args="), member(id(ctx.t("_a")), "length")),
 			])
 		),
-		...buildThisBoxing(),
+		...buildThisBoxing(ctx),
 		returnStmt(
 			call(id(isAsync ? ctx.execAsync : ctx.exec), [
 				id("u"),
-				id("_a"),
+				id(ctx.t("_a")),
 				id("cs"),
-				id("_tv"),
+				id(ctx.t("_tv")),
 				un("void", lit(0)),
-				member(id("fn"), "_ho"),
+				member(id("fn"), ctx.t("_ho")),
 			])
 		),
 	];
@@ -184,17 +184,17 @@ function buildDebugFunctionClosureIIFE(ctx: HandlerCtx): JsNode {
 				ifStmt(member(id("u"), "s"), [
 					varDecl(
 						"fn",
-						fnExpr(undefined, ["..._a"], innerBody(true), {
+						fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(true), {
 							async: true,
 						})
 					),
 					returnStmt(id("fn")),
 				]),
-				varDecl("fn", fnExpr(undefined, ["..._a"], innerBody(false))),
+				varDecl("fn", fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))),
 				returnStmt(id("fn")),
 			]
 		),
-		[id("_fu"), id("_fuid"), id(ctx.SC)]
+		[id(ctx.t("_fu")), id(ctx.t("_fuid")), id(ctx.SC)]
 	);
 }
 
@@ -210,28 +210,28 @@ function buildDebugFunctionClosureIIFE(ctx: HandlerCtx): JsNode {
 function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 	if (ctx.debug) {
 		return [
-			varDecl("_cuid", index(id(ctx.C), id(ctx.O))),
-			varDecl("_cu", call(id(ctx.load), [id("_cuid")])),
-			exprStmt(assign(member(id("_cu"), "_dbgId"), id("_cuid"))),
+			varDecl(ctx.t("_cuid"), index(id(ctx.C), id(ctx.O))),
+			varDecl(ctx.t("_cu"), call(id(ctx.load), [id(ctx.t("_cuid"))])),
+			exprStmt(assign(member(id(ctx.t("_cu")), ctx.t("_dbgId")), id(ctx.t("_cuid")))),
 			exprStmt(
 				call(id(ctx.dbg), [
 					lit("NEW_CLOSURE"),
-					bin("+", lit("uid="), id("_cuid")),
+					bin("+", lit("uid="), id(ctx.t("_cuid"))),
 					bin(
 						"+",
 						lit("async="),
-						un("!", un("!", member(id("_cu"), "s")))
+						un("!", un("!", member(id(ctx.t("_cu")), "s")))
 					),
-					bin("+", lit("params="), member(id("_cu"), "p")),
+					bin("+", lit("params="), member(id(ctx.t("_cu")), "p")),
 					bin(
 						"+",
 						lit("arrow="),
-						un("!", un("!", member(id("_cu"), "a")))
+						un("!", un("!", member(id(ctx.t("_cu")), "a")))
 					),
 				])
 			),
 			ifStmt(
-				member(id("_cu"), "a"),
+				member(id(ctx.t("_cu")), "a"),
 				[exprStmt(ctx.push(buildDebugArrowClosureIIFE(ctx)))],
 				[exprStmt(ctx.push(buildDebugRegularClosureIIFE(ctx)))]
 			),
@@ -239,9 +239,9 @@ function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 		];
 	}
 	return [
-		varDecl("_cu", call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
 		ifStmt(
-			member(id("_cu"), "a"),
+			member(id(ctx.t("_cu")), "a"),
 			[exprStmt(ctx.push(buildArrowClosureIIFE(ctx)))],
 			[exprStmt(ctx.push(buildRegularClosureIIFE(ctx)))]
 		),
@@ -258,19 +258,19 @@ function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
 	if (ctx.debug) {
 		return [
-			varDecl("_fuid", index(id(ctx.C), id(ctx.O))),
-			varDecl("_fu", call(id(ctx.load), [id("_fuid")])),
-			exprStmt(assign(member(id("_fu"), "_dbgId"), id("_fuid"))),
+			varDecl(ctx.t("_fuid"), index(id(ctx.C), id(ctx.O))),
+			varDecl(ctx.t("_fu"), call(id(ctx.load), [id(ctx.t("_fuid"))])),
+			exprStmt(assign(member(id(ctx.t("_fu")), ctx.t("_dbgId")), id(ctx.t("_fuid")))),
 			exprStmt(
 				call(id(ctx.dbg), [
 					lit("NEW_FUNCTION"),
-					bin("+", lit("uid="), id("_fuid")),
+					bin("+", lit("uid="), id(ctx.t("_fuid"))),
 					bin(
 						"+",
 						lit("async="),
-						un("!", un("!", member(id("_fu"), "s")))
+						un("!", un("!", member(id(ctx.t("_fu")), "s")))
 					),
-					bin("+", lit("params="), member(id("_fu"), "p")),
+					bin("+", lit("params="), member(id(ctx.t("_fu")), "p")),
 				])
 			),
 			exprStmt(ctx.push(buildDebugFunctionClosureIIFE(ctx))),
@@ -278,7 +278,7 @@ function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
 		];
 	}
 	return [
-		varDecl("_cu", call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
 		exprStmt(ctx.push(buildRegularClosureIIFE(ctx))),
 		breakStmt(),
 	];
@@ -293,7 +293,7 @@ function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
  */
 function NEW_ARROW(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("_cu", call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
 		exprStmt(ctx.push(buildArrowClosureIIFE(ctx))),
 		breakStmt(),
 	];
@@ -306,13 +306,13 @@ function NEW_ARROW(ctx: HandlerCtx): JsNode[] {
  */
 function NEW_ASYNC(ctx: HandlerCtx): JsNode[] {
 	const asyncBody: JsNode[] = [
-		...buildThisBoxing(),
+		...buildThisBoxing(ctx),
 		returnStmt(
-			call(id(ctx.execAsync), [id("u"), id("_a"), id("cs"), id("_tv")])
+			call(id(ctx.execAsync), [id("u"), id(ctx.t("_a")), id("cs"), id(ctx.t("_tv"))])
 		),
 	];
 	return [
-		varDecl("_cu", call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
 		exprStmt(
 			ctx.push(
 				call(
@@ -321,13 +321,13 @@ function NEW_ASYNC(ctx: HandlerCtx): JsNode[] {
 						["u", "cs"],
 						[
 							returnStmt(
-								fnExpr(undefined, ["..._a"], asyncBody, {
+								fnExpr(undefined, ["..." + ctx.t("_a")], asyncBody, {
 									async: true,
 								})
 							),
 						]
 					),
-					[id("_cu"), id(ctx.SC)]
+					[id(ctx.t("_cu")), id(ctx.SC)]
 				)
 			)
 		),
@@ -343,22 +343,22 @@ function NEW_ASYNC(ctx: HandlerCtx): JsNode[] {
  */
 function NEW_GENERATOR_HANDLER(ctx: HandlerCtx): JsNode[] {
 	const fnBody: JsNode[] = [
-		...buildThisBoxing(),
+		...buildThisBoxing(ctx),
 		returnStmt(
-			call(id(ctx.exec), [id("u"), id("_a"), id("cs"), id("_tv")])
+			call(id(ctx.exec), [id("u"), id(ctx.t("_a")), id("cs"), id(ctx.t("_tv"))])
 		),
 	];
 	return [
-		varDecl("_cu", call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
 		exprStmt(
 			ctx.push(
 				call(
 					fnExpr(
 						undefined,
 						["u", "cs"],
-						[returnStmt(fnExpr(undefined, ["..._a"], fnBody))]
+						[returnStmt(fnExpr(undefined, ["..." + ctx.t("_a")], fnBody))]
 					),
-					[id("_cu"), id(ctx.SC)]
+					[id(ctx.t("_cu")), id(ctx.SC)]
 				)
 			)
 		),

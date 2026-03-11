@@ -13,7 +13,7 @@
 
 import type { CaseClause } from "../nodes.js";
 import type { JsNode } from "../nodes.js";
-import type { RuntimeNames } from "../../encoding/names.js";
+import type { RuntimeNames, TempNames } from "../../encoding/names.js";
 import {
 	caseClause,
 	lit,
@@ -64,6 +64,7 @@ export interface InterpreterBuildOptions {
  */
 export function buildInterpreterFunctions(
 	names: RuntimeNames,
+	temps: TempNames,
 	shuffleMap: number[],
 	debug: boolean,
 	rollingCipher: boolean,
@@ -71,14 +72,14 @@ export function buildInterpreterFunctions(
 	interpOpts: InterpreterBuildOptions = {}
 ): JsNode[] {
 	return [
-		buildExecFunction(names, shuffleMap, {
+		buildExecFunction(names, temps, shuffleMap, {
 			isAsync: false,
 			debug,
 			rollingCipher,
 			seed,
 			interpOpts,
 		}),
-		buildExecFunction(names, shuffleMap, {
+		buildExecFunction(names, temps, shuffleMap, {
 			isAsync: true,
 			debug,
 			rollingCipher,
@@ -97,6 +98,7 @@ export function buildInterpreterFunctions(
  */
 export function buildExecFunction(
 	names: RuntimeNames,
+	temps: TempNames,
 	shuffleMap: number[],
 	opts: {
 		isAsync: boolean;
@@ -106,7 +108,7 @@ export function buildExecFunction(
 		interpOpts: InterpreterBuildOptions;
 	}
 ): JsNode {
-	const ctx = makeHandlerCtx(names, opts.isAsync, opts.debug);
+	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
 
 	// Build switch cases from the handler registry
 	const cases: CaseClause[] = [];
@@ -141,6 +143,7 @@ export function buildExecFunction(
 	const switchNode = switchStmt(id(ctx.PH), cases);
 	const fnNode = buildScaffoldAST(
 		names,
+		temps,
 		opts.isAsync,
 		opts.debug,
 		opts.rollingCipher,
@@ -172,6 +175,7 @@ export function buildExecFunction(
  */
 function buildScaffoldAST(
 	n: RuntimeNames,
+	temps: TempNames,
 	isAsync: boolean,
 	debug: boolean,
 	rollingCipher: boolean,
@@ -201,6 +205,13 @@ function buildScaffoldAST(
 	const sPar = n.sPar,
 		sV = n.sVars;
 
+	/** Temp name lookup shorthand. */
+	const T = (key: string): string => {
+		const name = temps[key];
+		if (name === undefined) throw new Error(`Unknown temp: ${key}`);
+		return name;
+	};
+
 	// --- Outer body ---
 	const outerBody: JsNode[] = [];
 
@@ -209,12 +220,12 @@ function buildScaffoldAST(
 
 	// var _uid_=(U._dbgId||'?')
 	outerBody.push(
-		varDecl("_uid_", bin("||", member(id(U), "_dbgId"), lit("?")))
+		varDecl(T("_uid_"), bin("||", member(id(U), T("_dbgId")), lit("?")))
 	);
 
 	// callStack.push(_uid_)
 	outerBody.push(
-		exprStmt(call(member(id(n.callStack), "push"), [id("_uid_")]))
+		exprStmt(call(member(id(n.callStack), "push"), [id(T("_uid_"))]))
 	);
 
 	// Recursion guard: if(depth>500){depth--;callStack.pop();throw new RangeError('Maximum call '+'s'+'tack size exceeded');}
@@ -254,7 +265,7 @@ function buildScaffoldAST(
 	// var _g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{}
 	tryBody.push(
 		varDecl(
-			"_g",
+			T("_g"),
 			ternary(
 				bin("!==", un("typeof", id("globalThis")), lit("undefined")),
 				id("globalThis"),
@@ -286,14 +297,14 @@ function buildScaffoldAST(
 	// Optional: debug entry logging
 	if (debug) {
 		tryBody.push(
-			varDecl("_uid", bin("||", member(id(U), "_dbgId"), lit("?")))
+			varDecl(T("_uid"), bin("||", member(id(U), T("_dbgId")), lit("?")))
 		);
 		tryBody.push(
 			exprStmt(
 				call(id(n.dbg), [
 					lit("ENTER"),
 					lit(fnLabel),
-					bin("+", lit("unit="), id("_uid")),
+					bin("+", lit("unit="), id(T("_uid"))),
 					bin("+", lit("params="), member(id(U), "p")),
 					bin("+", lit("args="), member(id(A), "length")),
 					bin(
@@ -315,11 +326,11 @@ function buildScaffoldAST(
 
 	// Optional: stack encoding proxy
 	if (interpOpts.stackEncoding) {
-		tryBody.push(...buildStackEncodingProxyAST(n));
+		tryBody.push(...buildStackEncodingProxyAST(n, temps));
 	}
 
 	// var _il=I.length
-	tryBody.push(varDecl("_il", member(id(I), "length")));
+	tryBody.push(varDecl(T("_il"), member(id(I), "length")));
 
 	// --- Inner dispatch loop: for(;;){ try{...}catch(e){...} } ---
 
@@ -335,16 +346,16 @@ function buildScaffoldAST(
 	if (rollingCipher) {
 		// var _ri=(IP-2)>>>1
 		whileBody.push(
-			varDecl("_ri", bin(">>>", bin("-", id(IP), lit(2)), lit(1)))
+			varDecl(T("_ri"), bin(">>>", bin("-", id(IP), lit(2)), lit(1)))
 		);
 		// var _ks=rcMix(rcState,_ri,_ri^0x9E3779B9)
 		whileBody.push(
 			varDecl(
-				"_ks",
+				T("_ks"),
 				call(id(n.rcMix), [
 					id(n.rcState),
-					id("_ri"),
-					bin("^", id("_ri"), lit(0x9e3779b9)),
+					id(T("_ri")),
+					bin("^", id(T("_ri")), lit(0x9e3779b9)),
 				])
 			)
 		);
@@ -355,7 +366,7 @@ function buildScaffoldAST(
 					id(PH),
 					bin(
 						"&",
-						bin("^", id(PH), bin("&", id("_ks"), lit(0xffff))),
+						bin("^", id(PH), bin("&", id(T("_ks")), lit(0xffff))),
 						lit(0xffff)
 					)
 				)
@@ -364,7 +375,7 @@ function buildScaffoldAST(
 		// O=(O^_ks)|0
 		whileBody.push(
 			exprStmt(
-				assign(id(O), bin("|", bin("^", id(O), id("_ks")), lit(0)))
+				assign(id(O), bin("|", bin("^", id(O), id(T("_ks"))), lit(0)))
 			)
 		);
 	}
@@ -381,7 +392,7 @@ function buildScaffoldAST(
 
 	// Inner try body: while(IP<_il){...}; return void 0;
 	const innerTryBody: JsNode[] = [
-		whileStmt(bin("<", id(IP), id("_il")), whileBody),
+		whileStmt(bin("<", id(IP), id(T("_il"))), whileBody),
 		returnStmt(un("void", lit(0))),
 	];
 
@@ -420,7 +431,7 @@ function buildScaffoldAST(
 	const exHandlerBody: JsNode[] = [];
 
 	// var _h=EX.pop()
-	exHandlerBody.push(varDecl("_h", call(member(id(EX), "pop"), [])));
+	exHandlerBody.push(varDecl(T("_h"), call(member(id(EX), "pop"), [])));
 
 	// if(_h._ci>=0){ ... catch routing ... }
 	const catchRouteBody: JsNode[] = [];
@@ -429,25 +440,25 @@ function buildScaffoldAST(
 			exprStmt(
 				call(id(n.dbg), [
 					lit("CATCH"),
-					bin("+", lit("ip="), member(id("_h"), "_ci")),
-					bin("+", lit("sp="), member(id("_h"), "_sp")),
+					bin("+", lit("ip="), member(id(T("_h")), T("_ci"))),
+					bin("+", lit("sp="), member(id(T("_h")), T("_sp"))),
 				])
 			)
 		);
 	}
 	// P=_h._sp
-	catchRouteBody.push(exprStmt(assign(id(P), member(id("_h"), "_sp"))));
+	catchRouteBody.push(exprStmt(assign(id(P), member(id(T("_h")), T("_sp")))));
 	// Push error onto stack: S[++P]=e
 	catchRouteBody.push(exprStmt(stackPush(S, P, id("e"))));
 	// IP=_h._ci*2
 	catchRouteBody.push(
-		exprStmt(assign(id(IP), bin("*", member(id("_h"), "_ci"), lit(2))))
+		exprStmt(assign(id(IP), bin("*", member(id(T("_h")), T("_ci")), lit(2))))
 	);
 	// continue
 	catchRouteBody.push(continueStmt());
 
 	exHandlerBody.push(
-		ifStmt(bin(">=", member(id("_h"), "_ci"), lit(0)), catchRouteBody)
+		ifStmt(bin(">=", member(id(T("_h")), T("_ci")), lit(0)), catchRouteBody)
 	);
 
 	// if(_h._fi>=0){ ... finally routing ... }
@@ -457,26 +468,26 @@ function buildScaffoldAST(
 			exprStmt(
 				call(id(n.dbg), [
 					lit("FINALLY"),
-					bin("+", lit("ip="), member(id("_h"), "_fi")),
-					bin("+", lit("sp="), member(id("_h"), "_sp")),
+					bin("+", lit("ip="), member(id(T("_h")), T("_fi"))),
+					bin("+", lit("sp="), member(id(T("_h")), T("_sp"))),
 				])
 			)
 		);
 	}
 	// P=_h._sp
-	finallyRouteBody.push(exprStmt(assign(id(P), member(id("_h"), "_sp"))));
+	finallyRouteBody.push(exprStmt(assign(id(P), member(id(T("_h")), T("_sp")))));
 	// PE=e; HPE=true
 	finallyRouteBody.push(exprStmt(assign(id(PE), id("e"))));
 	finallyRouteBody.push(exprStmt(assign(id(HPE), lit(true))));
 	// IP=_h._fi*2
 	finallyRouteBody.push(
-		exprStmt(assign(id(IP), bin("*", member(id("_h"), "_fi"), lit(2))))
+		exprStmt(assign(id(IP), bin("*", member(id(T("_h")), T("_fi")), lit(2))))
 	);
 	// continue
 	finallyRouteBody.push(continueStmt());
 
 	exHandlerBody.push(
-		ifStmt(bin(">=", member(id("_h"), "_fi"), lit(0)), finallyRouteBody)
+		ifStmt(bin(">=", member(id(T("_h")), T("_fi")), lit(0)), finallyRouteBody)
 	);
 
 	catchBody.push(
@@ -701,13 +712,15 @@ function generateDecoyHandlers(
  * @param n - Runtime identifier names
  * @returns Array of JsNode statements to insert into the function body
  */
-function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
+function buildStackEncodingProxyAST(n: RuntimeNames, temps: TempNames): JsNode[] {
 	const S = n.stk;
 	const U = n.unit;
+	const SEK = temps["_sek"]!;
+	const SERAW = temps["_seRaw"]!;
 
 	// var _sek=(U.i.length^U.r^0x5A3C96E1)>>>0
 	const sekInit = varDecl(
-		"_sek",
+		SEK,
 		bin(
 			">>>",
 			bin(
@@ -724,13 +737,13 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 	);
 
 	// var _seRaw=[]
-	const seRawInit = varDecl("_seRaw", arr());
+	const seRawInit = varDecl(SERAW, arr());
 
 	// Helper: (_sek^(i*0x9E3779B9))>>>0
 	const xorKey = (iVar: JsNode) =>
 		bin(
 			">>>",
-			bin("^", id("_sek"), bin("*", iVar, lit(0x9e3779b9))),
+			bin("^", id(SEK), bin("*", iVar, lit(0x9e3779b9))),
 			lit(0)
 		);
 
@@ -754,7 +767,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 					[
 						exprStmt(
 							assign(
-								index(id("_seRaw"), id("i")),
+								index(id(SERAW), id("i")),
 								arr(lit(0), bin("^", id("v"), xorKey(id("i"))))
 							)
 						),
@@ -766,7 +779,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 							[
 								exprStmt(
 									assign(
-										index(id("_seRaw"), id("i")),
+										index(id(SERAW), id("i")),
 										arr(
 											lit(1),
 											ternary(id("v"), lit(1), lit(0))
@@ -781,7 +794,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 									[
 										exprStmt(
 											assign(
-												index(id("_seRaw"), id("i")),
+												index(id(SERAW), id("i")),
 												arr(lit(2), id("v"))
 											)
 										),
@@ -790,7 +803,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 										// else{_seRaw[i]=[3,v];}
 										exprStmt(
 											assign(
-												index(id("_seRaw"), id("i")),
+												index(id(SERAW), id("i")),
 												arr(lit(3), id("v"))
 											)
 										),
@@ -803,7 +816,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 			],
 			[
 				// else{_seRaw[k]=v;}
-				exprStmt(assign(index(id("_seRaw"), id("k")), id("v"))),
+				exprStmt(assign(index(id(SERAW), id("k")), id("v"))),
 			]
 		),
 		// return true
@@ -819,7 +832,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 			bin("&&", bin("===", id("i"), id("i")), bin(">=", id("i"), lit(0))),
 			[
 				// var e=_seRaw[i]
-				varDecl("e", index(id("_seRaw"), id("i"))),
+				varDecl("e", index(id(SERAW), id("i"))),
 				// if(!e)return void 0
 				ifStmt(un("!", id("e")), [returnStmt(un("void", lit(0)))]),
 				// if(e[0]===0)return e[1]^((_sek^(i*0x9E3779B9))>>>0)
@@ -838,10 +851,10 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 		),
 		// if(k==='length')return _seRaw.length
 		ifStmt(bin("===", id("k"), lit("length")), [
-			returnStmt(member(id("_seRaw"), "length")),
+			returnStmt(member(id(SERAW), "length")),
 		]),
 		// return _seRaw[k]
-		returnStmt(index(id("_seRaw"), id("k"))),
+		returnStmt(index(id(SERAW), id("k"))),
 	];
 
 	// S=new Proxy(_seRaw,{set:function(_,k,v){...},get:function(_,k){...}})
@@ -849,7 +862,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames): JsNode[] {
 		assign(
 			id(S),
 			newExpr(id("Proxy"), [
-				id("_seRaw"),
+				id(SERAW),
 				obj(
 					["set", fnExpr(undefined, ["_", "k", "v"], setBody)],
 					["get", fnExpr(undefined, ["_", "k"], getBody)]
