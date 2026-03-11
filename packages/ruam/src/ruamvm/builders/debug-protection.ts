@@ -115,82 +115,64 @@ export function buildDebugProtection(names: RuntimeNames): JsNode[] {
 	body.push(v(T, lit(100)));
 
 	// --- _dm: debugger methods array ---
-	// [function(){debugger;}, function(){try{(new Function("de"+"bu"+"gger"))();}catch(_){debugger;}}, ...]
+	// Four CSP-safe polymorphic debugger triggers (no eval/Function).
+	// Each hides `debugger` behind a different invocation path so automated
+	// stripping tools can't pattern-match all four at once.
 	body.push(
 		v(
 			"_dm",
 			arr(
-				// Method 0: plain debugger
+				// Method 0: plain debugger statement
 				fnExpr(undefined, [], [debuggerStmt()]),
-				// Method 1: (new Function("de"+"bu"+"gger"))()
-				fnExpr(
-					undefined,
-					[],
-					[
-						tryCatch(
-							[
-								es(
-									call(
-										newExpr(id("Function"), [
-											bin(
-												"+",
-												bin("+", lit("de"), lit("bu")),
-												lit("gger")
-											),
-										]),
-										[]
-									)
-								),
-							],
-							"_",
-							[debuggerStmt()]
-						),
-					]
-				),
-				// Method 2: eval("debugger")
-				fnExpr(
-					undefined,
-					[],
-					[
-						tryCatch(
-							[
-								es(
-									call(id("eval"), [
-										bin(
-											"+",
-											bin("+", lit("de"), lit("bug")),
-											lit("ger")
-										),
-									])
-								),
-							],
-							"_",
-							[debuggerStmt()]
-						),
-					]
-				),
-				// Method 3: (0,eval)("deb"+"ugger")  — indirect eval
-				fnExpr(
-					undefined,
-					[],
-					[
-						tryCatch(
-							[
-								es(
-									call(
-										{
-											type: "SequenceExpr",
-											exprs: [lit(0), id("eval")],
-										} as JsNode,
-										[bin("+", lit("deb"), lit("ugger"))]
-									)
-								),
-							],
-							"_",
-							[debuggerStmt()]
-						),
-					]
-				)
+				// Method 1: toString coercion trap
+				// var _o={toString:function(){debugger;return "";}}; ""+_o;
+				fnExpr(undefined, [], [
+					v(
+						"_o",
+						obj([
+							"toString",
+							fnExpr(undefined, [], [
+								debuggerStmt(),
+								returnStmt(lit("")),
+							]),
+						])
+					),
+					es(bin("+", lit(""), id("_o"))),
+				]),
+				// Method 2: valueOf coercion trap
+				// var _o={valueOf:function(){debugger;return 0;}}; +_o;
+				fnExpr(undefined, [], [
+					v(
+						"_o",
+						obj([
+							"valueOf",
+							fnExpr(undefined, [], [
+								debuggerStmt(),
+								returnStmt(lit(0)),
+							]),
+						])
+					),
+					es(un("+", id("_o"))),
+				]),
+				// Method 3: getter trap via Object.defineProperty
+				// var _o={}; Object.defineProperty(_o,"v",{get:function(){debugger;return 0;}}); _o.v;
+				fnExpr(undefined, [], [
+					v("_o", obj()),
+					es(
+						mcall(id("Object"), "defineProperty", [
+							id("_o"),
+							lit("v"),
+							obj([
+								"get",
+								fnExpr(undefined, [], [
+									debuggerStmt(),
+									returnStmt(lit(0)),
+								]),
+							]),
+						])
+					),
+					es(m(id("_o"), "v")),
+				])
 			)
 		)
 	);

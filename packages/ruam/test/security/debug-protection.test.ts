@@ -50,8 +50,31 @@ describe("Debug Protection", () => {
 		it("contains polymorphic debugger invocations", () => {
 			// Should have multiple debugger invocation methods
 			expect(output).toContain("debugger");
-			// Dynamic construction via Function constructor or eval
-			expect(output).toMatch(/Function|eval/);
+			// CSP-safe traps: toString/valueOf coercion + defineProperty getter
+			expect(output).toContain("toString");
+			expect(output).toContain("valueOf");
+			expect(output).toContain("defineProperty");
+		});
+
+		it("does not use eval or Function constructor for debugger invocation", () => {
+			// Debug protection must be CSP-safe (Chrome extensions block eval)
+			// Extract the debug protection IIFE (contains FNV constant 2166136261)
+			const fnvIdx = output.indexOf("2166136261");
+			// Scan backward to find start of the IIFE
+			let start = fnvIdx;
+			while (start > 0 && output.slice(start - 10, start) !== "(function ") start--;
+			start = Math.max(0, start - 10);
+			// Scan forward to find the closing })()
+			let depth = 0;
+			let end = start;
+			for (let i = start; i < output.length; i++) {
+				if (output[i] === "{") depth++;
+				if (output[i] === "}") depth--;
+				if (depth === 0 && i > start + 100) { end = i + 10; break; }
+			}
+			const dbgRegion = output.slice(start, end);
+			expect(dbgRegion).not.toMatch(/\bnew Function\b/);
+			expect(dbgRegion).not.toMatch(/\beval\s*\(/);
 		});
 
 		it("contains timing measurement code", () => {
