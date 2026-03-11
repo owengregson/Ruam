@@ -27,6 +27,7 @@ import {
 	index,
 	ternary,
 	newExpr,
+	spread,
 	varDecl,
 	exprStmt,
 	ifStmt,
@@ -185,7 +186,7 @@ function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
  * ```
  * var argc=O;var callArgs=[];
  * for(var ai=0;ai<argc;ai++)callArgs.unshift(X());
- * var fn=X();W(fn.apply(void 0,callArgs));break;
+ * var fn=X();W(fn(...callArgs));break;
  * ```
  */
 function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
@@ -201,10 +202,7 @@ function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 		varDecl("fn", ctx.pop()),
 		exprStmt(
 			ctx.push(
-				call(member(id("fn"), "apply"), [
-					un("void", lit(0)),
-					id("callArgs"),
-				])
+				call(id("fn"), [spread(id("callArgs"))])
 			)
 		),
 		breakStmt(),

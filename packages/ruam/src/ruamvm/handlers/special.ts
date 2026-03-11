@@ -19,6 +19,7 @@ import {
 	member,
 	call,
 	arr,
+	spread,
 	varDecl,
 	exprStmt,
 	breakStmt,
@@ -100,29 +101,19 @@ function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
 // --- Arguments handlers ---
 
 /**
- * CREATE_UNMAPPED_ARGS / CREATE_MAPPED_ARGS: `W(Array.prototype.slice.call(A));break;`
+ * CREATE_UNMAPPED_ARGS / CREATE_MAPPED_ARGS: `W([...A]);break;`
  *
- * Both opcodes produce the same handler — a sliced copy of the arguments object.
+ * Both opcodes produce the same handler — a spread copy of the arguments object.
  */
 function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(
-			ctx.push(
-				call(
-					member(
-						member(member(id("Array"), "prototype"), "slice"),
-						"call"
-					),
-					[id(ctx.A)]
-				)
-			)
-		),
+		exprStmt(ctx.push(arr(spread(id(ctx.A))))),
 		breakStmt(),
 	];
 }
 
 /**
- * CREATE_REST_ARGS: `W(Array.prototype.slice.call(A,O));break;`
+ * CREATE_REST_ARGS: `W(A.slice(O));break;`
  *
  * Slices arguments from the operand index onward (rest parameter start).
  */
@@ -130,13 +121,7 @@ function CREATE_REST_ARGS(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
 			ctx.push(
-				call(
-					member(
-						member(member(id("Array"), "prototype"), "slice"),
-						"call"
-					),
-					[id(ctx.A), id(ctx.O)]
-				)
+				call(member(id(ctx.A), "slice"), [id(ctx.O)])
 			)
 		),
 		breakStmt(),
