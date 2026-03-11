@@ -275,11 +275,7 @@ function CALL_NEW(ctx: HandlerCtx): JsNode[] {
 	return [
 		...simplePreamble(ctx),
 		varDecl("Ctor", ctx.pop()),
-		exprStmt(
-			ctx.push(
-				newExpr(id("Ctor"), [spread(id("callArgs"))])
-			)
-		),
+		exprStmt(ctx.push(newExpr(id("Ctor"), [spread(id("callArgs"))]))),
 		breakStmt(),
 	];
 }
@@ -432,11 +428,7 @@ function CALL_TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 	return [
 		...simplePreamble(ctx),
 		varDecl("fn", ctx.pop()),
-		exprStmt(
-			ctx.push(
-				call(id("fn"), [spread(id("callArgs"))])
-			)
-		),
+		exprStmt(ctx.push(call(id("fn"), [spread(id("callArgs"))]))),
 		breakStmt(),
 	];
 }

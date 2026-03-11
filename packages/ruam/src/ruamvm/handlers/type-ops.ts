@@ -200,11 +200,7 @@ function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 			[exprStmt(call(member(id("callArgs"), "unshift"), [ctx.pop()]))]
 		),
 		varDecl("fn", ctx.pop()),
-		exprStmt(
-			ctx.push(
-				call(id("fn"), [spread(id("callArgs"))])
-			)
-		),
+		exprStmt(ctx.push(call(id("fn"), [spread(id("callArgs"))]))),
 		breakStmt(),
 	];
 }
