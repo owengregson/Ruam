@@ -45,6 +45,7 @@ export type JsNode =
 	| SequenceExpr
 	| AwaitExpr
 	| ImportExpr
+	| SpreadElement
 	| StackPush
 	| StackPop
 	| StackPeek;
@@ -196,9 +197,45 @@ export interface ArrayExpr {
 	type: "ArrayExpr";
 	elements: JsNode[];
 }
+/** A getter definition inside an object literal: `{ get name() { ... } }` */
+export interface GetterEntry {
+	kind: "get";
+	name: string;
+	body: JsNode[];
+}
+/** A setter definition inside an object literal: `{ set name(param) { ... } }` */
+export interface SetterEntry {
+	kind: "set";
+	name: string;
+	param: string;
+	body: JsNode[];
+}
+/** A shorthand method inside an object literal: `{ name(params) { ... } }` */
+export interface MethodEntry {
+	kind: "method";
+	name: string | JsNode;
+	params: string[];
+	body: JsNode[];
+	async: boolean;
+}
+/** A spread entry inside an object literal: `{ ...expr }` */
+export interface ObjSpreadEntry {
+	kind: "spread";
+	arg: JsNode;
+}
+/** A key-value property: `{ key: value }` or `{ [computed]: value }` */
+export type PropEntry = [string | JsNode, JsNode];
+/** Any entry that can appear inside an object literal. */
+export type ObjectEntry =
+	| PropEntry
+	| GetterEntry
+	| SetterEntry
+	| MethodEntry
+	| ObjSpreadEntry;
+
 export interface ObjectExpr {
 	type: "ObjectExpr";
-	entries: [string | JsNode, JsNode][];
+	entries: ObjectEntry[];
 }
 export interface FnExpr {
 	type: "FnExpr";
@@ -229,6 +266,10 @@ export interface AwaitExpr {
 export interface ImportExpr {
 	type: "ImportExpr";
 	specifier: JsNode;
+}
+export interface SpreadElement {
+	type: "SpreadElement";
+	arg: JsNode;
 }
 // --- Stack operations (emit directly as S[++P]=expr, S[P--], S[P]) ---
 
@@ -381,8 +422,33 @@ export function arr(...elements: JsNode[]): ArrayExpr {
 	return { type: "ArrayExpr", elements };
 }
 
-export function obj(...entries: [string | JsNode, JsNode][]): ObjectExpr {
+export function obj(...entries: ObjectEntry[]): ObjectExpr {
 	return { type: "ObjectExpr", entries };
+}
+
+export function getter(name: string, body: JsNode[]): GetterEntry {
+	return { kind: "get", name, body };
+}
+
+export function setter(
+	name: string,
+	param: string,
+	body: JsNode[]
+): SetterEntry {
+	return { kind: "set", name, param, body };
+}
+
+export function method(
+	name: string | JsNode,
+	params: string[],
+	body: JsNode[],
+	opts?: { async?: boolean }
+): MethodEntry {
+	return { kind: "method", name, params, body, async: opts?.async ?? false };
+}
+
+export function objSpread(arg: JsNode): ObjSpreadEntry {
+	return { kind: "spread", arg };
 }
 
 export function fnExpr(
@@ -416,6 +482,10 @@ export function awaitExpr(expr: JsNode): AwaitExpr {
 
 export function importExpr(specifier: JsNode): ImportExpr {
 	return { type: "ImportExpr", specifier };
+}
+
+export function spread(arg: JsNode): SpreadElement {
+	return { type: "SpreadElement", arg };
 }
 
 export function stackPush(S: string, P: string, value: JsNode): StackPush {
@@ -493,6 +563,7 @@ export const CHILD_FIELDS: Record<JsNode["type"], Record<string, FieldKind>> = {
 	SequenceExpr: { exprs: "nodes" },
 	AwaitExpr: { expr: "node" },
 	ImportExpr: { specifier: "node" },
+	SpreadElement: { arg: "node" },
 	StackPush: { value: "node" },
 	StackPop: {},
 	StackPeek: {},
@@ -513,14 +584,66 @@ export function mapChildren(
 	node: JsNode,
 	fn: (child: JsNode) => JsNode
 ): JsNode {
-	// Special case: ObjectExpr has [string|JsNode, JsNode] tuple entries
+	// Special case: ObjectExpr has union entry types (tuples + rich entries)
 	if (node.type === "ObjectExpr") {
 		let changed = false;
-		const mapped = node.entries.map(([k, v]) => {
-			const nk = typeof k === "string" ? k : fn(k);
-			const nv = fn(v);
-			if (nk !== k || nv !== v) changed = true;
-			return [nk, nv] as [string | JsNode, JsNode];
+		const mapped = node.entries.map((entry): ObjectEntry => {
+			if (Array.isArray(entry)) {
+				// PropEntry: [string|JsNode, JsNode]
+				const [k, v] = entry;
+				const nk = typeof k === "string" ? k : fn(k);
+				const nv = fn(v);
+				if (nk !== k || nv !== v) {
+					changed = true;
+					return [nk, nv] as PropEntry;
+				}
+				return entry;
+			}
+			switch (entry.kind) {
+				case "get": {
+					const nb = entry.body.map(fn);
+					if (nb.some((n, i) => n !== entry.body[i])) {
+						changed = true;
+						return { ...entry, body: nb };
+					}
+					return entry;
+				}
+				case "set": {
+					const nb = entry.body.map(fn);
+					if (nb.some((n, i) => n !== entry.body[i])) {
+						changed = true;
+						return { ...entry, body: nb };
+					}
+					return entry;
+				}
+				case "method": {
+					const nk =
+						typeof entry.name === "string"
+							? entry.name
+							: fn(entry.name);
+					const nb = entry.body.map(fn);
+					if (
+						nk !== entry.name ||
+						nb.some((n, i) => n !== entry.body[i])
+					) {
+						changed = true;
+						return {
+							...entry,
+							name: nk,
+							body: nb,
+						} as MethodEntry;
+					}
+					return entry;
+				}
+				case "spread": {
+					const na = fn(entry.arg);
+					if (na !== entry.arg) {
+						changed = true;
+						return { ...entry, arg: na };
+					}
+					return entry;
+				}
+			}
 		});
 		return changed ? { ...node, entries: mapped } : node;
 	}
