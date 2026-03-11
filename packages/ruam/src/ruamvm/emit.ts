@@ -7,7 +7,7 @@
  * @module ruamvm/emit
  */
 
-import type { JsNode, ReturnStmt } from "./nodes.js";
+import type { JsNode, ReturnStmt, ObjectEntry } from "./nodes.js";
 import { assertNever } from "./nodes.js";
 
 // --- Operator precedence table (higher = tighter binding) ---
@@ -220,14 +220,7 @@ export function emit(node: JsNode): string {
 		case "ArrayExpr":
 			return `[${node.elements.map((e) => emit(e)).join(",")}]`;
 		case "ObjectExpr":
-			return `{${node.entries
-				.map(
-					([k, v]) =>
-						`${typeof k === "string" ? k : `[${emit(k)}]`}:${emit(
-							v
-						)}`
-				)
-				.join(",")}}`;
+			return `{${node.entries.map(emitObjectEntry).join(",")}}`;
 		case "FnExpr":
 			return `${node.async ? "async " : ""}function${
 				node.name ? " " + node.name : ""
@@ -263,6 +256,8 @@ export function emit(node: JsNode): string {
 			return `await ${emit(node.expr)}`;
 		case "ImportExpr":
 			return `import(${emit(node.specifier)})`;
+		case "SpreadElement":
+			return `...${emit(node.arg)}`;
 		case "StackPush":
 			return `${node.S}[++${node.P}]=${emit(node.value)}`;
 		case "StackPop":
@@ -351,4 +346,28 @@ function emitLiteral(value: string | number | boolean | null | RegExp): string {
 	}
 	if (value instanceof RegExp) return value.toString();
 	return String(value);
+}
+
+/** Serialize a single object literal entry. */
+function emitObjectEntry(entry: ObjectEntry): string {
+	// Legacy tuple: [key, value] → key:value
+	if (Array.isArray(entry)) {
+		const [k, v] = entry;
+		return `${typeof k === "string" ? k : `[${emit(k)}]`}:${emit(v)}`;
+	}
+	switch (entry.kind) {
+		case "get":
+			return `get ${entry.name}(){${emitBody(entry.body)}}`;
+		case "set":
+			return `set ${entry.name}(${entry.param}){${emitBody(entry.body)}}`;
+		case "method": {
+			const key =
+				typeof entry.name === "string"
+					? entry.name
+					: `[${emit(entry.name)}]`;
+			return `${entry.async ? "async " : ""}${key}(${entry.params.join(",")}){${emitBody(entry.body)}}`;
+		}
+		case "spread":
+			return `...${emit(entry.arg)}`;
+	}
 }
