@@ -88,4 +88,3 @@ export function rollingEncrypt(
 		instrs[i + 1] = (instrs[i + 1]! ^ keyStream) | 0;
 	}
 }
-

@@ -365,7 +365,9 @@ function emitObjectEntry(entry: ObjectEntry): string {
 				typeof entry.name === "string"
 					? entry.name
 					: `[${emit(entry.name)}]`;
-			return `${entry.async ? "async " : ""}${key}(${entry.params.join(",")}){${emitBody(entry.body)}}`;
+			return `${entry.async ? "async " : ""}${key}(${entry.params.join(
+				","
+			)}){${emitBody(entry.body)}}`;
 		}
 		case "spread":
 			return `...${emit(entry.arg)}`;

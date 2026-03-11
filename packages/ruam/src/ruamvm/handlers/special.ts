@@ -106,10 +106,7 @@ function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
  * Both opcodes produce the same handler — a spread copy of the arguments object.
  */
 function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
-	return [
-		exprStmt(ctx.push(arr(spread(id(ctx.A))))),
-		breakStmt(),
-	];
+	return [exprStmt(ctx.push(arr(spread(id(ctx.A))))), breakStmt()];
 }
 
 /**
@@ -119,11 +116,7 @@ function CREATE_ARGS_COPY(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_REST_ARGS(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(
-			ctx.push(
-				call(member(id(ctx.A), "slice"), [id(ctx.O)])
-			)
-		),
+		exprStmt(ctx.push(call(member(id(ctx.A), "slice"), [id(ctx.O)]))),
 		breakStmt(),
 	];
 }

@@ -128,41 +128,60 @@ export function buildDebugProtection(names: RuntimeNames): JsNode[] {
 				fnExpr(undefined, [], [debuggerStmt()]),
 				// Method 1: toString coercion trap
 				// var _o={toString(){debugger;return "";}}; ""+_o;
-				fnExpr(undefined, [], [
-					v(
-						"_o",
-						obj(
-							method("toString", [], [
-								debuggerStmt(),
-								returnStmt(lit("")),
-							])
-						)
-					),
-					es(bin("+", lit(""), id("_o"))),
-				]),
+				fnExpr(
+					undefined,
+					[],
+					[
+						v(
+							"_o",
+							obj(
+								method(
+									"toString",
+									[],
+									[debuggerStmt(), returnStmt(lit(""))]
+								)
+							)
+						),
+						es(bin("+", lit(""), id("_o"))),
+					]
+				),
 				// Method 2: valueOf coercion trap
 				// var _o={valueOf(){debugger;return 0;}}; +_o;
-				fnExpr(undefined, [], [
-					v(
-						"_o",
-						obj(
-							method("valueOf", [], [
-								debuggerStmt(),
-								returnStmt(lit(0)),
-							])
-						)
-					),
-					es(un("+", id("_o"))),
-				]),
+				fnExpr(
+					undefined,
+					[],
+					[
+						v(
+							"_o",
+							obj(
+								method(
+									"valueOf",
+									[],
+									[debuggerStmt(), returnStmt(lit(0))]
+								)
+							)
+						),
+						es(un("+", id("_o"))),
+					]
+				),
 				// Method 3: getter trap
 				// var _o={get v(){debugger;return 0;}}; _o.v;
-				fnExpr(undefined, [], [
-					v(
-						"_o",
-						obj(getter("v", [debuggerStmt(), returnStmt(lit(0))]))
-					),
-					es(m(id("_o"), "v")),
-				])
+				fnExpr(
+					undefined,
+					[],
+					[
+						v(
+							"_o",
+							obj(
+								getter("v", [
+									debuggerStmt(),
+									returnStmt(lit(0)),
+								])
+							)
+						),
+						es(m(id("_o"), "v")),
+					]
+				)
 			)
 		)
 	);
