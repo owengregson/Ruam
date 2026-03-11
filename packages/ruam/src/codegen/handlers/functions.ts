@@ -8,19 +8,191 @@
  *  - Stubs:       BIND_THIS, MAKE_METHOD
  *  - Closure vars: PUSH_CLOSURE_VAR, STORE_CLOSURE_VAR
  *
- * NEW_CLOSURE and NEW_FUNCTION are the most complex handlers in the entire
- * VM — they create closure wrappers with arrow/non-arrow branching, async
- * variants, this-boxing for sloppy mode, and home object forwarding for
- * super calls.  All function handlers use raw() due to nested IIFE patterns,
- * multi-branch conditionals, and runtime function construction.
+ * All handlers use pure AST nodes — no raw() escape hatch.
  *
  * @module codegen/handlers/functions
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw, breakStmt } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	fnExpr,
+	returnStmt,
+	tryCatch,
+	breakStmt,
+	obj,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
+import {
+	buildArrowClosureIIFE,
+	buildRegularClosureIIFE,
+	buildThisBoxing,
+	debugTrace,
+} from "./helpers.js";
+
+// --- Debug closure IIFE builders ---
+
+/**
+ * Build a debug-mode arrow closure IIFE.
+ *
+ * Like buildArrowClosureIIFE but captures `uid` and emits debug trace calls
+ * inside the wrapper function body.
+ *
+ * @param ctx - Handler context with debug function name
+ * @returns JsNode — IIFE call expression
+ */
+function buildDebugArrowClosureIIFE(ctx: HandlerCtx): JsNode {
+	const innerBody = (isAsync: boolean): JsNode[] => [
+		exprStmt(
+			call(id(ctx.dbg), [
+				lit("CALL_CLOSURE"),
+				bin(
+					"+",
+					lit(isAsync ? "async arrow uid=" : "arrow uid="),
+					id("uid")
+				),
+				bin("+", lit("args="), member(id("_a"), "length")),
+			])
+		),
+		returnStmt(
+			call(id(isAsync ? ctx.execAsync : ctx.exec), [
+				id("u"),
+				id("_a"),
+				id("cs"),
+				id("ct"),
+			])
+		),
+	];
+	return call(
+		fnExpr(undefined, ["u", "uid", "cs", "ct"], [
+			ifStmt(member(id("u"), "s"), [
+				returnStmt(
+					fnExpr(undefined, ["..._a"], innerBody(true), {
+						async: true,
+					})
+				),
+			]),
+			returnStmt(fnExpr(undefined, ["..._a"], innerBody(false))),
+		]),
+		[id("_cu"), id("_cuid"), id(ctx.SC), id(ctx.TV)]
+	);
+}
+
+/**
+ * Build a debug-mode regular (non-arrow) closure IIFE.
+ *
+ * Like buildRegularClosureIIFE but captures `uid` and emits debug trace calls
+ * inside the wrapper function body.
+ *
+ * @param ctx - Handler context with debug function name
+ * @returns JsNode — IIFE call expression
+ */
+function buildDebugRegularClosureIIFE(ctx: HandlerCtx): JsNode {
+	const innerBody = (isAsync: boolean): JsNode[] => [
+		exprStmt(
+			call(id(ctx.dbg), [
+				lit("CALL_CLOSURE"),
+				bin(
+					"+",
+					lit(isAsync ? "async uid=" : "uid="),
+					id("uid")
+				),
+				bin("+", lit("args="), member(id("_a"), "length")),
+			])
+		),
+		...buildThisBoxing(),
+		returnStmt(
+			call(id(isAsync ? ctx.execAsync : ctx.exec), [
+				id("u"),
+				id("_a"),
+				id("cs"),
+				id("_tv"),
+				un("void", lit(0)),
+				member(id("fn"), "_ho"),
+			])
+		),
+	];
+	return call(
+		fnExpr(undefined, ["u", "uid", "cs"], [
+			ifStmt(member(id("u"), "s"), [
+				varDecl(
+					"fn",
+					fnExpr(undefined, ["..._a"], innerBody(true), {
+						async: true,
+					})
+				),
+				returnStmt(id("fn")),
+			]),
+			varDecl("fn", fnExpr(undefined, ["..._a"], innerBody(false))),
+			returnStmt(id("fn")),
+		]),
+		[id("_cu"), id("_cuid"), id(ctx.SC)]
+	);
+}
+
+/**
+ * Build a debug-mode function (non-arrow, no arrow branch) closure IIFE.
+ *
+ * Like buildDebugRegularClosureIIFE but uses "CALL_FUNCTION" trace label
+ * and captures `_fuid` as the unit ID.
+ *
+ * @param ctx - Handler context with debug function name
+ * @returns JsNode — IIFE call expression
+ */
+function buildDebugFunctionClosureIIFE(ctx: HandlerCtx): JsNode {
+	const innerBody = (isAsync: boolean): JsNode[] => [
+		exprStmt(
+			call(id(ctx.dbg), [
+				lit("CALL_FUNCTION"),
+				bin(
+					"+",
+					lit(isAsync ? "async uid=" : "uid="),
+					id("uid")
+				),
+				bin("+", lit("args="), member(id("_a"), "length")),
+			])
+		),
+		...buildThisBoxing(),
+		returnStmt(
+			call(id(isAsync ? ctx.execAsync : ctx.exec), [
+				id("u"),
+				id("_a"),
+				id("cs"),
+				id("_tv"),
+				un("void", lit(0)),
+				member(id("fn"), "_ho"),
+			])
+		),
+	];
+	return call(
+		fnExpr(undefined, ["u", "uid", "cs"], [
+			ifStmt(member(id("u"), "s"), [
+				varDecl(
+					"fn",
+					fnExpr(undefined, ["..._a"], innerBody(true), {
+						async: true,
+					})
+				),
+				returnStmt(id("fn")),
+			]),
+			varDecl("fn", fnExpr(undefined, ["..._a"], innerBody(false))),
+			returnStmt(id("fn")),
+		]),
+		[id("_fu"), id("_fuid"), id(ctx.SC)]
+	);
+}
 
 // --- Primary closure handlers ---
 
@@ -34,22 +206,34 @@ import { registry } from "./registry.js";
 function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 	if (ctx.debug) {
 		return [
-			raw(
-				`var _cuid=${ctx.C}[${ctx.O}];var _cu=${ctx.load}(_cuid);_cu._dbgId=_cuid;` +
-					`${ctx.dbg}('NEW_CLOSURE','uid='+_cuid,'async='+!!_cu.s,'params='+_cu.p,'arrow='+!!_cu.a);` +
-					`if(_cu.a){if(_cu.s){${ctx.pushStr("(function(u,uid,cs,ct){return async function(..._a){" + ctx.dbg + "('CALL_CLOSURE','async arrow uid='+uid,'args='+_a.length);return " + ctx.execAsync + "(u,_a,cs,ct);};})(_cu,_cuid," + ctx.SC + "," + ctx.TV + ")")};}else{${ctx.pushStr("(function(u,uid,cs,ct){return function(..._a){" + ctx.dbg + "('CALL_CLOSURE','arrow uid='+uid,'args='+_a.length);return " + ctx.exec + "(u,_a,cs,ct);};})(_cu,_cuid," + ctx.SC + "," + ctx.TV + ")")};}}` +
-					`else{if(_cu.s){${ctx.pushStr("(function(u,uid,cs){var fn=async function(..._a){" + ctx.dbg + "('CALL_CLOSURE','async uid='+uid,'args='+_a.length);var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.execAsync + "(u,_a,cs,_tv,void 0,fn._ho);};return fn;})(_cu,_cuid," + ctx.SC + ")")};}else{${ctx.pushStr("(function(u,uid,cs){var fn=function(..._a){" + ctx.dbg + "('CALL_CLOSURE','uid='+uid,'args='+_a.length);var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.exec + "(u,_a,cs,_tv,void 0,fn._ho);};return fn;})(_cu,_cuid," + ctx.SC + ")")};}}` +
-					`break;`
+			varDecl("_cuid", index(id(ctx.C), id(ctx.O))),
+			varDecl("_cu", call(id(ctx.load), [id("_cuid")])),
+			exprStmt(assign(member(id("_cu"), "_dbgId"), id("_cuid"))),
+			exprStmt(
+				call(id(ctx.dbg), [
+					lit("NEW_CLOSURE"),
+					bin("+", lit("uid="), id("_cuid")),
+					bin("+", lit("async="), un("!", un("!", member(id("_cu"), "s")))),
+					bin("+", lit("params="), member(id("_cu"), "p")),
+					bin("+", lit("arrow="), un("!", un("!", member(id("_cu"), "a")))),
+				])
 			),
+			ifStmt(
+				member(id("_cu"), "a"),
+				[exprStmt(ctx.push(buildDebugArrowClosureIIFE(ctx)))],
+				[exprStmt(ctx.push(buildDebugRegularClosureIIFE(ctx)))]
+			),
+			breakStmt(),
 		];
 	}
 	return [
-		raw(
-			`var _cu=${ctx.load}(${ctx.C}[${ctx.O}]);` +
-				`if(_cu.a){${ctx.pushStr("(function(u,cs,ct){if(u.s){return async function(..._a){return " + ctx.execAsync + "(u,_a,cs,ct);};}return function(..._a){return " + ctx.exec + "(u,_a,cs,ct);};})(_cu," + ctx.SC + "," + ctx.TV + ")")};}` +
-				`else{${ctx.pushStr("(function(u,cs){if(u.s){var fn=async function(..._a){var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.execAsync + "(u,_a,cs,_tv,void 0,fn._ho);};return fn;}var fn=function(..._a){var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.exec + "(u,_a,cs,_tv,void 0,fn._ho);};return fn;})(_cu," + ctx.SC + ")")};}` +
-				`break;`
+		varDecl("_cu", call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		ifStmt(
+			member(id("_cu"), "a"),
+			[exprStmt(ctx.push(buildArrowClosureIIFE(ctx)))],
+			[exprStmt(ctx.push(buildRegularClosureIIFE(ctx)))]
 		),
+		breakStmt(),
 	];
 }
 
@@ -62,19 +246,28 @@ function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
 	if (ctx.debug) {
 		return [
-			raw(
-				`var _fuid=${ctx.C}[${ctx.O}];var _fu=${ctx.load}(_fuid);_fu._dbgId=_fuid;` +
-					`${ctx.dbg}('NEW_FUNCTION','uid='+_fuid,'async='+!!_fu.s,'params='+_fu.p);` +
-					`if(_fu.s){${ctx.pushStr("(function(u,uid,cs){var fn=async function(..._a){" + ctx.dbg + "('CALL_FUNCTION','async uid='+uid,'args='+_a.length);var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.execAsync + "(u,_a,cs,_tv,void 0,fn._ho);};return fn;})(_fu,_fuid," + ctx.SC + ")")};}else{${ctx.pushStr("(function(u,uid,cs){var fn=function(..._a){" + ctx.dbg + "('CALL_FUNCTION','uid='+uid,'args='+_a.length);var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.exec + "(u,_a,cs,_tv,void 0,fn._ho);};return fn;})(_fu,_fuid," + ctx.SC + ")")};}` +
-					`break;`
+			varDecl("_fuid", index(id(ctx.C), id(ctx.O))),
+			varDecl("_fu", call(id(ctx.load), [id("_fuid")])),
+			exprStmt(assign(member(id("_fu"), "_dbgId"), id("_fuid"))),
+			exprStmt(
+				call(id(ctx.dbg), [
+					lit("NEW_FUNCTION"),
+					bin("+", lit("uid="), id("_fuid")),
+					bin("+", lit("async="), un("!", un("!", member(id("_fu"), "s")))),
+					bin("+", lit("params="), member(id("_fu"), "p")),
+				])
 			),
+			exprStmt(ctx.push(buildDebugFunctionClosureIIFE(ctx))),
+			breakStmt(),
 		];
 	}
 	return [
-		raw(
-			`${ctx.pushStr("(function(u,cs){if(u.s){var fn=async function(..._a){var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.execAsync + "(u,_a,cs,_tv,void 0,fn._ho);};return fn;}var fn=function(..._a){var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.exec + "(u,_a,cs,_tv,void 0,fn._ho);};return fn;})(" + ctx.load + "(" + ctx.C + "[" + ctx.O + "])," + ctx.SC + ")")};` +
-				`break;`
+		varDecl(
+			"_cu",
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
 		),
+		exprStmt(ctx.push(buildRegularClosureIIFE(ctx))),
+		breakStmt(),
 	];
 }
 
@@ -87,20 +280,52 @@ function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
  */
 function NEW_ARROW(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`${ctx.pushStr("(function(u,cs,ct){if(u.s){return async function(..._a){return " + ctx.execAsync + "(u,_a,cs,ct);};}return function(..._a){return " + ctx.exec + "(u,_a,cs,ct);};})( " + ctx.load + "(" + ctx.C + "[" + ctx.O + "])," + ctx.SC + "," + ctx.TV + ")")};break;`
+		varDecl(
+			"_cu",
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
 		),
+		exprStmt(ctx.push(buildArrowClosureIIFE(ctx))),
+		breakStmt(),
 	];
 }
 
 /**
  * NEW_ASYNC: create an async function with this-boxing.
+ *
+ * Always async, always non-arrow — uses execAsync with this-boxing.
  */
 function NEW_ASYNC(ctx: HandlerCtx): JsNode[] {
-	return [
-		raw(
-			`${ctx.pushStr("(function(u,cs){return async function(..._a){var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.execAsync + "(u,_a,cs,_tv);};})( " + ctx.load + "(" + ctx.C + "[" + ctx.O + "])," + ctx.SC + ")")};break;`
+	const asyncBody: JsNode[] = [
+		...buildThisBoxing(),
+		returnStmt(
+			call(id(ctx.execAsync), [
+				id("u"),
+				id("_a"),
+				id("cs"),
+				id("_tv"),
+			])
 		),
+	];
+	return [
+		varDecl(
+			"_cu",
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
+		),
+		exprStmt(
+			ctx.push(
+				call(
+					fnExpr(undefined, ["u", "cs"], [
+						returnStmt(
+							fnExpr(undefined, ["..._a"], asyncBody, {
+								async: true,
+							})
+						),
+					]),
+					[id("_cu"), id(ctx.SC)]
+				)
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -108,12 +333,38 @@ function NEW_ASYNC(ctx: HandlerCtx): JsNode[] {
  * NEW_GENERATOR / NEW_ASYNC_GENERATOR: create a generator function.
  *
  * Both are handled identically — generators are stub-executed (run to completion).
+ * Always non-arrow, always sync, uses exec with this-boxing.
  */
 function NEW_GENERATOR_HANDLER(ctx: HandlerCtx): JsNode[] {
-	return [
-		raw(
-			`${ctx.pushStr("(function(u,cs){return function(..._a){var _tv=this;if(!u.st){if(_tv==null)_tv=globalThis;else{var _tt=typeof _tv;if(_tt!==\"object\"&&_tt!==\"function\")_tv=Object(_tv);}}return " + ctx.exec + "(u,_a,cs,_tv);};})( " + ctx.load + "(" + ctx.C + "[" + ctx.O + "])," + ctx.SC + ")")};break;`
+	const fnBody: JsNode[] = [
+		...buildThisBoxing(),
+		returnStmt(
+			call(id(ctx.exec), [
+				id("u"),
+				id("_a"),
+				id("cs"),
+				id("_tv"),
+			])
 		),
+	];
+	return [
+		varDecl(
+			"_cu",
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
+		),
+		exprStmt(
+			ctx.push(
+				call(
+					fnExpr(undefined, ["u", "cs"], [
+						returnStmt(
+							fnExpr(undefined, ["..._a"], fnBody)
+						),
+					]),
+					[id("_cu"), id(ctx.SC)]
+				)
+			)
+		),
+		breakStmt(),
 	];
 }
 
@@ -126,9 +377,24 @@ function NEW_GENERATOR_HANDLER(ctx: HandlerCtx): JsNode[] {
  */
 function SET_FUNC_NAME(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.peekStr()};try{Object.defineProperty(fn,'name',{value:${ctx.C}[${ctx.O}],configurable:true});}catch(e){}break;`
+		varDecl("fn", ctx.peek()),
+		tryCatch(
+			[
+				exprStmt(
+					call(member(id("Object"), "defineProperty"), [
+						id("fn"),
+						lit("name"),
+						obj(
+							["value", index(id(ctx.C), id(ctx.O))],
+							["configurable", lit(true)]
+						),
+					])
+				),
+			],
+			"e",
+			[]
 		),
+		breakStmt(),
 	];
 }
 
@@ -137,9 +403,24 @@ function SET_FUNC_NAME(ctx: HandlerCtx): JsNode[] {
  */
 function SET_FUNC_LENGTH(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.peekStr()};try{Object.defineProperty(fn,'length',{value:${ctx.O},configurable:true});}catch(e){}break;`
+		varDecl("fn", ctx.peek()),
+		tryCatch(
+			[
+				exprStmt(
+					call(member(id("Object"), "defineProperty"), [
+						id("fn"),
+						lit("length"),
+						obj(
+							["value", id(ctx.O)],
+							["configurable", lit(true)]
+						),
+					])
+				),
+			],
+			"e",
+			[]
 		),
+		breakStmt(),
 	];
 }
 
@@ -155,15 +436,13 @@ function BIND_STUB(_ctx: HandlerCtx): JsNode[] {
 /**
  * PUSH_CLOSURE_VAR: walk scope chain to find a captured variable, push its value.
  *
- * Uses raw() because the while-loop with `break` exits the loop, not the case.
+ * Uses ctx.scopeWalk() for structured scope chain traversal.
  */
 function PUSH_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`${ctx.pushStr(sv)};`)
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([exprStmt(ctx.push(ctx.sv()))]),
 	];
 }
 
@@ -173,12 +452,11 @@ function PUSH_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
  * Pops the value from the stack, then walks the scope chain to find the slot.
  */
 function STORE_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];var val=${ctx.popStr()};var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`${sv}=val;`)
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("val", ctx.pop()),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([exprStmt(assign(ctx.sv(), id("val")))]),
 	];
 }
 
