@@ -38,9 +38,9 @@ src/
       classes.ts            Class compilation (methods, properties, inheritance)
 
   codegen/
-    nodes.ts                JS AST node types (~36 node kinds) + factory functions
+    nodes.ts                JS AST node types (~35 node kinds) + factory functions
     emit.ts                 Recursive emitter: AST -> minified JS with precedence-aware parens
-    transforms.ts           AST tree transforms (inlineStackOps, obfuscateLocals) + string post-processing
+    transforms.ts           AST tree transforms (obfuscateLocals)
     builders/
       interpreter.ts        Interpreter builder: assembles sync/async exec from handler registry
       loader.ts             Bytecode loader, cache, depth tracking, _ru4m watermark
@@ -51,10 +51,10 @@ src/
       rolling-cipher.ts     Rolling cipher runtime helpers (deriveKey, mix)
       debug-protection.ts   Multi-layered anti-debugger (6 detection layers + escalating response)
       debug-logging.ts      Debug trace infrastructure
-      stack-encoding.ts     Proxy-based stack XOR encoding
       globals.ts            Global exposure (globalThis binding)
     handlers/
       registry.ts           Handler registry (Map<Op, HandlerFn>), HandlerCtx type, makeHandlerCtx
+      helpers.ts            Shared handler helpers (buildThisBoxing, debugTrace, superProto, etc.)
       index.ts              Barrel module: re-exports + side-effect imports for 19 handler files
       stack.ts              Stack manipulation opcodes (PUSH, POP, DUP, SWAP, etc.)
       arithmetic.ts         Arithmetic opcodes (ADD, SUB, MUL, etc.)
@@ -97,7 +97,7 @@ docs/
 ## Architecture Notes
 
 - **Compilation pipeline**: Source JS -> Babel parse -> identify target functions -> compile each to BytecodeUnit -> serialize -> replace function body with VM dispatch call -> build VM runtime AST -> emit IIFE -> assemble output
-- **JS AST builder system** (`codegen/`): All runtime JS is generated via a purpose-built AST with ~36 node types (`nodes.ts`), factory functions, and a recursive emitter (`emit.ts`). Builder files in `codegen/builders/` produce `JsNode[]` for each runtime component. The interpreter is assembled from a handler registry (`codegen/handlers/`) where each opcode registers a `HandlerFn` returning AST nodes. A `raw()` escape hatch wraps opaque string snippets as AST nodes for complex handlers. String-based post-processing (stack inlining, local obfuscation) runs on the emitted string before final wrapping.
+- **JS AST builder system** (`codegen/`): All runtime JS is generated via a purpose-built AST with ~35 node types (`nodes.ts`), factory functions, and a recursive emitter (`emit.ts`). Builder files in `codegen/builders/` produce `JsNode[]` for each runtime component. The interpreter is assembled from a handler registry (`codegen/handlers/`) where each opcode registers a `HandlerFn` returning AST nodes. Tree-based post-processing (`obfuscateLocals` in `transforms.ts`) renames local variables before final emission.
 - **Direct physical dispatch**: The interpreter switch uses physical (shuffled) opcode numbers as case labels directly — no reverse opcode map is emitted in the output. Each build has unique case label assignments.
 - **Per-file opcode shuffle**: Seeded Fisher-Yates (LCG) produces different instruction encodings per build. Seed + shuffle constants live in `constants.ts`.
 - **Constant pool string encoding**: All string constants in the JSON bytecode format are XOR-encoded with an LCG key stream derived from the build seed. Decoded at load time by the `strDec` runtime function. Hides variable names, property names, and string literals.
@@ -113,7 +113,7 @@ docs/
 - **Dynamic opcodes** (`dynamicOpcodes` option): Filters unused opcode case handlers from the interpreter switch, reducing the attack surface for static analysis. Implemented in `codegen/builders/interpreter.ts` via `filterUnusedOpcodeHandlers()`.
 - **Decoy opcodes** (`decoyOpcodes` option): Injects 8-16 realistic-looking fake opcode handlers (arithmetic, stack, register, scope operations) into the interpreter switch for unused opcode slots. Implemented in `codegen/builders/interpreter.ts` via `injectDecoyHandlers()`.
 - **Dead code injection** (`deadCodeInjection` option): Inserts unreachable bytecode sequences after RETURN opcodes in compiled units. Jump targets are patched to maintain correctness. Implemented in `transform.ts` via `injectDeadCode()`.
-- **Stack encoding** (`stackEncoding` option): Wraps the VM stack array in a Proxy that XOR-encodes numeric values with position-dependent keys on set and decodes on get. Non-numeric values are tagged and stored transparently. Implemented in `codegen/builders/stack-encoding.ts` via `buildStackEncodingSource()`.
+- **Stack encoding** (`stackEncoding` option): Wraps the VM stack array in a Proxy that XOR-encodes numeric values with position-dependent keys on set and decodes on get. Non-numeric values are tagged and stored transparently. Implemented in `codegen/builders/interpreter.ts` via `buildStackEncodingProxy()`.
 - **CSPRNG seed**: Per-file opcode shuffle seed uses `crypto.randomBytes(4)` instead of `Date.now() ^ Math.random()`.
 - **Babel compat layer**: Shared `babel-compat.ts` normalizes ESM/CJS dual-export shapes for `@babel/traverse` and `@babel/generator`.
 - **Auto-enable rollingCipher**: `resolveOptions()` automatically enables `rollingCipher` when `integrityBinding` is set.
@@ -127,7 +127,7 @@ docs/
 - Test helper in `test/helpers.ts` wraps `obfuscateCode` + `eval` for round-trip verification
 - No linter/formatter configured — follow existing style
 - JSDoc: every module has `@module` tag, sections use `// --- Name ---` dividers, exported functions have `@param`/`@returns`
-- Runtime codegen: builder files in `codegen/builders/` export functions accepting `RuntimeNames` and returning `JsNode[]` (AST). Handler files in `codegen/handlers/` register `(ctx: HandlerCtx) => JsNode[]` functions in a shared `Map<Op, HandlerFn>` registry. `raw()` nodes wrap opaque string snippets for complex patterns.
+- Runtime codegen: builder files in `codegen/builders/` export functions accepting `RuntimeNames` and returning `JsNode[]` (AST). Handler files in `codegen/handlers/` register `(ctx: HandlerCtx) => JsNode[]` functions in a shared `Map<Op, HandlerFn>` registry. All runtime code uses typed AST nodes — no opaque string snippets.
 
 ## Known Bug Fixes (do not regress)
 
