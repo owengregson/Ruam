@@ -285,6 +285,9 @@ function parseArgs(argv: string[]): CliArgs {
 			case "--debug-protection":
 				result.options.debugProtection = true;
 				break;
+			case "--no-debug-protection":
+				result.options.debugProtection = false;
+				break;
 			case "--debug-logging":
 				result.options.debugLogging = true;
 				break;
@@ -407,6 +410,11 @@ function printHelp(version: string): void {
 	console.log(h("  SECURITY"));
 	console.log(
 		`    ${f("-d, --debug-protection")}     Anti-debugger timing loop`
+	);
+	console.log(
+		`    ${f(
+			"--no-debug-protection"
+		)}        Disable anti-debugger (overrides preset)`
 	);
 	console.log(
 		`    ${f(
