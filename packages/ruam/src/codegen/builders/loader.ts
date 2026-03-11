@@ -2,10 +2,7 @@
  * Loader builder — assembles the bytecode loader function and shared
  * declarations as AST nodes.
  *
- * Replaces the template-literal approach in runtime/templates/loader.ts
- * with AST-based construction. The function body uses raw() because the
- * loader has complex branching with string-type checks, JSON parsing,
- * constant pool revival, and encrypted/unencrypted paths.
+ * All runtime JS is generated via pure AST construction — no raw() nodes.
  *
  * @module codegen/builders/loader
  */
@@ -13,7 +10,27 @@
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../runtime/names.js";
 import { WATERMARK_NAME } from "../../runtime/names.js";
-import { raw, varDecl, id, lit, un } from "../nodes.js";
+import {
+	arr,
+	assign,
+	bin,
+	call,
+	exprStmt,
+	fn,
+	forStmt,
+	id,
+	ifStmt,
+	index,
+	lit,
+	member,
+	newExpr,
+	obj,
+	returnStmt,
+	ternary,
+	un,
+	update,
+	varDecl,
+} from "../nodes.js";
 
 // --- Builder ---
 
@@ -54,15 +71,15 @@ export function buildLoader(
 		nodes.push(
 			varDecl(WATERMARK_NAME, un("!", lit(0))),
 			varDecl(names.depth, lit(0)),
-			varDecl(names.callStack, raw("[]")),
-			varDecl(names.cache, raw("{}"))
+			varDecl(names.callStack, arr()),
+			varDecl(names.cache, obj())
 		);
 	}
 
 	// --- Load function ---
 
 	nodes.push(
-		raw(buildLoadFunction(encrypt, names, hasStringEncoding, rollingCipher))
+		buildLoadFunction(encrypt, names, hasStringEncoding, rollingCipher)
 	);
 
 	return nodes;
@@ -70,8 +87,152 @@ export function buildLoader(
 
 // --- Internals ---
 
+/** Shorthand: `cache[id]` index expression */
+function cacheId(names: RuntimeNames): JsNode {
+	return index(id(names.cache), id("id"));
+}
+
 /**
- * Build the load(id) function body as a raw string.
+ * Build the string decode branch for a constant at index j in the constant
+ * pool `target`. Returns an IfStmt or undefined if string encoding is off.
+ *
+ * Produces: `if(Array.isArray(cv)){target.c[j] = strDec([key,] cv, j);}`
+ */
+function buildStrDecodeCheck(
+	names: RuntimeNames,
+	hasStringEncoding: boolean,
+	rollingCipher: boolean,
+	target: string
+): JsNode | undefined {
+	if (!hasStringEncoding) return undefined;
+
+	// strDec(cv, j)  or  strDec(rcDeriveKey(target), cv, j)
+	const args: JsNode[] = rollingCipher
+		? [call(id(names.rcDeriveKey), [id(target)]), id("cv"), id("j")]
+		: [id("cv"), id("j")];
+
+	return ifStmt(
+		call(member(id("Array"), "isArray"), [id("cv")]),
+		[
+			exprStmt(
+				assign(
+					index(member(id(target), "c"), id("j")),
+					call(id(names.strDec), args)
+				)
+			),
+		]
+	);
+}
+
+/**
+ * Build the constant revival loop for a unit variable named `target`.
+ *
+ * ```js
+ * for(var j=0; j<target.c.length; j++){
+ *   var cv = target.c[j];
+ *   if(cv && cv.__regex__){ target.c[j] = new RegExp(cv.p, cv.f); }
+ *   else if(cv && cv.__bigint__){ target.c[j] = BigInt(cv.v); }
+ *   [else if(Array.isArray(cv)){ target.c[j] = strDec(...); }]
+ * }
+ * ```
+ */
+function buildRevivalLoop(
+	names: RuntimeNames,
+	target: string,
+	hasStringEncoding: boolean,
+	rollingCipher: boolean
+): JsNode {
+	const tgt = id(target);
+	const cArr = member(tgt, "c"); // target.c
+	const cJ = index(cArr, id("j")); // target.c[j]
+	const cv = id("cv");
+
+	// --- Loop body ---
+	const body: JsNode[] = [];
+
+	// var cv = target.c[j];
+	body.push(varDecl("cv", cJ));
+
+	// Build the if/else-if chain from inside out:
+	// Start with the innermost else-if (string decode, if enabled)
+	const strCheck = buildStrDecodeCheck(
+		names,
+		hasStringEncoding,
+		rollingCipher,
+		target
+	);
+
+	// else if(cv && cv.__bigint__){ target.c[j] = BigInt(cv.v); }
+	const bigintBranch = ifStmt(
+		bin("&&", cv, member(cv, "__bigint__")),
+		[exprStmt(assign(cJ, call(id("BigInt"), [member(cv, "v")])))],
+		strCheck ? [strCheck] : undefined
+	);
+
+	// if(cv && cv.__regex__){ target.c[j] = new RegExp(cv.p, cv.f); }
+	// else if(cv && cv.__bigint__){ ... }
+	body.push(
+		ifStmt(
+			bin("&&", cv, member(cv, "__regex__")),
+			[
+				exprStmt(
+					assign(
+						cJ,
+						newExpr(id("RegExp"), [member(cv, "p"), member(cv, "f")])
+					)
+				),
+			],
+			[bigintBranch]
+		)
+	);
+
+	return forStmt(
+		varDecl("j", lit(0)),
+		bin("<", id("j"), member(cArr, "length")),
+		update("++", false, id("j")),
+		body
+	);
+}
+
+/**
+ * Build: `if(target.i) target.i = new Int32Array(target.i);`
+ */
+function buildInt32Conversion(target: string): JsNode {
+	const tgt = id(target);
+	return ifStmt(member(tgt, "i"), [
+		exprStmt(
+			assign(
+				member(tgt, "i"),
+				newExpr(id("Int32Array"), [member(tgt, "i")])
+			)
+		),
+	]);
+}
+
+/**
+ * Build: `if(target.i && !(target.i instanceof Int32Array)) target.i = new Int32Array(target.i);`
+ */
+function buildInt32ConversionGuarded(target: string): JsNode {
+	const tgt = id(target);
+	return ifStmt(
+		bin(
+			"&&",
+			member(tgt, "i"),
+			un("!", bin("instanceof", member(tgt, "i"), id("Int32Array")))
+		),
+		[
+			exprStmt(
+				assign(
+					member(tgt, "i"),
+					newExpr(id("Int32Array"), [member(tgt, "i")])
+				)
+			),
+		]
+	);
+}
+
+/**
+ * Build the load(id) function as a FnDecl AST node.
  *
  * The function has three paths:
  * - Cache hit: return immediately.
@@ -83,52 +244,134 @@ function buildLoadFunction(
 	names: RuntimeNames,
 	hasStringEncoding: boolean,
 	rollingCipher: boolean
-): string {
-	const strDecodeCheck = hasStringEncoding
-		? rollingCipher
-			? `else if(Array.isArray(cv)){u.c[j]=${names.strDec}(${names.rcDeriveKey}(u),cv,j);}`
-			: `else if(Array.isArray(cv)){u.c[j]=${names.strDec}(cv,j);}`
-		: "";
+): JsNode {
+	const body: JsNode[] = [];
 
-	const strDecodeCheckRaw = hasStringEncoding
-		? rollingCipher
-			? `else if(Array.isArray(cv)){raw.c[j]=${names.strDec}(${names.rcDeriveKey}(raw),cv,j);}`
-			: `else if(Array.isArray(cv)){raw.c[j]=${names.strDec}(cv,j);}`
-		: "";
+	// --- Cache check: if(cache[id]) return cache[id]; ---
+	body.push(ifStmt(cacheId(names), [returnStmt(cacheId(names))]));
 
-	const encryptedPath =
-		`var bytes=${names.b64}(raw);` +
-		`var key=${names.fp}().toString(16);` +
-		`var dec=${names.rc4}(bytes,key);` +
-		`var eu=${names.deser}(dec);` +
-		`if(eu&&eu.i)eu.i=new Int32Array(eu.i);` +
-		`${names.cache}[id]=eu;`;
-
-	const jsonPath =
-		`var u=JSON.parse(raw);` +
-		`for(var j=0;j<u.c.length;j++){` +
-		`var cv=u.c[j];` +
-		`if(cv&&cv.__regex__){u.c[j]=new RegExp(cv.p,cv.f);}` +
-		`else if(cv&&cv.__bigint__){u.c[j]=BigInt(cv.v);}` +
-		strDecodeCheck +
-		`}` +
-		`if(u.i)u.i=new Int32Array(u.i);` +
-		`${names.cache}[id]=u;`;
-
-	const stringBranch = encrypt ? encryptedPath : jsonPath;
-
-	return (
-		`function ${names.load}(id){` +
-		`\n  if(${names.cache}[id])return ${names.cache}[id];` +
-		`\n  var raw=${WATERMARK_NAME}?${names.bt}[id]:void 0;` +
-		`\n  if(typeof raw==='string'){` +
-		`\n    ${stringBranch}` +
-		`\n  }else{` +
-		`\n    if(raw&&raw.c){for(var j=0;j<raw.c.length;j++){var cv=raw.c[j];if(cv&&cv.__regex__){raw.c[j]=new RegExp(cv.p,cv.f);}else if(cv&&cv.__bigint__){raw.c[j]=BigInt(cv.v);}${strDecodeCheckRaw}}}` +
-		`\n    if(raw&&raw.i&&!(raw.i instanceof Int32Array))raw.i=new Int32Array(raw.i);` +
-		`\n    ${names.cache}[id]=raw;` +
-		`\n  }` +
-		`\n  return ${names.cache}[id];` +
-		`\n}`
+	// --- var raw = _ru4m ? bt[id] : void 0; ---
+	body.push(
+		varDecl(
+			"raw",
+			ternary(
+				id(WATERMARK_NAME),
+				index(id(names.bt), id("id")),
+				un("void", lit(0))
+			)
+		)
 	);
+
+	// --- String branch vs Object branch ---
+	const stringBranchBody = encrypt
+		? buildEncryptedPath(names)
+		: buildJsonPath(names, hasStringEncoding, rollingCipher);
+
+	const objectBranchBody = buildObjectPath(
+		names,
+		hasStringEncoding,
+		rollingCipher
+	);
+
+	body.push(
+		ifStmt(
+			bin("===", un("typeof", id("raw")), lit("string")),
+			stringBranchBody,
+			objectBranchBody
+		)
+	);
+
+	// --- return cache[id]; ---
+	body.push(returnStmt(cacheId(names)));
+
+	return fn(names.load, ["id"], body);
+}
+
+/**
+ * Build the encrypted path body:
+ * ```js
+ * var bytes = b64(raw);
+ * var key = fp().toString(16);
+ * var dec = rc4(bytes, key);
+ * var eu = deser(dec);
+ * if(eu && eu.i) eu.i = new Int32Array(eu.i);
+ * cache[id] = eu;
+ * ```
+ */
+function buildEncryptedPath(names: RuntimeNames): JsNode[] {
+	return [
+		// var bytes = b64(raw);
+		varDecl("bytes", call(id(names.b64), [id("raw")])),
+		// var key = fp().toString(16);
+		varDecl(
+			"key",
+			call(member(call(id(names.fp), []), "toString"), [lit(16)])
+		),
+		// var dec = rc4(bytes, key);
+		varDecl("dec", call(id(names.rc4), [id("bytes"), id("key")])),
+		// var eu = deser(dec);
+		varDecl("eu", call(id(names.deser), [id("dec")])),
+		// if(eu && eu.i) eu.i = new Int32Array(eu.i);
+		ifStmt(bin("&&", id("eu"), member(id("eu"), "i")), [
+			exprStmt(
+				assign(
+					member(id("eu"), "i"),
+					newExpr(id("Int32Array"), [member(id("eu"), "i")])
+				)
+			),
+		]),
+		// cache[id] = eu;
+		exprStmt(assign(cacheId(names), id("eu"))),
+	];
+}
+
+/**
+ * Build the JSON parse path body:
+ * ```js
+ * var u = JSON.parse(raw);
+ * for(var j=0; j<u.c.length; j++){ ... revival ... }
+ * if(u.i) u.i = new Int32Array(u.i);
+ * cache[id] = u;
+ * ```
+ */
+function buildJsonPath(
+	names: RuntimeNames,
+	hasStringEncoding: boolean,
+	rollingCipher: boolean
+): JsNode[] {
+	return [
+		// var u = JSON.parse(raw);
+		varDecl("u", call(member(id("JSON"), "parse"), [id("raw")])),
+		// constant revival loop
+		buildRevivalLoop(names, "u", hasStringEncoding, rollingCipher),
+		// if(u.i) u.i = new Int32Array(u.i);
+		buildInt32Conversion("u"),
+		// cache[id] = u;
+		exprStmt(assign(cacheId(names), id("u"))),
+	];
+}
+
+/**
+ * Build the object (pre-parsed) branch body:
+ * ```js
+ * if(raw && raw.c){ for(var j=0; ...) { ... revival ... } }
+ * if(raw && raw.i && !(raw.i instanceof Int32Array)) raw.i = new Int32Array(raw.i);
+ * cache[id] = raw;
+ * ```
+ */
+function buildObjectPath(
+	names: RuntimeNames,
+	hasStringEncoding: boolean,
+	rollingCipher: boolean
+): JsNode[] {
+	return [
+		// if(raw && raw.c){ revival loop }
+		ifStmt(bin("&&", id("raw"), member(id("raw"), "c")), [
+			buildRevivalLoop(names, "raw", hasStringEncoding, rollingCipher),
+		]),
+		// if(raw && raw.i && !(raw.i instanceof Int32Array)) raw.i = new Int32Array(raw.i);
+		buildInt32ConversionGuarded("raw"),
+		// cache[id] = raw;
+		exprStmt(assign(cacheId(names), id("raw"))),
+	];
 }
