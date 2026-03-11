@@ -265,8 +265,6 @@ export function emit(node: JsNode): string {
 			return `${node.S}[${node.P}--]`;
 		case "StackPeek":
 			return `${node.S}[${node.P}]`;
-		case "Raw":
-			return node.code;
 		default:
 			return assertNever(node);
 	}

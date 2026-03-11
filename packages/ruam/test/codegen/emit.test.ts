@@ -36,7 +36,6 @@ import {
 	seq,
 	awaitExpr,
 	importExpr,
-	raw,
 	iife,
 	rest,
 } from "../../src/codegen/nodes.js";
@@ -333,9 +332,6 @@ describe("Emitter", () => {
 		});
 		it("import()", () => {
 			expect(emit(importExpr(lit("./mod")))).toBe("import('./mod')");
-		});
-		it("raw", () => {
-			expect(emit(raw("x=1+2"))).toBe("x=1+2");
 		});
 	});
 

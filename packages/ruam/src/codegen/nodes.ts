@@ -47,8 +47,7 @@ export type JsNode =
 	| ImportExpr
 	| StackPush
 	| StackPop
-	| StackPeek
-	| RawNode;
+	| StackPeek;
 
 // --- Declarations ---
 
@@ -250,11 +249,6 @@ export interface StackPeek {
 	P: string;
 }
 
-export interface RawNode {
-	type: "Raw";
-	code: string;
-}
-
 // --- Factory functions ---
 
 export function fn(
@@ -434,10 +428,6 @@ export function stackPeek(S: string, P: string): StackPeek {
 	return { type: "StackPeek", S, P };
 }
 
-export function raw(code: string): RawNode {
-	return { type: "Raw", code };
-}
-
 // --- Convenience ---
 
 export function iife(body: Block): CallExpr {
@@ -506,7 +496,6 @@ export const CHILD_FIELDS: Record<JsNode["type"], Record<string, FieldKind>> = {
 	StackPush: { value: "node" },
 	StackPop: {},
 	StackPeek: {},
-	Raw: {},
 };
 
 /**
