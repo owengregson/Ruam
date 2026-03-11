@@ -36,7 +36,7 @@ import {
 	update,
 	arr,
 	obj,
-	seq,
+	spread,
 } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { debugTrace, superProto } from "./helpers.js";
@@ -268,7 +268,7 @@ function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
  * ```
  * var argc=O;var callArgs=new Array(argc);
  * for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=X();
- * var Ctor=X();W(new (Ctor.bind.apply(Ctor,[null].concat(callArgs)))());break;
+ * var Ctor=X();W(new Ctor(...callArgs));break;
  * ```
  */
 function CALL_NEW(ctx: HandlerCtx): JsNode[] {
@@ -277,17 +277,7 @@ function CALL_NEW(ctx: HandlerCtx): JsNode[] {
 		varDecl("Ctor", ctx.pop()),
 		exprStmt(
 			ctx.push(
-				newExpr(
-					seq(
-						call(member(member(id("Ctor"), "bind"), "apply"), [
-							id("Ctor"),
-							call(member(arr(lit(null)), "concat"), [
-								id("callArgs"),
-							]),
-						])
-					),
-					[]
-				)
+				newExpr(id("Ctor"), [spread(id("callArgs"))])
 			)
 		),
 		breakStmt(),
@@ -367,7 +357,7 @@ function SPREAD_ARGS(ctx: HandlerCtx): JsNode[] {
  *
  * ```
  * ...spread preamble...
- * var fn=X();W(fn==null?void 0:fn.apply(void 0,callArgs));break;
+ * var fn=X();W(fn==null?void 0:fn(...callArgs));break;
  * ```
  */
 function CALL_OPTIONAL(ctx: HandlerCtx): JsNode[] {
@@ -379,10 +369,7 @@ function CALL_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 				ternary(
 					bin("==", id("fn"), lit(null)),
 					un("void", lit(0)),
-					call(member(id("fn"), "apply"), [
-						un("void", lit(0)),
-						id("callArgs"),
-					])
+					call(id("fn"), [spread(id("callArgs"))])
 				)
 			)
 		),
@@ -395,7 +382,7 @@ function CALL_OPTIONAL(ctx: HandlerCtx): JsNode[] {
  *
  * ```
  * ...spread preamble...
- * var recv=X();var fn=X();W(fn==null?void 0:fn.apply(recv,callArgs));break;
+ * var recv=X();var fn=X();W(fn==null?void 0:fn.call(recv,...callArgs));break;
  * ```
  */
 function CALL_METHOD_OPTIONAL(ctx: HandlerCtx): JsNode[] {
@@ -408,9 +395,9 @@ function CALL_METHOD_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 				ternary(
 					bin("==", id("fn"), lit(null)),
 					un("void", lit(0)),
-					call(member(id("fn"), "apply"), [
+					call(member(id("fn"), "call"), [
 						id("recv"),
-						id("callArgs"),
+						spread(id("callArgs")),
 					])
 				)
 			)
@@ -433,12 +420,12 @@ function DIRECT_EVAL(ctx: HandlerCtx): JsNode[] {
 // --- Tagged template call ---
 
 /**
- * CALL_TAGGED_TEMPLATE: pop arguments, pop tag function, apply.
+ * CALL_TAGGED_TEMPLATE: pop arguments, pop tag function, call with spread.
  *
  * ```
  * var argc=O;var callArgs=new Array(argc);
  * for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=X();
- * var fn=X();W(fn.apply(void 0,callArgs));break;
+ * var fn=X();W(fn(...callArgs));break;
  * ```
  */
 function CALL_TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
@@ -447,10 +434,7 @@ function CALL_TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 		varDecl("fn", ctx.pop()),
 		exprStmt(
 			ctx.push(
-				call(member(id("fn"), "apply"), [
-					un("void", lit(0)),
-					id("callArgs"),
-				])
+				call(id("fn"), [spread(id("callArgs"))])
 			)
 		),
 		breakStmt(),
@@ -497,9 +481,9 @@ function CALL_SUPER_METHOD(ctx: HandlerCtx): JsNode[] {
 			ctx.push(
 				ternary(
 					id("fn"),
-					call(member(id("fn"), "apply"), [
+					call(member(id("fn"), "call"), [
 						id(ctx.TV),
-						id("callArgs"),
+						spread(id("callArgs")),
 					]),
 					un("void", lit(0))
 				)

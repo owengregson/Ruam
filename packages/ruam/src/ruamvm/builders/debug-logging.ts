@@ -19,6 +19,8 @@ import {
 	lit,
 	bin,
 	obj,
+	arr,
+	spread,
 	member,
 	index,
 	call,
@@ -150,28 +152,13 @@ export function buildDebugLogging(
 			]),
 			// cfg._count++;
 			exprStmt(assign(cfgCount, bin("+", cfgCount, lit(1)))),
-			// var args=Array.prototype.slice.call(arguments);
-			varDecl(
-				"args",
-				call(
-					member(
-						member(member(id("Array"), "prototype"), "slice"),
-						"call"
-					),
-					[id("arguments")]
-				)
-			),
-			// console.log.apply(console,['[VM_DBG]'].concat(args));
+			// var args=[...arguments];
+			varDecl("args", arr(spread(id("arguments")))),
+			// console.log('[VM_DBG]',...args);
 			exprStmt(
-				call(member(member(console_, "log"), "apply"), [
-					console_,
-					call(
-						member(
-							{ type: "ArrayExpr", elements: [lit("[VM_DBG]")] },
-							"concat"
-						),
-						[id("args")]
-					),
+				call(member(console_, "log"), [
+					lit("[VM_DBG]"),
+					spread(id("args")),
 				])
 			),
 		]

@@ -47,6 +47,8 @@ import {
 	assign,
 	debuggerStmt,
 	newExpr,
+	getter,
+	method,
 } from "../nodes.js";
 
 // --- Helpers ---
@@ -125,51 +127,39 @@ export function buildDebugProtection(names: RuntimeNames): JsNode[] {
 				// Method 0: plain debugger statement
 				fnExpr(undefined, [], [debuggerStmt()]),
 				// Method 1: toString coercion trap
-				// var _o={toString:function(){debugger;return "";}}; ""+_o;
+				// var _o={toString(){debugger;return "";}}; ""+_o;
 				fnExpr(undefined, [], [
 					v(
 						"_o",
-						obj([
-							"toString",
-							fnExpr(undefined, [], [
+						obj(
+							method("toString", [], [
 								debuggerStmt(),
 								returnStmt(lit("")),
-							]),
-						])
+							])
+						)
 					),
 					es(bin("+", lit(""), id("_o"))),
 				]),
 				// Method 2: valueOf coercion trap
-				// var _o={valueOf:function(){debugger;return 0;}}; +_o;
+				// var _o={valueOf(){debugger;return 0;}}; +_o;
 				fnExpr(undefined, [], [
 					v(
 						"_o",
-						obj([
-							"valueOf",
-							fnExpr(undefined, [], [
+						obj(
+							method("valueOf", [], [
 								debuggerStmt(),
 								returnStmt(lit(0)),
-							]),
-						])
+							])
+						)
 					),
 					es(un("+", id("_o"))),
 				]),
-				// Method 3: getter trap via Object.defineProperty
-				// var _o={}; Object.defineProperty(_o,"v",{get:function(){debugger;return 0;}}); _o.v;
+				// Method 3: getter trap
+				// var _o={get v(){debugger;return 0;}}; _o.v;
 				fnExpr(undefined, [], [
-					v("_o", obj()),
-					es(
-						mcall(id("Object"), "defineProperty", [
-							id("_o"),
-							lit("v"),
-							obj([
-								"get",
-								fnExpr(undefined, [], [
-									debuggerStmt(),
-									returnStmt(lit(0)),
-								]),
-							]),
-						])
+					v(
+						"_o",
+						obj(getter("v", [debuggerStmt(), returnStmt(lit(0))]))
 					),
 					es(m(id("_o"), "v")),
 				])
