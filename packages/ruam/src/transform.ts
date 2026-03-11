@@ -161,7 +161,8 @@ export function obfuscateCode(
 		shuffleSeed,
 		rollingCipher,
 		integrityHash,
-		deadCodeInjection
+		deadCodeInjection,
+		temps["_ps"]
 	);
 
 	if (compiledUnits.size === 0) return code;
@@ -281,7 +282,8 @@ function compileTargets(
 	stringKey: number,
 	rollingCipher: boolean = false,
 	integrityHash?: number,
-	deadCodeInjection: boolean = false
+	deadCodeInjection: boolean = false,
+	scopeVarName?: string
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
 	const compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }> =
 		new Map();
@@ -322,7 +324,7 @@ function compileTargets(
 				});
 			}
 
-			replaceFunctionBody(fnPath, unit.id, names);
+			replaceFunctionBody(fnPath, unit.id, names, scopeVarName);
 		} catch (err) {
 			// Skip functions that fail to compile — don't break the whole file.
 			// Extract source location from the Babel path for debugging.
@@ -496,6 +498,73 @@ function injectDeadCode(unit: BytecodeUnit, seed: number): void {
 		// Insert the dead code block
 		instrs.splice(after + 1, 0, ...block);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Top-level binding collection (for program scope object)
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect the names of all top-level bindings in the program body.
+ *
+ * These bindings may be referenced by compiled bytecode via LOAD_SCOPED /
+ * STORE_SCOPED.  In module contexts (CJS / ESM) they are NOT on
+ * `globalThis`, so we register them in a program scope object that is
+ * threaded through the dispatch chain as the outer scope.
+ */
+function collectTopLevelBindings(body: t.Statement[]): string[] {
+	const bindings: string[] = [];
+	for (const node of body) {
+		if (t.isFunctionDeclaration(node) && node.id) {
+			bindings.push(node.id.name);
+		} else if (t.isVariableDeclaration(node)) {
+			for (const decl of node.declarations) {
+				if (t.isIdentifier(decl.id)) {
+					bindings.push(decl.id.name);
+				}
+			}
+		} else if (t.isClassDeclaration(node) && node.id) {
+			bindings.push(node.id.name);
+		}
+	}
+	return bindings;
+}
+
+/**
+ * Build the program scope object setup code.
+ *
+ * Creates a scope chain node with getter/setter bindings for every
+ * top-level declaration.  Getters lazily read from the enclosing JS
+ * scope (handling hoisting and late initialisation correctly).
+ *
+ * @param psName   - Variable name for the scope object.
+ * @param psvName  - Variable name for the scope.vars shorthand.
+ * @param sPar     - Randomized scope chain "parent" property name.
+ * @param sVars    - Randomized scope chain "vars" property name.
+ * @param bindings - Top-level binding names to register.
+ * @returns JS source string for the scope setup statements.
+ */
+function buildScopeSetupCode(
+	psName: string,
+	psvName: string,
+	sPar: string,
+	sVars: string,
+	bindings: string[]
+): string {
+	const lines: string[] = [];
+	lines.push(`var ${psName}={${sPar}:null,${sVars}:{}};`);
+	if (bindings.length > 0) {
+		lines.push(`var ${psvName}=${psName}.${sVars};`);
+		for (const name of bindings) {
+			lines.push(
+				`Object.defineProperty(${psvName},"${name}",` +
+					`{get:function(){return ${name}},` +
+					`set:function(v){${name}=v},` +
+					`enumerable:!0,configurable:!0});`
+			);
+		}
+	}
+	return lines.join("");
 }
 
 /** Build a `var <name>={...}` declaration for the bytecode table. */
@@ -672,10 +741,15 @@ function assembleShielded(
 		}
 
 		// Replace function body to use router (uses sharedNames.router as the dispatch name)
-		replaceFunctionBody(fnPath, unit.id, {
-			...sharedNames,
-			vm: sharedNames.router,
-		} as RuntimeNames);
+		replaceFunctionBody(
+			fnPath,
+			unit.id,
+			{
+				...sharedNames,
+				vm: sharedNames.router,
+			} as RuntimeNames,
+			sharedTemps["_ps"]
+		);
 
 		groups.push({
 			shuffleMap: groupShuffleMap,
@@ -711,16 +785,35 @@ function assembleShielded(
 		integrityBinding: opts.integrityBinding,
 	});
 
-	// Inject bytecode table inside the IIFE
+	// Collect top-level bindings before adding runtime statements
+	const topLevelBindings = collectTopLevelBindings(ast.program.body);
+
+	// Build program scope object (uses shared scope property names)
+	const scopeCode = buildScopeSetupCode(
+		sharedTemps["_ps"]!,
+		sharedTemps["_psv"]!,
+		sharedNames.sPar,
+		sharedNames.sVars,
+		topLevelBindings
+	);
+	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;
+
+	// Unwrap the IIFE and inject runtime statements directly into the
+	// program scope (same approach as non-shielded path).
 	const btNode = parse(btDecl, { sourceType: "script" }).program.body[0]!;
 	const runtimeNode = parse(runtime, { sourceType: "script" }).program
 		.body[0]!;
 	const iifeCall = (runtimeNode as t.ExpressionStatement)
 		.expression as t.CallExpression;
 	const iifeFn = iifeCall.callee as t.FunctionExpression;
-	iifeFn.body.body.unshift(btNode as t.Statement);
+	const runtimeStatements = iifeFn.body.body;
 
-	ast.program.body.unshift(runtimeNode);
+	ast.program.body.unshift(
+		btNode as t.Statement,
+		...runtimeStatements,
+		...(scopeNodes as t.Statement[])
+	);
+	ast.program.directives = [t.directive(t.directiveLiteral("use strict"))];
 
 	return generate(ast, { comments: false }).code;
 }
@@ -777,17 +870,41 @@ function assembleOutput(
 		usedOpcodes: runtimeOptions.usedOpcodes,
 	});
 
-	// Parse and inject bytecode table inside the runtime IIFE so each file
-	// gets its own local table.
+	// Collect top-level bindings BEFORE adding runtime statements.
+	// These are the names that compiled bytecode may reference via
+	// LOAD_SCOPED / STORE_SCOPED.
+	const topLevelBindings = collectTopLevelBindings(ast.program.body);
+
+	// Build the program scope object.  Getters/setters allow the VM
+	// to resolve module-scoped variables that are not on globalThis.
+	const scopeCode = buildScopeSetupCode(
+		temps["_ps"]!,
+		temps["_psv"]!,
+		names.sPar,
+		names.sVars,
+		topLevelBindings
+	);
+	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;
+
+	// Parse the runtime IIFE, then extract its body statements and inject
+	// them directly into the program (unwrapped) so that the VM runtime,
+	// function stubs, and top-level declarations all share the same scope.
 	const btNode = parse(btDecl, { sourceType: "script" }).program.body[0]!;
 	const runtimeNode = parse(runtime, { sourceType: "script" }).program
 		.body[0]!;
 	const iifeCall = (runtimeNode as t.ExpressionStatement)
 		.expression as t.CallExpression;
 	const iifeFn = iifeCall.callee as t.FunctionExpression;
-	iifeFn.body.body.unshift(btNode as t.Statement);
+	const runtimeStatements = iifeFn.body.body;
 
-	ast.program.body.unshift(runtimeNode);
+	// Prepend: bytecode table + runtime + scope setup before the user code.
+	ast.program.body.unshift(
+		btNode as t.Statement,
+		...runtimeStatements,
+		...(scopeNodes as t.Statement[])
+	);
+
+	ast.program.directives = [t.directive(t.directiveLiteral("use strict"))];
 
 	return generate(ast, { comments: false }).code;
 }
@@ -805,7 +922,8 @@ function assembleOutput(
 function replaceFunctionBody(
 	fnPath: NodePath<t.Function>,
 	unitId: string,
-	names: RuntimeNames
+	names: RuntimeNames,
+	scopeVarName?: string
 ): void {
 	const node = fnPath.node;
 	const vmId = t.identifier(names.vm);
@@ -813,37 +931,44 @@ function replaceFunctionBody(
 	if (node.type === "ArrowFunctionExpression") {
 		const restParam = t.restElement(t.identifier("__args"));
 		node.params = [restParam];
+		const arrowArgs: t.Expression[] = [
+			t.stringLiteral(unitId),
+			t.identifier("__args"),
+		];
+		if (scopeVarName) {
+			arrowArgs.push(t.identifier(scopeVarName));
+		}
 		node.body = t.blockStatement([
-			t.returnStatement(
-				t.callExpression(vmId, [
-					t.stringLiteral(unitId),
-					t.identifier("__args"),
-				])
-			),
+			t.returnStatement(t.callExpression(vmId, arrowArgs)),
 		]);
 		return;
 	}
 
 	// Regular functions: preserve `this` via vm.call
-	const vmCall = t.callExpression(
-		t.memberExpression(vmId, t.identifier("call")),
-		[
-			t.thisExpression(),
-			t.stringLiteral(unitId),
-			t.callExpression(
+	const callArgs: t.Expression[] = [
+		t.thisExpression(),
+		t.stringLiteral(unitId),
+		t.callExpression(
+			t.memberExpression(
 				t.memberExpression(
 					t.memberExpression(
-						t.memberExpression(
-							t.identifier("Array"),
-							t.identifier("prototype")
-						),
-						t.identifier("slice")
+						t.identifier("Array"),
+						t.identifier("prototype")
 					),
-					t.identifier("call")
+					t.identifier("slice")
 				),
-				[t.identifier("arguments")]
+				t.identifier("call")
 			),
-		]
+			[t.identifier("arguments")]
+		),
+	];
+	if (scopeVarName) {
+		callArgs.push(t.identifier(scopeVarName));
+	}
+
+	const vmCall = t.callExpression(
+		t.memberExpression(vmId, t.identifier("call")),
+		callArgs
 	);
 
 	node.body = t.blockStatement([t.returnStatement(vmCall)]);

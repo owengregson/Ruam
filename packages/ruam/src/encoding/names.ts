@@ -248,6 +248,8 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_ki", // keys index
 	"_ue", // user entry
 	"_ji", // jitter index
+	"_ps", // program scope (outer scope for top-level dispatch)
+	"_psv", // program scope vars reference
 ] as const;
 
 /** The watermark variable name — always `_ru4m`. */
@@ -398,6 +400,9 @@ const SHARED_NAME_KEYS = [
 	"wm",
 	"router",
 	"routeMap",
+	"sPar",
+	"sVars",
+	"sTdz",
 ] as const;
 
 /**

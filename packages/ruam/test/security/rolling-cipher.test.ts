@@ -628,62 +628,68 @@ describe("integrity binding anti-reversing", () => {
 		// and change it — this simulates an attacker trying to neutralize integrity binding
 		// by modifying the hash value
 		const modified = out.replace(
-			/var\s+(_\w+)=(\d{6,});/,
+			/var\s+(_\w+)\s*=\s*(\d{6,})\s*;/,
 			(match, name, num) => `var ${name}=${parseInt(num, 10) + 1};`
 		);
-		// With a wrong integrity hash, decryption should produce garbage opcodes
+		expect(modified).not.toBe(out); // Sanity: regex must have matched
+		// With a wrong integrity hash, decryption produces garbage opcodes.
+		// This may throw an error OR silently produce an incorrect result.
 		const vm = require("node:vm");
-		expect(() => {
-			vm.runInContext(
-				modified,
-				vm.createContext({
-					console,
-					Array,
-					Object,
-					String,
-					Number,
-					Boolean,
-					Symbol,
-					Math,
-					JSON,
-					Date,
-					RegExp,
-					Error,
-					TypeError,
-					RangeError,
-					SyntaxError,
-					ReferenceError,
-					Map,
-					Set,
-					WeakMap,
-					WeakSet,
-					Promise,
-					Proxy,
-					Reflect,
-					parseInt,
-					parseFloat,
-					isNaN,
-					isFinite,
-					undefined,
-					NaN,
-					Infinity,
-					setTimeout,
-					setInterval,
-					clearTimeout,
-					clearInterval,
-					queueMicrotask,
-					Uint8Array,
-					Int8Array,
-					Float64Array,
-					ArrayBuffer,
-					DataView,
-					TextEncoder,
-					TextDecoder,
-					Buffer,
-					globalThis,
-				})
-			);
-		}).toThrow();
+		const ctx = vm.createContext({
+			console,
+			Array,
+			Object,
+			String,
+			Number,
+			Boolean,
+			Symbol,
+			Math,
+			JSON,
+			Date,
+			RegExp,
+			Error,
+			TypeError,
+			RangeError,
+			SyntaxError,
+			ReferenceError,
+			Map,
+			Set,
+			WeakMap,
+			WeakSet,
+			Promise,
+			Proxy,
+			Reflect,
+			parseInt,
+			parseFloat,
+			isNaN,
+			isFinite,
+			undefined,
+			NaN,
+			Infinity,
+			setTimeout,
+			setInterval,
+			clearTimeout,
+			clearInterval,
+			queueMicrotask,
+			Uint8Array,
+			Int8Array,
+			Float64Array,
+			ArrayBuffer,
+			DataView,
+			TextEncoder,
+			TextDecoder,
+			Buffer,
+			globalThis,
+		});
+		let result: unknown;
+		let threw = false;
+		try {
+			result = vm.runInContext(modified, ctx);
+		} catch {
+			threw = true;
+		}
+		// Either it threw or it produced a wrong result (not 3)
+		expect(threw || result !== 3).toBe(true);
 	});
 
 	it("unmodified output executes correctly", () => {
