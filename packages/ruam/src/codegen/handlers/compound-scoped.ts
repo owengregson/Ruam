@@ -11,15 +11,24 @@
  *  - Logical assign:      AND_ASSIGN_SCOPED, OR_ASSIGN_SCOPED, NULLISH_ASSIGN_SCOPED
  *  - No-op:               ASSIGN_OP
  *
- * All handlers use raw() because scope chain walking involves while loops
- * with `break` statements that are ambiguous — the `break` exits the while
- * loop, not the enclosing switch case.
+ * All handlers use ctx.scopeWalk() for structured AST scope chain walking.
  *
  * @module codegen/handlers/compound-scoped
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw, breakStmt } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	index,
+	assign,
+	bin,
+	lit,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	breakStmt,
+} from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -29,19 +38,19 @@ import { registry } from "./registry.js";
  * Build a compound assignment handler that pops a value from the stack,
  * walks the scope chain, and applies the given compound operator.
  *
- * @param assignOp - The compound assignment operator (e.g. `'+='`, `'-='`)
+ * @param assignOp - The operator prefix (e.g. `'+'`, `'-'`, `'**'`)
  * @returns Handler function producing the case body
  */
 function compoundScopedAssign(assignOp: string): HandlerFn {
-	return (ctx) => {
-		const sv = ctx.svStr();
-		return [
-			raw(
-				`var val=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-					ctx.scopeWalkStr(`${sv}${assignOp}val;${ctx.pushStr(sv)};`)
-			),
-		];
-	};
+	return (ctx) => [
+		varDecl("val", ctx.pop()),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([
+			exprStmt(assign(ctx.sv(), id("val"), assignOp)),
+			exprStmt(ctx.push(ctx.sv())),
+		]),
+	];
 }
 
 /**
@@ -53,60 +62,66 @@ function compoundScopedAssign(assignOp: string): HandlerFn {
  * @returns Handler function producing the case body
  */
 function logicalScopedAssign(logicalOp: string): HandlerFn {
-	return (ctx) => {
-		const sv = ctx.svStr();
-		return [
-			raw(
-				`var val=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-					ctx.scopeWalkStr(`${sv}=${sv}${logicalOp}val;${ctx.pushStr(sv)};`)
-			),
-		];
-	};
+	return (ctx) => [
+		varDecl("val", ctx.pop()),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([
+			exprStmt(assign(ctx.sv(), bin(logicalOp, ctx.sv(), id("val")))),
+			exprStmt(ctx.push(ctx.sv())),
+		]),
+	];
 }
 
 // --- Increment / decrement ---
 
 /** INC_SCOPED: pre-increment a scoped variable, push new value. */
 function INC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`${sv}=${sv}+1;${ctx.pushStr(sv)};`)
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([
+			exprStmt(assign(ctx.sv(), bin("+", ctx.sv(), lit(1)))),
+			exprStmt(ctx.push(ctx.sv())),
+		]),
 	];
 }
 
 /** DEC_SCOPED: pre-decrement a scoped variable, push new value. */
 function DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`${sv}=${sv}-1;${ctx.pushStr(sv)};`)
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([
+			exprStmt(assign(ctx.sv(), bin("-", ctx.sv(), lit(1)))),
+			exprStmt(ctx.push(ctx.sv())),
+		]),
 	];
 }
 
 /** POST_INC_SCOPED: post-increment a scoped variable, push old value. */
 function POST_INC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`var old=${sv};${sv}=old+1;${ctx.pushStr("old")};`)
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([
+			varDecl("old", ctx.sv()),
+			exprStmt(assign(ctx.sv(), bin("+", id("old"), lit(1)))),
+			exprStmt(ctx.push(id("old"))),
+		]),
 	];
 }
 
 /** POST_DEC_SCOPED: post-decrement a scoped variable, push old value. */
 function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`var old=${sv};${sv}=old-1;${ctx.pushStr("old")};`)
-		),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([
+			varDecl("old", ctx.sv()),
+			exprStmt(assign(ctx.sv(), bin("-", id("old"), lit(1)))),
+			exprStmt(ctx.push(id("old"))),
+		]),
 	];
 }
 
@@ -114,12 +129,16 @@ function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
 
 /** NULLISH_ASSIGN_SCOPED: `??=` — only assign if current value is null/undefined. */
 function NULLISH_ASSIGN_SCOPED(ctx: HandlerCtx): JsNode[] {
-	const sv = ctx.svStr();
 	return [
-		raw(
-			`var val=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];var s=${ctx.SC};` +
-				ctx.scopeWalkStr(`if(${sv}==null)${sv}=val;${ctx.pushStr(sv)};`)
-		),
+		varDecl("val", ctx.pop()),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("s", id(ctx.SC)),
+		...ctx.scopeWalk([
+			ifStmt(bin("==", ctx.sv(), lit(null)), [
+				exprStmt(assign(ctx.sv(), id("val"))),
+			]),
+			exprStmt(ctx.push(ctx.sv())),
+		]),
 	];
 }
 
@@ -136,18 +155,18 @@ registry.set(Op.INC_SCOPED, INC_SCOPED);
 registry.set(Op.DEC_SCOPED, DEC_SCOPED);
 registry.set(Op.POST_INC_SCOPED, POST_INC_SCOPED);
 registry.set(Op.POST_DEC_SCOPED, POST_DEC_SCOPED);
-registry.set(Op.ADD_ASSIGN_SCOPED, compoundScopedAssign("+="));
-registry.set(Op.SUB_ASSIGN_SCOPED, compoundScopedAssign("-="));
-registry.set(Op.MUL_ASSIGN_SCOPED, compoundScopedAssign("*="));
-registry.set(Op.DIV_ASSIGN_SCOPED, compoundScopedAssign("/="));
-registry.set(Op.MOD_ASSIGN_SCOPED, compoundScopedAssign("%="));
-registry.set(Op.POW_ASSIGN_SCOPED, compoundScopedAssign("**="));
-registry.set(Op.BIT_AND_ASSIGN_SCOPED, compoundScopedAssign("&="));
-registry.set(Op.BIT_OR_ASSIGN_SCOPED, compoundScopedAssign("|="));
-registry.set(Op.BIT_XOR_ASSIGN_SCOPED, compoundScopedAssign("^="));
-registry.set(Op.SHL_ASSIGN_SCOPED, compoundScopedAssign("<<="));
-registry.set(Op.SHR_ASSIGN_SCOPED, compoundScopedAssign(">>="));
-registry.set(Op.USHR_ASSIGN_SCOPED, compoundScopedAssign(">>>="));
+registry.set(Op.ADD_ASSIGN_SCOPED, compoundScopedAssign("+"));
+registry.set(Op.SUB_ASSIGN_SCOPED, compoundScopedAssign("-"));
+registry.set(Op.MUL_ASSIGN_SCOPED, compoundScopedAssign("*"));
+registry.set(Op.DIV_ASSIGN_SCOPED, compoundScopedAssign("/"));
+registry.set(Op.MOD_ASSIGN_SCOPED, compoundScopedAssign("%"));
+registry.set(Op.POW_ASSIGN_SCOPED, compoundScopedAssign("**"));
+registry.set(Op.BIT_AND_ASSIGN_SCOPED, compoundScopedAssign("&"));
+registry.set(Op.BIT_OR_ASSIGN_SCOPED, compoundScopedAssign("|"));
+registry.set(Op.BIT_XOR_ASSIGN_SCOPED, compoundScopedAssign("^"));
+registry.set(Op.SHL_ASSIGN_SCOPED, compoundScopedAssign("<<"));
+registry.set(Op.SHR_ASSIGN_SCOPED, compoundScopedAssign(">>"));
+registry.set(Op.USHR_ASSIGN_SCOPED, compoundScopedAssign(">>>"));
 registry.set(Op.AND_ASSIGN_SCOPED, logicalScopedAssign("&&"));
 registry.set(Op.OR_ASSIGN_SCOPED, logicalScopedAssign("||"));
 registry.set(Op.NULLISH_ASSIGN_SCOPED, NULLISH_ASSIGN_SCOPED);
