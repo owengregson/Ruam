@@ -1,17 +1,32 @@
 /**
  * Runners builder — assembles VM dispatch and router functions as AST nodes.
  *
- * Replaces the template-literal approach in runtime/templates/runners.ts with
- * AST-based construction. The function bodies use raw() because the dispatch
- * logic involves dense conditional expressions and this-boxing that benefit
- * from verbatim output.
+ * Produces structured AST nodes for the VM dispatch function, its .call
+ * variant, and the shielding router — no raw() escape hatches.
  *
  * @module codegen/builders/runners
  */
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../runtime/names.js";
-import { raw } from "../nodes.js";
+import {
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	fn,
+	fnExpr,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	returnStmt,
+	obj,
+	arr,
+} from "../nodes.js";
 
 // --- VM dispatch functions ---
 
@@ -34,29 +49,121 @@ export function buildRunners(debug: boolean, names: RuntimeNames): JsNode[] {
 	const NT = names.nTgt;
 	const HO = names.ho;
 
-	const dbgEntry = debug
-		? `${names.dbg}('VM_DISPATCH','id='+id,'async='+!!${U}.s,'params='+${U}.p);${U}._dbgId=id;`
-		: "";
-
-	return [
-		raw(
-			`function ${names.vm}(id,${A},${OS},${TV},${NT},${HO}){` +
-				`var ${U}=${names.load}(id);` +
-				dbgEntry +
-				`if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},${NT},${HO});` +
-				`return ${names.exec}(${U},${A}||[],${OS}||null,${TV},${NT},${HO});` +
-				`}`
-		),
-		raw(
-			`${names.vm}.call=function(${TV},id,${A},${OS},${HO}){` +
-				`var ${U}=${names.load}(id);` +
-				dbgEntry +
-				`if(!${U}.a&&!${U}.st){if(${TV}==null)${TV}=globalThis;else{var _t=typeof ${TV};if(_t!=="object"&&_t!=="function")${TV}=Object(${TV});}}` +
-				`if(${U}.s)return ${names.execAsync}(${U},${A}||[],${OS}||null,${TV},void 0,${HO});` +
-				`return ${names.exec}(${U},${A}||[],${OS}||null,${TV},void 0,${HO});` +
-				`};`
-		),
+	/** Common args: (unit, args||[], outer||null, thisVal, newTarget, homeObject) */
+	const execArgs: JsNode[] = [
+		id(U),
+		bin("||", id(A), arr()),
+		bin("||", id(OS), lit(null)),
+		id(TV),
+		id(NT),
+		id(HO),
 	];
+
+	/** Shared: var U = load(id); */
+	const loadUnit: JsNode = varDecl(U, call(id(names.load), [id("id")]));
+
+	/** Optional debug trace statements */
+	const dbgStmts: JsNode[] = debug
+		? [
+				exprStmt(
+					call(id(names.dbg), [
+						lit("VM_DISPATCH"),
+						bin("+", lit("id="), id("id")),
+						bin(
+							"+",
+							lit("async="),
+							un("!", un("!", member(id(U), "s")))
+						),
+						bin("+", lit("params="), member(id(U), "p")),
+					])
+				),
+				exprStmt(
+					assign(member(id(U), "_dbgId"), id("id"))
+				),
+			]
+		: [];
+
+	// --- Main dispatch function: function vm(id, A, OS, TV, NT, HO) { ... } ---
+	const dispatchFn: JsNode = fn(
+		names.vm,
+		["id", A, OS, TV, NT, HO],
+		[
+			loadUnit,
+			...dbgStmts,
+			// if (U.s) return execAsync(U, A||[], OS||null, TV, NT, HO);
+			ifStmt(member(id(U), "s"), [
+				returnStmt(call(id(names.execAsync), execArgs)),
+			]),
+			// return exec(U, A||[], OS||null, TV, NT, HO);
+			returnStmt(call(id(names.exec), execArgs)),
+		]
+	);
+
+	// --- vm.call = function(TV, id, A, OS, HO) { ... }; ---
+	// This-boxing: if not arrow and not strict:
+	//   if (TV == null) TV = globalThis;
+	//   else { var _t = typeof TV; if (_t !== "object" && _t !== "function") TV = Object(TV); }
+	const thisBoxing: JsNode = ifStmt(
+		un(
+			"!",
+			bin("||", member(id(U), "a"), member(id(U), "st"))
+		),
+		[
+			ifStmt(
+				bin("==", id(TV), lit(null)),
+				// then: TV = globalThis
+				[exprStmt(assign(id(TV), id("globalThis")))],
+				// else: type check + box
+				[
+					varDecl("_t", un("typeof", id(TV))),
+					ifStmt(
+						bin(
+							"&&",
+							bin("!==", id("_t"), lit("object")),
+							bin("!==", id("_t"), lit("function"))
+						),
+						[
+							exprStmt(
+								assign(
+									id(TV),
+									call(id("Object"), [id(TV)])
+								)
+							),
+						]
+					),
+				]
+			),
+		]
+	);
+
+	/** exec args for .call — newTarget is void 0 */
+	const callExecArgs: JsNode[] = [
+		id(U),
+		bin("||", id(A), arr()),
+		bin("||", id(OS), lit(null)),
+		id(TV),
+		un("void", lit(0)),
+		id(HO),
+	];
+
+	const callFn: JsNode = exprStmt(
+		assign(
+			member(id(names.vm), "call"),
+			fnExpr(undefined, [TV, "id", A, OS, HO], [
+				loadUnit,
+				...dbgStmts,
+				thisBoxing,
+				// if (U.s) return execAsync(U, A||[], OS||null, TV, void 0, HO);
+				ifStmt(member(id(U), "s"), [
+					returnStmt(call(id(names.execAsync), callExecArgs)),
+				]),
+				// return exec(U, A||[], OS||null, TV, void 0, HO);
+				returnStmt(call(id(names.exec), callExecArgs)),
+			])
+		)
+	);
+
+	return [dispatchFn, callFn];
 }
 
 // --- Shielding router ---
@@ -85,24 +192,52 @@ export function buildRouter(
 	const NT = names.nTgt;
 	const HO = names.ho;
 
-	const entries: string[] = [];
+	// var RM = {};
+	const routeMapDecl: JsNode = varDecl(RM, obj());
+
+	// RM["id1"] = dispatch1; RM["id2"] = dispatch1; ...
+	const registrations: JsNode[] = [];
 	for (const { unitIds, dispatchName } of groupRegistrations) {
-		for (const id of unitIds) {
-			entries.push(`${RM}["${id}"]=${dispatchName};`);
+		for (const uid of unitIds) {
+			registrations.push(
+				exprStmt(
+					assign(
+						index(id(RM), lit(uid)),
+						id(dispatchName)
+					)
+				)
+			);
 		}
 	}
 
-	return [
-		raw(`var ${RM}={};${entries.join("")}`),
-		raw(
-			`function ${routerName}(id,${A},${OS},${TV},${NT},${HO}){` +
-				`return ${RM}[id](id,${A},${OS},${TV},${NT},${HO});` +
-				`}`
-		),
-		raw(
-			`${routerName}.call=function(${TV},id,${A},${OS},${HO}){` +
-				`return ${RM}[id].call(${TV},id,${A},${OS},${HO});` +
-				`};`
-		),
-	];
+	// function routerName(id, A, OS, TV, NT, HO) { return RM[id](id, A, OS, TV, NT, HO); }
+	const routerFn: JsNode = fn(
+		routerName,
+		["id", A, OS, TV, NT, HO],
+		[
+			returnStmt(
+				call(
+					index(id(RM), id("id")),
+					[id("id"), id(A), id(OS), id(TV), id(NT), id(HO)]
+				)
+			),
+		]
+	);
+
+	// routerName.call = function(TV, id, A, OS, HO) { return RM[id].call(TV, id, A, OS, HO); };
+	const routerCall: JsNode = exprStmt(
+		assign(
+			member(id(routerName), "call"),
+			fnExpr(undefined, [TV, "id", A, OS, HO], [
+				returnStmt(
+					call(
+						member(index(id(RM), id("id")), "call"),
+						[id(TV), id("id"), id(A), id(OS), id(HO)]
+					)
+				),
+			])
+		)
+	);
+
+	return [routeMapDecl, ...registrations, routerFn, routerCall];
 }
