@@ -38,7 +38,7 @@ src/
       classes.ts            Class compilation (methods, properties, inheritance)
 
   ruamvm/
-    nodes.ts                JS AST node types (~35 node kinds) + factory functions
+    nodes.ts                JS AST node types (~36 node kinds) + factory functions
     emit.ts                 Recursive emitter: AST -> minified JS with precedence-aware parens
     transforms.ts           AST tree transforms (obfuscateLocals)
     builders/
@@ -97,7 +97,7 @@ docs/
 ## Architecture Notes
 
 -   **Compilation pipeline**: Source JS -> Babel parse -> identify target functions -> compile each to BytecodeUnit -> serialize -> replace function body with VM dispatch call -> build VM runtime AST -> emit IIFE -> assemble output
--   **JS AST builder system** (`ruamvm/`): All runtime JS is generated via a purpose-built AST with ~35 node types (`nodes.ts`), factory functions, and a recursive emitter (`emit.ts`). Builder files in `ruamvm/builders/` produce `JsNode[]` for each runtime component. The interpreter is assembled from a handler registry (`ruamvm/handlers/`) where each opcode registers a `HandlerFn` returning AST nodes. Tree-based post-processing (`obfuscateLocals` in `transforms.ts`) renames local variables before final emission.
+-   **JS AST builder system** (`ruamvm/`): All runtime JS is generated via a purpose-built AST with ~36 node types (`nodes.ts`), factory functions, and a recursive emitter (`emit.ts`). Supports modern JS syntax: spread elements (`...expr` in calls/arrays/new), object getters/setters (`{ get x() {} }`), shorthand methods (`{ method() {} }`), and object spread (`{ ...obj }`). Builder files in `ruamvm/builders/` produce `JsNode[]` for each runtime component. The interpreter is assembled from a handler registry (`ruamvm/handlers/`) where each opcode registers a `HandlerFn` returning AST nodes. Tree-based post-processing (`obfuscateLocals` in `transforms.ts`) renames local variables before final emission.
 -   **Direct physical dispatch**: The interpreter switch uses physical (shuffled) opcode numbers as case labels directly — no reverse opcode map is emitted in the output. Each build has unique case label assignments.
 -   **Per-file opcode shuffle**: Seeded Fisher-Yates (LCG) produces different instruction encodings per build. Seed + shuffle constants live in `constants.ts`.
 -   **Constant pool string encoding**: All string constants in the JSON bytecode format are XOR-encoded with an LCG key stream derived from the build seed. Decoded at load time by the `strDec` runtime function. Hides variable names, property names, and string literals.
