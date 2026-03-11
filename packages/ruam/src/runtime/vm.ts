@@ -17,7 +17,7 @@
 import { OPCODE_COUNT } from "../compiler/opcodes.js";
 import type { RuntimeNames } from "./names.js";
 import type { JsNode } from "../codegen/nodes.js";
-import { raw, exprStmt, lit, varDecl } from "../codegen/nodes.js";
+import { exprStmt, lit, varDecl, arr, obj, un } from "../codegen/nodes.js";
 import { emit } from "../codegen/emit.js";
 import { buildFingerprintSource } from "../codegen/builders/fingerprint.js";
 import { buildDecoderSource, buildStringDecoderSource } from "../codegen/builders/decoder.js";
@@ -98,7 +98,7 @@ export function generateVmRuntime(options: {
 	// Rolling cipher helpers (must come before interpreter)
 	if (rollingCipher) {
 		if (integrityBinding && integrityHash !== undefined) {
-			nodes.push(raw(`var ${names.ihash}=${integrityHash}`));
+			nodes.push(varDecl(names.ihash, lit(integrityHash)));
 		}
 		nodes.push(...buildRollingCipherSource(
 			names,
@@ -235,7 +235,7 @@ export function generateShieldedVmRuntime(options: {
 
 		// Rolling cipher (always on with vmShielding)
 		if (integrityBinding && group.integrityHash !== undefined) {
-			nodes.push(raw(`var ${gn.ihash}=${group.integrityHash}`));
+			nodes.push(varDecl(gn.ihash, lit(group.integrityHash)));
 		}
 		nodes.push(...buildRollingCipherSource(
 			gn,
@@ -277,10 +277,10 @@ export function generateShieldedVmRuntime(options: {
 	}
 
 	// Shared: watermark, depth, callStack, cache (emitted once)
-	nodes.push(raw("var _ru4m=!0"));
+	nodes.push(varDecl("_ru4m", un("!", lit(0))));
 	nodes.push(varDecl(sharedNames.depth, lit(0)));
-	nodes.push(raw(`var ${sharedNames.callStack}=[]`));
-	nodes.push(raw(`var ${sharedNames.cache}={}`));
+	nodes.push(varDecl(sharedNames.callStack, arr()));
+	nodes.push(varDecl(sharedNames.cache, obj()));
 
 	// Router: maps unit IDs to group dispatch functions
 	nodes.push(
