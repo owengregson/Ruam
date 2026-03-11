@@ -131,6 +131,9 @@ export function obfuscateCode(
 		});
 	}
 
+	// -- Generate per-build cipher salt (if rolling cipher is enabled) --------
+	const cipherSalt = rollingCipher ? generateCryptoSeed() : undefined;
+
 	// -- Compute integrity hash if needed ------------------------------------
 	// Integrity binding hashes the interpreter template source and embeds
 	// the hash in the IIFE.  The same hash is used as part of the rolling
@@ -162,7 +165,8 @@ export function obfuscateCode(
 		rollingCipher,
 		integrityHash,
 		deadCodeInjection,
-		temps["_ps"]
+		temps["_ps"],
+		cipherSalt
 	);
 
 	if (compiledUnits.size === 0) return code;
@@ -188,6 +192,7 @@ export function obfuscateCode(
 		integrityBinding,
 		integrityHash,
 		usedOpcodes,
+		cipherSalt,
 	});
 }
 
@@ -283,7 +288,8 @@ function compileTargets(
 	rollingCipher: boolean = false,
 	integrityHash?: number,
 	deadCodeInjection: boolean = false,
-	scopeVarName?: string
+	scopeVarName?: string,
+	cipherSalt?: number
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
 	const compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }> =
 		new Map();
@@ -305,7 +311,8 @@ function compileTargets(
 				encryptBytecode,
 				stringKey,
 				rollingCipher,
-				integrityHash
+				integrityHash,
+				cipherSalt
 			);
 			compiledUnits.set(unit.id, { unit, encoded });
 
@@ -316,7 +323,8 @@ function compileTargets(
 					encryptBytecode,
 					stringKey,
 					rollingCipher,
-					integrityHash
+					integrityHash,
+					cipherSalt
 				);
 				compiledUnits.set(child.id, {
 					unit: child,
@@ -603,7 +611,8 @@ function encodeUnit(
 	encrypt: boolean,
 	stringKey: number,
 	rollingCipher: boolean = false,
-	integrityHash?: number
+	integrityHash?: number,
+	cipherSalt?: number
 ): string {
 	if (encrypt) {
 		return encodeBytecodeUnit(unit, {
@@ -611,6 +620,7 @@ function encodeUnit(
 			encrypt: true,
 			rollingCipher,
 			integrityHash,
+			cipherSalt,
 		});
 	}
 	return serializeUnitToJson(unit, {
@@ -618,6 +628,7 @@ function encodeUnit(
 		stringKey,
 		rollingCipher,
 		integrityHash,
+		cipherSalt,
 	});
 }
 
@@ -718,6 +729,10 @@ function assembleShielded(
 				usedOpcodes.add(instr.opcode);
 		}
 
+		// Per-group cipher salt — makes each group's rolling cipher key
+		// non-derivable from bytecode metadata alone
+		const groupCipherSalt = generateCryptoSeed();
+
 		// Encode units with this group's shuffle map
 		// Rolling cipher is always on for vmShielding
 		const encodeGroupUnit = (u: BytecodeUnit) =>
@@ -727,7 +742,8 @@ function assembleShielded(
 				opts.encryptBytecode,
 				groupSeed,
 				true,
-				groupIntegrityHash
+				groupIntegrityHash,
+				groupCipherSalt
 			);
 
 		const rootEncoded = encodeGroupUnit(unit);
@@ -759,6 +775,7 @@ function assembleShielded(
 			unitIds,
 			usedOpcodes,
 			integrityHash: groupIntegrityHash,
+			cipherSalt: groupCipherSalt,
 		});
 	}
 
@@ -846,6 +863,7 @@ function assembleOutput(
 		integrityBinding?: boolean;
 		integrityHash?: number;
 		usedOpcodes?: Set<number>;
+		cipherSalt?: number;
 	}
 ): string {
 	// Build bytecode table declaration (using randomized name)
@@ -868,6 +886,7 @@ function assembleOutput(
 		integrityBinding: runtimeOptions.integrityBinding,
 		integrityHash: runtimeOptions.integrityHash,
 		usedOpcodes: runtimeOptions.usedOpcodes,
+		cipherSalt: runtimeOptions.cipherSalt,
 	});
 
 	// Collect top-level bindings BEFORE adding runtime statements.

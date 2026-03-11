@@ -41,7 +41,11 @@ import {
  * @param names - Randomized runtime identifier names.
  * @returns An array of JsNode containing the dispatch function and its .call property.
  */
-export function buildRunners(debug: boolean, names: RuntimeNames, temps: TempNames): JsNode[] {
+export function buildRunners(
+	debug: boolean,
+	names: RuntimeNames,
+	temps: TempNames
+): JsNode[] {
 	const U = names.unit;
 	const A = names.args;
 	const OS = names.outer;

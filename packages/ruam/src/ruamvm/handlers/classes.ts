@@ -260,7 +260,9 @@ function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 				ifStmt(
 					id("isStatic"),
 					[
-						exprStmt(assign(member(id("fn"), ctx.t("_ho")), id("cls"))),
+						exprStmt(
+							assign(member(id("fn"), ctx.t("_ho")), id("cls"))
+						),
 						exprStmt(
 							assign(index(id("cls"), id("name")), id("fn"))
 						),
@@ -270,9 +272,17 @@ function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 							ctx.t("_tgt"),
 							bin("||", member(id("cls"), "prototype"), id("cls"))
 						),
-						exprStmt(assign(member(id("fn"), ctx.t("_ho")), id(ctx.t("_tgt")))),
 						exprStmt(
-							assign(index(id(ctx.t("_tgt")), id("name")), id("fn"))
+							assign(
+								member(id("fn"), ctx.t("_ho")),
+								id(ctx.t("_tgt"))
+							)
+						),
+						exprStmt(
+							assign(
+								index(id(ctx.t("_tgt")), id("name")),
+								id("fn")
+							)
 						),
 					]
 				),
@@ -439,9 +449,15 @@ function DEFINE_PRIVATE_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("fn", ctx.pop()),
 		varDecl("cls", ctx.peek()),
-		varDecl(ctx.t("_tgt"), bin("||", member(id("cls"), "prototype"), id("cls"))),
+		varDecl(
+			ctx.t("_tgt"),
+			bin("||", member(id("cls"), "prototype"), id("cls"))
+		),
 		exprStmt(
-			assign(index(id(ctx.t("_tgt")), index(id(ctx.C), id(ctx.O))), id("fn"))
+			assign(
+				index(id(ctx.t("_tgt")), index(id(ctx.C), id(ctx.O))),
+				id("fn")
+			)
 		),
 		breakStmt(),
 	];

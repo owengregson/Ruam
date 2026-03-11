@@ -9,6 +9,7 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
+import type { SplitFn } from "../constant-splitting.js";
 import {
 	assign,
 	bin,
@@ -279,17 +280,19 @@ function buildB64Function(names: RuntimeNames): JsNode {
  * @param names - Randomized runtime identifier names.
  * @param stringKey - The numeric XOR key for string encoding.
  * @param useImplicitKey - Whether the key is passed as a parameter (true) or embedded (false).
+ * @param split - Optional constant splitter for numeric obfuscation.
  * @returns An array of JsNode containing the decoder function declaration.
  */
 export function buildStringDecoderSource(
 	names: RuntimeNames,
 	stringKey: number,
-	useImplicitKey: boolean
+	useImplicitKey: boolean,
+	split?: SplitFn
 ): JsNode[] {
 	if (useImplicitKey) {
-		return [buildStrDecFunction(names, undefined)];
+		return [buildStrDecFunction(names, undefined, split)];
 	}
-	return [buildStrDecFunction(names, stringKey)];
+	return [buildStrDecFunction(names, stringKey, split)];
 }
 
 /**
@@ -318,8 +321,10 @@ export function buildStringDecoderSource(
  */
 function buildStrDecFunction(
 	names: RuntimeNames,
-	embeddedKey: number | undefined
+	embeddedKey: number | undefined,
+	split?: SplitFn
 ): JsNode {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const implicit = embeddedKey === undefined;
 	const params = implicit ? ["mk", "b", "x"] : ["b", "x"];
 
@@ -334,7 +339,7 @@ function buildStrDecFunction(
 
 	const body: JsNode[] = [
 		// var k = (keySource ^ (x * 0x9E3779B9)) >>> 0;
-		varDecl("k", u32(xor(keySource, bin("*", x, lit(0x9e3779b9))))),
+		varDecl("k", u32(xor(keySource, bin("*", x, L(0x9e3779b9))))),
 		// var s = '';
 		varDecl("s", lit("")),
 
@@ -351,9 +356,7 @@ function buildStrDecFunction(
 				exprStmt(
 					assign(
 						k,
-						u32(
-							bin("+", bin("*", k, lit(1664525)), lit(1013904223))
-						)
+						u32(bin("+", bin("*", k, L(1664525)), L(1013904223)))
 					)
 				),
 				// s += String.fromCharCode(b[i] ^ (k & 65535));

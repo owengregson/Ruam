@@ -615,21 +615,23 @@ describe("integrity binding anti-reversing", () => {
 
 	it("output contains integrity binding infrastructure", () => {
 		const out = obfuscateCode(sampleCode, ibOpts);
-		// The rolling cipher mix primes should be present (decimal form from AST emitter)
-		expect(out).toContain("2246822507"); // 0x85EBCA6B
-		expect(out).toContain("3266489909"); // 0xC2B2AE35
-		// The FNV offset basis (used in rcDeriveKey)
-		expect(out).toContain("2166136261"); // 0x811C9DC5
+		// With constant splitting, crypto constants are hidden behind computed
+		// expressions. Verify infrastructure exists by checking the output
+		// contains rolling cipher functions (Math.imul is used in both
+		// rcDeriveKey and rcMix).
+		expect(out).toContain("Math.imul");
+		// The output should execute correctly (proves infrastructure works end-to-end)
+		assertEquivalent(sampleCode, ibOpts);
 	});
 
 	it("modifying the embedded integrity hash breaks execution", () => {
 		const out = obfuscateCode(sampleCode, ibOpts);
-		// Find the embedded integrity hash (a large numeric literal in a var assignment)
-		// and change it — this simulates an attacker trying to neutralize integrity binding
-		// by modifying the hash value
+		// The integrity hash is now a computed expression (constant splitting).
+		// Find a var declaration containing a XOR or subtraction expression and
+		// corrupt one operand — this simulates an attacker modifying the hash.
 		const modified = out.replace(
-			/var\s+(_\w+)\s*=\s*(\d{6,})\s*;/,
-			(match, name, num) => `var ${name}=${parseInt(num, 10) + 1};`
+			/var\s+(_\w+)\s*=\s*(\d{6,})\s*\^/,
+			(match, name, num) => `var ${name}=${parseInt(num, 10) + 1}^`
 		);
 		expect(modified).not.toBe(out); // Sanity: regex must have matched
 		// With a wrong integrity hash, decryption produces garbage opcodes.

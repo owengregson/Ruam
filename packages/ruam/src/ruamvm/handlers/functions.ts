@@ -82,12 +82,19 @@ function buildDebugArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 			[
 				ifStmt(member(id("u"), "s"), [
 					returnStmt(
-						fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(true), {
-							async: true,
-						})
+						fnExpr(
+							undefined,
+							["..." + ctx.t("_a")],
+							innerBody(true),
+							{
+								async: true,
+							}
+						)
 					),
 				]),
-				returnStmt(fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))),
+				returnStmt(
+					fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))
+				),
 			]
 		),
 		[id(ctx.t("_cu")), id(ctx.t("_cuid")), id(ctx.SC), id(ctx.TV)]
@@ -132,13 +139,21 @@ function buildDebugRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 				ifStmt(member(id("u"), "s"), [
 					varDecl(
 						"fn",
-						fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(true), {
-							async: true,
-						})
+						fnExpr(
+							undefined,
+							["..." + ctx.t("_a")],
+							innerBody(true),
+							{
+								async: true,
+							}
+						)
 					),
 					returnStmt(id("fn")),
 				]),
-				varDecl("fn", fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))),
+				varDecl(
+					"fn",
+					fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))
+				),
 				returnStmt(id("fn")),
 			]
 		),
@@ -184,13 +199,21 @@ function buildDebugFunctionClosureIIFE(ctx: HandlerCtx): JsNode {
 				ifStmt(member(id("u"), "s"), [
 					varDecl(
 						"fn",
-						fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(true), {
-							async: true,
-						})
+						fnExpr(
+							undefined,
+							["..." + ctx.t("_a")],
+							innerBody(true),
+							{
+								async: true,
+							}
+						)
 					),
 					returnStmt(id("fn")),
 				]),
-				varDecl("fn", fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))),
+				varDecl(
+					"fn",
+					fnExpr(undefined, ["..." + ctx.t("_a")], innerBody(false))
+				),
 				returnStmt(id("fn")),
 			]
 		),
@@ -212,7 +235,12 @@ function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 		return [
 			varDecl(ctx.t("_cuid"), index(id(ctx.C), id(ctx.O))),
 			varDecl(ctx.t("_cu"), call(id(ctx.load), [id(ctx.t("_cuid"))])),
-			exprStmt(assign(member(id(ctx.t("_cu")), ctx.t("_dbgId")), id(ctx.t("_cuid")))),
+			exprStmt(
+				assign(
+					member(id(ctx.t("_cu")), ctx.t("_dbgId")),
+					id(ctx.t("_cuid"))
+				)
+			),
 			exprStmt(
 				call(id(ctx.dbg), [
 					lit("NEW_CLOSURE"),
@@ -239,7 +267,10 @@ function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 		];
 	}
 	return [
-		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(
+			ctx.t("_cu"),
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
+		),
 		ifStmt(
 			member(id(ctx.t("_cu")), "a"),
 			[exprStmt(ctx.push(buildArrowClosureIIFE(ctx)))],
@@ -260,7 +291,12 @@ function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
 		return [
 			varDecl(ctx.t("_fuid"), index(id(ctx.C), id(ctx.O))),
 			varDecl(ctx.t("_fu"), call(id(ctx.load), [id(ctx.t("_fuid"))])),
-			exprStmt(assign(member(id(ctx.t("_fu")), ctx.t("_dbgId")), id(ctx.t("_fuid")))),
+			exprStmt(
+				assign(
+					member(id(ctx.t("_fu")), ctx.t("_dbgId")),
+					id(ctx.t("_fuid"))
+				)
+			),
 			exprStmt(
 				call(id(ctx.dbg), [
 					lit("NEW_FUNCTION"),
@@ -278,7 +314,10 @@ function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
 		];
 	}
 	return [
-		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(
+			ctx.t("_cu"),
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
+		),
 		exprStmt(ctx.push(buildRegularClosureIIFE(ctx))),
 		breakStmt(),
 	];
@@ -293,7 +332,10 @@ function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
  */
 function NEW_ARROW(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(
+			ctx.t("_cu"),
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
+		),
 		exprStmt(ctx.push(buildArrowClosureIIFE(ctx))),
 		breakStmt(),
 	];
@@ -308,11 +350,19 @@ function NEW_ASYNC(ctx: HandlerCtx): JsNode[] {
 	const asyncBody: JsNode[] = [
 		...buildThisBoxing(ctx),
 		returnStmt(
-			call(id(ctx.execAsync), [id("u"), id(ctx.t("_a")), id("cs"), id(ctx.t("_tv"))])
+			call(id(ctx.execAsync), [
+				id("u"),
+				id(ctx.t("_a")),
+				id("cs"),
+				id(ctx.t("_tv")),
+			])
 		),
 	];
 	return [
-		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(
+			ctx.t("_cu"),
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
+		),
 		exprStmt(
 			ctx.push(
 				call(
@@ -321,9 +371,14 @@ function NEW_ASYNC(ctx: HandlerCtx): JsNode[] {
 						["u", "cs"],
 						[
 							returnStmt(
-								fnExpr(undefined, ["..." + ctx.t("_a")], asyncBody, {
-									async: true,
-								})
+								fnExpr(
+									undefined,
+									["..." + ctx.t("_a")],
+									asyncBody,
+									{
+										async: true,
+									}
+								)
 							),
 						]
 					),
@@ -345,18 +400,30 @@ function NEW_GENERATOR_HANDLER(ctx: HandlerCtx): JsNode[] {
 	const fnBody: JsNode[] = [
 		...buildThisBoxing(ctx),
 		returnStmt(
-			call(id(ctx.exec), [id("u"), id(ctx.t("_a")), id("cs"), id(ctx.t("_tv"))])
+			call(id(ctx.exec), [
+				id("u"),
+				id(ctx.t("_a")),
+				id("cs"),
+				id(ctx.t("_tv")),
+			])
 		),
 	];
 	return [
-		varDecl(ctx.t("_cu"), call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])),
+		varDecl(
+			ctx.t("_cu"),
+			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
+		),
 		exprStmt(
 			ctx.push(
 				call(
 					fnExpr(
 						undefined,
 						["u", "cs"],
-						[returnStmt(fnExpr(undefined, ["..." + ctx.t("_a")], fnBody))]
+						[
+							returnStmt(
+								fnExpr(undefined, ["..." + ctx.t("_a")], fnBody)
+							),
+						]
 					),
 					[id(ctx.t("_cu")), id(ctx.SC)]
 				)

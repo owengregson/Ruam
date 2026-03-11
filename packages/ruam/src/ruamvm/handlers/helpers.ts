@@ -159,12 +159,19 @@ export function buildArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 			[
 				ifStmt(member(id("u"), "s"), [
 					returnStmt(
-						fnExpr(undefined, ["..." + ctx.t("_a")], [execCall(true)], {
-							async: true,
-						})
+						fnExpr(
+							undefined,
+							["..." + ctx.t("_a")],
+							[execCall(true)],
+							{
+								async: true,
+							}
+						)
 					),
 				]),
-				returnStmt(fnExpr(undefined, ["..." + ctx.t("_a")], [execCall(false)])),
+				returnStmt(
+					fnExpr(undefined, ["..." + ctx.t("_a")], [execCall(false)])
+				),
 			]
 		),
 		[id(ctx.t("_cu")), id(ctx.SC), id(ctx.TV)]
@@ -212,7 +219,10 @@ export function buildRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 					),
 					returnStmt(id("fn")),
 				]),
-				varDecl("fn", fnExpr(undefined, ["..." + ctx.t("_a")], fnBody(false))),
+				varDecl(
+					"fn",
+					fnExpr(undefined, ["..." + ctx.t("_a")], fnBody(false))
+				),
 				returnStmt(id("fn")),
 			]
 		),

@@ -102,10 +102,16 @@ function DUP2(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.t("_a"), index(id(ctx.S), bin("-", id(ctx.P), lit(1)))),
 		varDecl(ctx.t("_b"), index(id(ctx.S), id(ctx.P))),
 		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id(ctx.t("_a")))
+			assign(
+				index(id(ctx.S), update("++", true, id(ctx.P))),
+				id(ctx.t("_a"))
+			)
 		),
 		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id(ctx.t("_b")))
+			assign(
+				index(id(ctx.S), update("++", true, id(ctx.P))),
+				id(ctx.t("_b"))
+			)
 		),
 		breakStmt(),
 	];

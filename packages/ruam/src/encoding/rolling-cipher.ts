@@ -25,18 +25,34 @@ import {
  * Derive the implicit master key from a bytecode unit's structural
  * properties.  This produces the same value at build time and runtime
  * because the metadata is available in both contexts.
+ *
+ * When {@link cipherSalt} is provided it is mixed into the hash after
+ * the metadata rounds but before the avalanche finalization.  This
+ * makes the key non-derivable from bytecode metadata alone — the salt
+ * is a per-build random value embedded as a numeric literal in the
+ * runtime output.
+ *
+ * @param instrCount     Number of instructions in the unit.
+ * @param registerCount  Number of registers used by the unit.
+ * @param paramCount     Number of parameters the unit accepts.
+ * @param constantCount  Number of constants in the constant pool.
+ * @param cipherSalt     Optional per-build random salt.
  */
 export function deriveImplicitKey(
 	instrCount: number,
 	registerCount: number,
 	paramCount: number,
-	constantCount: number
+	constantCount: number,
+	cipherSalt?: number
 ): number {
 	let h = FNV_OFFSET_BASIS;
 	h = Math.imul(h ^ instrCount, FNV_PRIME);
 	h = Math.imul(h ^ registerCount, FNV_PRIME);
 	h = Math.imul(h ^ paramCount, FNV_PRIME);
 	h = Math.imul(h ^ constantCount, FNV_PRIME);
+	if (cipherSalt !== undefined) {
+		h = Math.imul(h ^ cipherSalt, FNV_PRIME);
+	}
 	h ^= h >>> 16;
 	h = Math.imul(h, AVALANCHE_CONSTANT);
 	h ^= h >>> 13;

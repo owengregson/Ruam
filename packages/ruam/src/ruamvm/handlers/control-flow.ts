@@ -139,19 +139,31 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
 						bin("-", member(id(ctx.EX), "length"), lit(1))
 					)
 				),
-				ifStmt(bin(">=", member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)), [
-					exprStmt(assign(id(ctx.CT), lit(1))),
-					exprStmt(assign(id(ctx.CV), id(ctx.t("_rv")))),
-					exprStmt(call(member(id(ctx.EX), "pop"), [])),
-					exprStmt(assign(id(ctx.P), member(id(ctx.t("_h")), ctx.t("_sp")))),
-					exprStmt(
-						assign(
-							id(ctx.IP),
-							bin("*", member(id(ctx.t("_h")), ctx.t("_fi")), lit(2))
-						)
-					),
-					breakStmt(),
-				]),
+				ifStmt(
+					bin(">=", member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
+					[
+						exprStmt(assign(id(ctx.CT), lit(1))),
+						exprStmt(assign(id(ctx.CV), id(ctx.t("_rv")))),
+						exprStmt(call(member(id(ctx.EX), "pop"), [])),
+						exprStmt(
+							assign(
+								id(ctx.P),
+								member(id(ctx.t("_h")), ctx.t("_sp"))
+							)
+						),
+						exprStmt(
+							assign(
+								id(ctx.IP),
+								bin(
+									"*",
+									member(id(ctx.t("_h")), ctx.t("_fi")),
+									lit(2)
+								)
+							)
+						),
+						breakStmt(),
+					]
+				),
 			]
 		),
 		returnStmt(id(ctx.t("_rv"))),
@@ -184,19 +196,31 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 						bin("-", member(id(ctx.EX), "length"), lit(1))
 					)
 				),
-				ifStmt(bin(">=", member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)), [
-					exprStmt(assign(id(ctx.CT), lit(1))),
-					exprStmt(assign(id(ctx.CV), un("void", lit(0)))),
-					exprStmt(call(member(id(ctx.EX), "pop"), [])),
-					exprStmt(assign(id(ctx.P), member(id(ctx.t("_h")), ctx.t("_sp")))),
-					exprStmt(
-						assign(
-							id(ctx.IP),
-							bin("*", member(id(ctx.t("_h")), ctx.t("_fi")), lit(2))
-						)
-					),
-					breakStmt(),
-				]),
+				ifStmt(
+					bin(">=", member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
+					[
+						exprStmt(assign(id(ctx.CT), lit(1))),
+						exprStmt(assign(id(ctx.CV), un("void", lit(0)))),
+						exprStmt(call(member(id(ctx.EX), "pop"), [])),
+						exprStmt(
+							assign(
+								id(ctx.P),
+								member(id(ctx.t("_h")), ctx.t("_sp"))
+							)
+						),
+						exprStmt(
+							assign(
+								id(ctx.IP),
+								bin(
+									"*",
+									member(id(ctx.t("_h")), ctx.t("_fi")),
+									lit(2)
+								)
+							)
+						),
+						breakStmt(),
+					]
+				),
 			]
 		),
 		returnStmt(un("void", lit(0))),

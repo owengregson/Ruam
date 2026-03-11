@@ -52,7 +52,11 @@ function PUSH_NEW_TARGET(ctx: HandlerCtx): JsNode[] {
  * Uses intermediate `var g` to match the original runtime pattern.
  */
 function PUSH_GLOBAL_THIS(ctx: HandlerCtx): JsNode[] {
-	return [varDecl("g", id(ctx.t("_g"))), exprStmt(ctx.push(id("g"))), breakStmt()];
+	return [
+		varDecl("g", id(ctx.t("_g"))),
+		exprStmt(ctx.push(id("g"))),
+		breakStmt(),
+	];
 }
 
 /**

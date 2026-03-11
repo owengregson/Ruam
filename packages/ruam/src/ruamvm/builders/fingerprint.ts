@@ -15,6 +15,7 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
+import type { SplitFn } from "../constant-splitting.js";
 import {
 	fn,
 	varDecl,
@@ -65,9 +66,14 @@ function dotChain(chain: string): JsNode {
  * Build the environment fingerprint function as JsNode[].
  *
  * @param names - Per-build randomized runtime identifiers.
+ * @param split - Optional constant splitter for numeric obfuscation.
  * @returns A single-element array containing the function declaration.
  */
-export function buildFingerprintSource(names: RuntimeNames): JsNode[] {
+export function buildFingerprintSource(
+	names: RuntimeNames,
+	split?: SplitFn
+): JsNode[] {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const h = id("h");
 
 	// --- Function body ---
@@ -75,7 +81,7 @@ export function buildFingerprintSource(names: RuntimeNames): JsNode[] {
 	const body: JsNode[] = [];
 
 	// var h = 0x5f3759df;
-	body.push(varDecl("h", lit(0x5f3759df)));
+	body.push(varDecl("h", L(0x5f3759df)));
 
 	// h ^= <probe>.length << <shift>;
 	for (const [chain, shift] of PROBES) {
@@ -86,13 +92,9 @@ export function buildFingerprintSource(names: RuntimeNames): JsNode[] {
 
 	// Murmur3-style finalizer
 	// h = (h ^ (h >>> 16)) * 0x45d9f3b;
-	body.push(
-		exprStmt(assign(h, bin("*", xor(h, ushr(h, 16)), lit(0x45d9f3b))))
-	);
+	body.push(exprStmt(assign(h, bin("*", xor(h, ushr(h, 16)), L(0x45d9f3b)))));
 	// h = (h ^ (h >>> 13)) * 0x45d9f3b;
-	body.push(
-		exprStmt(assign(h, bin("*", xor(h, ushr(h, 13)), lit(0x45d9f3b))))
-	);
+	body.push(exprStmt(assign(h, bin("*", xor(h, ushr(h, 13)), L(0x45d9f3b)))));
 	// h = h ^ (h >>> 16);
 	body.push(exprStmt(assign(h, xor(h, ushr(h, 16)))));
 

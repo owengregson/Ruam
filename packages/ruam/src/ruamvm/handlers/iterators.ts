@@ -68,7 +68,10 @@ function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
 			ctx.push(
 				obj(
 					[ctx.t("_iter"), id("iter")],
-					[ctx.t("_done"), un("!", un("!", member(id("first"), "done")))],
+					[
+						ctx.t("_done"),
+						un("!", un("!", member(id("first"), "done"))),
+					],
 					[ctx.t("_value"), member(id("first"), "value")]
 				)
 			)
@@ -100,7 +103,10 @@ function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 			)
 		),
 		exprStmt(
-			assign(member(id("iterObj"), ctx.t("_value")), member(id("nxt"), "value"))
+			assign(
+				member(id("iterObj"), ctx.t("_value")),
+				member(id("nxt"), "value")
+			)
 		),
 		breakStmt(),
 	];
@@ -112,7 +118,9 @@ function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 function ITER_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.peek()),
-		exprStmt(ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))),
+		exprStmt(
+			ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))
+		),
 		breakStmt(),
 	];
 }
@@ -136,7 +144,10 @@ function ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
 		varDecl("iterObj", ctx.pop()),
 		ifStmt(member(member(id("iterObj"), ctx.t("_iter")), "return"), [
 			exprStmt(
-				call(member(member(id("iterObj"), ctx.t("_iter")), "return"), [])
+				call(
+					member(member(id("iterObj"), ctx.t("_iter")), "return"),
+					[]
+				)
 			),
 		]),
 		breakStmt(),
@@ -150,7 +161,9 @@ function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.peek()),
 		exprStmt(ctx.push(member(id("iterObj"), ctx.t("_value")))),
-		exprStmt(ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))),
+		exprStmt(
+			ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))
+		),
 		breakStmt(),
 	];
 }
@@ -172,7 +185,9 @@ function FORIN_INIT(ctx: HandlerCtx): JsNode[] {
 		forIn("k", id("obj"), [
 			exprStmt(call(member(id("keys"), "push"), [id("k")])),
 		]),
-		exprStmt(ctx.push(obj([ctx.t("_keys"), id("keys")], [ctx.t("_idx"), lit(0)]))),
+		exprStmt(
+			ctx.push(obj([ctx.t("_keys"), id("keys")], [ctx.t("_idx"), lit(0)]))
+		),
 		breakStmt(),
 	];
 }
@@ -284,7 +299,9 @@ function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 function ASYNC_ITER_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.peek()),
-		exprStmt(ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))),
+		exprStmt(
+			ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))
+		),
 		breakStmt(),
 	];
 }
@@ -312,7 +329,10 @@ function ASYNC_ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
 			exprStmt(
 				maybeAwait(
 					ctx,
-					call(member(member(id("iterObj"), ctx.t("_iter")), "return"), [])
+					call(
+						member(member(id("iterObj"), ctx.t("_iter")), "return"),
+						[]
+					)
 				)
 			),
 		]),

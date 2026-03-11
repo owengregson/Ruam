@@ -172,7 +172,10 @@ function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
 			ctx.push(
 				obj(
 					[ctx.t("_iter"), id("iter")],
-					[ctx.t("_done"), un("!", un("!", member(id("first"), "done")))],
+					[
+						ctx.t("_done"),
+						un("!", un("!", member(id("first"), "done"))),
+					],
 					[ctx.t("_value"), member(id("first"), "value")]
 				)
 			)

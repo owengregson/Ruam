@@ -280,7 +280,9 @@ function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
 			exprStmt(assign(id("s"), member(id("s"), ctx.sPar))),
 		]),
 		ifStmt(un("!", id(ctx.t("_tf"))), [
-			exprStmt(ctx.push(un("typeof", index(id(ctx.t("_g")), id("name"))))),
+			exprStmt(
+				ctx.push(un("typeof", index(id(ctx.t("_g")), id("name"))))
+			),
 		]),
 		breakStmt(),
 	];

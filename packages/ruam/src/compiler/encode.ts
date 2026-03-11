@@ -49,6 +49,8 @@ export interface EncodeOptions {
 	rollingCipher?: boolean;
 	/** Integrity hash to fold into the rolling cipher key. */
 	integrityHash?: number;
+	/** Per-build cipher salt mixed into the rolling cipher key derivation. */
+	cipherSalt?: number;
 }
 
 /**
@@ -64,7 +66,8 @@ export function encodeBytecodeUnit(
 		unit,
 		options.shuffleMap,
 		options.rollingCipher,
-		options.integrityHash
+		options.integrityHash,
+		options.cipherSalt
 	);
 	if (options.encrypt) {
 		const key = computeFingerprint().toString(16);
@@ -105,6 +108,8 @@ export interface JsonSerializeOptions {
 	rollingCipher?: boolean;
 	/** Integrity hash to fold into the rolling cipher key. */
 	integrityHash?: number;
+	/** Per-build cipher salt mixed into the rolling cipher key derivation. */
+	cipherSalt?: number;
 }
 
 /**
@@ -136,6 +141,7 @@ export function serializeUnitToJson(
 	let stringKey: number | undefined;
 	let rollingCipher = false;
 	let integrityHash: number | undefined;
+	let cipherSalt: number | undefined;
 
 	if (Array.isArray(optsOrMap)) {
 		shuffleMap = optsOrMap;
@@ -145,6 +151,7 @@ export function serializeUnitToJson(
 		stringKey = optsOrMap.stringKey;
 		rollingCipher = optsOrMap.rollingCipher ?? false;
 		integrityHash = optsOrMap.integrityHash;
+		cipherSalt = optsOrMap.cipherSalt;
 	}
 
 	// When rolling cipher is on, use the implicit key for string encoding
@@ -156,7 +163,8 @@ export function serializeUnitToJson(
 			unit.instructions.length,
 			unit.registerCount,
 			unit.paramCount,
-			unit.constants.length
+			unit.constants.length,
+			cipherSalt
 		);
 		if (integrityHash !== undefined) {
 			k = (k ^ integrityHash) >>> 0;
@@ -187,7 +195,8 @@ export function serializeUnitToJson(
 			unit.instructions.length,
 			unit.registerCount,
 			unit.paramCount,
-			unit.constants.length
+			unit.constants.length,
+			cipherSalt
 		);
 		rollingEncrypt(instrs, masterKey, integrityHash);
 	}
@@ -214,7 +223,8 @@ function serializeUnit(
 	unit: BytecodeUnit,
 	shuffleMap: number[],
 	applyRollingCipher: boolean = false,
-	integrityHash?: number
+	integrityHash?: number,
+	cipherSalt?: number
 ): Uint8Array {
 	const buf = new ArrayBuffer(estimateSize(unit));
 	const view = new DataView(buf);
@@ -277,7 +287,8 @@ function serializeUnit(
 			unit.instructions.length,
 			unit.registerCount,
 			unit.paramCount,
-			unit.constants.length
+			unit.constants.length,
+			cipherSalt
 		);
 		rollingEncrypt(flatInstrs, masterKey, integrityHash);
 	}

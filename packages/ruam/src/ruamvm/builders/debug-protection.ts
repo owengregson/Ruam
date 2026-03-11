@@ -91,7 +91,10 @@ function ursh(left: JsNode, right: JsNode): JsNode {
  * @param names - Per-build randomized runtime identifiers.
  * @returns A single-element array containing the IIFE call expression.
  */
-export function buildDebugProtection(names: RuntimeNames, temps: TempNames): JsNode[] {
+export function buildDebugProtection(
+	names: RuntimeNames,
+	temps: TempNames
+): JsNode[] {
 	const T = names.thresh;
 	const BT = names.bt;
 	const CA = names.cache;
@@ -411,7 +414,12 @@ export function buildDebugProtection(names: RuntimeNames, temps: TempNames): JsN
 /**
  * Build _act() — escalating response function.
  */
-function buildActFunction(sevId: JsNode, btId: JsNode, caId: JsNode, Z: (key: string) => string): JsNode {
+function buildActFunction(
+	sevId: JsNode,
+	btId: JsNode,
+	caId: JsNode,
+	Z: (key: string) => string
+): JsNode {
 	return fn(
 		Z("_act"),
 		[],
@@ -428,15 +436,29 @@ function buildActFunction(sevId: JsNode, btId: JsNode, caId: JsNode, Z: (key: st
 							v(Z("_ks"), mcall(id("Object"), "keys", [btId])),
 							forStmt(
 								v(Z("_ki"), lit(0)),
-								bin("<", id(Z("_ki")), m(id(Z("_ks")), "length")),
-								assign(id(Z("_ki")), bin("+", id(Z("_ki")), lit(1))),
+								bin(
+									"<",
+									id(Z("_ki")),
+									m(id(Z("_ks")), "length")
+								),
+								assign(
+									id(Z("_ki")),
+									bin("+", id(Z("_ki")), lit(1))
+								),
 								[
 									v(
 										Z("_ue"),
-										index(btId, index(id(Z("_ks")), id(Z("_ki"))))
+										index(
+											btId,
+											index(id(Z("_ks")), id(Z("_ki")))
+										)
 									),
 									ifStmt(
-										bin("&&", id(Z("_ue")), m(id(Z("_ue")), "i")),
+										bin(
+											"&&",
+											id(Z("_ue")),
+											m(id(Z("_ue")), "i")
+										),
 										[
 											forStmt(
 												v(Z("_ji"), lit(0)),
@@ -450,14 +472,20 @@ function buildActFunction(sevId: JsNode, btId: JsNode, caId: JsNode, Z: (key: st
 												),
 												assign(
 													id(Z("_ji")),
-													bin("+", id(Z("_ji")), lit(2))
+													bin(
+														"+",
+														id(Z("_ji")),
+														lit(2)
+													)
 												),
 												[
 													es(
 														assign(
 															index(
 																m(
-																	id(Z("_ue")),
+																	id(
+																		Z("_ue")
+																	),
 																	"i"
 																),
 																id(Z("_ji"))
@@ -468,12 +496,16 @@ function buildActFunction(sevId: JsNode, btId: JsNode, caId: JsNode, Z: (key: st
 																	index(
 																		m(
 																			id(
-																				Z("_ue")
+																				Z(
+																					"_ue"
+																				)
 																			),
 																			"i"
 																		),
 																		id(
-																			Z("_ji")
+																			Z(
+																				"_ji"
+																			)
 																		)
 																	),
 																	bin(
@@ -506,7 +538,12 @@ function buildActFunction(sevId: JsNode, btId: JsNode, caId: JsNode, Z: (key: st
 							tryCatch(
 								[
 									forIn(Z("_k"), caId, [
-										es(un("delete", index(caId, id(Z("_k"))))),
+										es(
+											un(
+												"delete",
+												index(caId, id(Z("_k")))
+											)
+										),
 									]),
 								],
 								"_",
@@ -535,7 +572,10 @@ function buildActFunction(sevId: JsNode, btId: JsNode, caId: JsNode, Z: (key: st
 												Z("_ue"),
 												index(
 													btId,
-													index(id(Z("_ks")), id(Z("_ki")))
+													index(
+														id(Z("_ks")),
+														id(Z("_ki"))
+													)
 												)
 											),
 											ifStmt(id(Z("_ue")), [
@@ -565,7 +605,12 @@ function buildActFunction(sevId: JsNode, btId: JsNode, caId: JsNode, Z: (key: st
 /**
  * Build _p1() — polymorphic debugger invocation with dual-clock timing.
  */
-function buildP1(nowId: JsNode, dmId: JsNode, threshId: JsNode, Z: (key: string) => string): JsNode {
+function buildP1(
+	nowId: JsNode,
+	dmId: JsNode,
+	threshId: JsNode,
+	Z: (key: string) => string
+): JsNode {
 	return fn(
 		Z("_p1"),
 		[],
@@ -595,7 +640,11 @@ function buildP1(nowId: JsNode, dmId: JsNode, threshId: JsNode, Z: (key: string)
 /**
  * Build _p2() — statistical jitter analysis.
  */
-function buildP2(nowId: JsNode, dmId: JsNode, Z: (key: string) => string): JsNode {
+function buildP2(
+	nowId: JsNode,
+	dmId: JsNode,
+	Z: (key: string) => string
+): JsNode {
 	const tsId = id(Z("_ts"));
 	return fn(
 		Z("_p2"),
@@ -612,7 +661,10 @@ function buildP2(nowId: JsNode, dmId: JsNode, Z: (key: string) => string): JsNod
 					v(Z("_s"), call(nowId, [])),
 					es(
 						call(
-							index(dmId, bin("%", id(Z("_i")), m(dmId, "length"))),
+							index(
+								dmId,
+								bin("%", id(Z("_i")), m(dmId, "length"))
+							),
 							[]
 						)
 					),
@@ -649,11 +701,18 @@ function buildP2(nowId: JsNode, dmId: JsNode, Z: (key: string) => string): JsNod
 				bin("<", id(Z("_i")), m(tsId, "length")),
 				assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
 				[
-					v(Z("_d"), bin("-", index(tsId, id(Z("_i"))), id(Z("_av")))),
+					v(
+						Z("_d"),
+						bin("-", index(tsId, id(Z("_i"))), id(Z("_av")))
+					),
 					es(
 						assign(
 							id(Z("_vr")),
-							bin("+", id(Z("_vr")), bin("*", id(Z("_d")), id(Z("_d"))))
+							bin(
+								"+",
+								id(Z("_vr")),
+								bin("*", id(Z("_d")), id(Z("_d")))
+							)
 						)
 					),
 				]
@@ -662,7 +721,11 @@ function buildP2(nowId: JsNode, dmId: JsNode, Z: (key: string) => string): JsNod
 			returnStmt(
 				bin(
 					"||",
-					bin(">", bin("/", id(Z("_vr")), m(tsId, "length")), lit(500)),
+					bin(
+						">",
+						bin("/", id(Z("_vr")), m(tsId, "length")),
+						lit(500)
+					),
 					bin(">", id(Z("_av")), lit(50))
 				)
 			),
@@ -686,7 +749,9 @@ function buildP3(Z: (key: string) => string): JsNode {
 						bin("||", m(newExpr(id("Error"), []), "stack"), lit(""))
 					),
 					ifStmt(
-						mcall(lit(/--inspect|--debug/i), "test", [id(Z("_st"))]),
+						mcall(lit(/--inspect|--debug/i), "test", [
+							id(Z("_st")),
+						]),
 						[returnStmt(lit(true))]
 					),
 				],
@@ -705,7 +770,10 @@ function buildP3(Z: (key: string) => string): JsNode {
 									id(Z("_i")),
 									m(m(id("process"), "execArgv"), "length")
 								),
-								assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
+								assign(
+									id(Z("_i")),
+									bin("+", id(Z("_i")), lit(1))
+								),
 								[
 									ifStmt(
 										mcall(
@@ -740,7 +808,11 @@ function buildP3(Z: (key: string) => string): JsNode {
 /**
  * Build _p4() — function integrity self-verification (FNV-1a).
  */
-function buildP4(dbgId: JsNode, fhId: JsNode, Z: (key: string) => string): JsNode {
+function buildP4(
+	dbgId: JsNode,
+	fhId: JsNode,
+	Z: (key: string) => string
+): JsNode {
 	return fn(
 		Z("_p4"),
 		[],
@@ -858,7 +930,10 @@ function buildP5(Z: (key: string) => string): JsNode {
 											[
 												index(
 													id("console"),
-													index(id(Z("_fn")), id(Z("_i")))
+													index(
+														id(Z("_fn")),
+														id(Z("_i"))
+													)
 												),
 											]
 										)
@@ -909,7 +984,11 @@ function buildP5(Z: (key: string) => string): JsNode {
 /**
  * Build _p6() — global property trap canary.
  */
-function buildP6(thId: JsNode, tlId: JsNode, Z: (key: string) => string): JsNode {
+function buildP6(
+	thId: JsNode,
+	tlId: JsNode,
+	Z: (key: string) => string
+): JsNode {
 	return fn(
 		Z("_p6"),
 		[],
@@ -927,7 +1006,11 @@ function buildP6(thId: JsNode, tlId: JsNode, Z: (key: string) => string): JsNode
 /**
  * Build _run() — main detection loop with random probe selection and setTimeout recursion.
  */
-function buildRun(pbId: JsNode, sevId: JsNode, Z: (key: string) => string): JsNode {
+function buildRun(
+	pbId: JsNode,
+	sevId: JsNode,
+	Z: (key: string) => string
+): JsNode {
 	return fn(
 		Z("_run"),
 		[],
@@ -997,7 +1080,10 @@ function buildRun(pbId: JsNode, sevId: JsNode, Z: (key: string) => string): JsNo
 						)
 					)
 				),
-				v(Z("_tid"), call(id("setTimeout"), [id(Z("_run")), id(Z("_nx"))])),
+				v(
+					Z("_tid"),
+					call(id("setTimeout"), [id(Z("_run")), id(Z("_nx"))])
+				),
 				ifStmt(
 					bin(
 						"&&",
