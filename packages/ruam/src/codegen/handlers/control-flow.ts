@@ -8,9 +8,7 @@
  *  - Throws:  THROW, RETHROW
  *  - Misc:    NOP, TABLE_SWITCH, LOOKUP_SWITCH
  *
- * Simple jump handlers use AST nodes directly.  RETURN, RETURN_VOID, THROW,
- * and RETHROW use raw() nodes because their mixed control flow (return in a
- * case body, break inside nested if) is most cleanly expressed as literal JS.
+ * All handlers use pure AST nodes.
  *
  * @module codegen/handlers/control-flow
  */
@@ -27,9 +25,14 @@ import {
 	ifStmt,
 	varDecl,
 	breakStmt,
-	raw,
+	returnStmt,
+	throwStmt,
+	call,
+	member,
+	index,
 } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
+import { debugTrace } from "./helpers.js";
 
 // --- Shorthand helpers ---
 
@@ -106,7 +109,7 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
 	];
 }
 
-// --- Return / throw handlers (raw for mixed control flow) ---
+// --- Return / throw handlers ---
 
 /**
  * RETURN: pop return value, optionally defer to finally handler, then return.
@@ -120,13 +123,20 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
  */
 function RETURN(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var _rv=${ctx.S}[${ctx.P}--];` +
-				(ctx.debug ? `${ctx.dbg}('RETURN','value=',_rv);` : "") +
-				`if(${ctx.EX}&&${ctx.EX}.length>0){var _h=${ctx.EX}[${ctx.EX}.length-1];` +
-				`if(_h._fi>=0){${ctx.CT}=1;${ctx.CV}=_rv;${ctx.EX}.pop();` +
-				`${ctx.P}=_h._sp;${ctx.IP}=_h._fi*2;break;}}return _rv;`
-		),
+		varDecl("_rv", ctx.pop()),
+		...debugTrace(ctx, "RETURN", lit("value="), id("_rv")),
+		ifStmt(bin("&&", id(ctx.EX), bin(">", member(id(ctx.EX), "length"), lit(0))), [
+			varDecl("_h", index(id(ctx.EX), bin("-", member(id(ctx.EX), "length"), lit(1)))),
+			ifStmt(bin(">=", member(id("_h"), "_fi"), lit(0)), [
+				exprStmt(assign(id(ctx.CT), lit(1))),
+				exprStmt(assign(id(ctx.CV), id("_rv"))),
+				exprStmt(call(member(id(ctx.EX), "pop"), [])),
+				exprStmt(assign(id(ctx.P), member(id("_h"), "_sp"))),
+				exprStmt(assign(id(ctx.IP), bin("*", member(id("_h"), "_fi"), lit(2)))),
+				breakStmt(),
+			]),
+		]),
+		returnStmt(id("_rv")),
 	];
 }
 
@@ -141,12 +151,19 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
  */
 function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			(ctx.debug ? `${ctx.dbg}('RETURN_VOID');` : "") +
-				`if(${ctx.EX}&&${ctx.EX}.length>0){var _h=${ctx.EX}[${ctx.EX}.length-1];` +
-				`if(_h._fi>=0){${ctx.CT}=1;${ctx.CV}=void 0;${ctx.EX}.pop();` +
-				`${ctx.P}=_h._sp;${ctx.IP}=_h._fi*2;break;}}return void 0;`
-		),
+		...debugTrace(ctx, "RETURN_VOID"),
+		ifStmt(bin("&&", id(ctx.EX), bin(">", member(id(ctx.EX), "length"), lit(0))), [
+			varDecl("_h", index(id(ctx.EX), bin("-", member(id(ctx.EX), "length"), lit(1)))),
+			ifStmt(bin(">=", member(id("_h"), "_fi"), lit(0)), [
+				exprStmt(assign(id(ctx.CT), lit(1))),
+				exprStmt(assign(id(ctx.CV), un("void", lit(0)))),
+				exprStmt(call(member(id(ctx.EX), "pop"), [])),
+				exprStmt(assign(id(ctx.P), member(id("_h"), "_sp"))),
+				exprStmt(assign(id(ctx.IP), bin("*", member(id("_h"), "_fi"), lit(2)))),
+				breakStmt(),
+			]),
+		]),
+		returnStmt(un("void", lit(0))),
 	];
 }
 
@@ -161,11 +178,9 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
  */
 function THROW(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var _te=${ctx.S}[${ctx.P}--];` +
-				(ctx.debug ? `${ctx.dbg}('THROW','value=',_te);` : "") +
-				`throw _te;`
-		),
+		varDecl("_te", ctx.pop()),
+		...debugTrace(ctx, "THROW", lit("value="), id("_te")),
+		throwStmt(id("_te")),
 	];
 }
 
@@ -178,9 +193,13 @@ function THROW(ctx: HandlerCtx): JsNode[] {
  */
 function RETHROW(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`if(${ctx.HPE}){var ex=${ctx.PE};${ctx.PE}=null;${ctx.HPE}=false;throw ex;}break;`
-		),
+		ifStmt(id(ctx.HPE), [
+			varDecl("ex", id(ctx.PE)),
+			exprStmt(assign(id(ctx.PE), lit(null))),
+			exprStmt(assign(id(ctx.HPE), lit(false))),
+			throwStmt(id("ex")),
+		]),
+		breakStmt(),
 	];
 }
 
