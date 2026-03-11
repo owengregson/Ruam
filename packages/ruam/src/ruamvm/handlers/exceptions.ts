@@ -50,7 +50,10 @@ import { registry } from "./registry.js";
  */
 function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl(ctx.t("_ci"), bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))),
+		varDecl(
+			ctx.t("_ci"),
+			bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))
+		),
 		varDecl(ctx.t("_fi"), bin("&", id(ctx.O), lit(0xffff))),
 		ifStmt(bin("===", id(ctx.t("_ci")), lit(0xffff)), [
 			exprStmt(assign(id(ctx.t("_ci")), un("-", lit(1)))),
@@ -61,7 +64,11 @@ function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
 		ifStmt(un("!", id(ctx.EX)), [exprStmt(assign(id(ctx.EX), arr()))]),
 		exprStmt(
 			call(member(id(ctx.EX), "push"), [
-				obj([ctx.t("_ci"), id(ctx.t("_ci"))], [ctx.t("_fi"), id(ctx.t("_fi"))], [ctx.t("_sp"), id(ctx.P)]),
+				obj(
+					[ctx.t("_ci"), id(ctx.t("_ci"))],
+					[ctx.t("_fi"), id(ctx.t("_fi"))],
+					[ctx.t("_sp"), id(ctx.P)]
+				),
 			])
 		),
 		breakStmt(),

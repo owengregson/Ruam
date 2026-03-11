@@ -14,6 +14,7 @@
 import type { CaseClause } from "../nodes.js";
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
+import type { SplitFn } from "../constant-splitting.js";
 import {
 	caseClause,
 	lit,
@@ -45,7 +46,11 @@ import {
 	fnExpr,
 } from "../nodes.js";
 import { registry, makeHandlerCtx } from "../handlers/index.js";
-import { VM_MAX_RECURSION_DEPTH } from "../../constants.js";
+import {
+	VM_MAX_RECURSION_DEPTH,
+	LCG_MULTIPLIER,
+	LCG_INCREMENT,
+} from "../../constants.js";
 import { obfuscateLocals } from "../transforms.js";
 
 /** Options for interpreter filtering and hardening. */
@@ -69,7 +74,8 @@ export function buildInterpreterFunctions(
 	debug: boolean,
 	rollingCipher: boolean,
 	seed: number,
-	interpOpts: InterpreterBuildOptions = {}
+	interpOpts: InterpreterBuildOptions = {},
+	split?: SplitFn
 ): JsNode[] {
 	return [
 		buildExecFunction(names, temps, shuffleMap, {
@@ -78,6 +84,7 @@ export function buildInterpreterFunctions(
 			rollingCipher,
 			seed,
 			interpOpts,
+			split,
 		}),
 		buildExecFunction(names, temps, shuffleMap, {
 			isAsync: true,
@@ -85,6 +92,7 @@ export function buildInterpreterFunctions(
 			rollingCipher,
 			seed,
 			interpOpts,
+			split,
 		}),
 	];
 }
@@ -106,12 +114,13 @@ export function buildExecFunction(
 		rollingCipher: boolean;
 		seed: number;
 		interpOpts: InterpreterBuildOptions;
+		split?: SplitFn;
 	}
 ): JsNode {
 	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
 
-	// Build switch cases from the handler registry
-	const cases: CaseClause[] = [];
+	// Build raw switch cases from the handler registry
+	const rawCases: CaseClause[] = [];
 	for (const [op, handler] of registry) {
 		// Dynamic opcodes: skip handlers for opcodes not used by any compiled unit
 		if (
@@ -122,12 +131,12 @@ export function buildExecFunction(
 			continue;
 		}
 		const physicalOp = shuffleMap[op]!;
-		cases.push(caseClause(lit(physicalOp), handler(ctx)));
+		rawCases.push(caseClause(lit(physicalOp), handler(ctx)));
 	}
 
 	// Generate decoy handlers for unused opcodes
 	if (opts.interpOpts.decoyOpcodes && opts.interpOpts.usedOpcodes) {
-		cases.push(
+		rawCases.push(
 			...generateDecoyHandlers(
 				names,
 				shuffleMap,
@@ -136,11 +145,52 @@ export function buildExecFunction(
 		);
 	}
 
+	// --- Handler table indirection ---
+	// Assign shuffled handler indices so case labels bear no relationship
+	// to physical opcodes, adding an indirection layer against static analysis.
+	const htName = temps["_ht"];
+	if (htName === undefined) throw new Error("Missing temp: _ht");
+
+	const handlerCount = rawCases.length;
+	const handlerIndices = Array.from({ length: handlerCount }, (_, i) => i);
+
+	// Shuffle handler indices using LCG from seed
+	let hs = opts.seed >>> 0;
+	for (let i = handlerIndices.length - 1; i > 0; i--) {
+		hs = (hs * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+		const j = hs % (i + 1);
+		[handlerIndices[i]!, handlerIndices[j]!] = [
+			handlerIndices[j]!,
+			handlerIndices[i]!,
+		];
+	}
+
+	// Build handler table init statements and remapped cases
+	const htInit: JsNode[] = [varDecl(htName, obj())];
+	const cases: CaseClause[] = [];
+
+	for (let i = 0; i < rawCases.length; i++) {
+		const rawCase = rawCases[i]!;
+		const handlerIdx = handlerIndices[i]!;
+
+		// Skip default case label (null) — should not appear in rawCases
+		if (rawCase.label === null) continue;
+
+		// _ht[physicalOp] = handlerIdx
+		htInit.push(
+			exprStmt(assign(index(id(htName), rawCase.label), lit(handlerIdx)))
+		);
+
+		// case handlerIdx: <body>
+		cases.push(caseClause(lit(handlerIdx), rawCase.body));
+	}
+
 	// Default case
 	cases.push(caseClause(null, [breakStmt()]));
 
 	// Build the scaffold as AST with the switch cases
-	const switchNode = switchStmt(id(ctx.PH), cases);
+	// Switch discriminant is _ht[PH] instead of PH directly
+	const switchNode = switchStmt(index(id(htName), id(ctx.PH)), cases);
 	const fnNode = buildScaffoldAST(
 		names,
 		temps,
@@ -148,7 +198,9 @@ export function buildExecFunction(
 		opts.debug,
 		opts.rollingCipher,
 		opts.interpOpts,
-		switchNode
+		switchNode,
+		htInit,
+		opts.split
 	);
 
 	// Apply tree-based obfuscation of local variable names
@@ -171,6 +223,8 @@ export function buildExecFunction(
  * @param rollingCipher - Whether rolling cipher decryption is enabled
  * @param interpOpts - Interpreter build options
  * @param switchNode - The switch statement AST node (with all cases)
+ * @param htInit - Handler table initialization statements (dispatch indirection)
+ * @param split - Optional constant splitter for numeric obfuscation
  * @returns FnDecl AST node for the complete interpreter function
  */
 function buildScaffoldAST(
@@ -180,8 +234,11 @@ function buildScaffoldAST(
 	debug: boolean,
 	rollingCipher: boolean,
 	interpOpts: InterpreterBuildOptions,
-	switchNode: JsNode
+	switchNode: JsNode,
+	htInit?: JsNode[],
+	split?: SplitFn
 ): JsNode {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const fnName = isAsync ? n.execAsync : n.exec;
 	const fnLabel = isAsync ? n.execAsync : n.exec;
 
@@ -326,7 +383,7 @@ function buildScaffoldAST(
 
 	// Optional: stack encoding proxy
 	if (interpOpts.stackEncoding) {
-		tryBody.push(...buildStackEncodingProxyAST(n, temps));
+		tryBody.push(...buildStackEncodingProxyAST(n, temps, split));
 	}
 
 	// var _il=I.length
@@ -355,7 +412,7 @@ function buildScaffoldAST(
 				call(id(n.rcMix), [
 					id(n.rcState),
 					id(T("_ri")),
-					bin("^", id(T("_ri")), lit(0x9e3779b9)),
+					bin("^", id(T("_ri")), L(0x9e3779b9)),
 				])
 			)
 		);
@@ -452,7 +509,9 @@ function buildScaffoldAST(
 	catchRouteBody.push(exprStmt(stackPush(S, P, id("e"))));
 	// IP=_h._ci*2
 	catchRouteBody.push(
-		exprStmt(assign(id(IP), bin("*", member(id(T("_h")), T("_ci")), lit(2))))
+		exprStmt(
+			assign(id(IP), bin("*", member(id(T("_h")), T("_ci")), lit(2)))
+		)
 	);
 	// continue
 	catchRouteBody.push(continueStmt());
@@ -475,19 +534,26 @@ function buildScaffoldAST(
 		);
 	}
 	// P=_h._sp
-	finallyRouteBody.push(exprStmt(assign(id(P), member(id(T("_h")), T("_sp")))));
+	finallyRouteBody.push(
+		exprStmt(assign(id(P), member(id(T("_h")), T("_sp"))))
+	);
 	// PE=e; HPE=true
 	finallyRouteBody.push(exprStmt(assign(id(PE), id("e"))));
 	finallyRouteBody.push(exprStmt(assign(id(HPE), lit(true))));
 	// IP=_h._fi*2
 	finallyRouteBody.push(
-		exprStmt(assign(id(IP), bin("*", member(id(T("_h")), T("_fi")), lit(2))))
+		exprStmt(
+			assign(id(IP), bin("*", member(id(T("_h")), T("_fi")), lit(2)))
+		)
 	);
 	// continue
 	finallyRouteBody.push(continueStmt());
 
 	exHandlerBody.push(
-		ifStmt(bin(">=", member(id(T("_h")), T("_fi")), lit(0)), finallyRouteBody)
+		ifStmt(
+			bin(">=", member(id(T("_h")), T("_fi")), lit(0)),
+			finallyRouteBody
+		)
 	);
 
 	catchBody.push(
@@ -520,6 +586,11 @@ function buildScaffoldAST(
 	// Inner try-catch wrapped in for(;;)
 	const innerTryCatch = tryCatch(innerTryBody, "e", catchBody);
 	const foreverLoop = forStmt(null, null, null, [innerTryCatch]);
+
+	// Handler table initialization (dispatch indirection)
+	if (htInit) {
+		tryBody.push(...htInit);
+	}
 
 	tryBody.push(foreverLoop);
 
@@ -710,9 +781,16 @@ function generateDecoyHandlers(
  * on set and decodes on get. Transparent to all opcode handlers.
  *
  * @param n - Runtime identifier names
+ * @param temps - Temp name mapping
+ * @param split - Optional constant splitter for numeric obfuscation
  * @returns Array of JsNode statements to insert into the function body
  */
-function buildStackEncodingProxyAST(n: RuntimeNames, temps: TempNames): JsNode[] {
+function buildStackEncodingProxyAST(
+	n: RuntimeNames,
+	temps: TempNames,
+	split?: SplitFn
+): JsNode[] {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const S = n.stk;
 	const U = n.unit;
 	const SEK = temps["_sek"]!;
@@ -730,7 +808,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames, temps: TempNames): JsNode[]
 					member(member(id(U), "i"), "length"),
 					member(id(U), "r")
 				),
-				lit(0x5a3c96e1)
+				L(0x5a3c96e1)
 			),
 			lit(0)
 		)
@@ -741,11 +819,7 @@ function buildStackEncodingProxyAST(n: RuntimeNames, temps: TempNames): JsNode[]
 
 	// Helper: (_sek^(i*0x9E3779B9))>>>0
 	const xorKey = (iVar: JsNode) =>
-		bin(
-			">>>",
-			bin("^", id(SEK), bin("*", iVar, lit(0x9e3779b9))),
-			lit(0)
-		);
+		bin(">>>", bin("^", id(SEK), bin("*", iVar, L(0x9e3779b9))), lit(0));
 
 	// set handler function body
 	const setBody: JsNode[] = [

@@ -10,6 +10,7 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
+import type { SplitFn } from "../constant-splitting.js";
 import {
 	assign,
 	bin,
@@ -49,15 +50,19 @@ const xorAssign = (target: string, value: JsNode): JsNode =>
  *
  * @param names          Runtime identifier mapping.
  * @param integrityHash  Optional integrity hash literal to fold into the derived key.
+ * @param split          Optional constant splitter for numeric obfuscation.
+ * @param cipherSalt     Optional per-build salt folded into the derived key via an extra FNV round.
  * @returns Array of JsNode representing both function declarations.
  */
 export function buildRollingCipherSource(
 	names: RuntimeNames,
-	integrityHash?: number
+	integrityHash?: number,
+	split?: SplitFn,
+	cipherSalt?: number
 ): JsNode[] {
 	return [
-		buildDeriveKeyFunction(names, integrityHash),
-		buildMixFunction(names),
+		buildDeriveKeyFunction(names, integrityHash, split, cipherSalt),
+		buildMixFunction(names, split),
 	];
 }
 
@@ -73,12 +78,15 @@ export function buildRollingCipherSource(
  */
 function buildDeriveKeyFunction(
 	names: RuntimeNames,
-	integrityHash?: number
+	integrityHash?: number,
+	split?: SplitFn,
+	cipherSalt?: number
 ): JsNode {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const h = id("h");
 	const u = id("u");
 	const k = id("k");
-	const FNV_PRIME = lit(0x01000193);
+	const FNV_PRIME = L(0x01000193);
 
 	// h = Math.imul(h ^ expr, FNV_PRIME)
 	const fnvRound = (expr: JsNode): JsNode =>
@@ -86,7 +94,7 @@ function buildDeriveKeyFunction(
 
 	const body: JsNode[] = [
 		// var h = 0x811C9DC5;
-		varDecl("h", lit(0x811c9dc5)),
+		varDecl("h", L(0x811c9dc5)),
 		// h = Math.imul(h ^ (u.i.length >>> 1), 0x01000193);
 		fnvRound(ushr(member(member(u, "i"), "length"), 1)),
 		// h = Math.imul(h ^ u.r, 0x01000193);
@@ -95,15 +103,25 @@ function buildDeriveKeyFunction(
 		fnvRound(member(u, "p")),
 		// h = Math.imul(h ^ u.c.length, 0x01000193);
 		fnvRound(member(member(u, "c"), "length")),
+	];
+
+	// Optional: fold in per-build cipher salt via extra FNV round
+	// Must come BEFORE avalanche finalization to match build-time deriveImplicitKey
+	if (cipherSalt !== undefined) {
+		body.push(fnvRound(L(cipherSalt)));
+	}
+
+	// Avalanche finalization
+	body.push(
 		// h ^= h >>> 16;
 		xorAssign("h", ushr(h, 16)),
 		// h = Math.imul(h, 0x45D9F3B);
-		exprStmt(assign(h, imul(h, lit(0x45d9f3b)))),
+		exprStmt(assign(h, imul(h, L(0x45d9f3b)))),
 		// h ^= h >>> 13;
 		xorAssign("h", ushr(h, 13)),
 		// var k = h >>> 0;
-		varDecl("k", ushr(h, 0)),
-	];
+		varDecl("k", ushr(h, 0))
+	);
 
 	// Optional: k = (k ^ ihash) >>> 0;
 	if (integrityHash !== undefined) {
@@ -124,7 +142,8 @@ function buildDeriveKeyFunction(
  * Advances the rolling cipher state by mixing in the decrypted opcode
  * and operand values using two multiply-xor rounds with avalanche shift.
  */
-function buildMixFunction(names: RuntimeNames): JsNode {
+function buildMixFunction(names: RuntimeNames, split?: SplitFn): JsNode {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const h = id("h");
 	const a = id("a");
 	const b = id("b");
@@ -136,9 +155,9 @@ function buildMixFunction(names: RuntimeNames): JsNode {
 			// var h = s;
 			varDecl("h", id("s")),
 			// h = Math.imul(h ^ a, 0x85EBCA6B) >>> 0;
-			exprStmt(assign(h, ushr(imul(xor(h, a), lit(0x85ebca6b)), 0))),
+			exprStmt(assign(h, ushr(imul(xor(h, a), L(0x85ebca6b)), 0))),
 			// h = Math.imul(h ^ b, 0xC2B2AE35) >>> 0;
-			exprStmt(assign(h, ushr(imul(xor(h, b), lit(0xc2b2ae35)), 0))),
+			exprStmt(assign(h, ushr(imul(xor(h, b), L(0xc2b2ae35)), 0))),
 			// h ^= h >>> 16;
 			xorAssign("h", ushr(h, 16)),
 			// return h >>> 0;

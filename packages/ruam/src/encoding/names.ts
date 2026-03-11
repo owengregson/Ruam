@@ -250,6 +250,9 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_ji", // jitter index
 	"_ps", // program scope (outer scope for top-level dispatch)
 	"_psv", // program scope vars reference
+
+	// --- Interpreter dispatch indirection ---
+	"_ht", // handler lookup table (interpreter dispatch indirection)
 ] as const;
 
 /** The watermark variable name — always `_ru4m`. */
@@ -314,7 +317,10 @@ function createNameGenerator(seed: number, externalUsed?: Set<string>) {
  * @param seed - LCG seed for deterministic name generation.
  * @returns RuntimeNames and TempNames.
  */
-export function generateRuntimeNames(seed: number, sharedUsed?: Set<string>): {
+export function generateRuntimeNames(
+	seed: number,
+	sharedUsed?: Set<string>
+): {
 	runtime: RuntimeNames;
 	temps: TempNames;
 } {
@@ -436,16 +442,20 @@ export function generateShieldedNames(
 	const globalUsed = new Set<string>();
 
 	// Generate shared names from the shared seed
-	const { runtime: shared, temps: sharedTemps } =
-		generateRuntimeNames(sharedSeed, globalUsed);
+	const { runtime: shared, temps: sharedTemps } = generateRuntimeNames(
+		sharedSeed,
+		globalUsed
+	);
 
 	// Generate per-group names with the shared used set
 	const groups: RuntimeNames[] = [];
 	const groupTemps: TempNames[] = [];
 
 	for (const groupSeed of groupSeeds) {
-		const { runtime: groupNames, temps } =
-			generateRuntimeNames(groupSeed, globalUsed);
+		const { runtime: groupNames, temps } = generateRuntimeNames(
+			groupSeed,
+			globalUsed
+		);
 
 		// Override shared fields for cross-group consistency
 		for (const key of SHARED_NAME_KEYS) {

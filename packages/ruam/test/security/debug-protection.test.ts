@@ -156,11 +156,13 @@ describe("Debug Protection", () => {
 				`function a() { return 1; } function b() { return 2; } a() + b();`,
 				{ vmShielding: true, debugProtection: true }
 			);
-			// The IIFE should appear only once (shared infrastructure)
-			const matches = output.match(/2166136261/g); // 0x811C9DC5 in decimal
-			// 4 occurrences: initial + verify, each using the FNV constant twice
+			// The FNV offset basis 2166136261 (0x811C9DC5) appears only in
+			// debug protection (shared) — rolling cipher builders use constant
+			// splitting so their FNV constants are hidden behind computed expressions.
+			// Debug protection emits FNV in its self-verification checksums.
+			const matches = output.match(/2166136261/g);
 			expect(matches).toBeTruthy();
-			expect(matches!.length).toBe(4);
+			expect(matches!.length).toBe(2);
 		});
 	});
 });

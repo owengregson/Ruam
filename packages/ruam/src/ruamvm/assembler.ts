@@ -32,6 +32,8 @@ import { buildRunners, buildRouter } from "./builders/runners.js";
 import { buildLoader } from "./builders/loader.js";
 import { buildDeserializer } from "./builders/deserializer.js";
 import { buildGlobalExposure } from "./builders/globals.js";
+import { makeConstantSplitter } from "./constant-splitting.js";
+import type { SplitFn } from "./constant-splitting.js";
 
 /**
  * Generate the complete VM runtime source code.
@@ -54,6 +56,7 @@ export function generateVmRuntime(options: {
 	integrityBinding?: boolean;
 	integrityHash?: number;
 	usedOpcodes?: Set<number>;
+	cipherSalt?: number;
 }): string {
 	const {
 		opcodeShuffleMap,
@@ -71,7 +74,12 @@ export function generateVmRuntime(options: {
 		integrityBinding = false,
 		integrityHash,
 		usedOpcodes,
+		cipherSalt,
 	} = options;
+
+	// Create constant splitter — replaces well-known numeric literals with
+	// computed expressions so attackers can't grep for FNV primes, etc.
+	const split: SplitFn = makeConstantSplitter(seed);
 
 	// Build reverse map: physical -> logical opcode
 	const reverseMap = new Array<number>(OPCODE_COUNT);
@@ -86,7 +94,7 @@ export function generateVmRuntime(options: {
 
 	// Optional encryption support
 	if (encrypt) {
-		nodes.push(...buildFingerprintSource(names));
+		nodes.push(...buildFingerprintSource(names, split));
 		nodes.push(...buildDecoderSource(names));
 	}
 
@@ -103,12 +111,14 @@ export function generateVmRuntime(options: {
 	// Rolling cipher helpers (must come before interpreter)
 	if (rollingCipher) {
 		if (integrityBinding && integrityHash !== undefined) {
-			nodes.push(varDecl(names.ihash, lit(integrityHash)));
+			nodes.push(varDecl(names.ihash, split(integrityHash)));
 		}
 		nodes.push(
 			...buildRollingCipherSource(
 				names,
-				integrityBinding ? integrityHash : undefined
+				integrityBinding ? integrityHash : undefined,
+				split,
+				cipherSalt
 			)
 		);
 	}
@@ -127,7 +137,8 @@ export function generateVmRuntime(options: {
 				decoyOpcodes,
 				stackEncoding,
 				usedOpcodes,
-			}
+			},
+			split
 		)
 	);
 
@@ -137,7 +148,7 @@ export function generateVmRuntime(options: {
 	// String constant decoder (XOR key stream)
 	if (stringKey !== undefined) {
 		nodes.push(
-			...buildStringDecoderSource(names, stringKey, rollingCipher)
+			...buildStringDecoderSource(names, stringKey, rollingCipher, split)
 		);
 	}
 
@@ -176,6 +187,8 @@ export interface ShieldingGroup {
 	usedOpcodes: Set<number>;
 	/** Per-group integrity hash (if integrityBinding is on). */
 	integrityHash?: number;
+	/** Per-group cipher salt for rolling cipher key derivation. */
+	cipherSalt?: number;
 }
 
 /**
@@ -210,6 +223,11 @@ export function generateShieldedVmRuntime(options: {
 		integrityBinding = false,
 	} = options;
 
+	// Shared constant splitter for shared builders (fingerprint, decoder)
+	const sharedSplit: SplitFn = makeConstantSplitter(
+		groups[0]?.seed ?? 0x12345678
+	);
+
 	const nodes: JsNode[] = [];
 
 	// "use strict" directive
@@ -217,7 +235,7 @@ export function generateShieldedVmRuntime(options: {
 
 	// Shared: encryption support
 	if (encrypt) {
-		nodes.push(...buildFingerprintSource(sharedNames));
+		nodes.push(...buildFingerprintSource(sharedNames, sharedSplit));
 		nodes.push(...buildDecoderSource(sharedNames));
 	}
 
@@ -237,6 +255,9 @@ export function generateShieldedVmRuntime(options: {
 		const gn = group.names;
 		const gt = group.temps;
 
+		// Per-group constant splitter — each group gets unique split patterns
+		const groupSplit: SplitFn = makeConstantSplitter(group.seed);
+
 		// Debug logging (per-group)
 		if (debugLogging) {
 			const reverseMap = new Array<number>(OPCODE_COUNT);
@@ -248,12 +269,14 @@ export function generateShieldedVmRuntime(options: {
 
 		// Rolling cipher (always on with vmShielding)
 		if (integrityBinding && group.integrityHash !== undefined) {
-			nodes.push(varDecl(gn.ihash, lit(group.integrityHash)));
+			nodes.push(varDecl(gn.ihash, groupSplit(group.integrityHash)));
 		}
 		nodes.push(
 			...buildRollingCipherSource(
 				gn,
-				integrityBinding ? group.integrityHash : undefined
+				integrityBinding ? group.integrityHash : undefined,
+				groupSplit,
+				group.cipherSalt
 			)
 		);
 
@@ -271,7 +294,8 @@ export function generateShieldedVmRuntime(options: {
 					decoyOpcodes,
 					stackEncoding,
 					usedOpcodes: group.usedOpcodes,
-				}
+				},
+				groupSplit
 			)
 		);
 
@@ -279,7 +303,7 @@ export function generateShieldedVmRuntime(options: {
 		nodes.push(...buildRunners(debugLogging, gn, gt));
 
 		// String decoder (per-group, rolling cipher implicit key)
-		nodes.push(...buildStringDecoderSource(gn, 0, true));
+		nodes.push(...buildStringDecoderSource(gn, 0, true, groupSplit));
 
 		// Loader (per-group, skips shared var declarations)
 		nodes.push(
