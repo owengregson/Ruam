@@ -87,20 +87,6 @@ export interface HandlerCtx {
 	curSv: (key?: JsNode) => JsNode;
 	/** Scope walk pattern as AST nodes: `while(s){if(key in s.sV){<body>break;}s=s.sPar;}break;` */
 	scopeWalk: (body: JsNode[], key?: JsNode) => JsNode[];
-
-	// Legacy string-returning helpers — for incremental migration from raw() templates
-	/** @deprecated Use sv() which returns JsNode */
-	svStr: (key?: string) => string;
-	/** @deprecated Use curSv() which returns JsNode */
-	curSvStr: (key?: string) => string;
-	/** @deprecated Use scopeWalk() which returns JsNode[] */
-	scopeWalkStr: (body: string, key?: string) => string;
-	/** @deprecated Use pop() */
-	popStr: () => string;
-	/** @deprecated Use peek() */
-	peekStr: () => string;
-	/** @deprecated Use push() — returns string like `W(expr)` */
-	pushStr: (expr: string) => string;
 }
 
 /** A handler function returns the case body as AST nodes. */
@@ -167,14 +153,5 @@ export function makeHandlerCtx(
 			]),
 			breakStmt(),
 		],
-
-		// Legacy string-returning helpers for incremental migration
-		svStr: (key = "name") => `s.${names.sVars}[${key}]`,
-		curSvStr: (key = "name") => `${names.scope}.${names.sVars}[${key}]`,
-		scopeWalkStr: (body: string, key = "name") =>
-			`while(s){if(${key} in s.${names.sVars}){${body}break;}s=s.${names.sPar};}break;`,
-		popStr: () => `${names.stk}[${names.stp}--]`,
-		peekStr: () => `${names.stk}[${names.stp}]`,
-		pushStr: (expr: string) => `${names.sPush}(${expr})`,
 	};
 }

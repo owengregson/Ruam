@@ -53,12 +53,6 @@ export interface RuntimeNames {
 	stk: string;
 	/** Stack pointer (was `sp`). */
 	stp: string;
-	/** Push function (was `push`). */
-	sPush: string;
-	/** Pop function (was `pop`). */
-	sPop: string;
-	/** Peek function (was `peek`). */
-	sPeek: string;
 
 	// Interpreter internal locals — disguise the VM pattern
 	/** operand variable */
@@ -157,9 +151,7 @@ const BLACKLIST = new Set([
 	"_cu",
 	"_fuid",
 	"_fu",
-	"_uid_",
 	"_dbgId",
-	"_last20",
 	"_ho",
 ]);
 
@@ -215,9 +207,6 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
 		dbgProt: genName(),
 		stk: genName(),
 		stp: genName(),
-		sPush: genName(),
-		sPop: genName(),
-		sPeek: genName(),
 		operand: genName(),
 		scope: genName(),
 		regs: genName(),
