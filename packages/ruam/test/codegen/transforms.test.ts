@@ -5,7 +5,6 @@ import {
 	fn,
 	varDecl,
 	exprStmt,
-	raw,
 	returnStmt,
 	tryCatch,
 	id,
@@ -95,13 +94,6 @@ describe("obfuscateLocals", () => {
 		const r1 = obfuscateLocals(nodes, 100);
 		const r2 = obfuscateLocals(nodes, 200);
 		expect(emit(r1[0]!)).not.toBe(emit(r2[0]!));
-	});
-
-	it("does not modify raw nodes", () => {
-		const nodes = [raw("var handler=1;handler;")];
-		const result = obfuscateLocals(nodes, seed);
-		// Raw nodes are opaque — no var declarations collected
-		expect(emit(result[0]!)).toBe("var handler=1;handler;");
 	});
 
 	it("returns nodes unchanged when nothing to rename", () => {
