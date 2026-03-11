@@ -434,7 +434,6 @@ function getNumericConst(
 	return null;
 }
 
-
 /**
  * Pre-compute the set of all instruction indices that are jump targets.
  * This replaces the O(n) per-query isJumpTarget scan with O(1) lookups.

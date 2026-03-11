@@ -27,13 +27,16 @@ import {
 } from "./compiler/opcodes.js";
 import { serializeUnitToJson, encodeBytecodeUnit } from "./compiler/encode.js";
 import type { JsonSerializeOptions } from "./compiler/encode.js";
-import { generateVmRuntime, generateShieldedVmRuntime } from "./runtime/vm.js";
-import type { ShieldingGroup } from "./runtime/vm.js";
+import {
+	generateVmRuntime,
+	generateShieldedVmRuntime,
+} from "./ruamvm/assembler.js";
+import type { ShieldingGroup } from "./ruamvm/assembler.js";
 import {
 	generateRuntimeNames,
 	generateShieldedNames,
-} from "./runtime/names.js";
-import type { RuntimeNames } from "./runtime/names.js";
+} from "./encoding/names.js";
+import type { RuntimeNames } from "./encoding/names.js";
 import { resolveOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
 import { preprocessIdentifiers, resetHexCounter } from "./preprocess.js";
@@ -42,8 +45,8 @@ import {
 	FNV_OFFSET_BASIS,
 	FNV_PRIME,
 } from "./constants.js";
-import { buildInterpreterFunctions } from "./codegen/builders/interpreter.js";
-import { emit } from "./codegen/emit.js";
+import { buildInterpreterFunctions } from "./ruamvm/builders/interpreter.js";
+import { emit } from "./ruamvm/emit.js";
 
 import { randomBytes } from "node:crypto";
 
@@ -138,9 +141,13 @@ export function obfuscateCode(
 	let integrityHash: number | undefined;
 	if (integrityBinding) {
 		const interpNodes = buildInterpreterFunctions(
-			names, shuffleMap, debugLogging, true, shuffleSeed
+			names,
+			shuffleMap,
+			debugLogging,
+			true,
+			shuffleSeed
 		);
-		const interpSource = interpNodes.map(n => emit(n)).join("\n");
+		const interpSource = interpNodes.map((n) => emit(n)).join("\n");
 		integrityHash = fnv1a(interpSource);
 	}
 
@@ -490,7 +497,6 @@ function injectDeadCode(unit: BytecodeUnit, seed: number): void {
 	}
 }
 
-
 /** Build a `var <name>={...}` declaration for the bytecode table. */
 function buildBtDecl(
 	units: Map<string, { encoded: string }>,
@@ -615,9 +621,13 @@ function assembleShielded(
 		let groupIntegrityHash: number | undefined;
 		if (opts.integrityBinding) {
 			const interpNodes = buildInterpreterFunctions(
-				groupNames, groupShuffleMap, opts.debugLogging ?? false, true, groupSeed
+				groupNames,
+				groupShuffleMap,
+				opts.debugLogging ?? false,
+				true,
+				groupSeed
 			);
-			const interpSource = interpNodes.map(n => emit(n)).join("\n");
+			const interpSource = interpNodes.map((n) => emit(n)).join("\n");
 			groupIntegrityHash = fnv1a(interpSource);
 		}
 

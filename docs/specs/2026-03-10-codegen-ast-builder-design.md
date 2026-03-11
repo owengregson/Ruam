@@ -18,12 +18,12 @@ Replace string-based code generation with a purpose-built JavaScript AST builder
 
 ### Node Types
 
-| Category | Nodes |
-|----------|-------|
-| Declarations | `VarDecl`, `ConstDecl`, `FnDecl` (with `async` flag), `ParamList` (with rest param support) |
-| Statements | `Block`, `If`, `While`, `For`, `ForIn`, `Switch`, `Case`, `Break`, `Continue`, `Return`, `Throw`, `TryCatch`, `Debugger` |
-| Expressions | `Id`, `Literal` (string/number/boolean/null/RegExp), `BinOp` (incl. `in`, `instanceof`), `UnaryOp` (incl. `delete`, `void`, `typeof`), `UpdateExpr` (pre/post `++`/`--`), `Assign` (incl. compound `+=`, `-=`, `^=`, `>>>=`, etc.), `Call`, `MemberExpr`, `Index`, `Ternary`, `Array`, `Object`, `FnExpr` (with `async` flag), `ArrowFn` (with `async` flag), `New`, `Sequence`, `Await`, `ImportExpr` |
-| Special | `Raw` — escape hatch for injecting raw JS strings verbatim |
+| Category     | Nodes                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Declarations | `VarDecl`, `ConstDecl`, `FnDecl` (with `async` flag), `ParamList` (with rest param support)                                                                                                                                                                                                                                                                                                            |
+| Statements   | `Block`, `If`, `While`, `For`, `ForIn`, `Switch`, `Case`, `Break`, `Continue`, `Return`, `Throw`, `TryCatch`, `Debugger`                                                                                                                                                                                                                                                                               |
+| Expressions  | `Id`, `Literal` (string/number/boolean/null/RegExp), `BinOp` (incl. `in`, `instanceof`), `UnaryOp` (incl. `delete`, `void`, `typeof`), `UpdateExpr` (pre/post `++`/`--`), `Assign` (incl. compound `+=`, `-=`, `^=`, `>>>=`, etc.), `Call`, `MemberExpr`, `Index`, `Ternary`, `Array`, `Object`, `FnExpr` (with `async` flag), `ArrowFn` (with `async` flag), `New`, `Sequence`, `Await`, `ImportExpr` |
+| Special      | `Raw` — escape hatch for injecting raw JS strings verbatim                                                                                                                                                                                                                                                                                                                                             |
 
 ### Factory Functions
 
@@ -74,37 +74,37 @@ iife(body)                        — (function(){...})()
 rest(name)                        — ...name (in parameter lists)
 ```
 
-File: `src/codegen/nodes.ts` (~100 lines)
+File: `src/ruamvm/nodes.ts` (~100 lines)
 
 ## Emitter
 
 Single recursive function: `emit(node): string`. Produces minified JS output.
 
-- Minified by default. No pretty-printing option. The AST is the readable representation.
-- Automatic semicolons after statements.
-- Precedence-aware parenthesization — only adds parens when operator precedence requires them.
-- `UpdateExpr` correctly distinguishes prefix (`++x`) vs postfix (`x++`).
-- `Assign` with `op` emits compound form (`x+=1` not `x=x+1`).
-- Keyword operators (`in`, `instanceof`, `typeof`, `void`, `delete`) emit with correct spacing.
-- `Raw` nodes emit verbatim.
+-   Minified by default. No pretty-printing option. The AST is the readable representation.
+-   Automatic semicolons after statements.
+-   Precedence-aware parenthesization — only adds parens when operator precedence requires them.
+-   `UpdateExpr` correctly distinguishes prefix (`++x`) vs postfix (`x++`).
+-   `Assign` with `op` emits compound form (`x+=1` not `x=x+1`).
+-   Keyword operators (`in`, `instanceof`, `typeof`, `void`, `delete`) emit with correct spacing.
+-   `Raw` nodes emit verbatim.
 
-File: `src/codegen/emit.ts` (~250 lines)
+File: `src/ruamvm/emit.ts` (~250 lines)
 
 ## Tree Transformations
 
 The 5 current regex-based post-processing passes become structural tree operations:
 
-| Current (regex) | New (tree operation) |
-|-----------------|---------------------|
-| `inlineStackOps()` — paren-counting string replacement | Visitor: pattern-match `Call(id(W), [expr])` → `Assign(Index(S, Update('++', true, P)), expr)`. Remove W/X/Y function declarations. |
-| `obfuscateLocals()` — regex `\bvar\s+([a-zA-Z]...)` | Visitor: collect `VarDecl` AND `ParamList` names 3+ chars not in KEEP set, generate short replacements via LCG, rename all matching `Id` references. |
-| `filterUnusedOpcodeHandlers()` — complex case-block regex | Filter: `cases.filter(c => usedOpcodes.has(c.label))` |
-| `injectDecoyHandlers()` — insert before `default:break;` | Push: append decoy `CaseClause` nodes to the cases array. |
-| Case label remapping — regex `\bcase (\d+):` | Map: `caseClause(shuffleMap[op], handler(ctx))` during construction. |
+| Current (regex)                                           | New (tree operation)                                                                                                                                 |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inlineStackOps()` — paren-counting string replacement    | Visitor: pattern-match `Call(id(W), [expr])` → `Assign(Index(S, Update('++', true, P)), expr)`. Remove W/X/Y function declarations.                  |
+| `obfuscateLocals()` — regex `\bvar\s+([a-zA-Z]...)`       | Visitor: collect `VarDecl` AND `ParamList` names 3+ chars not in KEEP set, generate short replacements via LCG, rename all matching `Id` references. |
+| `filterUnusedOpcodeHandlers()` — complex case-block regex | Filter: `cases.filter(c => usedOpcodes.has(c.label))`                                                                                                |
+| `injectDecoyHandlers()` — insert before `default:break;`  | Push: append decoy `CaseClause` nodes to the cases array.                                                                                            |
+| Case label remapping — regex `\bcase (\d+):`              | Map: `caseClause(shuffleMap[op], handler(ctx))` during construction.                                                                                 |
 
 **Ordering:** Inline stack ops must run before obfuscate locals (inlining removes W/X/Y which would otherwise be rename targets). Decoy injection must run before case label remapping. In the AST approach, case remapping happens at construction time (not as a separate pass), so the only ordering constraint is: inline → rename.
 
-File: `src/codegen/transforms.ts` (~250 lines)
+File: `src/ruamvm/transforms.ts` (~250 lines)
 
 ## Opcode Handler Registry
 
@@ -114,51 +114,51 @@ Each of the ~294 opcode handlers becomes a standalone function returning `JsNode
 
 ```typescript
 interface HandlerCtx {
-  // Stack machine
-  S: string;     // stack array
-  P: string;     // stack pointer
-  W: string;     // push function (pre-inline)
-  X: string;     // pop function (pre-inline)
-  Y: string;     // peek function (pre-inline)
+	// Stack machine
+	S: string; // stack array
+	P: string; // stack pointer
+	W: string; // push function (pre-inline)
+	X: string; // pop function (pre-inline)
+	Y: string; // peek function (pre-inline)
 
-  // Interpreter state
-  IP: string;    // instruction pointer
-  C: string;     // constants array
-  O: string;     // operand
-  SC: string;    // scope
-  R: string;     // registers
-  EX: string;    // exception handler stack
-  PE: string;    // pending exception
-  HPE: string;   // has pending exception
-  CT: string;    // completion type
-  CV: string;    // completion value
-  PH: string;    // physical opcode variable
+	// Interpreter state
+	IP: string; // instruction pointer
+	C: string; // constants array
+	O: string; // operand
+	SC: string; // scope
+	R: string; // registers
+	EX: string; // exception handler stack
+	PE: string; // pending exception
+	HPE: string; // has pending exception
+	CT: string; // completion type
+	CV: string; // completion value
+	PH: string; // physical opcode variable
 
-  // Function parameters
-  U: string;     // unit parameter
-  A: string;     // args parameter
-  OS: string;    // outerScope parameter
-  TV: string;    // thisVal parameter
-  NT: string;    // newTarget parameter
-  HO: string;    // homeObject parameter
+	// Function parameters
+	U: string; // unit parameter
+	A: string; // args parameter
+	OS: string; // outerScope parameter
+	TV: string; // thisVal parameter
+	NT: string; // newTarget parameter
+	HO: string; // homeObject parameter
 
-  // Scope property names
-  sPar: string;  // scope.parent
-  sV: string;    // scope.vars
-  sTdz: string;  // scope.tdzVars
+	// Scope property names
+	sPar: string; // scope.parent
+	sV: string; // scope.vars
+	sTdz: string; // scope.tdzVars
 
-  // Infrastructure references
-  exec: string;      // sync exec function name
-  execAsync: string;  // async exec function name
-  load: string;       // loader function name
-  depth: string;      // recursion depth counter
-  callStack: string;  // call stack for error messages
-  dbg: string;        // debug log function name
-  fSlots: string;     // function slots array name
+	// Infrastructure references
+	exec: string; // sync exec function name
+	execAsync: string; // async exec function name
+	load: string; // loader function name
+	depth: string; // recursion depth counter
+	callStack: string; // call stack for error messages
+	dbg: string; // debug log function name
+	fSlots: string; // function slots array name
 
-  // Flags
-  isAsync: boolean;   // true when building async interpreter variant
-  debug: boolean;     // true when debug logging is enabled
+	// Flags
+	isAsync: boolean; // true when building async interpreter variant
+	debug: boolean; // true when debug logging is enabled
 }
 ```
 
@@ -170,10 +170,16 @@ The interpreter is built twice: once with `isAsync: false`, once with `isAsync: 
 
 ```typescript
 export function AWAIT(ctx: HandlerCtx): JsNode[] {
-  if (ctx.isAsync) {
-    return [assign(index(id(ctx.S), id(ctx.P)), awaitExpr(index(id(ctx.S), id(ctx.P)))), breakStmt()];
-  }
-  return [assign(index(id(ctx.S), id(ctx.P)), raw('void 0')), breakStmt()];
+	if (ctx.isAsync) {
+		return [
+			assign(
+				index(id(ctx.S), id(ctx.P)),
+				awaitExpr(index(id(ctx.S), id(ctx.P)))
+			),
+			breakStmt(),
+		];
+	}
+	return [assign(index(id(ctx.S), id(ctx.P)), raw("void 0")), breakStmt()];
 }
 ```
 
@@ -183,10 +189,19 @@ Handlers that emit debug tracing check `ctx.debug`:
 
 ```typescript
 export function RETURN(ctx: HandlerCtx): JsNode[] {
-  const stmts: JsNode[] = [];
-  if (ctx.debug) stmts.push(exprStmt(call(id(ctx.dbg), [lit('RETURN'), lit('value='), index(id(ctx.S), id(ctx.P))])));
-  stmts.push(returnStmt(index(id(ctx.S), id(ctx.P))));
-  return stmts;
+	const stmts: JsNode[] = [];
+	if (ctx.debug)
+		stmts.push(
+			exprStmt(
+				call(id(ctx.dbg), [
+					lit("RETURN"),
+					lit("value="),
+					index(id(ctx.S), id(ctx.P)),
+				])
+			)
+		);
+	stmts.push(returnStmt(index(id(ctx.S), id(ctx.P))));
+	return stmts;
 }
 ```
 
@@ -195,7 +210,7 @@ When `ctx.debug` is false, no debug nodes are emitted — zero overhead in the o
 ### Handler Files
 
 ```
-src/codegen/handlers/
+src/ruamvm/handlers/
   arithmetic.ts         — ADD, SUB, MUL, DIV, MOD, NEG, INC, DEC, ...
   comparison.ts         — EQ, NEQ, SEQ, SNEQ, LT, GT, LTE, GTE
   stack.ts              — PUSH_CONST, POP, DUP, SWAP, ROT3, PICK, ...
@@ -213,31 +228,36 @@ src/codegen/handlers/
 ### Interpreter Builder
 
 ```typescript
-function buildInterpreter(ctx: HandlerCtx, shuffleMap: number[], opts: InterpreterOptions): JsNode {
-  // Build switch cases from registry
-  const cases = [];
-  for (const [op, handler] of registry) {
-    if (opts.usedOpcodes && !opts.usedOpcodes.has(op)) continue;
-    cases.push(caseClause(shuffleMap[op], handler(ctx)));
-  }
-  if (opts.decoyOpcodes) {
-    cases.push(...generateDecoyHandlers(ctx, shuffleMap, opts.usedOpcodes));
-  }
-  const switchNode = switchStmt(id(ctx.PH), cases);
+function buildInterpreter(
+	ctx: HandlerCtx,
+	shuffleMap: number[],
+	opts: InterpreterOptions
+): JsNode {
+	// Build switch cases from registry
+	const cases = [];
+	for (const [op, handler] of registry) {
+		if (opts.usedOpcodes && !opts.usedOpcodes.has(op)) continue;
+		cases.push(caseClause(shuffleMap[op], handler(ctx)));
+	}
+	if (opts.decoyOpcodes) {
+		cases.push(...generateDecoyHandlers(ctx, shuffleMap, opts.usedOpcodes));
+	}
+	const switchNode = switchStmt(id(ctx.PH), cases);
 
-  // Wrap in function declaration with interpreter scaffold
-  // (var declarations, dispatch loop, exception handling, etc.)
-  return fn(ctx.isAsync ? ctx.execAsync : ctx.exec,
-    [ctx.U, ctx.A, ctx.OS, ctx.TV, ctx.NT, ctx.HO],
-    buildInterpreterBody(ctx, switchNode),
-    { async: ctx.isAsync }
-  );
+	// Wrap in function declaration with interpreter scaffold
+	// (var declarations, dispatch loop, exception handling, etc.)
+	return fn(
+		ctx.isAsync ? ctx.execAsync : ctx.exec,
+		[ctx.U, ctx.A, ctx.OS, ctx.TV, ctx.NT, ctx.HO],
+		buildInterpreterBody(ctx, switchNode),
+		{ async: ctx.isAsync }
+	);
 }
 ```
 
 The interpreter builder calls transforms (inline stack ops, rename locals) on the returned tree before passing it to the orchestrator.
 
-File: `src/codegen/builders/interpreter.ts` (~150 lines)
+File: `src/ruamvm/builders/interpreter.ts` (~150 lines)
 
 **Note on closure handlers:** The NEW_CLOSURE and NEW_FUNCTION handlers are the most complex (~50+ AST factory calls each due to nested IIFEs, async/sync branching, arrow vs regular, this-boxing). These will be verbose but structurally correct. Using `raw()` for these handlers is an acceptable pragmatic choice during initial migration, converting them to full AST later.
 
@@ -246,7 +266,7 @@ File: `src/codegen/builders/interpreter.ts` (~150 lines)
 The remaining templates (loader, runners, debug protection, etc.) become builder functions returning `JsNode[]`:
 
 ```
-src/codegen/builders/
+src/ruamvm/builders/
   loader.ts, runners.ts, globals.ts, deserializer.ts,
   debug-logging.ts, debug-protection.ts, rolling-cipher.ts,
   decoder.ts, fingerprint.ts, stack-encoding.ts
@@ -256,7 +276,8 @@ The orchestrator (`vm.ts`) assembles AST nodes from all builders and calls `emit
 
 ```typescript
 const nodes: JsNode[] = [];
-if (encrypt) nodes.push(...generateFingerprint(names), ...generateDecoder(names));
+if (encrypt)
+	nodes.push(...generateFingerprint(names), ...generateDecoder(names));
 if (dbgProt) nodes.push(...generateDebugProtection(names));
 // ... all builders ...
 return emit(iife(block(...nodes)));
@@ -265,7 +286,7 @@ return emit(iife(block(...nodes)));
 ## File Layout
 
 ```
-src/codegen/
+src/ruamvm/
   nodes.ts              — type definitions + factory functions
   emit.ts               — AST → JS source emitter
   transforms.ts         — rename, inline stack ops, etc.
@@ -298,20 +319,20 @@ src/codegen/
 
 ## Deleted After Migration
 
-- `src/runtime/templates/` — entire directory (7 files)
-- `generate*Source()` functions from `src/runtime/rolling-cipher.ts`, `decoder.ts`, `fingerprint.ts`
-- `obfuscateLocals()`, `inlineStackOps()`, `filterUnusedOpcodeHandlers()`, `injectDecoyHandlers()` from old `interpreter.ts`
+-   `src/runtime/templates/` — entire directory (7 files)
+-   `generate*Source()` functions from `src/runtime/rolling-cipher.ts`, `decoder.ts`, `fingerprint.ts`
+-   `obfuscateLocals()`, `inlineStackOps()`, `filterUnusedOpcodeHandlers()`, `injectDecoyHandlers()` from old `interpreter.ts`
 
 ## Changed Files
 
-- `src/runtime/vm.ts` — switches from string concatenation to AST node assembly + `emit()`. Calls builders instead of old `generate*()` functions.
-- `src/transform.ts` — the bytecode table declaration (`var _bt={...}`) is currently generated as a raw string and parsed with Babel for injection into the IIFE. After migration, this can emit via the AST builder directly, or continue using the existing Babel parse/inject approach with the `emit()`'d output string. Either works; the second requires no change to `transform.ts`.
+-   `src/runtime/vm.ts` — switches from string concatenation to AST node assembly + `emit()`. Calls builders instead of old `generate*()` functions.
+-   `src/transform.ts` — the bytecode table declaration (`var _bt={...}`) is currently generated as a raw string and parsed with Babel for injection into the IIFE. After migration, this can emit via the AST builder directly, or continue using the existing Babel parse/inject approach with the `emit()`'d output string. Either works; the second requires no change to `transform.ts`.
 
 ## Unchanged
 
-- `src/runtime/names.ts` — RuntimeNames interface and generators
-- `src/compiler/` — entirely untouched
-- All existing tests — output is functionally identical
+-   `src/runtime/names.ts` — RuntimeNames interface and generators
+-   `src/compiler/` — entirely untouched
+-   All existing tests — output is functionally identical
 
 ## Validation Strategy
 

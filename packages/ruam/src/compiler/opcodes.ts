@@ -833,7 +833,10 @@ export const PACKED_JUMP_OPS = new Set<Op>([
  * Numeric binary opcodes eligible for constant folding.
  * Maps each foldable opcode to its JS evaluation function.
  */
-export const FOLDABLE_BINOPS = new Map<Op, (a: number, b: number) => number | null>([
+export const FOLDABLE_BINOPS = new Map<
+	Op,
+	(a: number, b: number) => number | null
+>([
 	[Op.ADD, (a, b) => a + b],
 	[Op.SUB, (a, b) => a - b],
 	[Op.MUL, (a, b) => a * b],

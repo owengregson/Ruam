@@ -1,0 +1,332 @@
+/**
+ * Type operation and miscellaneous opcode handlers in AST node form.
+ *
+ * Covers 18 opcodes:
+ *  - Type ops:  TYPEOF, VOID, TO_NUMBER, TO_STRING, TO_BOOLEAN, TO_OBJECT,
+ *               TO_PROPERTY_KEY, TO_NUMERIC
+ *  - Templates: TEMPLATE_LITERAL, TAGGED_TEMPLATE, CREATE_RAW_STRINGS
+ *  - No-ops:    DEBUGGER_STMT, COMMA, SOURCE_MAP
+ *  - Meta:      IMPORT_META, DYNAMIC_IMPORT
+ *  - Assertions: ASSERT_DEFINED, ASSERT_FUNCTION
+ *
+ * All handlers use pure AST nodes — no raw() escape hatch.
+ *
+ * @module ruamvm/handlers/type-ops
+ */
+
+import { Op } from "../../compiler/opcodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	un,
+	bin,
+	assign,
+	call,
+	member,
+	index,
+	ternary,
+	newExpr,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	forStmt,
+	throwStmt,
+	breakStmt,
+	update,
+	importExpr,
+} from "../nodes.js";
+import { registry, type HandlerCtx } from "./registry.js";
+
+// --- Simple type coercions (AST nodes) ---
+
+/** `S[P]=typeof S[P];break;` */
+function TYPEOF(ctx: HandlerCtx): JsNode[] {
+	return [
+		exprStmt(assign(ctx.peek(), un("typeof", ctx.peek()))),
+		breakStmt(),
+	];
+}
+
+/** `S[P]=void 0;break;` */
+function VOID(ctx: HandlerCtx): JsNode[] {
+	return [exprStmt(assign(ctx.peek(), un("void", lit(0)))), breakStmt()];
+}
+
+/** `S[P]=Number(S[P]);break;` */
+function TO_NUMBER(ctx: HandlerCtx): JsNode[] {
+	return [
+		exprStmt(assign(ctx.peek(), call(id("Number"), [ctx.peek()]))),
+		breakStmt(),
+	];
+}
+
+/** `S[P]=String(S[P]);break;` */
+function TO_STRING(ctx: HandlerCtx): JsNode[] {
+	return [
+		exprStmt(assign(ctx.peek(), call(id("String"), [ctx.peek()]))),
+		breakStmt(),
+	];
+}
+
+/** `S[P]=Boolean(S[P]);break;` */
+function TO_BOOLEAN(ctx: HandlerCtx): JsNode[] {
+	return [
+		exprStmt(assign(ctx.peek(), call(id("Boolean"), [ctx.peek()]))),
+		breakStmt(),
+	];
+}
+
+/** `S[P]=Object(S[P]);break;` */
+function TO_OBJECT(ctx: HandlerCtx): JsNode[] {
+	return [
+		exprStmt(assign(ctx.peek(), call(id("Object"), [ctx.peek()]))),
+		breakStmt(),
+	];
+}
+
+// --- Conditional type coercions ---
+
+/**
+ * TO_PROPERTY_KEY: `{var v=S[P];S[P]=typeof v==='symbol'?v:String(v);break;}`
+ */
+function TO_PROPERTY_KEY(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("v", ctx.peek()),
+		exprStmt(
+			assign(
+				ctx.peek(),
+				ternary(
+					bin("===", un("typeof", id("v")), lit("symbol")),
+					id("v"),
+					call(id("String"), [id("v")])
+				)
+			)
+		),
+		breakStmt(),
+	];
+}
+
+/**
+ * TO_NUMERIC: `{var v=S[P];S[P]=typeof v==='bigint'?v:Number(v);break;}`
+ */
+function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("v", ctx.peek()),
+		exprStmt(
+			assign(
+				ctx.peek(),
+				ternary(
+					bin("===", un("typeof", id("v")), lit("bigint")),
+					id("v"),
+					call(id("Number"), [id("v")])
+				)
+			)
+		),
+		breakStmt(),
+	];
+}
+
+// --- Template handlers ---
+
+/**
+ * TEMPLATE_LITERAL: assemble template parts from the stack.
+ *
+ * ```
+ * var exprCount=O;var parts=[];
+ * for(var ti=exprCount*2;ti>=0;ti--)parts.unshift(X());
+ * var result='';for(var ti=0;ti<parts.length;ti++)result+=String(parts[ti]!=null?parts[ti]:'');
+ * W(result);break;
+ * ```
+ */
+function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("exprCount", id(ctx.O)),
+		varDecl("parts", { type: "ArrayExpr", elements: [] }),
+		forStmt(
+			varDecl("ti", bin("*", id("exprCount"), lit(2))),
+			bin(">=", id("ti"), lit(0)),
+			update("--", false, id("ti")),
+			[exprStmt(call(member(id("parts"), "unshift"), [ctx.pop()]))]
+		),
+		varDecl("result", lit("")),
+		forStmt(
+			varDecl("ti", lit(0)),
+			bin("<", id("ti"), member(id("parts"), "length")),
+			update("++", false, id("ti")),
+			[
+				exprStmt(
+					assign(
+						id("result"),
+						call(id("String"), [
+							ternary(
+								bin(
+									"!=",
+									index(id("parts"), id("ti")),
+									lit(null)
+								),
+								index(id("parts"), id("ti")),
+								lit("")
+							),
+						]),
+						"+"
+					)
+				),
+			]
+		),
+		exprStmt(ctx.push(id("result"))),
+		breakStmt(),
+	];
+}
+
+/**
+ * TAGGED_TEMPLATE: call tag function with template arguments.
+ *
+ * ```
+ * var argc=O;var callArgs=[];
+ * for(var ai=0;ai<argc;ai++)callArgs.unshift(X());
+ * var fn=X();W(fn.apply(void 0,callArgs));break;
+ * ```
+ */
+function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("argc", id(ctx.O)),
+		varDecl("callArgs", { type: "ArrayExpr", elements: [] }),
+		forStmt(
+			varDecl("ai", lit(0)),
+			bin("<", id("ai"), id("argc")),
+			update("++", false, id("ai")),
+			[exprStmt(call(member(id("callArgs"), "unshift"), [ctx.pop()]))]
+		),
+		varDecl("fn", ctx.pop()),
+		exprStmt(
+			ctx.push(
+				call(member(id("fn"), "apply"), [
+					un("void", lit(0)),
+					id("callArgs"),
+				])
+			)
+		),
+		breakStmt(),
+	];
+}
+
+/**
+ * CREATE_RAW_STRINGS: build frozen raw strings array.
+ *
+ * ```
+ * var count=O;var raw=[];
+ * for(var ri=0;ri<count;ri++)raw.unshift(X());
+ * Object.freeze(raw);W(raw);break;
+ * ```
+ */
+function CREATE_RAW_STRINGS(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("count", id(ctx.O)),
+		varDecl("raw", { type: "ArrayExpr", elements: [] }),
+		forStmt(
+			varDecl("ri", lit(0)),
+			bin("<", id("ri"), id("count")),
+			update("++", false, id("ri")),
+			[exprStmt(call(member(id("raw"), "unshift"), [ctx.pop()]))]
+		),
+		exprStmt(call(member(id("Object"), "freeze"), [id("raw")])),
+		exprStmt(ctx.push(id("raw"))),
+		breakStmt(),
+	];
+}
+
+// --- No-op handlers (AST nodes — just break) ---
+
+/** DEBUGGER_STMT: no-op in obfuscated output. */
+function DEBUGGER_STMT(_ctx: HandlerCtx): JsNode[] {
+	return [breakStmt()];
+}
+
+/** COMMA: no-op (value already on stack). */
+function COMMA(_ctx: HandlerCtx): JsNode[] {
+	return [breakStmt()];
+}
+
+/** SOURCE_MAP: no-op (debug information only). */
+function SOURCE_MAP(_ctx: HandlerCtx): JsNode[] {
+	return [breakStmt()];
+}
+
+// --- Meta / import handlers ---
+
+/** `S[++P]={};break;` — import.meta stub */
+function IMPORT_META(ctx: HandlerCtx): JsNode[] {
+	return [
+		exprStmt(ctx.push({ type: "ObjectExpr", entries: [] })),
+		breakStmt(),
+	];
+}
+
+/**
+ * DYNAMIC_IMPORT: `{var spec=X();W(import(spec));break;}`
+ */
+function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("spec", ctx.pop()),
+		exprStmt(ctx.push(importExpr(id("spec")))),
+		breakStmt(),
+	];
+}
+
+// --- Assertion handlers ---
+
+/**
+ * ASSERT_DEFINED: `{var v=Y();if(v===void 0)throw new TypeError('Cannot read properties of undefined');break;}`
+ */
+function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("v", ctx.peek()),
+		ifStmt(bin("===", id("v"), un("void", lit(0))), [
+			throwStmt(
+				newExpr(id("TypeError"), [
+					lit("Cannot read properties of undefined"),
+				])
+			),
+		]),
+		breakStmt(),
+	];
+}
+
+/**
+ * ASSERT_FUNCTION: `{var v=Y();if(typeof v!=='function')throw new TypeError(v+' is not a function');break;}`
+ */
+function ASSERT_FUNCTION(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("v", ctx.peek()),
+		ifStmt(bin("!==", un("typeof", id("v")), lit("function")), [
+			throwStmt(
+				newExpr(id("TypeError"), [
+					bin("+", id("v"), lit(" is not a function")),
+				])
+			),
+		]),
+		breakStmt(),
+	];
+}
+
+// --- Registration ---
+
+registry.set(Op.TYPEOF, TYPEOF);
+registry.set(Op.VOID, VOID);
+registry.set(Op.TO_NUMBER, TO_NUMBER);
+registry.set(Op.TO_STRING, TO_STRING);
+registry.set(Op.TO_BOOLEAN, TO_BOOLEAN);
+registry.set(Op.TO_OBJECT, TO_OBJECT);
+registry.set(Op.TO_PROPERTY_KEY, TO_PROPERTY_KEY);
+registry.set(Op.TO_NUMERIC, TO_NUMERIC);
+registry.set(Op.TEMPLATE_LITERAL, TEMPLATE_LITERAL);
+registry.set(Op.TAGGED_TEMPLATE, TAGGED_TEMPLATE);
+registry.set(Op.CREATE_RAW_STRINGS, CREATE_RAW_STRINGS);
+registry.set(Op.DEBUGGER_STMT, DEBUGGER_STMT);
+registry.set(Op.COMMA, COMMA);
+registry.set(Op.SOURCE_MAP, SOURCE_MAP);
+registry.set(Op.IMPORT_META, IMPORT_META);
+registry.set(Op.DYNAMIC_IMPORT, DYNAMIC_IMPORT);
+registry.set(Op.ASSERT_DEFINED, ASSERT_DEFINED);
+registry.set(Op.ASSERT_FUNCTION, ASSERT_FUNCTION);

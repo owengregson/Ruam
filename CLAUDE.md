@@ -4,11 +4,11 @@ JS VM obfuscator — compiles JavaScript functions into custom bytecode executed
 
 ## Quick Reference
 
-- **Build**: `npm run build` (tsup, ESM-only)
-- **Typecheck**: `npm run typecheck` (tsc --noEmit)
-- **Test**: `npm run test` (vitest, 1803 tests)
-- **Test watch**: `npm run test:watch`
-- **Node**: >= 18, **Module**: ESM (`"type": "module"`)
+-   **Build**: `npm run build` (tsup, ESM-only)
+-   **Typecheck**: `npm run typecheck` (tsc --noEmit)
+-   **Test**: `npm run test` (vitest, 1803 tests)
+-   **Test watch**: `npm run test:watch`
+-   **Node**: >= 18, **Module**: ESM (`"type": "module"`)
 
 ## Project Structure
 
@@ -37,7 +37,7 @@ src/
       expressions.ts        Expression compilation (calls, members, operators, etc.)
       classes.ts            Class compilation (methods, properties, inheritance)
 
-  codegen/
+  ruamvm/
     nodes.ts                JS AST node types (~35 node kinds) + factory functions
     emit.ts                 Recursive emitter: AST -> minified JS with precedence-aware parens
     transforms.ts           AST tree transforms (obfuscateLocals)
@@ -96,53 +96,53 @@ docs/
 
 ## Architecture Notes
 
-- **Compilation pipeline**: Source JS -> Babel parse -> identify target functions -> compile each to BytecodeUnit -> serialize -> replace function body with VM dispatch call -> build VM runtime AST -> emit IIFE -> assemble output
-- **JS AST builder system** (`codegen/`): All runtime JS is generated via a purpose-built AST with ~35 node types (`nodes.ts`), factory functions, and a recursive emitter (`emit.ts`). Builder files in `codegen/builders/` produce `JsNode[]` for each runtime component. The interpreter is assembled from a handler registry (`codegen/handlers/`) where each opcode registers a `HandlerFn` returning AST nodes. Tree-based post-processing (`obfuscateLocals` in `transforms.ts`) renames local variables before final emission.
-- **Direct physical dispatch**: The interpreter switch uses physical (shuffled) opcode numbers as case labels directly — no reverse opcode map is emitted in the output. Each build has unique case label assignments.
-- **Per-file opcode shuffle**: Seeded Fisher-Yates (LCG) produces different instruction encodings per build. Seed + shuffle constants live in `constants.ts`.
-- **Constant pool string encoding**: All string constants in the JSON bytecode format are XOR-encoded with an LCG key stream derived from the build seed. Decoded at load time by the `strDec` runtime function. Hides variable names, property names, and string literals.
-- **Per-build identifier randomization**: All internal VM identifiers (`_vm`, `_BT`, `stack`, etc.) are replaced with random 2-3 char names generated via LCG PRNG (same seed as opcode shuffle). Managed by `RuntimeNames` interface in `runtime/names.ts`.
-- **Watermark**: Every output contains `var _ru4m=!0;` — looks random but encodes "ruam" with a `4` for `a`.
-- **Rolling cipher** (`rollingCipher` option): Position-dependent XOR encryption on every instruction. The master key is derived implicitly from bytecode metadata (instruction count, register count, param count, constant count) via FNV-1a — no plaintext seed appears in the output. Each instruction is encrypted with `mixState(baseKey, index, index ^ 0x9E3779B9)`. Implemented in `runtime/rolling-cipher.ts`. When enabled, string encoding also uses the implicit key instead of a plaintext literal.
-- **Integrity binding** (`integrityBinding` option): A per-build hash (FNV-1a of the interpreter template source) is folded into the rolling cipher's base key (`baseKey = masterKey XOR integrityHash`). The hash is embedded as a numeric literal in the IIFE. If an attacker modifies the hash value, all instruction decryption produces garbage. Requires `rollingCipher`.
-- **VM Shielding** (`vmShielding` option): Each root function gets its own micro-interpreter with unique opcode shuffle, identifier names, and rolling cipher key. A shared router function maps unit IDs to group dispatch functions. Shared infrastructure (cache, fingerprint, deserializer) is emitted once. Auto-enables `rollingCipher`. Implemented in `transform.ts` (`assembleShielded()`), `runtime/vm.ts` (`generateShieldedVmRuntime()`), `runtime/names.ts` (`generateShieldedNames()`), and `codegen/builders/runners.ts` (`buildRouterSource()`).
-- **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `high` (+debug protection, integrity binding, dead code, stack encoding, VM shielding). Defined in `presets.ts`.
-- **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
-- `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
-- **Home object (`[[HomeObject]]`)**: Class methods get `fn._ho = target` stamped at define-time. The home object is passed through the VM dispatch chain (`_vm.call` → `exec`) so `super` resolves correctly in multi-level inheritance. `GET_SUPER_PROP`, `SET_SUPER_PROP`, `CALL_SUPER_METHOD`, `SUPER_CALL` all use `Object.getPrototypeOf(homeObject)` when available.
-- **Dynamic opcodes** (`dynamicOpcodes` option): Filters unused opcode case handlers from the interpreter switch, reducing the attack surface for static analysis. Implemented in `codegen/builders/interpreter.ts` via `filterUnusedOpcodeHandlers()`.
-- **Decoy opcodes** (`decoyOpcodes` option): Injects 8-16 realistic-looking fake opcode handlers (arithmetic, stack, register, scope operations) into the interpreter switch for unused opcode slots. Implemented in `codegen/builders/interpreter.ts` via `injectDecoyHandlers()`.
-- **Dead code injection** (`deadCodeInjection` option): Inserts unreachable bytecode sequences after RETURN opcodes in compiled units. Jump targets are patched to maintain correctness. Implemented in `transform.ts` via `injectDeadCode()`.
-- **Stack encoding** (`stackEncoding` option): Wraps the VM stack array in a Proxy that XOR-encodes numeric values with position-dependent keys on set and decodes on get. Non-numeric values are tagged and stored transparently. Implemented in `codegen/builders/interpreter.ts` via `buildStackEncodingProxy()`.
-- **CSPRNG seed**: Per-file opcode shuffle seed uses `crypto.randomBytes(4)` instead of `Date.now() ^ Math.random()`.
-- **Babel compat layer**: Shared `babel-compat.ts` normalizes ESM/CJS dual-export shapes for `@babel/traverse` and `@babel/generator`.
-- **Auto-enable rollingCipher**: `resolveOptions()` automatically enables `rollingCipher` when `integrityBinding` is set.
-- **Debug protection** (`debugProtection` option): Multi-layered anti-debugger system with 6 independent detection layers: (1) polymorphic debugger invocation with dual-clock timing, (2) statistical jitter analysis, (3) environment analysis (--inspect flags, stack traces), (4) function integrity self-verification (FNV-1a checksum), (5) native API integrity (console methods + Function.prototype.toString), (6) global property trap canary (browser DevTools enumeration). Escalating response: silent bytecode corruption → cache/constants wipe → infinite debugger loop. Uses recursive setTimeout with jitter and `.unref()` for Node.js compatibility. Error messages mimic native V8 messages. Implemented in `codegen/builders/debug-protection.ts`.
+-   **Compilation pipeline**: Source JS -> Babel parse -> identify target functions -> compile each to BytecodeUnit -> serialize -> replace function body with VM dispatch call -> build VM runtime AST -> emit IIFE -> assemble output
+-   **JS AST builder system** (`ruamvm/`): All runtime JS is generated via a purpose-built AST with ~35 node types (`nodes.ts`), factory functions, and a recursive emitter (`emit.ts`). Builder files in `ruamvm/builders/` produce `JsNode[]` for each runtime component. The interpreter is assembled from a handler registry (`ruamvm/handlers/`) where each opcode registers a `HandlerFn` returning AST nodes. Tree-based post-processing (`obfuscateLocals` in `transforms.ts`) renames local variables before final emission.
+-   **Direct physical dispatch**: The interpreter switch uses physical (shuffled) opcode numbers as case labels directly — no reverse opcode map is emitted in the output. Each build has unique case label assignments.
+-   **Per-file opcode shuffle**: Seeded Fisher-Yates (LCG) produces different instruction encodings per build. Seed + shuffle constants live in `constants.ts`.
+-   **Constant pool string encoding**: All string constants in the JSON bytecode format are XOR-encoded with an LCG key stream derived from the build seed. Decoded at load time by the `strDec` runtime function. Hides variable names, property names, and string literals.
+-   **Per-build identifier randomization**: All internal VM identifiers (`_vm`, `_BT`, `stack`, etc.) are replaced with random 2-3 char names generated via LCG PRNG (same seed as opcode shuffle). Managed by `RuntimeNames` interface in `runtime/names.ts`.
+-   **Watermark**: Every output contains `var _ru4m=!0;` — looks random but encodes "ruam" with a `4` for `a`.
+-   **Rolling cipher** (`rollingCipher` option): Position-dependent XOR encryption on every instruction. The master key is derived implicitly from bytecode metadata (instruction count, register count, param count, constant count) via FNV-1a — no plaintext seed appears in the output. Each instruction is encrypted with `mixState(baseKey, index, index ^ 0x9E3779B9)`. Implemented in `runtime/rolling-cipher.ts`. When enabled, string encoding also uses the implicit key instead of a plaintext literal.
+-   **Integrity binding** (`integrityBinding` option): A per-build hash (FNV-1a of the interpreter template source) is folded into the rolling cipher's base key (`baseKey = masterKey XOR integrityHash`). The hash is embedded as a numeric literal in the IIFE. If an attacker modifies the hash value, all instruction decryption produces garbage. Requires `rollingCipher`.
+-   **VM Shielding** (`vmShielding` option): Each root function gets its own micro-interpreter with unique opcode shuffle, identifier names, and rolling cipher key. A shared router function maps unit IDs to group dispatch functions. Shared infrastructure (cache, fingerprint, deserializer) is emitted once. Auto-enables `rollingCipher`. Implemented in `transform.ts` (`assembleShielded()`), `runtime/vm.ts` (`generateShieldedVmRuntime()`), `runtime/names.ts` (`generateShieldedNames()`), and `ruamvm/builders/runners.ts` (`buildRouterSource()`).
+-   **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `high` (+debug protection, integrity binding, dead code, stack encoding, VM shielding). Defined in `presets.ts`.
+-   **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
+-   `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
+-   **Home object (`[[HomeObject]]`)**: Class methods get `fn._ho = target` stamped at define-time. The home object is passed through the VM dispatch chain (`_vm.call` → `exec`) so `super` resolves correctly in multi-level inheritance. `GET_SUPER_PROP`, `SET_SUPER_PROP`, `CALL_SUPER_METHOD`, `SUPER_CALL` all use `Object.getPrototypeOf(homeObject)` when available.
+-   **Dynamic opcodes** (`dynamicOpcodes` option): Filters unused opcode case handlers from the interpreter switch, reducing the attack surface for static analysis. Implemented in `ruamvm/builders/interpreter.ts` via `filterUnusedOpcodeHandlers()`.
+-   **Decoy opcodes** (`decoyOpcodes` option): Injects 8-16 realistic-looking fake opcode handlers (arithmetic, stack, register, scope operations) into the interpreter switch for unused opcode slots. Implemented in `ruamvm/builders/interpreter.ts` via `injectDecoyHandlers()`.
+-   **Dead code injection** (`deadCodeInjection` option): Inserts unreachable bytecode sequences after RETURN opcodes in compiled units. Jump targets are patched to maintain correctness. Implemented in `transform.ts` via `injectDeadCode()`.
+-   **Stack encoding** (`stackEncoding` option): Wraps the VM stack array in a Proxy that XOR-encodes numeric values with position-dependent keys on set and decodes on get. Non-numeric values are tagged and stored transparently. Implemented in `ruamvm/builders/interpreter.ts` via `buildStackEncodingProxy()`.
+-   **CSPRNG seed**: Per-file opcode shuffle seed uses `crypto.randomBytes(4)` instead of `Date.now() ^ Math.random()`.
+-   **Babel compat layer**: Shared `babel-compat.ts` normalizes ESM/CJS dual-export shapes for `@babel/traverse` and `@babel/generator`.
+-   **Auto-enable rollingCipher**: `resolveOptions()` automatically enables `rollingCipher` when `integrityBinding` is set.
+-   **Debug protection** (`debugProtection` option): Multi-layered anti-debugger system with 6 independent detection layers: (1) polymorphic debugger invocation with dual-clock timing, (2) statistical jitter analysis, (3) environment analysis (--inspect flags, stack traces), (4) function integrity self-verification (FNV-1a checksum), (5) native API integrity (console methods + Function.prototype.toString), (6) global property trap canary (browser DevTools enumeration). Escalating response: silent bytecode corruption → cache/constants wipe → infinite debugger loop. Uses recursive setTimeout with jitter and `.unref()` for Node.js compatibility. Error messages mimic native V8 messages. Implemented in `ruamvm/builders/debug-protection.ts`.
 
 ## Code Conventions
 
-- TypeScript with strict mode, ESM imports (`.js` extensions in import paths)
-- `noUncheckedIndexedAccess: true` — always handle possible `undefined` from indexed access
-- Tests use vitest globals (`describe`, `it`, `expect` — no imports needed)
-- Test helper in `test/helpers.ts` wraps `obfuscateCode` + `eval` for round-trip verification
-- No linter/formatter configured — follow existing style
-- JSDoc: every module has `@module` tag, sections use `// --- Name ---` dividers, exported functions have `@param`/`@returns`
-- Runtime codegen: builder files in `codegen/builders/` export functions accepting `RuntimeNames` and returning `JsNode[]` (AST). Handler files in `codegen/handlers/` register `(ctx: HandlerCtx) => JsNode[]` functions in a shared `Map<Op, HandlerFn>` registry. All runtime code uses typed AST nodes — no opaque string snippets.
+-   TypeScript with strict mode, ESM imports (`.js` extensions in import paths)
+-   `noUncheckedIndexedAccess: true` — always handle possible `undefined` from indexed access
+-   Tests use vitest globals (`describe`, `it`, `expect` — no imports needed)
+-   Test helper in `test/helpers.ts` wraps `obfuscateCode` + `eval` for round-trip verification
+-   No linter/formatter configured — follow existing style
+-   JSDoc: every module has `@module` tag, sections use `// --- Name ---` dividers, exported functions have `@param`/`@returns`
+-   Runtime ruamvm: builder files in `ruamvm/builders/` export functions accepting `RuntimeNames` and returning `JsNode[]` (AST). Handler files in `ruamvm/handlers/` register `(ctx: HandlerCtx) => JsNode[]` functions in a shared `Map<Op, HandlerFn>` registry. All runtime code uses typed AST nodes — no opaque string snippets.
 
 ## Known Bug Fixes (do not regress)
 
-- **NEW_CLASS**: IIFE-wrapped `_ctor` to prevent var-hoisting sharing across classes
-- **Switch break**: `breakLabel` set before POP so break cleans discriminant off the stack
-- **DEFINE_GETTER/SETTER**: `enumerable: false` to match native class behavior
-- **Labeled continue**: `patchBreaksAndContinues` propagates inner loop's `continueLabel` to parent labeled context
-- **Super expressions**: All `super.prop`, `super.method()`, `super.prop = val`, `super.prop++` patterns compile via dedicated `GET_SUPER_PROP`/`SET_SUPER_PROP`/`CALL_SUPER_METHOD` opcodes instead of trying to compile `Super` as a regular expression
-- **Home object for super**: Multi-level inheritance works correctly via `fn._ho` property stamped by `DEFINE_METHOD`/`DEFINE_GETTER`/`DEFINE_SETTER`, forwarded through closure wrappers
-- **Finally after return**: `cType`/`cVal` completion tracking defers `return` until `finally` executes
-- **Per-iteration `let` bindings**: `for (let ...)` loops emit `PUSH_SCOPE`/`POP_SCOPE` per iteration with variable copying
-- **Sparse array holes**: `[1,,3]` emits `ARRAY_HOLE` (not `PUSH_UNDEFINED + ARRAY_PUSH`)
-- **Computed class methods**: Compile key expression at runtime, use `SET_PROP_DYNAMIC` with home object stamping
+-   **NEW_CLASS**: IIFE-wrapped `_ctor` to prevent var-hoisting sharing across classes
+-   **Switch break**: `breakLabel` set before POP so break cleans discriminant off the stack
+-   **DEFINE_GETTER/SETTER**: `enumerable: false` to match native class behavior
+-   **Labeled continue**: `patchBreaksAndContinues` propagates inner loop's `continueLabel` to parent labeled context
+-   **Super expressions**: All `super.prop`, `super.method()`, `super.prop = val`, `super.prop++` patterns compile via dedicated `GET_SUPER_PROP`/`SET_SUPER_PROP`/`CALL_SUPER_METHOD` opcodes instead of trying to compile `Super` as a regular expression
+-   **Home object for super**: Multi-level inheritance works correctly via `fn._ho` property stamped by `DEFINE_METHOD`/`DEFINE_GETTER`/`DEFINE_SETTER`, forwarded through closure wrappers
+-   **Finally after return**: `cType`/`cVal` completion tracking defers `return` until `finally` executes
+-   **Per-iteration `let` bindings**: `for (let ...)` loops emit `PUSH_SCOPE`/`POP_SCOPE` per iteration with variable copying
+-   **Sparse array holes**: `[1,,3]` emits `ARRAY_HOLE` (not `PUSH_UNDEFINED + ARRAY_PUSH`)
+-   **Computed class methods**: Compile key expression at runtime, use `SET_PROP_DYNAMIC` with home object stamping
 
 ## Directories to Ignore
 
-- `TestInputExt/` and `TestOutputExt/` are manual test fixtures (a Chrome extension) — not part of the library
-- `docs/` contains only archived v1 documentation
+-   `TestInputExt/` and `TestOutputExt/` are manual test fixtures (a Chrome extension) — not part of the library
+-   `docs/` contains only archived v1 documentation
