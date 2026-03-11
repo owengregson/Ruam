@@ -4,7 +4,7 @@ import { obfuscateCode } from "../../src/transform.js";
 import {
 	deriveImplicitKey,
 	rollingEncrypt,
-} from "../../src/runtime/rolling-cipher.js";
+} from "../../src/encoding/rolling-cipher.js";
 
 // ---------------------------------------------------------------------------
 // Build-time rolling cipher unit tests

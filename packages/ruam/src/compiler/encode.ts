@@ -12,8 +12,8 @@
  */
 
 import type { BytecodeUnit, ConstantPoolEntry } from "../types.js";
-import { computeFingerprint } from "../runtime/fingerprint.js";
-import { rc4, b64encode } from "../runtime/decoder.js";
+import { computeFingerprint } from "../encoding/fingerprint.js";
+import { rc4, b64encode } from "../encoding/decoder.js";
 import {
 	LCG_MULTIPLIER,
 	LCG_INCREMENT,
@@ -33,7 +33,7 @@ import {
 import {
 	deriveImplicitKey,
 	rollingEncrypt,
-} from "../runtime/rolling-cipher.js";
+} from "../encoding/rolling-cipher.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -168,8 +168,7 @@ export function serializeUnitToJson(
 		if (c.type === "regex") {
 			return { __regex__: true, p: c.value.pattern, f: c.value.flags };
 		}
-		if (c.type === "bigint")
-			return { __bigint__: true, v: c.value };
+		if (c.type === "bigint") return { __bigint__: true, v: c.value };
 		if (c.type === "string" && effectiveStringKey !== undefined) {
 			return encodeStringChars(c.value, effectiveStringKey, idx);
 		}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { emit } from "../../src/codegen/emit.js";
+import { emit } from "../../src/ruamvm/emit.js";
 import {
 	fn,
 	varDecl,
@@ -38,7 +38,7 @@ import {
 	importExpr,
 	iife,
 	rest,
-} from "../../src/codegen/nodes.js";
+} from "../../src/ruamvm/nodes.js";
 
 describe("Emitter", () => {
 	describe("declarations", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { emit } from "../../src/codegen/emit.js";
-import { obfuscateLocals, KEEP } from "../../src/codegen/transforms.js";
+import { emit } from "../../src/ruamvm/emit.js";
+import { obfuscateLocals, KEEP } from "../../src/ruamvm/transforms.js";
 import {
 	fn,
 	varDecl,
@@ -10,7 +10,7 @@ import {
 	id,
 	lit,
 	forIn,
-} from "../../src/codegen/nodes.js";
+} from "../../src/ruamvm/nodes.js";
 
 describe("obfuscateLocals", () => {
 	const seed = 12345;
