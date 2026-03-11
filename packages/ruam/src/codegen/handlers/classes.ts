@@ -1,5 +1,5 @@
 /**
- * Class definition opcode handlers in raw node form.
+ * Class definition opcode handlers using pure AST nodes.
  *
  * Covers 22 opcodes:
  *  - Class creation:   NEW_CLASS, NEW_DERIVED_CLASS, EXTEND_CLASS
@@ -14,15 +14,121 @@
  *  - Finalization:     FINALIZE_CLASS
  *  - Private env:      INIT_PRIVATE_ENV, ADD_PRIVATE_BRAND, CHECK_PRIVATE_BRAND
  *
- * All handlers use raw() — IIFE class constructors, property access chains,
- * home object stamping, and prototype setup are most cleanly expressed as literal JS.
+ * All handlers use pure AST nodes — no raw() escape hatch.
  *
  * @module codegen/handlers/classes
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, raw, breakStmt } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	returnStmt,
+	fnExpr,
+	ternary,
+	breakStmt,
+	obj,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
+import { debugTrace } from "./helpers.js";
+
+// --- Helpers ---
+
+/**
+ * Build the IIFE-wrapped class constructor pattern.
+ *
+ * Creates a constructor proxy via an immediately-invoked function expression
+ * to isolate `var _ctor` and prevent var-hoisting from sharing across classes.
+ *
+ * ```js
+ * (function(){
+ *   var c=null;
+ *   var f=function(){if(c)return c.apply(this,arguments);};
+ *   f.__setCtor=function(x){c=x;};
+ *   return f;
+ * })()
+ * ```
+ *
+ * @returns JsNode — IIFE call expression producing the constructor proxy
+ */
+function buildCtorIIFE(): JsNode {
+	return call(
+		fnExpr(undefined, [], [
+			varDecl("c", lit(null)),
+			varDecl(
+				"f",
+				fnExpr(undefined, [], [
+					ifStmt(id("c"), [
+						returnStmt(
+							call(member(id("c"), "apply"), [
+								id("this"),
+								id("arguments"),
+							])
+						),
+					]),
+				])
+			),
+			exprStmt(
+				assign(
+					member(id("f"), "__setCtor"),
+					fnExpr(undefined, ["x"], [
+						exprStmt(assign(id("c"), id("x"))),
+					])
+				)
+			),
+			returnStmt(id("f")),
+		]),
+		[]
+	);
+}
+
+/**
+ * Build prototype chain setup nodes for class inheritance.
+ *
+ * ```js
+ * cls.prototype = Object.create(SuperClass.prototype);
+ * cls.prototype.constructor = cls;
+ * Object.setPrototypeOf(cls, SuperClass);
+ * ```
+ *
+ * @param clsName - Local variable name for the class
+ * @param superName - Local variable name for the superclass
+ * @returns JsNode[] — prototype chain setup statements
+ */
+function buildPrototypeChain(clsName: string, superName: string): JsNode[] {
+	return [
+		exprStmt(
+			assign(
+				member(id(clsName), "prototype"),
+				call(member(id("Object"), "create"), [
+					member(id(superName), "prototype"),
+				])
+			)
+		),
+		exprStmt(
+			assign(
+				member(member(id(clsName), "prototype"), "constructor"),
+				id(clsName)
+			)
+		),
+		exprStmt(
+			call(member(id("Object"), "setPrototypeOf"), [
+				id(clsName),
+				id(superName),
+			])
+		),
+	];
+}
 
 // --- Class creation ---
 
@@ -42,15 +148,24 @@ import { registry, type HandlerCtx } from "./registry.js";
  */
 function NEW_CLASS(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var hasSuperClass=${ctx.O};var SuperClass=hasSuperClass?${ctx.popStr()}:null;` +
-				(ctx.debug
-					? `${ctx.dbg}('NEW_CLASS','hasSuper='+!!hasSuperClass);`
-					: "") +
-				`var cls=(function(){var c=null;var f=function(){if(c)return c.apply(this,arguments);};f.__setCtor=function(x){c=x;};return f;})();` +
-				`if(SuperClass){cls.prototype=Object.create(SuperClass.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,SuperClass);}` +
-				`${ctx.pushStr("cls")};break;`
+		varDecl("hasSuperClass", id(ctx.O)),
+		varDecl(
+			"SuperClass",
+			ternary(id("hasSuperClass"), ctx.pop(), lit(null))
 		),
+		...debugTrace(
+			ctx,
+			"NEW_CLASS",
+			bin(
+				"+",
+				lit("hasSuper="),
+				un("!", un("!", id("hasSuperClass")))
+			)
+		),
+		varDecl("cls", buildCtorIIFE()),
+		ifStmt(id("SuperClass"), buildPrototypeChain("cls", "SuperClass")),
+		exprStmt(ctx.push(id("cls"))),
+		breakStmt(),
 	];
 }
 
@@ -68,13 +183,12 @@ function NEW_CLASS(ctx: HandlerCtx): JsNode[] {
  */
 function NEW_DERIVED_CLASS(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var SuperClass=${ctx.popStr()};` +
-				(ctx.debug ? `${ctx.dbg}('NEW_DERIVED_CLASS');` : "") +
-				`var cls=(function(){var c=null;var f=function(){if(c)return c.apply(this,arguments);};f.__setCtor=function(x){c=x;};return f;})();` +
-				`cls.prototype=Object.create(SuperClass.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,SuperClass);` +
-				`${ctx.pushStr("cls")};break;`
-		),
+		varDecl("SuperClass", ctx.pop()),
+		...debugTrace(ctx, "NEW_DERIVED_CLASS"),
+		varDecl("cls", buildCtorIIFE()),
+		...buildPrototypeChain("cls", "SuperClass"),
+		exprStmt(ctx.push(id("cls"))),
+		breakStmt(),
 	];
 }
 
@@ -89,10 +203,10 @@ function NEW_DERIVED_CLASS(ctx: HandlerCtx): JsNode[] {
  */
 function EXTEND_CLASS(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var superCls=${ctx.popStr()};var cls=${ctx.peekStr()};` +
-				`cls.prototype=Object.create(superCls.prototype);cls.prototype.constructor=cls;Object.setPrototypeOf(cls,superCls);break;`
-		),
+		varDecl("superCls", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		...buildPrototypeChain("cls", "superCls"),
+		breakStmt(),
 	];
 }
 
@@ -106,23 +220,99 @@ function EXTEND_CLASS(ctx: HandlerCtx): JsNode[] {
  */
 function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
-				(ctx.debug
-					? `${ctx.dbg}('DEFINE_METHOD','name='+name,'static='+!!isStatic,'isCtor='+(name==='constructor'));`
-					: "") +
-				`if(name==='constructor'){if(cls.__setCtor)cls.__setCtor(fn);fn._ho=cls.prototype;cls.prototype.constructor=fn;}` +
-				`else if(isStatic){fn._ho=cls;cls[name]=fn;}else{var _tgt=(cls.prototype||cls);fn._ho=_tgt;_tgt[name]=fn;}break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		varDecl("name", index(id(ctx.C), bin("&", id(ctx.O), lit(0xffff)))),
+		varDecl(
+			"isStatic",
+			bin("&", bin(">>", id(ctx.O), lit(16)), lit(1))
 		),
+		...debugTrace(
+			ctx,
+			"DEFINE_METHOD",
+			bin("+", lit("name="), id("name")),
+			bin(
+				"+",
+				lit("static="),
+				un("!", un("!", id("isStatic")))
+			),
+			bin(
+				"+",
+				lit("isCtor="),
+				bin("===", id("name"), lit("constructor"))
+			)
+		),
+		ifStmt(
+			bin("===", id("name"), lit("constructor")),
+			[
+				ifStmt(member(id("cls"), "__setCtor"), [
+					exprStmt(
+						call(member(id("cls"), "__setCtor"), [id("fn")])
+					),
+				]),
+				exprStmt(
+					assign(
+						member(id("fn"), "_ho"),
+						member(id("cls"), "prototype")
+					)
+				),
+				exprStmt(
+					assign(
+						member(member(id("cls"), "prototype"), "constructor"),
+						id("fn")
+					)
+				),
+			],
+			[
+				ifStmt(
+					id("isStatic"),
+					[
+						exprStmt(
+							assign(member(id("fn"), "_ho"), id("cls"))
+						),
+						exprStmt(
+							assign(
+								index(id("cls"), id("name")),
+								id("fn")
+							)
+						),
+					],
+					[
+						varDecl(
+							"_tgt",
+							bin(
+								"||",
+								member(id("cls"), "prototype"),
+								id("cls")
+							)
+						),
+						exprStmt(
+							assign(member(id("fn"), "_ho"), id("_tgt"))
+						),
+						exprStmt(
+							assign(
+								index(id("_tgt"), id("name")),
+								id("fn")
+							)
+						),
+					]
+				),
+			]
+		),
+		breakStmt(),
 	];
 }
 
 /** `{var fn=X();var cls=Y();fn._ho=cls;cls[C[O]]=fn;break;}` */
 function DEFINE_STATIC_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};fn._ho=cls;cls[${ctx.C}[${ctx.O}]]=fn;break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(assign(member(id("fn"), "_ho"), id("cls"))),
+		exprStmt(
+			assign(index(id("cls"), index(id(ctx.C), id(ctx.O))), id("fn"))
 		),
+		breakStmt(),
 	];
 }
 
@@ -134,21 +324,55 @@ function DEFINE_STATIC_METHOD(ctx: HandlerCtx): JsNode[] {
  */
 function DEFINE_GETTER(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
-				`var target=isStatic?cls:(cls.prototype||cls);fn._ho=target;` +
-				`Object.defineProperty(target,name,{get:fn,configurable:true,enumerable:false});break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		varDecl("name", index(id(ctx.C), bin("&", id(ctx.O), lit(0xffff)))),
+		varDecl(
+			"isStatic",
+			bin("&", bin(">>", id(ctx.O), lit(16)), lit(1))
 		),
+		varDecl(
+			"target",
+			ternary(
+				id("isStatic"),
+				id("cls"),
+				bin("||", member(id("cls"), "prototype"), id("cls"))
+			)
+		),
+		exprStmt(assign(member(id("fn"), "_ho"), id("target"))),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				id("target"),
+				id("name"),
+				obj(
+					["get", id("fn")],
+					["configurable", lit(true)],
+					["enumerable", lit(false)]
+				),
+			])
+		),
+		breakStmt(),
 	];
 }
 
 /** `{var fn=X();var cls=Y();fn._ho=cls;Object.defineProperty(cls,C[O],{get:fn,configurable:true,enumerable:false});break;}` */
 function DEFINE_STATIC_GETTER(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};fn._ho=cls;` +
-				`Object.defineProperty(cls,${ctx.C}[${ctx.O}],{get:fn,configurable:true,enumerable:false});break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(assign(member(id("fn"), "_ho"), id("cls"))),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				id("cls"),
+				index(id(ctx.C), id(ctx.O)),
+				obj(
+					["get", id("fn")],
+					["configurable", lit(true)],
+					["enumerable", lit(false)]
+				),
+			])
 		),
+		breakStmt(),
 	];
 }
 
@@ -158,21 +382,55 @@ function DEFINE_STATIC_GETTER(ctx: HandlerCtx): JsNode[] {
  */
 function DEFINE_SETTER(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};var name=${ctx.C}[${ctx.O}&0xFFFF];var isStatic=(${ctx.O}>>16)&1;` +
-				`var target=isStatic?cls:(cls.prototype||cls);fn._ho=target;` +
-				`Object.defineProperty(target,name,{set:fn,configurable:true,enumerable:false});break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		varDecl("name", index(id(ctx.C), bin("&", id(ctx.O), lit(0xffff)))),
+		varDecl(
+			"isStatic",
+			bin("&", bin(">>", id(ctx.O), lit(16)), lit(1))
 		),
+		varDecl(
+			"target",
+			ternary(
+				id("isStatic"),
+				id("cls"),
+				bin("||", member(id("cls"), "prototype"), id("cls"))
+			)
+		),
+		exprStmt(assign(member(id("fn"), "_ho"), id("target"))),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				id("target"),
+				id("name"),
+				obj(
+					["set", id("fn")],
+					["configurable", lit(true)],
+					["enumerable", lit(false)]
+				),
+			])
+		),
+		breakStmt(),
 	];
 }
 
 /** `{var fn=X();var cls=Y();fn._ho=cls;Object.defineProperty(cls,C[O],{set:fn,configurable:true,enumerable:false});break;}` */
 function DEFINE_STATIC_SETTER(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};fn._ho=cls;` +
-				`Object.defineProperty(cls,${ctx.C}[${ctx.O}],{set:fn,configurable:true,enumerable:false});break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(assign(member(id("fn"), "_ho"), id("cls"))),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				id("cls"),
+				index(id(ctx.C), id(ctx.O)),
+				obj(
+					["set", id("fn")],
+					["configurable", lit(true)],
+					["enumerable", lit(false)]
+				),
+			])
 		),
+		breakStmt(),
 	];
 }
 
@@ -181,74 +439,112 @@ function DEFINE_STATIC_SETTER(ctx: HandlerCtx): JsNode[] {
 /** `{var val=X();var name=C[O];var obj=Y();obj[name]=val;break;}` */
 function DEFINE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var val=${ctx.popStr()};var name=${ctx.C}[${ctx.O}];var obj=${ctx.peekStr()};obj[name]=val;break;`
-		),
+		varDecl("val", ctx.pop()),
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		varDecl("obj", ctx.peek()),
+		exprStmt(assign(index(id("obj"), id("name")), id("val"))),
+		breakStmt(),
 	];
 }
 
 /** `{var val=X();var cls=Y();cls[C[O]]=val;break;}` */
 function DEFINE_STATIC_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var val=${ctx.popStr()};var cls=${ctx.peekStr()};cls[${ctx.C}[${ctx.O}]]=val;break;`
+		varDecl("val", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(
+			assign(index(id("cls"), index(id(ctx.C), id(ctx.O))), id("val"))
 		),
+		breakStmt(),
 	];
 }
 
 // --- Private member definition ---
 
-/** `{var fn=X();var cls=Y();(cls.prototype||cls)[C[O]]=fn;break;}` */
+/** `{var fn=X();var cls=Y();var _tgt=(cls.prototype||cls);_tgt[C[O]]=fn;break;}` */
 function DEFINE_PRIVATE_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};(cls.prototype||cls)[${ctx.C}[${ctx.O}]]=fn;break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		varDecl(
+			"_tgt",
+			bin("||", member(id("cls"), "prototype"), id("cls"))
 		),
+		exprStmt(
+			assign(
+				index(id("_tgt"), index(id(ctx.C), id(ctx.O))),
+				id("fn")
+			)
+		),
+		breakStmt(),
 	];
 }
 
 /** `{var fn=X();var cls=Y();Object.defineProperty(cls.prototype||cls,C[O],{get:fn,configurable:true});break;}` */
 function DEFINE_PRIVATE_GETTER(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};Object.defineProperty(cls.prototype||cls,${ctx.C}[${ctx.O}],{get:fn,configurable:true});break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				bin("||", member(id("cls"), "prototype"), id("cls")),
+				index(id(ctx.C), id(ctx.O)),
+				obj(["get", id("fn")], ["configurable", lit(true)]),
+			])
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var fn=X();var cls=Y();Object.defineProperty(cls.prototype||cls,C[O],{set:fn,configurable:true});break;}` */
 function DEFINE_PRIVATE_SETTER(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};Object.defineProperty(cls.prototype||cls,${ctx.C}[${ctx.O}],{set:fn,configurable:true});break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(
+			call(member(id("Object"), "defineProperty"), [
+				bin("||", member(id("cls"), "prototype"), id("cls")),
+				index(id(ctx.C), id(ctx.O)),
+				obj(["set", id("fn")], ["configurable", lit(true)]),
+			])
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var val=X();var obj=Y();obj[C[O]]=val;break;}` */
 function DEFINE_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var val=${ctx.popStr()};var obj=${ctx.peekStr()};obj[${ctx.C}[${ctx.O}]]=val;break;`
+		varDecl("val", ctx.pop()),
+		varDecl("obj", ctx.peek()),
+		exprStmt(
+			assign(index(id("obj"), index(id(ctx.C), id(ctx.O))), id("val"))
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var val=X();var cls=Y();cls[C[O]]=val;break;}` */
 function DEFINE_STATIC_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var val=${ctx.popStr()};var cls=${ctx.peekStr()};cls[${ctx.C}[${ctx.O}]]=val;break;`
+		varDecl("val", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(
+			assign(index(id("cls"), index(id(ctx.C), id(ctx.O))), id("val"))
 		),
+		breakStmt(),
 	];
 }
 
 /** `{var fn=X();var cls=Y();cls[C[O]]=fn;break;}` */
 function DEFINE_STATIC_PRIVATE_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
-		raw(
-			`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};cls[${ctx.C}[${ctx.O}]]=fn;break;`
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(
+			assign(index(id("cls"), index(id(ctx.C), id(ctx.O))), id("fn"))
 		),
+		breakStmt(),
 	];
 }
 
@@ -256,7 +552,12 @@ function DEFINE_STATIC_PRIVATE_METHOD(ctx: HandlerCtx): JsNode[] {
 
 /** `{var fn=X();var cls=Y();fn.call(cls);break;}` */
 function CLASS_STATIC_BLOCK(ctx: HandlerCtx): JsNode[] {
-	return [raw(`var fn=${ctx.popStr()};var cls=${ctx.peekStr()};fn.call(cls);break;`)];
+	return [
+		varDecl("fn", ctx.pop()),
+		varDecl("cls", ctx.peek()),
+		exprStmt(call(member(id("fn"), "call"), [id("cls")])),
+		breakStmt(),
+	];
 }
 
 // --- No-op class handlers ---
