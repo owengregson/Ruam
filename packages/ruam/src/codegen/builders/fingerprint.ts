@@ -19,11 +19,12 @@ import {
 	fn,
 	varDecl,
 	id,
-	raw,
+	lit,
 	assign,
 	bin,
 	member,
 	exprStmt,
+	returnStmt,
 } from "../nodes.js";
 
 // --- Probe table ---
@@ -38,6 +39,14 @@ const PROBES: [string, number][] = [
 	["parseInt.length", 0x04],
 ];
 
+// --- Local helpers for dense bit manipulation ---
+
+/** `a ^ b` */
+const xor = (a: JsNode, b: JsNode): JsNode => bin("^", a, b);
+
+/** `a >>> n` */
+const ushr = (a: JsNode, n: number): JsNode => bin(">>>", a, lit(n));
+
 // --- Helpers ---
 
 /** Emit a dotted property chain as nested MemberExpr nodes. */
@@ -48,12 +57,6 @@ function dotChain(chain: string): JsNode {
 		node = member(node, parts[i]!);
 	}
 	return node;
-}
-
-/** Hex literal as a raw node (preserves 0x… notation in output, zero-padded to even length). */
-function hex(n: number): JsNode {
-	const s = n.toString(16);
-	return raw("0x" + (s.length % 2 ? "0" + s : s));
 }
 
 // --- Builder ---
@@ -72,24 +75,29 @@ export function buildFingerprintSource(names: RuntimeNames): JsNode[] {
 	const body: JsNode[] = [];
 
 	// var h = 0x5f3759df;
-	body.push(varDecl("h", hex(0x5f3759df)));
+	body.push(varDecl("h", lit(0x5f3759df)));
 
 	// h ^= <probe>.length << <shift>;
 	for (const [chain, shift] of PROBES) {
 		body.push(
-			exprStmt(assign(h, bin("<<", dotChain(chain), hex(shift)), "^"))
+			exprStmt(assign(h, bin("<<", dotChain(chain), lit(shift)), "^"))
 		);
 	}
 
-	// Murmur3-style finalizer — uses raw() because the nested
-	// parenthesization in the original template (`(h^(h>>>16))`) includes
-	// explicit inner parens that the AST emitter would (correctly) omit.
-	body.push(raw("h=(h^(h>>>16))*0x45d9f3b"));
-	body.push(raw("h=(h^(h>>>13))*0x45d9f3b"));
-	body.push(raw("h=h^(h>>>16)"));
+	// Murmur3-style finalizer
+	// h = (h ^ (h >>> 16)) * 0x45d9f3b;
+	body.push(
+		exprStmt(assign(h, bin("*", xor(h, ushr(h, 16)), lit(0x45d9f3b))))
+	);
+	// h = (h ^ (h >>> 13)) * 0x45d9f3b;
+	body.push(
+		exprStmt(assign(h, bin("*", xor(h, ushr(h, 13)), lit(0x45d9f3b))))
+	);
+	// h = h ^ (h >>> 16);
+	body.push(exprStmt(assign(h, xor(h, ushr(h, 16)))));
 
 	// return h >>> 0;
-	body.push(raw("return h>>>0"));
+	body.push(returnStmt(ushr(h, 0)));
 
 	return [fn(names.fp, [], body)];
 }
