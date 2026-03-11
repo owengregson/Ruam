@@ -60,9 +60,9 @@ describe("Debug Protection", () => {
 		});
 
 		it("contains function integrity self-check", () => {
-			// FNV-1a hash constants used for self-verification
-			expect(output).toContain("0x811C9DC5");
-			expect(output).toContain("0x01000193");
+			// FNV-1a hash constants used for self-verification (decimal form)
+			expect(output).toContain("2166136261"); // 0x811C9DC5
+			expect(output).toContain("16777619"); // 0x01000193
 		});
 
 		it("contains console API integrity check", () => {
@@ -134,7 +134,7 @@ describe("Debug Protection", () => {
 				{ vmShielding: true, debugProtection: true }
 			);
 			// The IIFE should appear only once (shared infrastructure)
-			const matches = output.match(/0x811C9DC5/g);
+			const matches = output.match(/2166136261/g); // 0x811C9DC5 in decimal
 			// 4 occurrences: initial + verify, each using the FNV constant twice
 			expect(matches).toBeTruthy();
 			expect(matches!.length).toBe(4);
