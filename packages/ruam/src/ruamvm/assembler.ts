@@ -15,7 +15,7 @@
  */
 
 import { OPCODE_COUNT } from "../compiler/opcodes.js";
-import type { RuntimeNames } from "../encoding/names.js";
+import type { RuntimeNames, TempNames } from "../encoding/names.js";
 import type { JsNode } from "./nodes.js";
 import { exprStmt, lit, varDecl, arr, obj, un } from "./nodes.js";
 import { emit } from "./emit.js";
@@ -41,6 +41,7 @@ import { buildGlobalExposure } from "./builders/globals.js";
 export function generateVmRuntime(options: {
 	opcodeShuffleMap: number[];
 	names: RuntimeNames;
+	temps: TempNames;
 	encrypt: boolean;
 	debugProtection: boolean;
 	debugLogging?: boolean;
@@ -57,6 +58,7 @@ export function generateVmRuntime(options: {
 	const {
 		opcodeShuffleMap,
 		names,
+		temps,
 		encrypt,
 		debugProtection: dbgProt,
 		debugLogging = false,
@@ -90,12 +92,12 @@ export function generateVmRuntime(options: {
 
 	// Optional debug protection
 	if (dbgProt) {
-		nodes.push(...buildDebugProtection(names));
+		nodes.push(...buildDebugProtection(names, temps));
 	}
 
 	// Optional debug logging
 	if (debugLogging) {
-		nodes.push(...buildDebugLogging(reverseMap, names));
+		nodes.push(...buildDebugLogging(reverseMap, names, temps));
 	}
 
 	// Rolling cipher helpers (must come before interpreter)
@@ -115,6 +117,7 @@ export function generateVmRuntime(options: {
 	nodes.push(
 		...buildInterpreterFunctions(
 			names,
+			temps,
 			opcodeShuffleMap,
 			debugLogging,
 			rollingCipher,
@@ -129,7 +132,7 @@ export function generateVmRuntime(options: {
 	);
 
 	// Runner dispatch functions
-	nodes.push(...buildRunners(debugLogging, names));
+	nodes.push(...buildRunners(debugLogging, names, temps));
 
 	// String constant decoder (XOR key stream)
 	if (stringKey !== undefined) {
@@ -163,6 +166,8 @@ export interface ShieldingGroup {
 	shuffleMap: number[];
 	/** Group-specific randomized identifier names. */
 	names: RuntimeNames;
+	/** Group-specific randomized temp names. */
+	temps: TempNames;
 	/** Group-specific seed (for obfuscateLocals). */
 	seed: number;
 	/** Unit IDs belonging to this group (root + children). */
@@ -185,6 +190,7 @@ export interface ShieldingGroup {
 export function generateShieldedVmRuntime(options: {
 	groups: ShieldingGroup[];
 	sharedNames: RuntimeNames;
+	sharedTemps: TempNames;
 	encrypt: boolean;
 	debugProtection: boolean;
 	debugLogging?: boolean;
@@ -195,6 +201,7 @@ export function generateShieldedVmRuntime(options: {
 	const {
 		groups,
 		sharedNames,
+		sharedTemps,
 		encrypt,
 		debugProtection: dbgProt,
 		debugLogging = false,
@@ -216,7 +223,7 @@ export function generateShieldedVmRuntime(options: {
 
 	// Shared: debug protection
 	if (dbgProt) {
-		nodes.push(...buildDebugProtection(sharedNames));
+		nodes.push(...buildDebugProtection(sharedNames, sharedTemps));
 	}
 
 	// Shared: deserializer
@@ -228,6 +235,7 @@ export function generateShieldedVmRuntime(options: {
 
 	for (const group of groups) {
 		const gn = group.names;
+		const gt = group.temps;
 
 		// Debug logging (per-group)
 		if (debugLogging) {
@@ -235,7 +243,7 @@ export function generateShieldedVmRuntime(options: {
 			for (let i = 0; i < group.shuffleMap.length; i++) {
 				reverseMap[group.shuffleMap[i]!] = i;
 			}
-			nodes.push(...buildDebugLogging(reverseMap, gn));
+			nodes.push(...buildDebugLogging(reverseMap, gn, gt));
 		}
 
 		// Rolling cipher (always on with vmShielding)
@@ -253,6 +261,7 @@ export function generateShieldedVmRuntime(options: {
 		nodes.push(
 			...buildInterpreterFunctions(
 				gn,
+				gt,
 				group.shuffleMap,
 				debugLogging,
 				true, // rollingCipher always on in shielding mode
@@ -267,7 +276,7 @@ export function generateShieldedVmRuntime(options: {
 		);
 
 		// Runners (per-group dispatch function)
-		nodes.push(...buildRunners(debugLogging, gn));
+		nodes.push(...buildRunners(debugLogging, gn, gt));
 
 		// String decoder (per-group, rolling cipher implicit key)
 		nodes.push(...buildStringDecoderSource(gn, 0, true));

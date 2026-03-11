@@ -99,13 +99,13 @@ function DUP(ctx: HandlerCtx): JsNode[] {
 
 function DUP2(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("_a", index(id(ctx.S), bin("-", id(ctx.P), lit(1)))),
-		varDecl("_b", index(id(ctx.S), id(ctx.P))),
+		varDecl(ctx.t("_a"), index(id(ctx.S), bin("-", id(ctx.P), lit(1)))),
+		varDecl(ctx.t("_b"), index(id(ctx.S), id(ctx.P))),
 		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("_a"))
+			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id(ctx.t("_a")))
 		),
 		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("_b"))
+			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id(ctx.t("_b")))
 		),
 		breakStmt(),
 	];

@@ -5,6 +5,10 @@
  * making the output look like generic minified code rather than
  * an obvious VM interpreter.
  *
+ * All generated names (RuntimeNames + TempNames) come from a single
+ * LCG sequence sharing one `used` set, guaranteeing zero collisions
+ * and per-build variation for every `_`-prefixed identifier in the output.
+ *
  * @module encoding/names
  */
 
@@ -135,35 +139,135 @@ export interface RuntimeNames {
 	routeMap: string;
 }
 
+// --- TempNames ---
+
+/**
+ * Randomized names for handler/builder temporary variables and
+ * internal object property keys.
+ *
+ * Every `_`-prefixed identifier in the generated runtime code is
+ * represented here. The canonical key (e.g. `"_ci"`) maps to a
+ * per-build randomized name, guaranteeing:
+ *   1. No collisions with RuntimeNames
+ *   2. No fixed fingerprint across builds
+ */
+export type TempNames = Readonly<Record<string, string>>;
+
+/**
+ * Canonical names for all handler/builder temporaries.
+ * Organized by scope of usage.
+ */
+const TEMP_NAME_CATALOG: readonly string[] = [
+	// --- Handler case-body local variables (interpreter function scope) ---
+	"_a", // arguments array (stack.ts, helpers.ts, functions.ts)
+	"_b", // temp (stack.ts)
+	"_rv", // return value (control-flow.ts)
+	"_rv2", // return value 2 (exceptions.ts)
+	"_te", // thrown exception (control-flow.ts)
+	"_cu", // current unit (functions.ts, helpers.ts)
+	"_cuid", // closure unit ID (functions.ts)
+	"_fu", // function unit (functions.ts)
+	"_fuid", // function unit ID (functions.ts)
+	"_tv", // this value (helpers.ts, functions.ts)
+	"_tt", // type test (helpers.ts)
+	"_tgt", // target (classes.ts)
+	"_tf", // type found (scope.ts)
+
+	// --- Internal object property keys (cross-handler consistency) ---
+	"_ci", // catch index (exception handler objects)
+	"_fi", // finally index (exception handler objects)
+	"_sp", // stack pointer (exception handler objects)
+	"_iter", // iterator (iterator objects)
+	"_done", // done flag (iterator objects)
+	"_value", // value (iterator objects)
+	"_async", // async flag (iterator objects)
+	"_keys", // keys array (for-in objects)
+	"_idx", // index (for-in objects)
+	"_ho", // home object (function objects)
+	"_dbgId", // debug ID (unit objects)
+	"_count", // counter (debug config)
+	"_opNames", // opcode names (debug config)
+
+	// --- Interpreter scaffold locals ---
+	"_uid_", // unit ID for stack trace
+	"_uid", // unit ID for debug
+	"_g", // global scope
+	"_il", // instruction length
+	"_ri", // rolling cipher index
+	"_ks", // rolling cipher key schedule / object keys
+	"_h", // exception handler variable
+	"_sek", // stack encoding key
+	"_seRaw", // stack encoding raw array
+
+	// --- Runner locals ---
+	"_t", // type variable (runners.ts)
+
+	// --- Debug protection locals ---
+	"_sev", // severity
+	"_dm", // demo array
+	"_now", // current time
+	"_th", // threshold
+	"_tl", // last time
+	"_pb", // probe list
+	"_fh", // FNV hash initial
+	"_o", // object (coercion)
+	"_hr", // high resolution timer
+	"_src", // source code
+	"_it", // timeout ID
+	"_act", // action handler
+	"_gk", // global keys
+	"_k", // key (for-in)
+	"_p1", // detector function 1
+	"_p2", // detector function 2
+	"_p3", // detector function 3
+	"_p4", // detector function 4
+	"_p5", // detector function 5
+	"_p6", // detector function 6
+	"_run", // debug protection runner
+	"_s1", // sample time 1
+	"_s2", // sample time 2
+	"_e1", // elapsed time 1
+	"_e2", // elapsed time 2
+	"_ts", // timestamp array
+	"_i", // loop iterator
+	"_s", // start time
+	"_sm", // sum measurement
+	"_av", // average value
+	"_vr", // variance
+	"_d", // difference
+	"_st", // stack trace
+	"_cs", // checksum source
+	"_ch", // checksum hash
+	"_nc", // native code string
+	"_fn", // function list
+	"_ft", // function toString
+	"_n", // count
+	"_det", // detection flag
+	"_nx", // next timeout
+	"_tid", // timeout ID
+	"_ki", // keys index
+	"_ue", // user entry
+	"_ji", // jitter index
+] as const;
+
 /** The watermark variable name — always `_ru4m`. */
 export const WATERMARK_NAME = "_ru4m";
 
 const ALPHA = "abcdefghijklmnopqrstuvwxyz";
 const ALNUM = "abcdefghijklmnopqrstuvwxyz0123456789";
 
-// Names used as temporaries in generated interpreter case bodies — avoid collisions.
-const BLACKLIST = new Set([
-	"_a",
-	"_b",
-	"_rv",
-	"_te",
-	"_cuid",
-	"_cu",
-	"_fuid",
-	"_fu",
-	"_dbgId",
-	"_ho",
-]);
+// --- Name generation ---
 
 /**
- * Generate randomized runtime identifiers from a seed.
+ * Create an LCG-based name generator.
  *
- * Each seed produces a unique set of short, minifier-looking names
- * (e.g. `_qx7`, `_a3f`, `_m9`) so that no two builds share the
- * same internal naming.
+ * All names produced by the returned `genName()` are guaranteed unique
+ * within the `used` set. An external `used` set can be provided to
+ * enforce cross-generator uniqueness (e.g. across shielding groups
+ * that share the same IIFE scope).
  */
-export function generateRuntimeNames(seed: number): RuntimeNames {
-	const used = new Set<string>();
+function createNameGenerator(seed: number, externalUsed?: Set<string>) {
+	const used = externalUsed ?? new Set<string>();
 	let s = seed >>> 0;
 
 	function lcg(): number {
@@ -172,23 +276,49 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
 	}
 
 	function genName(): string {
+		let minLen = 2;
 		for (let attempt = 0; ; attempt++) {
-			if (attempt > 5000) {
+			if (attempt > 10000) {
 				throw new Error("Runtime name pool exhausted");
 			}
-			const len = 2 + (lcg() % 2); // 2-3 chars after '_'
+			// After repeated collisions, increase minimum length
+			// to skip saturated short-name buckets.
+			if (attempt > 0 && attempt % 50 === 0 && minLen < 6) {
+				minLen++;
+			}
+			const range = 7 - minLen; // e.g. minLen=2 → range=5 (2–6)
+			const len = minLen + (lcg() % range); // minLen–6 chars after '_'
 			let name = "_" + ALPHA[lcg() % ALPHA.length]!;
 			for (let i = 1; i < len; i++) {
 				name += ALNUM[lcg() % ALNUM.length]!;
 			}
-			if (!used.has(name) && !BLACKLIST.has(name)) {
+			if (!used.has(name)) {
 				used.add(name);
 				return name;
 			}
 		}
 	}
 
-	return {
+	return { genName, used };
+}
+
+/**
+ * Generate randomized runtime identifiers and temp names from a seed.
+ *
+ * Both RuntimeNames and TempNames are produced from a single LCG
+ * sequence with a shared collision-free `used` set, guaranteeing
+ * that no two names in the entire output can collide.
+ *
+ * @param seed - LCG seed for deterministic name generation.
+ * @returns RuntimeNames and TempNames.
+ */
+export function generateRuntimeNames(seed: number, sharedUsed?: Set<string>): {
+	runtime: RuntimeNames;
+	temps: TempNames;
+} {
+	const { genName } = createNameGenerator(seed, sharedUsed);
+
+	const runtime: RuntimeNames = {
 		bt: genName(),
 		vm: genName(),
 		exec: genName(),
@@ -241,6 +371,14 @@ export function generateRuntimeNames(seed: number): RuntimeNames {
 		router: genName(),
 		routeMap: genName(),
 	};
+
+	// Generate temp names from the same LCG + used set
+	const temps: Record<string, string> = {};
+	for (const key of TEMP_NAME_CATALOG) {
+		temps[key] = genName();
+	}
+
+	return { runtime, temps: temps as TempNames };
 }
 
 /** Fields of {@link RuntimeNames} that are shared across all shielding groups. */
@@ -268,7 +406,12 @@ const SHARED_NAME_KEYS = [
  *
  * Shared names (bytecode table, cache, depth, debug, etc.) are
  * consistent across all groups. Per-group names (interpreter locals,
- * rolling cipher, etc.) are unique per group and collision-free.
+ * rolling cipher, temps, etc.) are unique per group.
+ *
+ * All groups share a single `used` set to guarantee cross-group
+ * uniqueness — all per-group code is emitted into the same IIFE
+ * scope, so name collisions between groups would produce runtime
+ * errors.
  *
  * @param sharedSeed - Seed for shared infrastructure names.
  * @param groupSeeds - One seed per shielding group.
@@ -277,48 +420,37 @@ const SHARED_NAME_KEYS = [
 export function generateShieldedNames(
 	sharedSeed: number,
 	groupSeeds: number[]
-): { shared: RuntimeNames; groups: RuntimeNames[] } {
-	// Generate shared names from the shared seed
-	const shared = generateRuntimeNames(sharedSeed);
-
-	// Generate per-group names, overriding shared fields for consistency
-	const groups: RuntimeNames[] = [];
-	// Collect all names already used by shared to prevent collisions
+): {
+	shared: RuntimeNames;
+	sharedTemps: TempNames;
+	groups: RuntimeNames[];
+	groupTemps: TempNames[];
+} {
+	// Single used set shared across all generators to prevent
+	// cross-group name collisions in the shared IIFE scope.
 	const globalUsed = new Set<string>();
-	for (const key of SHARED_NAME_KEYS) {
-		globalUsed.add(shared[key]);
-	}
+
+	// Generate shared names from the shared seed
+	const { runtime: shared, temps: sharedTemps } =
+		generateRuntimeNames(sharedSeed, globalUsed);
+
+	// Generate per-group names with the shared used set
+	const groups: RuntimeNames[] = [];
+	const groupTemps: TempNames[] = [];
 
 	for (const groupSeed of groupSeeds) {
-		let names: RuntimeNames | undefined;
-		// Retry if a group name collides with shared or another group
-		for (let attempt = 0; attempt < 1000; attempt++) {
-			const candidate = generateRuntimeNames(
-				(groupSeed ^ groups.length) + attempt
-			);
-			// Override shared fields
-			for (const key of SHARED_NAME_KEYS) {
-				(candidate as unknown as Record<string, string>)[key] =
-					shared[key];
-			}
-			// Check for collisions among non-shared names
-			const groupNonShared = Object.entries(candidate)
-				.filter(
-					([k]) =>
-						!(SHARED_NAME_KEYS as readonly string[]).includes(k)
-				)
-				.map(([, v]) => v);
-			if (!groupNonShared.some((n) => globalUsed.has(n))) {
-				for (const n of groupNonShared) globalUsed.add(n);
-				names = candidate;
-				break;
-			}
+		const { runtime: groupNames, temps } =
+			generateRuntimeNames(groupSeed, globalUsed);
+
+		// Override shared fields for cross-group consistency
+		for (const key of SHARED_NAME_KEYS) {
+			(groupNames as unknown as Record<string, string>)[key] =
+				shared[key];
 		}
-		if (!names) {
-			throw new Error("Shielded group name pool exhausted");
-		}
-		groups.push(names);
+
+		groups.push(groupNames);
+		groupTemps.push(temps);
 	}
 
-	return { shared, groups };
+	return { shared, sharedTemps, groups, groupTemps };
 }

@@ -11,7 +11,7 @@
  */
 
 import type { JsNode } from "../nodes.js";
-import type { RuntimeNames } from "../../encoding/names.js";
+import type { RuntimeNames, TempNames } from "../../encoding/names.js";
 import {
 	fn,
 	varDecl,
@@ -49,7 +49,8 @@ import { Op, OPCODE_COUNT } from "../../compiler/opcodes.js";
  */
 export function buildDebugLogging(
 	reverseMap: number[],
-	names: RuntimeNames
+	names: RuntimeNames,
+	temps: TempNames
 ): JsNode[] {
 	// --- Build opcode name table: physical opcode -> name string ---
 
@@ -80,9 +81,9 @@ export function buildDebugLogging(
 	// Helper accessors
 	const cfgId = id(cfg);
 	const cfgEnabled = member(cfgId, "enabled");
-	const cfgCount = member(cfgId, "_count");
+	const cfgCount = member(cfgId, temps["_count"]!);
 	const cfgMaxLogs = member(cfgId, "maxLogs");
-	const cfgOpNames = member(cfgId, "_opNames");
+	const cfgOpNames = member(cfgId, temps["_opNames"]!);
 	const cfgLevel = member(cfgId, "level");
 	const cfgLevels = member(cfgId, "levels");
 	const console_ = id("console");
@@ -97,8 +98,8 @@ export function buildDebugLogging(
 			["level", lit("trace")],
 			["filter", lit(null)],
 			["maxLogs", lit(10000)],
-			["_count", lit(0)],
-			["_opNames", obj(...nameEntries)],
+			[temps["_count"]!, lit(0)],
+			[temps["_opNames"]!, obj(...nameEntries)],
 			[
 				"levels",
 				obj(

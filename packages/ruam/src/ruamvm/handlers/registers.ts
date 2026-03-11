@@ -198,7 +198,7 @@ function FAST_GET_PROP(ctx: HandlerCtx): JsNode[] {
 /** LOAD_GLOBAL_FAST: `{var g=_g;S[++P]=g[C[O]];break;}` */
 function LOAD_GLOBAL_FAST(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("g", id("_g")),
+		varDecl("g", id(ctx.t("_g"))),
 		exprStmt(ctx.push(index(id("g"), index(id(ctx.C), id(ctx.O))))),
 		breakStmt(),
 	];

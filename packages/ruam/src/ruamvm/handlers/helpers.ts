@@ -36,26 +36,28 @@ import type { HandlerCtx } from "./registry.js";
  *
  * @returns JsNode[] to insert in function body
  */
-export function buildThisBoxing(): JsNode[] {
+export function buildThisBoxing(ctx?: HandlerCtx): JsNode[] {
+	const tvName = ctx ? ctx.t("_tv") : "_tv";
+	const ttName = ctx ? ctx.t("_tt") : "_tt";
 	return [
-		varDecl("_tv", id("this")),
+		varDecl(tvName, id("this")),
 		ifStmt(un("!", member(id("u"), "st")), [
 			ifStmt(
-				bin("==", id("_tv"), lit(null)),
-				[exprStmt(assign(id("_tv"), id("globalThis")))],
+				bin("==", id(tvName), lit(null)),
+				[exprStmt(assign(id(tvName), id("globalThis")))],
 				[
-					varDecl("_tt", un("typeof", id("_tv"))),
+					varDecl(ttName, un("typeof", id(tvName))),
 					ifStmt(
 						bin(
 							"&&",
-							bin("!==", id("_tt"), lit("object")),
-							bin("!==", id("_tt"), lit("function"))
+							bin("!==", id(ttName), lit("object")),
+							bin("!==", id(ttName), lit("function"))
 						),
 						[
 							exprStmt(
 								assign(
-									id("_tv"),
-									call(id("Object"), [id("_tv")])
+									id(tvName),
+									call(id("Object"), [id(tvName)])
 								)
 							),
 						]
@@ -145,7 +147,7 @@ export function buildArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 		returnStmt(
 			call(id(isAsync ? ctx.execAsync : ctx.exec), [
 				id("u"),
-				id("_a"),
+				id(ctx.t("_a")),
 				id("cs"),
 				id("ct"),
 			])
@@ -157,15 +159,15 @@ export function buildArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 			[
 				ifStmt(member(id("u"), "s"), [
 					returnStmt(
-						fnExpr(undefined, ["..._a"], [execCall(true)], {
+						fnExpr(undefined, ["..." + ctx.t("_a")], [execCall(true)], {
 							async: true,
 						})
 					),
 				]),
-				returnStmt(fnExpr(undefined, ["..._a"], [execCall(false)])),
+				returnStmt(fnExpr(undefined, ["..." + ctx.t("_a")], [execCall(false)])),
 			]
 		),
-		[id("_cu"), id(ctx.SC), id(ctx.TV)]
+		[id(ctx.t("_cu")), id(ctx.SC), id(ctx.TV)]
 	);
 }
 
@@ -184,15 +186,15 @@ export function buildArrowClosureIIFE(ctx: HandlerCtx): JsNode {
  */
 export function buildRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 	const fnBody = (isAsync: boolean): JsNode[] => [
-		...buildThisBoxing(),
+		...buildThisBoxing(ctx),
 		returnStmt(
 			call(id(isAsync ? ctx.execAsync : ctx.exec), [
 				id("u"),
-				id("_a"),
+				id(ctx.t("_a")),
 				id("cs"),
-				id("_tv"),
+				id(ctx.t("_tv")),
 				un("void", lit(0)),
-				member(id("fn"), "_ho"),
+				member(id("fn"), ctx.t("_ho")),
 			])
 		),
 	];
@@ -204,16 +206,16 @@ export function buildRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 				ifStmt(member(id("u"), "s"), [
 					varDecl(
 						"fn",
-						fnExpr(undefined, ["..._a"], fnBody(true), {
+						fnExpr(undefined, ["..." + ctx.t("_a")], fnBody(true), {
 							async: true,
 						})
 					),
 					returnStmt(id("fn")),
 				]),
-				varDecl("fn", fnExpr(undefined, ["..._a"], fnBody(false))),
+				varDecl("fn", fnExpr(undefined, ["..." + ctx.t("_a")], fnBody(false))),
 				returnStmt(id("fn")),
 			]
 		),
-		[id("_cu"), id(ctx.SC)]
+		[id(ctx.t("_cu")), id(ctx.SC)]
 	);
 }

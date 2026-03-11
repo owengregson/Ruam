@@ -24,7 +24,7 @@ import {
 	exprStmt,
 	breakStmt,
 } from "../nodes.js";
-import type { RuntimeNames } from "../../encoding/names.js";
+import type { RuntimeNames, TempNames } from "../../encoding/names.js";
 import type { Op } from "../../compiler/opcodes.js";
 
 /**
@@ -75,6 +75,9 @@ export interface HandlerCtx {
 	isAsync: boolean; // true when building async interpreter variant
 	debug: boolean; // true when debug logging is enabled
 
+	/** Temp name lookup — maps canonical key (e.g. `"_ci"`) to per-build randomized name. */
+	t: (key: string) => string;
+
 	// Stack operation factories — emit directly as S[++P]=expr, S[P--], S[P]
 	push: (value: JsNode) => StackPush;
 	pop: () => StackPop;
@@ -96,10 +99,11 @@ export type HandlerFn = (ctx: HandlerCtx) => JsNode[];
 export const registry = new Map<Op, HandlerFn>();
 
 /**
- * Build a HandlerCtx from RuntimeNames and flags.
+ * Build a HandlerCtx from RuntimeNames, TempNames, and flags.
  */
 export function makeHandlerCtx(
 	names: RuntimeNames,
+	temps: TempNames,
 	isAsync: boolean,
 	debug: boolean
 ): HandlerCtx {
@@ -135,6 +139,13 @@ export function makeHandlerCtx(
 		fSlots: names.fSlots,
 		isAsync,
 		debug,
+		t: (key: string): string => {
+			const name = temps[key];
+			if (name === undefined) {
+				throw new Error(`Unknown temp name key: ${key}`);
+			}
+			return name;
+		},
 		push: (value: JsNode) => stackPush(names.stk, names.stp, value),
 		pop: () => stackPop(names.stk, names.stp),
 		peek: () => stackPeek(names.stk, names.stp),
