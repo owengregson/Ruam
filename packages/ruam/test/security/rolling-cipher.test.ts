@@ -615,11 +615,11 @@ describe("integrity binding anti-reversing", () => {
 
 	it("output contains integrity binding infrastructure", () => {
 		const out = obfuscateCode(sampleCode, ibOpts);
-		// The rolling cipher mix primes should be present
-		expect(out).toContain("0x85EBCA6B");
-		expect(out).toContain("0xC2B2AE35");
+		// The rolling cipher mix primes should be present (decimal form from AST emitter)
+		expect(out).toContain("2246822507"); // 0x85EBCA6B
+		expect(out).toContain("3266489909"); // 0xC2B2AE35
 		// The FNV offset basis (used in rcDeriveKey)
-		expect(out).toContain("0x811C9DC5");
+		expect(out).toContain("2166136261"); // 0x811C9DC5
 	});
 
 	it("modifying the embedded integrity hash breaks execution", () => {
