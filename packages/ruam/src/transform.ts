@@ -587,36 +587,28 @@ function collectTopLevelBindings(body: t.Statement[]): string[] {
 /**
  * Build the program scope object setup code.
  *
- * Creates a scope chain node with getter/setter bindings for every
- * top-level declaration.  Getters lazily read from the enclosing JS
- * scope (handling hoisting and late initialisation correctly).
+ * Creates a prototypal scope object (Object.create(null)) with
+ * getter/setter bindings for every top-level declaration. Getters
+ * lazily read from the enclosing JS scope (handling hoisting and
+ * late initialisation correctly).
  *
  * @param psName   - Variable name for the scope object.
- * @param psvName  - Variable name for the scope.vars shorthand.
- * @param sPar     - Randomized scope chain "parent" property name.
- * @param sVars    - Randomized scope chain "vars" property name.
  * @param bindings - Top-level binding names to register.
  * @returns JS source string for the scope setup statements.
  */
 function buildScopeSetupCode(
 	psName: string,
-	psvName: string,
-	sPar: string,
-	sVars: string,
 	bindings: string[]
 ): string {
 	const lines: string[] = [];
-	lines.push(`var ${psName}={${sPar}:null,${sVars}:{}};`);
-	if (bindings.length > 0) {
-		lines.push(`var ${psvName}=${psName}.${sVars};`);
-		for (const name of bindings) {
-			lines.push(
-				`Object.defineProperty(${psvName},"${name}",` +
-					`{get:function(){return ${name}},` +
-					`set:function(v){${name}=v},` +
-					`enumerable:!0,configurable:!0});`
-			);
-		}
+	lines.push(`var ${psName}=Object.create(null);`);
+	for (const name of bindings) {
+		lines.push(
+			`Object.defineProperty(${psName},"${name}",` +
+				`{get:function(){return ${name}},` +
+				`set:function(v){${name}=v},` +
+				`enumerable:!0,configurable:!0});`
+		);
 	}
 	return lines.join("");
 }
@@ -942,9 +934,6 @@ function assembleOutputFromParts(
 	// Build the program scope object.
 	const scopeCode = buildScopeSetupCode(
 		temps["_ps"]!,
-		temps["_psv"]!,
-		names.sPar,
-		names.sVars,
 		topLevelBindings
 	);
 	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;

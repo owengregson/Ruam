@@ -102,7 +102,7 @@ function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
 					[
 						exprStmt(
 							assign(
-								index(member(id(ctx.SC), ctx.sV), id("cname")),
+								index(id(ctx.SC), id("cname")),
 								id("err")
 							)
 						),

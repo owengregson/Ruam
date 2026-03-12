@@ -25,6 +25,8 @@ import {
 	obj,
 	assign,
 	bin,
+	call,
+	member,
 	id,
 } from "./nodes.js";
 import { emit } from "./emit.js";
@@ -112,6 +114,16 @@ export function generateVmRuntime(options: {
 
 	// "use strict" directive
 	nodes.push(exprStmt(lit("use strict")));
+
+	// TDZ sentinel — unique prototype-less object for temporal dead zone checks.
+	// Declared at IIFE scope so all interpreter invocations share the
+	// same sentinel identity (checked via `===`).
+	nodes.push(
+		varDecl(
+			names.tdzSentinel,
+			call(member(id("Object"), "create"), [lit(null)])
+		)
+	);
 
 	// Optional encryption support
 	if (encrypt) {
@@ -291,6 +303,14 @@ export function generateShieldedVmRuntime(options: {
 	// "use strict" directive
 	nodes.push(exprStmt(lit("use strict")));
 
+	// TDZ sentinel — shared across all groups
+	nodes.push(
+		varDecl(
+			sharedNames.tdzSentinel,
+			call(member(id("Object"), "create"), [lit(null)])
+		)
+	);
+
 	// Shared: encryption support
 	if (encrypt) {
 		nodes.push(...buildFingerprintSource(sharedNames, sharedSplit));
@@ -440,10 +460,11 @@ function emitIIFE(nodes: JsNode[]): string {
 		const s = emit(node);
 		if (s.length === 0) continue;
 		parts.push(s);
-		// Add semicolon if the emitted string doesn't already end with one
-		// and isn't a function/block that doesn't need one
-		if (!s.endsWith(";") && !s.endsWith("}")) {
-			parts.push(";");
+		// Function declarations don't need semicolons; everything else does.
+		// We check the node type rather than string endings to avoid
+		// misclassifying object-literal-ending expressions (e.g. `var x={}`).
+		if (node.type !== "FnDecl") {
+			if (!s.endsWith(";")) parts.push(";");
 		}
 	}
 	parts.push("})();");

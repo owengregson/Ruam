@@ -19,6 +19,7 @@ import {
 	member,
 	bin,
 	assign,
+	call,
 	ifStmt,
 	whileStmt,
 	exprStmt,
@@ -57,10 +58,8 @@ export interface HandlerCtx {
 	NT: string; // newTarget parameter
 	HO: string; // homeObject parameter
 
-	// Scope property names
-	sPar: string; // scope.parent
-	sV: string; // scope.vars
-	sTdz: string; // scope.tdzVars
+	// TDZ sentinel variable (IIFE-scope unique object)
+	tdzSentinel: string;
 
 	// Infrastructure references
 	exec: string; // sync exec function name
@@ -83,12 +82,12 @@ export interface HandlerCtx {
 	pop: () => StackPop;
 	peek: () => StackPeek;
 
-	// Scope chain helpers — AST-returning versions for structured composition
-	/** `s.sV[key]` — scoped variable reference as AST node (default key: `id("name")`) */
+	// Scope chain helpers — prototypal scope (Object.create chain)
+	/** `s[key]` — scoped variable reference on walk variable (default key: `id("name")`) */
 	sv: (key?: JsNode) => JsNode;
-	/** `SC.sV[key]` — current scope variable reference as AST node (default key: `id("name")`) */
+	/** `SC[key]` — current scope variable reference (default key: `id("name")`) */
 	curSv: (key?: JsNode) => JsNode;
-	/** Scope walk pattern as AST nodes: `while(s){if(key in s.sV){<body>break;}s=s.sPar;}break;` */
+	/** Scope walk: `while(s){if(Object.prototype.hasOwnProperty.call(s,key)){<body>break;}s=Object.getPrototypeOf(s);}break;` */
 	scopeWalk: (body: JsNode[], key?: JsNode) => JsNode[];
 }
 
@@ -127,9 +126,7 @@ export function makeHandlerCtx(
 		TV: names.tVal,
 		NT: names.nTgt,
 		HO: names.ho,
-		sPar: names.sPar,
-		sV: names.sVars,
-		sTdz: names.sTdz,
+		tdzSentinel: names.tdzSentinel,
 		exec: names.exec,
 		execAsync: names.execAsync,
 		load: names.load,
@@ -150,18 +147,30 @@ export function makeHandlerCtx(
 		pop: () => stackPop(names.stk, names.stp),
 		peek: () => stackPeek(names.stk, names.stp),
 
-		// AST-returning scope helpers
-		sv: (key: JsNode = id("name")) =>
-			index(member(id("s"), names.sVars), key),
-		curSv: (key: JsNode = id("name")) =>
-			index(member(id(names.scope), names.sVars), key),
+		// AST-returning scope helpers — prototypal scope chain
+		sv: (key: JsNode = id("name")) => index(id("s"), key),
+		curSv: (key: JsNode = id("name")) => index(id(names.scope), key),
 		scopeWalk: (body: JsNode[], key: JsNode = id("name")): JsNode[] => [
 			whileStmt(id("s"), [
-				ifStmt(bin("in", key, member(id("s"), names.sVars)), [
-					...body,
-					breakStmt(),
-				]),
-				exprStmt(assign(id("s"), member(id("s"), names.sPar))),
+				ifStmt(
+					call(
+						member(
+							member(
+								member(id("Object"), "prototype"),
+								"hasOwnProperty"
+							),
+							"call"
+						),
+						[id("s"), key]
+					),
+					[...body, breakStmt()]
+				),
+				exprStmt(
+					assign(
+						id("s"),
+						call(member(id("Object"), "getPrototypeOf"), [id("s")])
+					)
+				),
 			]),
 			breakStmt(),
 		],
