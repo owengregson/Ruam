@@ -86,12 +86,42 @@ export function buildRunners(
 		: [];
 
 	// --- Main dispatch function: function vm(id, A, OS, TV, NT, HO) { ... } ---
+	// Includes this-boxing: if TV is provided and the unit is not
+	// arrow/strict, box null/undefined → globalThis, primitives → Object().
+	// This allows function stubs to call vm(id, args, scope, this) directly
+	// without needing the separate vm.call pattern.
+	const mainThisBoxing: JsNode = ifStmt(
+		bin(
+			"&&",
+			bin("!==", id(TV), un("void", lit(0))),
+			un("!", bin("||", member(id(U), "a"), member(id(U), "st")))
+		),
+		[
+			ifStmt(
+				bin("==", id(TV), lit(null)),
+				[exprStmt(assign(id(TV), id("globalThis")))],
+				[
+					varDecl(temps["_t"]!, un("typeof", id(TV))),
+					ifStmt(
+						bin(
+							"&&",
+							bin("!==", id(temps["_t"]!), lit("object")),
+							bin("!==", id(temps["_t"]!), lit("function"))
+						),
+						[exprStmt(assign(id(TV), call(id("Object"), [id(TV)])))]
+					),
+				]
+			),
+		]
+	);
+
 	const dispatchFn: JsNode = fn(
 		names.vm,
 		["id", A, OS, TV, NT, HO],
 		[
 			loadUnit,
 			...dbgStmts,
+			mainThisBoxing,
 			// if (U.s) return execAsync(U, A||[], OS||null, TV, NT, HO);
 			ifStmt(member(id(U), "s"), [
 				returnStmt(call(id(names.execAsync), execArgs)),

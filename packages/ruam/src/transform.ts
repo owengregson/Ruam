@@ -1044,13 +1044,16 @@ function replaceFunctionBody(
 ): void {
 	const node = fnPath.node;
 	const vmId = t.identifier(names.vm);
+	const argsId = t.identifier("__args");
+
+	// Both arrows and regular functions use rest params for natural output.
+	const restParam = t.restElement(argsId);
+	node.params = [restParam];
 
 	if (node.type === "ArrowFunctionExpression") {
-		const restParam = t.restElement(t.identifier("__args"));
-		node.params = [restParam];
 		const arrowArgs: t.Expression[] = [
 			t.stringLiteral(unitId),
-			t.identifier("__args"),
+			argsId,
 		];
 		if (scopeVarName) {
 			arrowArgs.push(t.identifier(scopeVarName));
@@ -1061,33 +1064,32 @@ function replaceFunctionBody(
 		return;
 	}
 
-	// Regular functions: preserve `this` via vm.call
-	const callArgs: t.Expression[] = [
-		t.thisExpression(),
+	// Regular functions: call vm(id, args, scope, this) directly.
+	// The vm dispatcher handles this-boxing internally when TV is
+	// provided, so no .call() or Array.prototype.slice needed.
+	const vmArgs: t.Expression[] = [
 		t.stringLiteral(unitId),
-		t.callExpression(
-			t.memberExpression(
-				t.memberExpression(
-					t.memberExpression(
-						t.identifier("Array"),
-						t.identifier("prototype")
-					),
-					t.identifier("slice")
-				),
-				t.identifier("call")
-			),
-			[t.identifier("arguments")]
-		),
+		argsId,
 	];
 	if (scopeVarName) {
-		callArgs.push(t.identifier(scopeVarName));
+		vmArgs.push(t.identifier(scopeVarName));
+	} else {
+		vmArgs.push(t.nullLiteral());
 	}
+	// Pass `this` as the thisVal parameter
+	vmArgs.push(t.thisExpression());
 
-	const vmCall = t.callExpression(
-		t.memberExpression(vmId, t.identifier("call")),
-		callArgs
-	);
+	const vmCall = t.callExpression(vmId, vmArgs);
 
-	node.body = t.blockStatement([t.returnStatement(vmCall)]);
-	node.params = (node as t.FunctionDeclaration).params ?? [];
+	// Decoy body: add a filler statement before the dispatch so the
+	// function doesn't look like a bare one-liner VM stub. The arg-length
+	// assignment looks like natural argument processing.
+	const decoy = t.variableDeclaration("var", [
+		t.variableDeclarator(
+			t.identifier("_n"),
+			t.binaryExpression("|", t.memberExpression(argsId, t.identifier("length")), t.numericLiteral(0))
+		),
+	]);
+
+	node.body = t.blockStatement([decoy, t.returnStatement(vmCall)]);
 }
