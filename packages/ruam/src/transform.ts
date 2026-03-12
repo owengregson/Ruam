@@ -157,6 +157,15 @@ export function obfuscateCode(
 
 	if (compiledUnits.size === 0) return code;
 
+	// -- Detect async units (for conditional async interpreter emit) --------
+	let hasAsyncUnits = false;
+	for (const [, { unit }] of compiledUnits) {
+		if (unit.isAsync) {
+			hasAsyncUnits = true;
+			break;
+		}
+	}
+
 	// -- Collect used opcodes (for dynamicOpcodes / decoyOpcodes) -----------
 	let usedOpcodes: Set<number> | undefined;
 	if (dynamicOpcodes || decoyOpcodes) {
@@ -187,7 +196,9 @@ export function obfuscateCode(
 				usedOpcodes,
 				mixedBooleanArithmetic,
 				handlerFragmentation,
-			}
+			},
+			undefined,
+			hasAsyncUnits
 		);
 		const interpSource = interpResult.interpreters
 			.map((n) => emit(n))
@@ -216,6 +227,7 @@ export function obfuscateCode(
 		mixedBooleanArithmetic,
 		handlerFragmentation,
 		alphabet,
+		hasAsyncUnits,
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
@@ -730,6 +742,7 @@ function assembleShielded(
 		unitIds: string[];
 		usedOpcodes: Set<number>;
 		cipherSalt: number;
+		hasAsyncUnits: boolean;
 	}[] = [];
 
 	for (let gi = 0; gi < targetPaths.length; gi++) {
@@ -773,6 +786,10 @@ function assembleShielded(
 				usedOpcodes.add(instr.opcode);
 		}
 
+		// Detect async units in this group
+		const groupHasAsync =
+			unit.isAsync || unit.childUnits.some((c) => c.isAsync);
+
 		// Per-group cipher salt
 		const groupCipherSalt = generateCryptoSeed();
 
@@ -802,6 +819,7 @@ function assembleShielded(
 			unitIds,
 			usedOpcodes,
 			cipherSalt: groupCipherSalt,
+			hasAsyncUnits: groupHasAsync,
 		});
 	}
 
@@ -830,7 +848,9 @@ function assembleShielded(
 					usedOpcodes: gm.usedOpcodes,
 					mixedBooleanArithmetic: opts.mixedBooleanArithmetic,
 					handlerFragmentation: opts.handlerFragmentation,
-				}
+				},
+				undefined,
+				gm.hasAsyncUnits
 			);
 			const interpSource = interpResult.interpreters
 				.map((n) => emit(n))
@@ -848,6 +868,7 @@ function assembleShielded(
 			usedOpcodes: gm.usedOpcodes,
 			integrityHash: groupIntegrityHash,
 			cipherSalt: gm.cipherSalt,
+			hasAsyncUnits: gm.hasAsyncUnits,
 		});
 	}
 

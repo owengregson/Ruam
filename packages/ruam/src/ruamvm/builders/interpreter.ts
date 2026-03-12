@@ -97,7 +97,8 @@ export function buildInterpreterFunctions(
 	rollingCipher: boolean,
 	seed: number,
 	interpOpts: InterpreterBuildOptions = {},
-	split?: SplitFn
+	split?: SplitFn,
+	hasAsyncUnits = true
 ): InterpreterBuildResult {
 	// Function table dispatch replaces the switch — disable handler
 	// fragmentation since handlers are naturally isolated in separate
@@ -120,8 +121,7 @@ export function buildInterpreterFunctions(
 		split
 	);
 
-	// Build case clauses separately for sync and async, because some handlers
-	// (AWAIT, iterators, closures) produce different AST depending on ctx.isAsync.
+	// Build sync case clauses (always needed).
 	const syncCases = buildCasesForMode(
 		names,
 		temps,
@@ -129,17 +129,6 @@ export function buildInterpreterFunctions(
 		seed,
 		effectiveOpts,
 		false,
-		debug,
-		htMeta.handlerIndices,
-		split
-	);
-	const asyncCases = buildCasesForMode(
-		names,
-		temps,
-		shuffleMap,
-		seed,
-		effectiveOpts,
-		true,
 		debug,
 		htMeta.handlerIndices,
 		split
@@ -155,6 +144,35 @@ export function buildInterpreterFunctions(
 		fragmentLabelMap: syncCases.fragmentLabelMap,
 	});
 
+	// When no async units exist, skip the full async interpreter.
+	// Emit a simple alias: var execAsync = exec
+	// The closure IIFE code references execAsync by name but never
+	// reaches that branch (all unit.s flags are falsy), so the alias
+	// is safe dead-code plumbing.
+	if (!hasAsyncUnits) {
+		const alias = varDecl(names.execAsync, id(names.exec));
+		return {
+			interpreters: [syncFn, alias],
+			handlerTableInit: htMeta.initNodes,
+			keyAnchorValue: htMeta.keyAnchorValue,
+		};
+	}
+
+	// Async units exist — build the async interpreter with structural
+	// differentiation: different group count than sync to avoid the
+	// "two identical interpreter" signature.
+	const asyncCases = buildCasesForMode(
+		names,
+		temps,
+		shuffleMap,
+		seed,
+		effectiveOpts,
+		true,
+		debug,
+		htMeta.handlerIndices,
+		split
+	);
+
 	const asyncFn = buildExecFunction(names, temps, asyncCases.cases, {
 		isAsync: true,
 		debug,
@@ -163,6 +181,9 @@ export function buildInterpreterFunctions(
 		interpOpts: effectiveOpts,
 		split,
 		fragmentLabelMap: asyncCases.fragmentLabelMap,
+		// Structural differentiation: async uses a different group count
+		// so it doesn't look like a carbon copy of the sync interpreter
+		asyncGroupOffset: 1,
 	});
 
 	return {
@@ -579,6 +600,8 @@ function buildExecFunction(
 		interpOpts: InterpreterBuildOptions;
 		split?: SplitFn;
 		fragmentLabelMap?: Map<number, number>;
+		/** Offset to apply to group count for structural differentiation. */
+		asyncGroupOffset?: number;
 	}
 ): JsNode {
 	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
@@ -592,7 +615,8 @@ function buildExecFunction(
 		temps,
 		htName,
 		ctx.PH,
-		opts.isAsync
+		opts.isAsync,
+		opts.asyncGroupOffset
 	);
 
 	const fnNode = buildScaffoldAST(
@@ -1221,7 +1245,8 @@ function buildFunctionTableDispatch(
 	temps: TempNames,
 	htName: string,
 	phName: string,
-	isAsync: boolean
+	isAsync: boolean,
+	groupCountOffset = 0
 ): { preLoopDecls: JsNode[]; dispatchNodes: JsNode[] } {
 	const FRS = temps["_frs"];
 	const FRV = temps["_frv"];
@@ -1254,12 +1279,24 @@ function buildFunctionTableDispatch(
 		return fnExpr(undefined, [], body, isAsync ? { async: true } : undefined);
 	});
 
-	// Determine group count based on total handler count
+	// Determine group count based on total handler count.
+	// groupCountOffset differentiates sync vs async structure: when
+	// nonzero, shift the group count (subtract if at ceiling, add if
+	// below) so the two interpreters don't look like carbon copies.
 	const totalHandlers = handlerFns.length;
-	const numGroups = Math.min(
-		FT_MAX_GROUPS,
-		totalHandlers < 80 ? 2 : totalHandlers < 160 ? 3 : 4
-	);
+	const baseGroups =
+		totalHandlers < 80 ? 2 : totalHandlers < 160 ? 3 : 4;
+	let numGroups: number;
+	if (groupCountOffset !== 0) {
+		// Shift away from the base: up if room, down otherwise
+		const shifted =
+			baseGroups + groupCountOffset <= FT_MAX_GROUPS
+				? baseGroups + groupCountOffset
+				: baseGroups - groupCountOffset;
+		numGroups = Math.max(2, Math.min(FT_MAX_GROUPS, shifted));
+	} else {
+		numGroups = Math.min(FT_MAX_GROUPS, baseGroups);
+	}
 	const groupSize = Math.ceil(totalHandlers / numGroups);
 
 	// Pre-loop declarations: sentinel, return value, group arrays

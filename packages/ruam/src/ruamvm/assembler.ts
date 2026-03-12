@@ -81,6 +81,8 @@ export function generateVmRuntime(options: {
 	handlerFragmentation?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
+	/** Whether any compiled units are async (controls async interpreter emit). */
+	hasAsyncUnits?: boolean;
 }): VmRuntimeResult {
 	const {
 		opcodeShuffleMap,
@@ -102,6 +104,7 @@ export function generateVmRuntime(options: {
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
 		alphabet,
+		hasAsyncUnits = true,
 	} = options;
 
 	// Create constant splitter — replaces well-known numeric literals with
@@ -148,7 +151,9 @@ export function generateVmRuntime(options: {
 		nodes.push(...buildDebugLogging(reverseMap, names, temps));
 	}
 
-	// Build interpreter core (sync + async) — also produces handler table init
+	// Build interpreter core — also produces handler table init.
+	// When hasAsyncUnits is false, only the sync interpreter is emitted
+	// (the async exec is aliased to sync for dead-code-path safety).
 	const interpResult = buildInterpreterFunctions(
 		names,
 		temps,
@@ -164,7 +169,8 @@ export function generateVmRuntime(options: {
 			mixedBooleanArithmetic,
 			handlerFragmentation,
 		},
-		split
+		split,
+		hasAsyncUnits
 	);
 
 	// Handler table + key anchor init (must come before rolling cipher
@@ -253,6 +259,8 @@ export interface ShieldingGroup {
 	integrityHash?: number;
 	/** Per-group cipher salt for rolling cipher key derivation. */
 	cipherSalt?: number;
+	/** Whether this group contains async units. */
+	hasAsyncUnits?: boolean;
 }
 
 /** Result from generating the shielded VM runtime. */
@@ -360,7 +368,8 @@ export function generateShieldedVmRuntime(options: {
 		}
 
 		// Build interpreter core (per-group) — produces handler table init
-		// + key anchor + interpreter function bodies
+		// + key anchor + interpreter function bodies.
+		// When group has no async units, only the sync interpreter is emitted.
 		const interpResult = buildInterpreterFunctions(
 			gn,
 			gt,
@@ -376,7 +385,8 @@ export function generateShieldedVmRuntime(options: {
 				mixedBooleanArithmetic,
 				handlerFragmentation,
 			},
-			groupSplit
+			groupSplit,
+			group.hasAsyncUnits ?? true
 		);
 
 		// Handler table + key anchor init (must come before rolling cipher
