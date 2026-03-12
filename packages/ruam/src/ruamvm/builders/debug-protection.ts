@@ -5,18 +5,17 @@
  * with AST-based construction.  All six detection layers, escalating response
  * logic, and scheduler are built from structured AST nodes.
  *
+ * No `debugger` statements are used — fully CSP/TrustedScript compatible.
+ *
  * Detection layers:
- *   1. Polymorphic debugger invocation with dual-clock timing
- *   2. Statistical jitter analysis (multiple rapid probes, variance check)
- *   3. Environment analysis (--inspect flags, stack trace anomalies)
- *   4. Function integrity self-verification (FNV-1a checksum of own source)
- *   5. Native API integrity (console methods, Function.prototype.toString)
- *   6. Global property trap canary (browser DevTools enumeration)
+ *   1. Built-in prototype integrity (Object/Array/JSON method monkey-patch detection)
+ *   2. Environment analysis (--inspect flags, stack trace anomalies)
+ *   3. Function integrity self-verification (FNV-1a checksum of own source)
  *
  * Response escalation:
  *   Level 1-2: Silent bytecode instruction corruption (wrong opcode dispatch)
  *   Level 3-4: Cache wipe + constants array destruction
- *   Level 5+:  Infinite debugger loop (hard lockout)
+ *   Level 5+:  Total bytecode annihilation + infinite busy loop
  *
  * @module ruamvm/builders/debug-protection
  */
@@ -45,7 +44,6 @@ import {
 	obj,
 	fnExpr,
 	assign,
-	debuggerStmt,
 	newExpr,
 	getter,
 	method,
@@ -95,7 +93,6 @@ export function buildDebugProtection(
 	names: RuntimeNames,
 	temps: TempNames
 ): JsNode[] {
-	const T = names.thresh;
 	const BT = names.bt;
 	const CA = names.cache;
 
@@ -108,10 +105,6 @@ export function buildDebugProtection(
 	const sevId = id(Z("_sev"));
 	const btId = id(BT);
 	const caId = id(CA);
-	const dmId = id(Z("_dm"));
-	const nowId = id(Z("_now"));
-	const thId = id(Z("_th"));
-	const tlId = id(Z("_tl"));
 	const pbId = id(Z("_pb"));
 	const fhId = id(Z("_fh"));
 	const dbgId = id(dbgName);
@@ -119,130 +112,16 @@ export function buildDebugProtection(
 	// --- Body statements ---
 	const body: JsNode[] = [];
 
-	// var T=100;
-	body.push(v(T, lit(100)));
-
-	// --- _dm: debugger methods array ---
-	// Four CSP-safe polymorphic debugger triggers (no eval/Function).
-	// Each hides `debugger` behind a different invocation path so automated
-	// stripping tools can't pattern-match all four at once.
-	body.push(
-		v(
-			Z("_dm"),
-			arr(
-				// Method 0: plain debugger statement
-				fnExpr(undefined, [], [debuggerStmt()]),
-				// Method 1: toString coercion trap
-				// var _o={toString(){debugger;return "";}}; ""+_o;
-				fnExpr(
-					undefined,
-					[],
-					[
-						v(
-							Z("_o"),
-							obj(
-								method(
-									"toString",
-									[],
-									[debuggerStmt(), returnStmt(lit(""))]
-								)
-							)
-						),
-						es(bin("+", lit(""), id(Z("_o")))),
-					]
-				),
-				// Method 2: valueOf coercion trap
-				// var _o={valueOf(){debugger;return 0;}}; +_o;
-				fnExpr(
-					undefined,
-					[],
-					[
-						v(
-							Z("_o"),
-							obj(
-								method(
-									"valueOf",
-									[],
-									[debuggerStmt(), returnStmt(lit(0))]
-								)
-							)
-						),
-						es(un("+", id(Z("_o")))),
-					]
-				),
-				// Method 3: getter trap
-				// var _o={get v(){debugger;return 0;}}; _o.v;
-				fnExpr(
-					undefined,
-					[],
-					[
-						v(
-							Z("_o"),
-							obj(
-								getter("v", [
-									debuggerStmt(),
-									returnStmt(lit(0)),
-								])
-							)
-						),
-						es(m(id(Z("_o")), "v")),
-					]
-				)
-			)
-		)
-	);
-
-	// var _hr=(typeof performance!=='undefined'&&typeof performance.now==='function')?performance:null;
-	body.push(
-		v(
-			Z("_hr"),
-			ternary(
-				bin(
-					"&&",
-					bin(
-						"!==",
-						un("typeof", id("performance")),
-						lit("undefined")
-					),
-					bin(
-						"===",
-						un("typeof", m(id("performance"), "now")),
-						lit("function")
-					)
-				),
-				id("performance"),
-				lit(null)
-			)
-		)
-	);
-
-	// var _now=_hr?function(){return _hr.now();}:Date.now;
-	body.push(
-		v(
-			Z("_now"),
-			ternary(
-				id(Z("_hr")),
-				fnExpr(
-					undefined,
-					[],
-					[returnStmt(mcall(id(Z("_hr")), "now", []))]
-				),
-				m(id("Date"), "now")
-			)
-		)
-	);
-
 	// var _sev=0;
 	body.push(v(Z("_sev"), lit(0)));
+	// var _dc=0; (detection count — must reach threshold before escalating)
+	body.push(v(Z("_d"), lit(0)));
 
 	// --- function _act() ---
 	body.push(buildActFunction(sevId, btId, caId, Z));
 
-	// --- function _p1() (dual-clock timing) ---
-	body.push(buildP1(nowId, dmId, id(T), Z));
-
-	// --- function _p2() (jitter analysis) ---
-	body.push(buildP2(nowId, dmId, Z));
+	// --- function _p1() (built-in prototype integrity) ---
+	body.push(buildP1(Z));
 
 	// --- function _p3() (environment analysis) ---
 	body.push(buildP3(Z));
@@ -288,87 +167,8 @@ export function buildDebugProtection(
 	// --- function _p4() (integrity self-check) ---
 	body.push(buildP4(dbgId, fhId, Z));
 
-	// --- function _p5() (native API integrity) ---
-	body.push(buildP5(Z));
-
-	// --- Trap canary setup ---
-	// var _th=0; var _tl=0;
-	body.push(v(Z("_th"), lit(0)));
-	body.push(v(Z("_tl"), lit(0)));
-
-	// if(typeof window!=='undefined'){try{...}catch(_){}}
-	body.push(
-		ifStmt(bin("!==", un("typeof", id("window")), lit("undefined")), [
-			tryCatch(
-				[
-					// var _gk='__'+Math.random().toString(36).slice(2,6);
-					v(
-						Z("_gk"),
-						bin(
-							"+",
-							lit("__"),
-							mcall(
-								mcall(
-									call(m(id("Math"), "random"), []),
-									"toString",
-									[lit(36)]
-								),
-								"slice",
-								[lit(2), lit(6)]
-							)
-						)
-					),
-					// Object.defineProperty(window,_gk,{get:function(){_th++;return void 0;},configurable:true,enumerable:true});
-					es(
-						mcall(id("Object"), "defineProperty", [
-							id("window"),
-							id(Z("_gk")),
-							obj(
-								[
-									"get",
-									fnExpr(
-										undefined,
-										[],
-										[
-											es(
-												assign(
-													thId,
-													bin("+", thId, lit(1))
-												)
-											),
-											returnStmt(un("void", lit(0))),
-										]
-									),
-								],
-								["configurable", lit(true)],
-								["enumerable", lit(true)]
-							),
-						])
-					),
-				],
-				"_",
-				[]
-			),
-		])
-	);
-
-	// --- function _p6() (trap canary check) ---
-	body.push(buildP6(thId, tlId, Z));
-
-	// var _pb=[_p1,_p2,_p3,_p4,_p5,_p6];
-	body.push(
-		v(
-			Z("_pb"),
-			arr(
-				id(Z("_p1")),
-				id(Z("_p2")),
-				id(Z("_p3")),
-				id(Z("_p4")),
-				id(Z("_p5")),
-				id(Z("_p6"))
-			)
-		)
-	);
+	// var _pb=[_p1,_p3,_p4];
+	body.push(v(Z("_pb"), arr(id(Z("_p1")), id(Z("_p3")), id(Z("_p4")))));
 
 	// --- function _run() ---
 	body.push(buildRun(pbId, sevId, Z));
@@ -413,6 +213,10 @@ export function buildDebugProtection(
 
 /**
  * Build _act() — escalating response function.
+ *
+ * Level 1-2: Silent bytecode instruction corruption
+ * Level 3-4: Cache wipe + constants array destruction
+ * Level 5+:  Total bytecode annihilation + infinite busy loop (no debugger statements)
  */
 function buildActFunction(
 	sevId: JsNode,
@@ -593,8 +397,80 @@ function buildActFunction(
 								[]
 							),
 						],
-						// else{while(true){debugger;}}
-						[whileStmt(lit(true), [debuggerStmt()])]
+						// else { total annihilation — zero out all instruction arrays + constants + infinite busy loop }
+						[
+							// Wipe all bytecode entries completely
+							tryCatch(
+								[
+									v(
+										Z("_ks"),
+										mcall(id("Object"), "keys", [btId])
+									),
+									forStmt(
+										v(Z("_ki"), lit(0)),
+										bin(
+											"<",
+											id(Z("_ki")),
+											m(id(Z("_ks")), "length")
+										),
+										assign(
+											id(Z("_ki")),
+											bin("+", id(Z("_ki")), lit(1))
+										),
+										[
+											v(
+												Z("_ue"),
+												index(
+													btId,
+													index(
+														id(Z("_ks")),
+														id(Z("_ki"))
+													)
+												)
+											),
+											ifStmt(id(Z("_ue")), [
+												// Zero out instructions
+												es(
+													assign(
+														m(id(Z("_ue")), "i"),
+														arr()
+													)
+												),
+												// Wipe constants
+												es(
+													assign(
+														m(id(Z("_ue")), "c"),
+														arr()
+													)
+												),
+											]),
+										]
+									),
+								],
+								"_",
+								[]
+							),
+							// Wipe cache
+							tryCatch(
+								[
+									forIn(Z("_k"), caId, [
+										es(
+											un(
+												"delete",
+												index(caId, id(Z("_k")))
+											)
+										),
+									]),
+								],
+								"_",
+								[]
+							),
+							// Infinite busy loop — freezes the JS thread
+							// while(true){_sev++;}
+							whileStmt(lit(true), [
+								es(assign(sevId, bin("+", sevId, lit(1)))),
+							]),
+						]
 					),
 				]
 			),
@@ -603,132 +479,73 @@ function buildActFunction(
 }
 
 /**
- * Build _p1() — polymorphic debugger invocation with dual-clock timing.
+ * Build _p1() — Built-in prototype integrity check.
+ *
+ * Detects monkey-patching of core Object/Array/JSON methods, a common
+ * technique used by reverse engineers to intercept VM operations.
+ * Complementary to _p5() which checks console methods.
+ *
+ * Fully CSP/TrustedScript safe — no console, eval, or debugger usage.
  */
-function buildP1(
-	nowId: JsNode,
-	dmId: JsNode,
-	threshId: JsNode,
-	Z: (key: string) => string
-): JsNode {
+function buildP1(Z: (key: string) => string): JsNode {
 	return fn(
 		Z("_p1"),
 		[],
 		[
-			// var _s1=_now();
-			v(Z("_s1"), call(nowId, [])),
-			// var _s2=Date.now();
-			v(Z("_s2"), mcall(id("Date"), "now", [])),
-			// _dm[(_s2&3)]();
-			es(call(index(dmId, band(id(Z("_s2")), lit(3))), [])),
-			// var _e1=_now()-_s1;
-			v(Z("_e1"), bin("-", call(nowId, []), id(Z("_s1")))),
-			// var _e2=Date.now()-_s2;
-			v(Z("_e2"), bin("-", mcall(id("Date"), "now", []), id(Z("_s2")))),
-			// return _e1>T||_e2>T;
-			returnStmt(
-				bin(
-					"||",
-					bin(">", id(Z("_e1")), threshId),
-					bin(">", id(Z("_e2")), threshId)
-				)
-			),
-		]
-	);
-}
-
-/**
- * Build _p2() — statistical jitter analysis.
- */
-function buildP2(
-	nowId: JsNode,
-	dmId: JsNode,
-	Z: (key: string) => string
-): JsNode {
-	const tsId = id(Z("_ts"));
-	return fn(
-		Z("_p2"),
-		[],
-		[
-			// var _ts=[];
-			v(Z("_ts"), arr()),
-			// for(var _i=0;_i<3;_i++){var _s=_now();_dm[_i%_dm.length]();_ts.push(_now()-_s);}
-			forStmt(
-				v(Z("_i"), lit(0)),
-				bin("<", id(Z("_i")), lit(3)),
-				assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
+			tryCatch(
 				[
-					v(Z("_s"), call(nowId, [])),
-					es(
-						call(
-							index(
-								dmId,
-								bin("%", id(Z("_i")), m(dmId, "length"))
-							),
-							[]
-						)
-					),
-					es(
-						mcall(tsId, "push", [
-							bin("-", call(nowId, []), id(Z("_s"))),
-						])
-					),
-				]
-			),
-			// var _sm=0;
-			v(Z("_sm"), lit(0)),
-			// for(var _i=0;_i<_ts.length;_i++)_sm+=_ts[_i];
-			forStmt(
-				v(Z("_i"), lit(0)),
-				bin("<", id(Z("_i")), m(tsId, "length")),
-				assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
-				[
-					es(
-						assign(
-							id(Z("_sm")),
-							bin("+", id(Z("_sm")), index(tsId, id(Z("_i"))))
-						)
-					),
-				]
-			),
-			// var _av=_sm/_ts.length;
-			v(Z("_av"), bin("/", id(Z("_sm")), m(tsId, "length"))),
-			// var _vr=0;
-			v(Z("_vr"), lit(0)),
-			// for(var _i=0;_i<_ts.length;_i++){var _d=_ts[_i]-_av;_vr+=_d*_d;}
-			forStmt(
-				v(Z("_i"), lit(0)),
-				bin("<", id(Z("_i")), m(tsId, "length")),
-				assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
-				[
+					// var _nc='[native code]';
+					v(Z("_nc"), lit("[native code]")),
+					// var _fn=[Object.keys,Object.defineProperty,Array.prototype.push,Array.prototype.slice,JSON.stringify];
 					v(
-						Z("_d"),
-						bin("-", index(tsId, id(Z("_i"))), id(Z("_av")))
-					),
-					es(
-						assign(
-							id(Z("_vr")),
-							bin(
-								"+",
-								id(Z("_vr")),
-								bin("*", id(Z("_d")), id(Z("_d")))
-							)
+						Z("_fn"),
+						arr(
+							m(id("Object"), "keys"),
+							m(id("Object"), "defineProperty"),
+							m(m(id("Array"), "prototype"), "push"),
+							m(m(id("Array"), "prototype"), "slice"),
+							m(id("JSON"), "stringify")
 						)
 					),
-				]
-			),
-			// return(_vr/_ts.length)>500||_av>50;
-			returnStmt(
-				bin(
-					"||",
-					bin(
-						">",
-						bin("/", id(Z("_vr")), m(tsId, "length")),
-						lit(500)
+					// for(var _i=0;_i<_fn.length;_i++){
+					forStmt(
+						v(Z("_i"), lit(0)),
+						bin("<", id(Z("_i")), m(id(Z("_fn")), "length")),
+						assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
+						[
+							// var _ts=Function.prototype.toString.call(_fn[_i]);
+							v(
+								Z("_ts"),
+								call(
+									m(
+										m(
+											m(id("Function"), "prototype"),
+											"toString"
+										),
+										"call"
+									),
+									[index(id(Z("_fn")), id(Z("_i")))]
+								)
+							),
+							// if(_ts.indexOf(_nc)===-1)return true;
+							ifStmt(
+								bin(
+									"===",
+									mcall(id(Z("_ts")), "indexOf", [
+										id(Z("_nc")),
+									]),
+									lit(-1)
+								),
+								[returnStmt(lit(true))]
+							),
+						]
 					),
-					bin(">", id(Z("_av")), lit(50))
-				)
+				],
+				"_",
+				[]
 			),
+			// return false;
+			returnStmt(lit(false)),
 		]
 	);
 }
@@ -860,150 +677,6 @@ function buildP4(
 }
 
 /**
- * Build _p5() — native API integrity (console methods + Function.prototype.toString).
- */
-function buildP5(Z: (key: string) => string): JsNode {
-	return fn(
-		Z("_p5"),
-		[],
-		[
-			tryCatch(
-				[
-					// if(typeof console==='undefined')return false;
-					ifStmt(
-						bin(
-							"===",
-							un("typeof", id("console")),
-							lit("undefined")
-						),
-						[returnStmt(lit(false))]
-					),
-					// var _nc='[native code]';
-					v(Z("_nc"), lit("[native code]")),
-					// var _fn=['log','warn','error','table','dir','trace','clear'];
-					v(
-						Z("_fn"),
-						arr(
-							lit("log"),
-							lit("warn"),
-							lit("error"),
-							lit("table"),
-							lit("dir"),
-							lit("trace"),
-							lit("clear")
-						)
-					),
-					// for(var _i=0;_i<_fn.length;_i++){...}
-					forStmt(
-						v(Z("_i"), lit(0)),
-						bin("<", id(Z("_i")), m(id(Z("_fn")), "length")),
-						assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
-						[
-							// if(typeof console[_fn[_i]]==='function'){...}
-							ifStmt(
-								bin(
-									"===",
-									un(
-										"typeof",
-										index(
-											id("console"),
-											index(id(Z("_fn")), id(Z("_i")))
-										)
-									),
-									lit("function")
-								),
-								[
-									// var _ts=Function.prototype.toString.call(console[_fn[_i]]);
-									v(
-										Z("_ts"),
-										call(
-											m(
-												m(
-													m(
-														id("Function"),
-														"prototype"
-													),
-													"toString"
-												),
-												"call"
-											),
-											[
-												index(
-													id("console"),
-													index(
-														id(Z("_fn")),
-														id(Z("_i"))
-													)
-												),
-											]
-										)
-									),
-									// if(_ts.indexOf(_nc)===-1)return true;
-									ifStmt(
-										bin(
-											"===",
-											mcall(id(Z("_ts")), "indexOf", [
-												id(Z("_nc")),
-											]),
-											lit(-1)
-										),
-										[returnStmt(lit(true))]
-									),
-								]
-							),
-						]
-					),
-					// var _ft=Function.prototype.toString.toString();
-					v(
-						Z("_ft"),
-						mcall(
-							m(m(id("Function"), "prototype"), "toString"),
-							"toString",
-							[]
-						)
-					),
-					// if(_ft.indexOf(_nc)===-1)return true;
-					ifStmt(
-						bin(
-							"===",
-							mcall(id(Z("_ft")), "indexOf", [id(Z("_nc"))]),
-							lit(-1)
-						),
-						[returnStmt(lit(true))]
-					),
-				],
-				"_",
-				[]
-			),
-			// return false;
-			returnStmt(lit(false)),
-		]
-	);
-}
-
-/**
- * Build _p6() — global property trap canary.
- */
-function buildP6(
-	thId: JsNode,
-	tlId: JsNode,
-	Z: (key: string) => string
-): JsNode {
-	return fn(
-		Z("_p6"),
-		[],
-		[
-			// var _d=_th-_tl;
-			v(Z("_d"), bin("-", thId, tlId)),
-			// _tl=_th;
-			es(assign(tlId, thId)),
-			// return _d>3;
-			returnStmt(bin(">", id(Z("_d")), lit(3))),
-		]
-	);
-}
-
-/**
  * Build _run() — main detection loop with random probe selection and setTimeout recursion.
  */
 function buildRun(
@@ -1060,8 +733,20 @@ function buildRun(
 					),
 				]
 			),
-			// if(_det)_act();
-			ifStmt(id(Z("_det")), [es(call(id(Z("_act")), []))]),
+			// if(_det){_d++;if(_d>=3)_act();}else{_d=0;}
+			// Require 3 consecutive detection rounds before escalating.
+			// A single false positive (e.g. DevTools open, sidebar) resets on next clean round.
+			ifStmt(
+				id(Z("_det")),
+				[
+					es(assign(id(Z("_d")), bin("+", id(Z("_d")), lit(1)))),
+					ifStmt(bin(">=", id(Z("_d")), lit(3)), [
+						es(call(id(Z("_act")), [])),
+					]),
+				],
+				// else: reset detection counter (transient false positive)
+				[es(assign(id(Z("_d")), lit(0)))]
+			),
 			// if(_sev<5){var _nx=2000+((Math.random()*5000)|0);var _tid=setTimeout(_run,_nx);if(typeof _tid==='object'&&_tid.unref)_tid.unref();}
 			ifStmt(bin("<", sevId, lit(5)), [
 				v(

@@ -52,6 +52,9 @@ import {
 	LCG_INCREMENT,
 } from "../../constants.js";
 import { obfuscateLocals } from "../transforms.js";
+import { applyMBA } from "../mba.js";
+import { fragmentCases } from "../handler-fragmentation.js";
+import type { SwitchStmt } from "../nodes.js";
 
 /** Options for interpreter filtering and hardening. */
 export interface InterpreterBuildOptions {
@@ -59,6 +62,8 @@ export interface InterpreterBuildOptions {
 	decoyOpcodes?: boolean;
 	stackEncoding?: boolean;
 	usedOpcodes?: Set<number>;
+	mixedBooleanArithmetic?: boolean;
+	handlerFragmentation?: boolean;
 }
 
 /**
@@ -167,7 +172,7 @@ export function buildExecFunction(
 
 	// Build handler table init statements and remapped cases
 	const htInit: JsNode[] = [varDecl(htName, obj())];
-	const cases: CaseClause[] = [];
+	let cases: CaseClause[] = [];
 
 	for (let i = 0; i < rawCases.length; i++) {
 		const rawCase = rawCases[i]!;
@@ -188,9 +193,66 @@ export function buildExecFunction(
 	// Default case
 	cases.push(caseClause(null, [breakStmt()]));
 
-	// Build the scaffold as AST with the switch cases
-	// Switch discriminant is _ht[PH] instead of PH directly
-	const switchNode = switchStmt(index(id(htName), id(ctx.PH)), cases);
+	// --- MBA: replace arithmetic/bitwise ops with MBA expressions ---
+	if (opts.interpOpts.mixedBooleanArithmetic) {
+		cases = cases.map((c) => {
+			if (c.label === null) return c; // skip default case
+			const transformedBody = applyMBA(c.body, opts.seed);
+			return caseClause(c.label, transformedBody);
+		});
+	}
+
+	// --- Handler fragmentation: split handlers into interleaved fragments ---
+	let dispatchNodes: JsNode[];
+	let finalHtInit: JsNode[];
+
+	if (opts.interpOpts.handlerFragmentation) {
+		const nfName = temps["_nf"];
+		if (nfName === undefined) throw new Error("Missing temp: _nf");
+
+		// Fragment the case bodies
+		const fragResult = fragmentCases(cases, nfName, opts.seed);
+
+		// Rebuild htInit with remapped labels (physicalOp → first-fragment ID)
+		finalHtInit = [htInit[0]!]; // var _ht = {}
+		for (let h = 1; h < htInit.length; h++) {
+			const stmt = htInit[h]!;
+			if (stmt.type !== "ExprStmt") {
+				finalHtInit.push(stmt);
+				continue;
+			}
+			const expr = (stmt as { type: "ExprStmt"; expr: JsNode }).expr;
+			if (expr.type !== "AssignExpr") {
+				finalHtInit.push(stmt);
+				continue;
+			}
+			const oldLabel =
+				expr.value.type === "Literal"
+					? (expr.value.value as number)
+					: -1;
+			const newLabel = fragResult.labelMap.get(oldLabel);
+			if (newLabel !== undefined) {
+				finalHtInit.push(exprStmt(assign(expr.target, lit(newLabel))));
+			} else {
+				finalHtInit.push(stmt);
+			}
+		}
+
+		// Build dispatch: var _nf=_ht[PH]; for(;;){ switch(_nf){...} break; }
+		const fragSwitch = switchStmt(
+			id(nfName),
+			fragResult.cases
+		) as SwitchStmt;
+		dispatchNodes = [
+			varDecl(nfName, index(id(htName), id(ctx.PH))),
+			forStmt(null, null, null, [fragSwitch, breakStmt()]),
+		];
+	} else {
+		finalHtInit = htInit;
+		// Standard dispatch: switch(_ht[PH]){...}
+		dispatchNodes = [switchStmt(index(id(htName), id(ctx.PH)), cases)];
+	}
+
 	const fnNode = buildScaffoldAST(
 		names,
 		temps,
@@ -198,8 +260,8 @@ export function buildExecFunction(
 		opts.debug,
 		opts.rollingCipher,
 		opts.interpOpts,
-		switchNode,
-		htInit,
+		dispatchNodes,
+		finalHtInit,
 		opts.split
 	);
 
@@ -222,7 +284,7 @@ export function buildExecFunction(
  * @param debug - Whether debug logging is enabled
  * @param rollingCipher - Whether rolling cipher decryption is enabled
  * @param interpOpts - Interpreter build options
- * @param switchNode - The switch statement AST node (with all cases)
+ * @param dispatchNodes - The dispatch AST nodes (switch or fragmented for-loop)
  * @param htInit - Handler table initialization statements (dispatch indirection)
  * @param split - Optional constant splitter for numeric obfuscation
  * @returns FnDecl AST node for the complete interpreter function
@@ -234,7 +296,7 @@ function buildScaffoldAST(
 	debug: boolean,
 	rollingCipher: boolean,
 	interpOpts: InterpreterBuildOptions,
-	switchNode: JsNode,
+	dispatchNodes: JsNode[],
 	htInit?: JsNode[],
 	split?: SplitFn
 ): JsNode {
@@ -444,8 +506,8 @@ function buildScaffoldAST(
 		);
 	}
 
-	// The switch statement
-	whileBody.push(switchNode);
+	// Dispatch: either a plain switch or fragmented for-loop + switch
+	whileBody.push(...dispatchNodes);
 
 	// Inner try body: while(IP<_il){...}; return void 0;
 	const innerTryBody: JsNode[] = [

@@ -57,6 +57,8 @@ export function generateVmRuntime(options: {
 	integrityHash?: number;
 	usedOpcodes?: Set<number>;
 	cipherSalt?: number;
+	mixedBooleanArithmetic?: boolean;
+	handlerFragmentation?: boolean;
 }): string {
 	const {
 		opcodeShuffleMap,
@@ -75,6 +77,8 @@ export function generateVmRuntime(options: {
 		integrityHash,
 		usedOpcodes,
 		cipherSalt,
+		mixedBooleanArithmetic = false,
+		handlerFragmentation = false,
 	} = options;
 
 	// Create constant splitter — replaces well-known numeric literals with
@@ -137,6 +141,8 @@ export function generateVmRuntime(options: {
 				decoyOpcodes,
 				stackEncoding,
 				usedOpcodes,
+				mixedBooleanArithmetic,
+				handlerFragmentation,
 			},
 			split
 		)
@@ -210,6 +216,8 @@ export function generateShieldedVmRuntime(options: {
 	decoyOpcodes?: boolean;
 	stackEncoding?: boolean;
 	integrityBinding?: boolean;
+	mixedBooleanArithmetic?: boolean;
+	handlerFragmentation?: boolean;
 }): string {
 	const {
 		groups,
@@ -221,6 +229,8 @@ export function generateShieldedVmRuntime(options: {
 		decoyOpcodes = false,
 		stackEncoding = false,
 		integrityBinding = false,
+		mixedBooleanArithmetic = false,
+		handlerFragmentation = false,
 	} = options;
 
 	// Shared constant splitter for shared builders (fingerprint, decoder)
@@ -294,6 +304,8 @@ export function generateShieldedVmRuntime(options: {
 					decoyOpcodes,
 					stackEncoding,
 					usedOpcodes: group.usedOpcodes,
+					mixedBooleanArithmetic,
+					handlerFragmentation,
 				},
 				groupSplit
 			)

@@ -14,7 +14,11 @@
  */
 
 import { obfuscateFile } from "./index.js";
-import type { VmObfuscationOptions, PresetName } from "./types.js";
+import type {
+	VmObfuscationOptions,
+	PresetName,
+	TargetEnvironment,
+} from "./types.js";
 import fs from "fs-extra";
 import path from "path";
 import chalk from "chalk";
@@ -61,6 +65,8 @@ const OPTION_LABELS: Record<string, string> = {
 	rollingCipher: "Rolling Cipher",
 	integrityBinding: "Integrity Binding",
 	vmShielding: "VM Shielding",
+	mixedBooleanArithmetic: "Mixed Boolean Arithmetic",
+	handlerFragmentation: "Handler Fragmentation",
 };
 
 // --- CLI Argument Types ---
@@ -312,6 +318,15 @@ function parseArgs(argv: string[]): CliArgs {
 			case "--vm-shielding":
 				result.options.vmShielding = true;
 				break;
+			case "--mba":
+				result.options.mixedBooleanArithmetic = true;
+				break;
+			case "--handler-fragmentation":
+				result.options.handlerFragmentation = true;
+				break;
+			case "--target":
+				result.options.target = nextArg(arg) as TargetEnvironment;
+				break;
 			case "--include":
 				result.include = [nextArg(arg)];
 				break;
@@ -444,6 +459,16 @@ function printHelp(version: string): void {
 	console.log(
 		`    ${f("--vm-shielding")}            Per-function micro-interpreters`
 	);
+	console.log(
+		`    ${f(
+			"--mba"
+		)}                      Mixed boolean arithmetic obfuscation`
+	);
+	console.log(
+		`    ${f(
+			"--handler-fragmentation"
+		)}   Split handlers into interleaved fragments`
+	);
 	console.log();
 
 	console.log(h("  FILES"));
@@ -456,6 +481,23 @@ function printHelp(version: string): void {
 		`    ${f("--exclude")} ${a("<glob>")}          Exclude glob ${d(
 			'(default: "**/node_modules/**")'
 		)}`
+	);
+	console.log();
+
+	console.log(h("  ENVIRONMENT"));
+	console.log(
+		`    ${f("--target")} ${a("<env>")}             Target environment`
+	);
+	console.log(
+		`      ${chalk.cyan("node")}               Node.js (CJS / ESM)`
+	);
+	console.log(
+		`      ${chalk.cyan("browser")}            Plain browser scripts ${d(
+			"(default)"
+		)}`
+	);
+	console.log(
+		`      ${chalk.cyan("browser-extension")}  Chrome extension MAIN world`
 	);
 	console.log();
 

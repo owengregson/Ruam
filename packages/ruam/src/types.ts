@@ -8,6 +8,19 @@
 /** Preset names that group multiple options. */
 export type PresetName = "low" | "medium" | "max";
 
+/**
+ * Target execution environment.
+ *
+ * Controls environment-specific output settings (e.g. IIFE wrapping).
+ * Explicit options always override target defaults.
+ *
+ * - `"node"` — Node.js (CJS or ESM modules).
+ * - `"browser"` — Plain browser scripts (`<script>` tags). **Default.**
+ * - `"browser-extension"` — Chrome extension MAIN world content scripts.
+ *   Wraps output in an IIFE to avoid TrustedScript CSP errors.
+ */
+export type TargetEnvironment = "node" | "browser" | "browser-extension";
+
 /** Options accepted by {@link obfuscateCode} and the CLI. */
 export interface VmObfuscationOptions {
 	/**
@@ -108,6 +121,45 @@ export interface VmObfuscationOptions {
 	 * Automatically enables {@link rollingCipher}.
 	 */
 	vmShielding?: boolean;
+
+	/**
+	 * Replace arithmetic and bitwise operations in the interpreter with
+	 * equivalent mixed boolean-arithmetic (MBA) expressions.
+	 *
+	 * Infrastructure operations (stack pointer, IP, indices) are transformed
+	 * directly. User-value arithmetic (`+`, `-`) is wrapped with a runtime
+	 * int32 guard that uses the MBA path for integers and falls back to
+	 * the clean operator for floats, strings, etc.
+	 *
+	 * MBA expressions are nested to depth 2 for additional obfuscation.
+	 */
+	mixedBooleanArithmetic?: boolean;
+
+	/**
+	 * Split each opcode handler into 2-3 fragments scattered across
+	 * the interpreter switch as separate case labels.
+	 *
+	 * A next-fragment variable chains fragments via `continue`, turning
+	 * the handler dispatch into a flat state machine with hundreds of
+	 * interleaved micro-states. Reverse engineers must trace fragment
+	 * connections across the entire switch to reconstruct any single
+	 * opcode's logic.
+	 */
+	handlerFragmentation?: boolean;
+
+	/**
+	 * Target execution environment.
+	 *
+	 * Controls environment-specific output settings. Explicit options
+	 * always override target defaults. Defaults to `"browser"`.
+	 *
+	 * - `"node"` — Node.js (CJS or ESM modules).
+	 * - `"browser"` — Plain browser scripts (`<script>` tags).
+	 * - `"browser-extension"` — Chrome extension MAIN world content scripts.
+	 *   Wraps output in an IIFE to avoid TrustedScript CSP errors on pages
+	 *   with `require-trusted-types-for 'script'`.
+	 */
+	target?: TargetEnvironment;
 }
 
 // --- Bytecode Data Structures ---
