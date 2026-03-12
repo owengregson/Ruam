@@ -37,7 +37,7 @@ export default function Navbar() {
 			<div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
 				{/* Logo */}
 				<a href="#" className="flex items-center gap-2.5">
-					<Image src="/ruam.svg" alt="Ruam" width={26} height={26} />
+					<Image src={`${process.env.NEXT_PUBLIC_BASE_PATH}/ruam.svg`} alt="Ruam" width={26} height={26} />
 					<span className="font-display text-lg italic text-snow">
 						ruam
 					</span>

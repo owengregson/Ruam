@@ -7,7 +7,7 @@ export default function Footer() {
 		<footer className="border-t border-edge/30 py-10">
 			<div className="mx-auto flex max-w-4xl flex-col items-center justify-between gap-4 px-6 sm:flex-row">
 				<div className="flex items-center gap-2.5">
-					<Image src="/ruam.svg" alt="Ruam" width={20} height={20} />
+					<Image src={`${process.env.NEXT_PUBLIC_BASE_PATH}/ruam.svg`} alt="Ruam" width={20} height={20} />
 					<span className="font-mono text-xs text-ash">
 						ruam &middot; made with ❤️ by{" "}
 						<a
