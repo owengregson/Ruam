@@ -3,8 +3,14 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/ruam/**'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/ruam/**'
+      - '.github/workflows/ci.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -24,8 +30,10 @@ jobs:
           node-version: 20
           cache: npm
 
+      # npm ci can miss platform-specific optional dependencies in workspaces
+      # (https://github.com/npm/cli/issues/4828). npm install handles this correctly.
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build packages
         run: npx turbo run build --filter=ruam
@@ -45,42 +53,3 @@ jobs:
         with:
           name: stats
           path: packages/ruam/stats.json
-
-  deploy:
-    name: Deploy to GitHub Pages
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build library (dependency)
-        run: npx turbo run build --filter=ruam
-
-      - name: Build website
-        run: npx turbo run build --filter=web
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/web/out
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
