@@ -227,6 +227,16 @@ export const MIX_PRIME2 = 0xc2b2ae35;
 /** Murmur3 avalanche constant. */
 export const AVALANCHE_CONSTANT = 0x45d9f3b;
 
+/**
+ * Steganographic watermark magic value — FNV-1a hash of "ruam".
+ *
+ * XOR-folded into the key anchor during handler table initialization.
+ * Invisible in output (no dedicated variable or string), but provably
+ * present: removing this step from the key anchor computation breaks
+ * all rolling cipher instruction decryption.
+ */
+export const WATERMARK_MAGIC = 0x2812af9a;
+
 // --- Binary Format Type Tags ---
 // Shared between encode.ts (build-time) and deserializer.ts (runtime).
 

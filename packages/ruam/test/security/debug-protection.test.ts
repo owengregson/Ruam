@@ -37,7 +37,8 @@ describe("Debug Protection", () => {
 				preset: "max",
 			});
 			expect(output).toBeTruthy();
-			expect(output).toContain("_ru4m");
+			// Watermark is steganographic — no visible _ru4m variable
+			expect(output).not.toContain("_ru4m");
 		});
 	});
 

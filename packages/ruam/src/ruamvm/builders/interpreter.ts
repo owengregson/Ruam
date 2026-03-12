@@ -50,6 +50,7 @@ import {
 	VM_MAX_RECURSION_DEPTH,
 	LCG_MULTIPLIER,
 	LCG_INCREMENT,
+	WATERMARK_MAGIC,
 } from "../../constants.js";
 import { obfuscateLocals } from "../transforms.js";
 import { applyMBA } from "../mba.js";
@@ -305,12 +306,15 @@ function buildHandlerTableMeta(
 		rk = (Math.imul(rk ^ physicalOp, 0x45d9f3b) ^ handlerIdx) >>> 0;
 	}
 
-	// Compute key anchor: FNV-1a checksum of encoded data
-	let anchor = 0x811c9dc5;
+	// Compute key anchor: FNV-1a checksum of encoded data.
+	// Offset basis is FNV_OFFSET_BASIS ^ WATERMARK_MAGIC (steganographic
+	// watermark — alters the FNV seed so the watermark is provably present
+	// but invisible in the output; no dedicated variable or string).
+	const WM_OFFSET = (0x811c9dc5 ^ WATERMARK_MAGIC) >>> 0;
+	let anchor = WM_OFFSET;
 	for (const v of encodedData) {
 		anchor = Math.imul(anchor ^ v, 0x01000193) >>> 0;
 	}
-	anchor = anchor >>> 0;
 
 	// --- Build IIFE-scope initialization AST ---
 	const initNodes: JsNode[] = [];
@@ -384,12 +388,12 @@ function buildHandlerTableMeta(
 		)
 	);
 
-	// Key anchor: FNV-1a checksum of packed data
-	// var _ka = 0x811C9DC5;
-	// for(var _hti=0; _hti<_htd.length; _hti++) {
-	//   _ka = Math.imul(_ka ^ _htd[_hti], 0x01000193) >>> 0;
-	// }
-	initNodes.push(varDecl(names.keyAnchor, L(0x811c9dc5)));
+	// Key anchor: FNV-1a checksum with watermarked offset basis.
+	// Uses WM_OFFSET (= FNV_OFFSET_BASIS ^ WATERMARK_MAGIC) instead of
+	// the standard FNV offset basis. The watermark is invisible — just
+	// a non-standard starting value. Provably present: computing with
+	// the standard basis would break all rolling cipher decryption.
+	initNodes.push(varDecl(names.keyAnchor, L(WM_OFFSET)));
 	initNodes.push(
 		forStmt(
 			assign(id(htiName), lit(0)),

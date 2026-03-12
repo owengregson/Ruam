@@ -626,13 +626,13 @@ describe("integrity binding anti-reversing", () => {
 		assertEquivalent(sampleCode, ibOpts);
 	});
 
-	it("modifying the embedded integrity hash breaks execution", () => {
+	it("modifying a key anchor XOR fold breaks execution", () => {
 		const out = obfuscateCode(sampleCode, ibOpts);
-		// The integrity hash is folded into the key anchor via an XOR:
-		//   _ka = (_ka ^ (DIGITS ^ DIGITS)) >>> 0
-		// Find this pattern and corrupt one of the numeric operands.
+		// The key anchor has XOR folds (watermark + integrity hash):
+		//   _ka = (_ka ^ SPLIT_EXPR) >>> 0
+		// Find any such pattern and corrupt a numeric literal inside it.
 		const modified = out.replace(
-			/(\w+)\s*=\s*\(\1\s*\^\s*\((\d{6,})\s*\^/,
+			/(\w+)\s*=\s*\(\1\s*\^[^;]*?(\d{6,})/,
 			(match, _name, num) =>
 				match.replace(num, String(parseInt(num, 10) + 1))
 		);

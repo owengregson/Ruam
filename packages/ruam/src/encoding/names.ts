@@ -134,10 +134,6 @@ export interface RuntimeNames {
 	/** Key anchor variable (combines handler table checksum + optional integrity hash). */
 	keyAnchor: string;
 
-	// Watermark — looks like an essential variable
-	/** Watermark variable name (_ru4m). */
-	wm: string;
-
 	// VM Shielding router
 	/** Router function name (used in vmShielding mode). */
 	router: string;
@@ -269,9 +265,6 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_htv", // handler table decode value (was hardcoded "_v")
 	"_htw", // handler table decode weight (was hardcoded "_w")
 ] as const;
-
-/** The watermark variable name — always `_ru4m`. */
-export const WATERMARK_NAME = "_ru4m";
 
 // --- Name pool ---
 
@@ -465,7 +458,6 @@ export function generateRuntimeNames(
 		ihash: genName(),
 		ihashFn: genName(),
 		keyAnchor: genName(),
-		wm: WATERMARK_NAME,
 		router: genName(),
 		routeMap: genName(),
 	};
@@ -493,7 +485,6 @@ const SHARED_NAME_KEYS = [
 	"dbgOp",
 	"dbgCfg",
 	"dbgProt",
-	"wm",
 	"router",
 	"routeMap",
 	"sPar",
