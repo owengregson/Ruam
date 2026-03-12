@@ -9,7 +9,6 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
-import { WATERMARK_NAME } from "../../encoding/names.js";
 import {
 	arr,
 	assign,
@@ -26,7 +25,6 @@ import {
 	newExpr,
 	obj,
 	returnStmt,
-	ternary,
 	un,
 	update,
 	varDecl,
@@ -39,7 +37,7 @@ import {
  * as JsNode[].
  *
  * Returns an array containing:
- * 1. Shared variable declarations (watermark, depth, callStack, cache) —
+ * 1. Shared variable declarations (depth, callStack, cache) —
  *    omitted when `options.skipSharedDecls` is true.
  * 2. The `load(id)` function declaration.
  *
@@ -69,7 +67,6 @@ export function buildLoader(
 
 	if (!options?.skipSharedDecls) {
 		nodes.push(
-			varDecl(WATERMARK_NAME, un("!", lit(0))),
 			varDecl(names.depth, lit(0)),
 			varDecl(names.callStack, arr()),
 			varDecl(names.cache, obj())
@@ -250,17 +247,8 @@ function buildLoadFunction(
 	// --- Cache check: if(cache[id]) return cache[id]; ---
 	body.push(ifStmt(cacheId(names), [returnStmt(cacheId(names))]));
 
-	// --- var raw = _ru4m ? bt[id] : void 0; ---
-	body.push(
-		varDecl(
-			"raw",
-			ternary(
-				id(WATERMARK_NAME),
-				index(id(names.bt), id("id")),
-				un("void", lit(0))
-			)
-		)
-	);
+	// --- var raw = bt[id]; ---
+	body.push(varDecl("raw", index(id(names.bt), id("id"))));
 
 	// --- String branch vs Object branch ---
 	const stringBranchBody = encrypt

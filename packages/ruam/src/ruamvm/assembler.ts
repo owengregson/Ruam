@@ -6,7 +6,7 @@
  *   - The dispatch functions
  *   - A bytecode loader + cache
  *   - Optional: fingerprint + RC4 decoder, debug protection, debug logging
- *   - The `_ru4m` watermark variable
+ *   - Steganographic watermark (folded into key anchor)
  *
  * Uses AST-based builders from `ruamvm/builders/` instead of template
  * literals, then emits via `ruamvm/emit.ts`.
@@ -23,7 +23,6 @@ import {
 	varDecl,
 	arr,
 	obj,
-	un,
 	assign,
 	bin,
 	id,
@@ -195,7 +194,7 @@ export function generateVmRuntime(options: {
 		);
 	}
 
-	// Loader, cache, depth tracking, watermark
+	// Loader, cache, depth tracking
 	nodes.push(
 		...buildLoader(encrypt, names, stringKey !== undefined, rollingCipher)
 	);
@@ -405,8 +404,7 @@ export function generateShieldedVmRuntime(options: {
 		});
 	}
 
-	// Shared: watermark, depth, callStack, cache (emitted once)
-	nodes.push(varDecl("_ru4m", un("!", lit(0))));
+	// Shared: depth, callStack, cache (emitted once)
 	nodes.push(varDecl(sharedNames.depth, lit(0)));
 	nodes.push(varDecl(sharedNames.callStack, arr()));
 	nodes.push(varDecl(sharedNames.cache, obj()));

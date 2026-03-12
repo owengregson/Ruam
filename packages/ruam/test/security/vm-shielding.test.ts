@@ -189,12 +189,14 @@ describe("VM Shielding", () => {
 			expect(output.length).toBeGreaterThan(100);
 		});
 
-		it("output contains watermark", () => {
+		it("watermark is steganographic (no visible _ru4m variable)", () => {
 			const output = obfuscateCode(
 				`function f() { return 1; } f();`,
 				shieldOpts
 			);
-			expect(output).toContain("_ru4m");
+			// Watermark is now folded into the key anchor computation —
+			// no visible `var _ru4m` declaration should exist
+			expect(output).not.toContain("_ru4m");
 		});
 
 		it("rolling cipher is auto-enabled", () => {
@@ -257,7 +259,8 @@ describe("VM Shielding", () => {
 			);
 			expect(output).toBeTruthy();
 			expect(output.length).toBeGreaterThan(500);
-			expect(output).toContain("_ru4m");
+			// Watermark is steganographic — no visible _ru4m variable
+			expect(output).not.toContain("_ru4m");
 		});
 	});
 });
