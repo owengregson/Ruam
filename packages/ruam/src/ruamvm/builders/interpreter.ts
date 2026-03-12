@@ -335,46 +335,52 @@ function buildHandlerTableMeta(
 			varDecl(htiName, lit(0)),
 			bin("<", id(htiName), member(id(htdName), "length")),
 			assign(id(htiName), lit(2), "+"),
-			[
-				// var _v = _htd[_hti] ^ (_htk & 0xFFFF);
-				varDecl(
-					"_v",
-					bin(
-						"^",
-						index(id(htdName), id(htiName)),
-						bin("&", id(htkName), lit(0xffff))
-					)
-				),
-				// var _w = _htd[_hti+1] ^ ((_htk >>> 16) & 0xFFFF);
-				varDecl(
-					"_w",
-					bin(
-						"^",
-						index(id(htdName), bin("+", id(htiName), lit(1))),
-						bin("&", bin(">>>", id(htkName), lit(16)), lit(0xffff))
-					)
-				),
-				// _ht[_v] = _w;
-				exprStmt(assign(index(id(htName), id("_v")), id("_w"))),
-				// _htk = (Math.imul(_htk ^ _v, 0x45D9F3B) ^ _w) >>> 0;
-				exprStmt(
-					assign(
-						id(htkName),
+			(() => {
+				const htvName = temps["_htv"];
+				const htwName = temps["_htw"];
+				if (htvName === undefined || htwName === undefined)
+					throw new Error("Missing temps: _htv/_htw");
+				return [
+					// var htv = _htd[_hti] ^ (_htk & 0xFFFF);
+					varDecl(
+						htvName,
 						bin(
-							">>>",
-							bin(
-								"^",
-								call(member(id("Math"), "imul"), [
-									bin("^", id(htkName), id("_v")),
-									L(0x45d9f3b),
-								]),
-								id("_w")
-							),
-							lit(0)
+							"^",
+							index(id(htdName), id(htiName)),
+							bin("&", id(htkName), lit(0xffff))
 						)
-					)
-				),
-			]
+					),
+					// var htw = _htd[_hti+1] ^ ((_htk >>> 16) & 0xFFFF);
+					varDecl(
+						htwName,
+						bin(
+							"^",
+							index(id(htdName), bin("+", id(htiName), lit(1))),
+							bin("&", bin(">>>", id(htkName), lit(16)), lit(0xffff))
+						)
+					),
+					// _ht[htv] = htw;
+					exprStmt(assign(index(id(htName), id(htvName)), id(htwName))),
+					// _htk = (Math.imul(_htk ^ htv, 0x45D9F3B) ^ htw) >>> 0;
+					exprStmt(
+						assign(
+							id(htkName),
+							bin(
+								">>>",
+								bin(
+									"^",
+									call(member(id("Math"), "imul"), [
+										bin("^", id(htkName), id(htvName)),
+										L(0x45d9f3b),
+									]),
+									id(htwName)
+								),
+								lit(0)
+							)
+						)
+					),
+				];
+			})()
 		)
 	);
 
@@ -597,8 +603,14 @@ function buildExecFunction(
 		opts.split
 	);
 
-	// Apply tree-based obfuscation of local variable names
-	const [obfuscated] = obfuscateLocals([fnNode], opts.seed);
+	// Apply tree-based obfuscation of local variable names.
+	// Build reserved set from RuntimeNames + TempNames values so
+	// genShort() avoids collisions with identifiers in the same scope.
+	const reserved = new Set([
+		...Object.values(names),
+		...Object.values(temps),
+	]);
+	const [obfuscated] = obfuscateLocals([fnNode], opts.seed, reserved);
 	return obfuscated!;
 }
 

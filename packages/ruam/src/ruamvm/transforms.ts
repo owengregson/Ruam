@@ -252,9 +252,16 @@ export const RESERVED = new Set([
  *
  * @param nodes - The statement list to transform
  * @param seed - LCG seed for deterministic name generation
+ * @param reserved - Optional set of names that must not be used as
+ *   replacement targets (e.g. RuntimeNames/TempNames values already
+ *   allocated for the same scope).
  * @returns Transformed statement list
  */
-export function obfuscateLocals(nodes: JsNode[], seed: number): JsNode[] {
+export function obfuscateLocals(
+	nodes: JsNode[],
+	seed: number,
+	reserved?: ReadonlySet<string>
+): JsNode[] {
 	// Collect names to rename
 	const toRename = new Set<string>();
 	collectNames(nodes, toRename);
@@ -268,7 +275,7 @@ export function obfuscateLocals(nodes: JsNode[], seed: number): JsNode[] {
 	}
 	const alpha = "abcdefghijklmnopqrstuvwxyz";
 	const alnum = "abcdefghijklmnopqrstuvwxyz0123456789";
-	const used = new Set<string>();
+	const used = new Set<string>(reserved);
 
 	function genShort(): string {
 		for (;;) {
