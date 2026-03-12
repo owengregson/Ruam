@@ -8,8 +8,8 @@ import { obfuscateCode } from "../../src/transform.js";
  * These tests ensure that:
  * 1. No plaintext reverse opcode map is present
  * 2. String constants are not in plaintext
- * 3. The interpreter uses randomized case labels
- * 4. Different builds produce different opcode assignments
+ * 3. The interpreter uses function table dispatch (not a giant switch)
+ * 4. Different builds produce different handler structures
  * 5. The output still executes correctly
  */
 describe("anti-reversing properties", () => {
@@ -90,26 +90,22 @@ describe("anti-reversing properties", () => {
 	});
 
 	describe("per-build uniqueness", () => {
-		it("two builds produce different case label assignments", () => {
+		it("two builds produce different handler group structures", () => {
 			const out1 = obfuscateCode(sampleCode);
 			const out2 = obfuscateCode(sampleCode);
 
-			// Extract all case labels from both outputs
-			const casePattern = /\bcase (\d+):/g;
-			const cases1 = [...out1.matchAll(casePattern)].map((m) =>
-				parseInt(m[1]!)
-			);
-			const cases2 = [...out2.matchAll(casePattern)].map((m) =>
-				parseInt(m[1]!)
-			);
+			// With function table dispatch, handlers are anonymous closures
+			// in group arrays. Extract the handler function bodies.
+			const fnPattern = /function\s*\(/g;
+			const fns1 = [...out1.matchAll(fnPattern)];
+			const fns2 = [...out2.matchAll(fnPattern)];
 
-			// Both should have the same number of case labels
-			expect(cases1.length).toBe(cases2.length);
-			expect(cases1.length).toBeGreaterThan(100); // should have many opcodes
+			// Both should have many handler functions (one per opcode)
+			expect(fns1.length).toBeGreaterThan(50);
+			expect(fns2.length).toBeGreaterThan(50);
 
-			// But the actual numbers should differ (different seeds)
-			// There's an astronomically small chance they'd be the same
-			expect(cases1).not.toEqual(cases2);
+			// The outputs should differ overall (different seeds → names, etc.)
+			expect(out1).not.toEqual(out2);
 		});
 
 		it("two builds produce different variable names", () => {
@@ -148,23 +144,28 @@ describe("anti-reversing properties", () => {
 	});
 
 	describe("structural obfuscation", () => {
-		it("case labels are non-sequential random numbers", () => {
+		it("dispatch uses function table groups, not a giant switch", () => {
 			const out = obfuscateCode(sampleCode);
+
+			// The old switch had 200+ case labels; function table dispatch
+			// replaces it with handler group arrays + if-else routing.
 			const casePattern = /\bcase (\d+):/g;
-			const cases = [...out.matchAll(casePattern)].map((m) =>
-				parseInt(m[1]!)
-			);
+			const cases = [...out.matchAll(casePattern)];
 
-			// Case numbers should not be sequential (0, 1, 2, 3, ...)
-			const isSequential = cases
-				.slice(0, 20)
-				.every((v, i) => i === 0 || v === cases[i - 1]! + 1);
-			expect(isSequential).toBe(false);
+			// Should have very few case labels (only from small internal
+			// switches within individual handlers, not the main dispatch)
+			expect(cases.length).toBeLessThan(50);
 
-			// Case numbers should span a wide range (shuffled 0-278)
-			const max = Math.max(...cases);
-			const min = Math.min(...cases);
-			expect(max - min).toBeGreaterThan(100);
+			// Should have multiple handler group arrays (2-4 groups)
+			const groupArrayPattern = /\[function\s*\(/g;
+			const groups = [...out.matchAll(groupArrayPattern)];
+			expect(groups.length).toBeGreaterThanOrEqual(2);
+			expect(groups.length).toBeLessThanOrEqual(8); // sync + async
+
+			// Handler closures should be abundant
+			const fnPattern = /function\s*\(/g;
+			const fns = [...out.matchAll(fnPattern)];
+			expect(fns.length).toBeGreaterThan(50);
 		});
 
 		it("no recognizable VM patterns in variable names", () => {

@@ -288,6 +288,15 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_del", // encoded string length
 	"_dea", // encoded string array
 	"_dei", // encoded string index
+
+	// --- Function table dispatch (replaces switch) ---
+	"_frs", // function table return sentinel
+	"_frv", // function table return value
+	"_fdi", // function table dispatch index
+	"_fg0", // function table handler group 0
+	"_fg1", // function table handler group 1
+	"_fg2", // function table handler group 2
+	"_fg3", // function table handler group 3
 ] as const;
 
 // --- Name pool ---
