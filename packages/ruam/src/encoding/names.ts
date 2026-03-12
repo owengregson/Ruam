@@ -260,6 +260,24 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	// --- Handler table decode loop temporaries ---
 	"_htv", // handler table decode value (was hardcoded "_v")
 	"_htw", // handler table decode weight (was hardcoded "_w")
+
+	// --- Deserializer locals (object method pattern) ---
+	"_dr", // reader object variable
+	"_dv", // DataView property on reader
+	"_dof", // offset property on reader
+	"_du8", // readU8 method on reader
+	"_du16", // readU16 method on reader
+	"_du32", // readU32 method on reader
+	"_di32", // readI32 method on reader
+	"_df64", // readF64 method on reader
+	"_drs", // readStr method on reader
+	"_dfl", // flags variable
+	"_dpc", // param count variable
+	"_drc", // register count variable
+	"_dcc", // constant count variable
+	"_dcs", // constants array variable
+	"_dic", // instruction count variable
+	"_din", // instructions array variable
 ] as const;
 
 // --- Name pool ---

@@ -212,7 +212,7 @@ export function generateVmRuntime(options: {
 	);
 
 	// Binary deserializer
-	nodes.push(...buildDeserializer(names));
+	nodes.push(...buildDeserializer(names, temps));
 
 	// Global exposure
 	nodes.push(...buildGlobalExposure(names.vm));
@@ -323,7 +323,7 @@ export function generateShieldedVmRuntime(options: {
 	}
 
 	// Shared: deserializer
-	nodes.push(...buildDeserializer(sharedNames));
+	nodes.push(...buildDeserializer(sharedNames, sharedTemps));
 
 	// Per-group micro-interpreters
 	const groupRegistrations: { unitIds: string[]; dispatchName: string }[] =

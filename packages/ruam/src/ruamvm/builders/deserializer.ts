@@ -3,15 +3,16 @@
  *
  * Produces a single function declaration that reads a compact binary
  * `Uint8Array` format back into a bytecode unit object at runtime.
- * The function parses the version byte, flags, parameter/register counts,
- * the tagged constant pool, and the interleaved instruction array
- * (opcode u16 + operand i32 pairs).
+ *
+ * The reader is structured as an object with shorthand methods, making it
+ * look like a utility class rather than a binary parser. All internal names
+ * (properties, methods, locals) are randomized via TempNames.
  *
  * @module ruamvm/builders/deserializer
  */
 
-import type { JsNode } from "../nodes.js";
-import type { RuntimeNames } from "../../encoding/names.js";
+import type { JsNode, ObjectEntry } from "../nodes.js";
+import type { RuntimeNames, TempNames } from "../../encoding/names.js";
 import {
 	fn,
 	varDecl,
@@ -25,6 +26,7 @@ import {
 	index,
 	newExpr,
 	obj,
+	method,
 	exprStmt,
 	returnStmt,
 	forStmt,
@@ -35,15 +37,6 @@ import {
 	update,
 } from "../nodes.js";
 
-// --- Helpers ---
-
-/** Shorthand for `call(member(obj, prop), args)`. */
-const mcall = (o: JsNode, prop: string, args: JsNode[]): JsNode =>
-	call(member(o, prop), args);
-
-/** `a & b` */
-const band = (a: JsNode, b: JsNode): JsNode => bin("&", a, b);
-
 // --- Builder ---
 
 /**
@@ -51,313 +44,315 @@ const band = (a: JsNode, b: JsNode): JsNode => bin("&", a, b);
  *
  * Produces a single function declaration that reads a compact binary
  * `Uint8Array` format back into a bytecode unit object at runtime.
- * The function parses the version byte, flags, parameter/register counts,
- * the tagged constant pool, and the interleaved instruction array
- * (opcode u16 + operand i32 pairs).
+ * Internal structure uses an object with shorthand methods (class-like
+ * pattern) and all names are randomized via TempNames.
  *
  * @param names - Per-build randomized runtime identifiers.
+ * @param temps - Per-build randomized temp name mapping.
  * @returns A single-element array containing the deserializer function.
  */
-export function buildDeserializer(names: RuntimeNames): JsNode[] {
+export function buildDeserializer(
+	names: RuntimeNames,
+	temps: TempNames
+): JsNode[] {
 	const bytes = id("bytes");
-	const view = id("view");
-	const offset = id("offset");
 	const TRUE = lit(true);
 
-	// --- Function body ---
+	// --- Temp name lookups ---
+	const T = (key: string): string => {
+		const name = temps[key];
+		if (name === undefined) throw new Error(`Unknown temp: ${key}`);
+		return name;
+	};
 
+	// Reader object variable and property/method names
+	const DR = T("_dr"); // reader object
+	const DV = T("_dv"); // DataView property
+	const DOF = T("_dof"); // offset property
+	const DU8 = T("_du8"); // readU8 method
+	const DU16 = T("_du16"); // readU16 method
+	const DU32 = T("_du32"); // readU32 method
+	const DI32 = T("_di32"); // readI32 method
+	const DF64 = T("_df64"); // readF64 method
+	const DRS = T("_drs"); // readStr method
+
+	// Parser local variable names
+	const FL = T("_dfl"); // flags
+	const PC = T("_dpc"); // param count
+	const RC = T("_drc"); // register count
+	const CC = T("_dcc"); // constant count
+	const CS = T("_dcs"); // constants array
+	const IC = T("_dic"); // instruction count
+	const IN = T("_din"); // instructions array
+
+	// Shorthand: reader.method() call
+	const rdr = id(DR);
+	const rcall = (m: string, args: JsNode[] = []): JsNode =>
+		call(member(rdr, m), args);
+	// Shorthand: this.prop
+	const tprop = (p: string): JsNode => member(id("this"), p);
+	// Shorthand: this.method() from within a method body
+	const tcall = (m: string, args: JsNode[] = []): JsNode =>
+		call(member(id("this"), m), args);
+
+	// --- Function body ---
 	const body: JsNode[] = [];
 
-	// var view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
-	body.push(
-		varDecl(
-			"view",
+	// --- Build reader object with shorthand methods ---
+
+	const readerEntries: ObjectEntry[] = [
+		// v: new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+		[
+			DV,
 			newExpr(id("DataView"), [
 				member(bytes, "buffer"),
 				member(bytes, "byteOffset"),
 				member(bytes, "byteLength"),
-			])
-		)
-	);
+			]),
+		],
+		// o: 0
+		[DOF, lit(0)],
 
-	// var offset=0;
-	body.push(varDecl("offset", lit(0)));
+		// u8() { return this.v.getUint8(this.o++); }
+		method(DU8, [], [
+			returnStmt(
+				call(member(tprop(DV), "getUint8"), [
+					update("++", false, tprop(DOF)),
+				])
+			),
+		]),
 
-	// --- Inner helper functions ---
+		// u16() { var x=this.v.getUint16(this.o,true); this.o+=2; return x; }
+		method(DU16, [], [
+			varDecl("x", call(member(tprop(DV), "getUint16"), [tprop(DOF), TRUE])),
+			exprStmt(assign(tprop(DOF), lit(2), "+")),
+			returnStmt(id("x")),
+		]),
 
-	// function readU8(){return view.getUint8(offset++);}
-	body.push(
-		fn(
-			"readU8",
-			[],
-			[returnStmt(mcall(view, "getUint8", [update("++", false, offset)]))]
-		)
-	);
+		// u32() { var x=this.v.getUint32(this.o,true); this.o+=4; return x; }
+		method(DU32, [], [
+			varDecl("x", call(member(tprop(DV), "getUint32"), [tprop(DOF), TRUE])),
+			exprStmt(assign(tprop(DOF), lit(4), "+")),
+			returnStmt(id("x")),
+		]),
 
-	// function readU16(){var v=view.getUint16(offset,true);offset+=2;return v;}
-	body.push(
-		fn(
-			"readU16",
-			[],
-			[
-				varDecl("v", mcall(view, "getUint16", [offset, TRUE])),
-				exprStmt(assign(offset, lit(2), "+")),
-				returnStmt(id("v")),
-			]
-		)
-	);
+		// i32() { var x=this.v.getInt32(this.o,true); this.o+=4; return x; }
+		method(DI32, [], [
+			varDecl("x", call(member(tprop(DV), "getInt32"), [tprop(DOF), TRUE])),
+			exprStmt(assign(tprop(DOF), lit(4), "+")),
+			returnStmt(id("x")),
+		]),
 
-	// function readU32(){var v=view.getUint32(offset,true);offset+=4;return v;}
-	body.push(
-		fn(
-			"readU32",
-			[],
-			[
-				varDecl("v", mcall(view, "getUint32", [offset, TRUE])),
-				exprStmt(assign(offset, lit(4), "+")),
-				returnStmt(id("v")),
-			]
-		)
-	);
+		// f64() { var x=this.v.getFloat64(this.o,true); this.o+=8; return x; }
+		method(DF64, [], [
+			varDecl(
+				"x",
+				call(member(tprop(DV), "getFloat64"), [tprop(DOF), TRUE])
+			),
+			exprStmt(assign(tprop(DOF), lit(8), "+")),
+			returnStmt(id("x")),
+		]),
 
-	// function readI32(){var v=view.getInt32(offset,true);offset+=4;return v;}
-	body.push(
-		fn(
-			"readI32",
-			[],
-			[
-				varDecl("v", mcall(view, "getInt32", [offset, TRUE])),
-				exprStmt(assign(offset, lit(4), "+")),
-				returnStmt(id("v")),
-			]
-		)
-	);
+		// str() { var n=this.u32(); var s=''; for(var i=0;i<n;i++){s+=String.fromCharCode(this.u8());} return s; }
+		method(DRS, [], [
+			varDecl("n", tcall(DU32)),
+			varDecl("s", lit("")),
+			forStmt(
+				varDecl("i", lit(0)),
+				bin("<", id("i"), id("n")),
+				update("++", false, id("i")),
+				[
+					exprStmt(
+						assign(
+							id("s"),
+							call(member(id("String"), "fromCharCode"), [
+								tcall(DU8),
+							]),
+							"+"
+						)
+					),
+				]
+			),
+			returnStmt(id("s")),
+		]),
+	];
 
-	// function readF64(){var v=view.getFloat64(offset,true);offset+=8;return v;}
-	body.push(
-		fn(
-			"readF64",
-			[],
-			[
-				varDecl("v", mcall(view, "getFloat64", [offset, TRUE])),
-				exprStmt(assign(offset, lit(8), "+")),
-				returnStmt(id("v")),
-			]
-		)
-	);
-
-	// function readStr(){var len=readU32();var s='';for(var i=0;i<len;i++){s+=String.fromCharCode(readU8());}return s;}
-	body.push(
-		fn(
-			"readStr",
-			[],
-			[
-				varDecl("len", call(id("readU32"), [])),
-				varDecl("s", lit("")),
-				forStmt(
-					varDecl("i", lit(0)),
-					bin("<", id("i"), id("len")),
-					update("++", false, id("i")),
-					[
-						exprStmt(
-							assign(
-								id("s"),
-								call(member(id("String"), "fromCharCode"), [
-									call(id("readU8"), []),
-								]),
-								"+"
-							)
-						),
-					]
-				),
-				returnStmt(id("s")),
-			]
-		)
-	);
+	// var r = { v: ..., o: 0, u8() {...}, ... };
+	body.push(varDecl(DR, obj(...readerEntries)));
 
 	// --- Header reads ---
 
-	// var version=readU8();
-	body.push(varDecl("version", call(id("readU8"), [])));
-	// var flags=readU16();
-	body.push(varDecl("flags", call(id("readU16"), [])));
-	// var pCount=readU16();
-	body.push(varDecl("pCount", call(id("readU16"), [])));
-	// var rCount=readU16();
-	body.push(varDecl("rCount", call(id("readU16"), [])));
-	// var cCount=readU32();
-	body.push(varDecl("cCount", call(id("readU32"), [])));
+	// readU8() — skip version byte
+	body.push(exprStmt(rcall(DU8)));
+	// var fl=r.u16();
+	body.push(varDecl(FL, rcall(DU16)));
+	// var pc=r.u16();
+	body.push(varDecl(PC, rcall(DU16)));
+	// var rc=r.u16();
+	body.push(varDecl(RC, rcall(DU16)));
+	// var cc=r.u32();
+	body.push(varDecl(CC, rcall(DU32)));
 
-	// var constants=[];
-	body.push(varDecl("constants", { type: "ArrayExpr", elements: [] }));
+	// var cs=[];
+	body.push(varDecl(CS, { type: "ArrayExpr", elements: [] }));
 
 	// --- Constant pool loop ---
 
-	const constants = id("constants");
-	const push = (arg: JsNode): JsNode => mcall(constants, "push", [arg]);
-	const flags = id("flags");
+	const constants = id(CS);
+	const push = (arg: JsNode): JsNode =>
+		call(member(constants, "push"), [arg]);
+	const flags = id(FL);
 
 	// Build switch cases for constant pool tags
 	const cases: JsNode[] = [];
 
-	// case 0: constants.push(null); break;
+	// case 0: cs.push(null); break;
 	cases.push(caseClause(lit(0), [exprStmt(push(lit(null))), breakStmt()]));
-	// case 1: constants.push(void 0); break;
+	// case 1: cs.push(void 0); break;
 	cases.push(
 		caseClause(lit(1), [exprStmt(push(un("void", lit(0)))), breakStmt()])
 	);
-	// case 2: constants.push(false); break;
+	// case 2: cs.push(false); break;
 	cases.push(caseClause(lit(2), [exprStmt(push(lit(false))), breakStmt()]));
-	// case 3: constants.push(true); break;
+	// case 3: cs.push(true); break;
 	cases.push(caseClause(lit(3), [exprStmt(push(lit(true))), breakStmt()]));
-	// case 4: constants.push(view.getInt8(offset)); offset+=1; break;
+	// case 4: cs.push(r.v.getInt8(r.o)); r.o+=1; break;
 	cases.push(
 		caseClause(lit(4), [
-			exprStmt(push(mcall(view, "getInt8", [offset]))),
-			exprStmt(assign(offset, lit(1), "+")),
+			exprStmt(
+				push(
+					call(member(member(rdr, DV), "getInt8"), [member(rdr, DOF)])
+				)
+			),
+			exprStmt(assign(member(rdr, DOF), lit(1), "+")),
 			breakStmt(),
 		])
 	);
-	// case 5: constants.push(view.getInt16(offset,true)); offset+=2; break;
+	// case 5: cs.push(r.v.getInt16(r.o,true)); r.o+=2; break;
 	cases.push(
 		caseClause(lit(5), [
-			exprStmt(push(mcall(view, "getInt16", [offset, TRUE]))),
-			exprStmt(assign(offset, lit(2), "+")),
+			exprStmt(
+				push(
+					call(member(member(rdr, DV), "getInt16"), [
+						member(rdr, DOF),
+						TRUE,
+					])
+				)
+			),
+			exprStmt(assign(member(rdr, DOF), lit(2), "+")),
 			breakStmt(),
 		])
 	);
-	// case 6: constants.push(readI32()); break;
+	// case 6: cs.push(r.i32()); break;
 	cases.push(
-		caseClause(lit(6), [
-			exprStmt(push(call(id("readI32"), []))),
-			breakStmt(),
-		])
+		caseClause(lit(6), [exprStmt(push(rcall(DI32))), breakStmt()])
 	);
-	// case 7: constants.push(readF64()); break;
+	// case 7: cs.push(r.f64()); break;
 	cases.push(
-		caseClause(lit(7), [
-			exprStmt(push(call(id("readF64"), []))),
-			breakStmt(),
-		])
+		caseClause(lit(7), [exprStmt(push(rcall(DF64))), breakStmt()])
 	);
-	// case 8: constants.push(BigInt(readStr())); break;
+	// case 8: cs.push(BigInt(r.str())); break;
 	cases.push(
 		caseClause(lit(8), [
-			exprStmt(push(call(id("BigInt"), [call(id("readStr"), [])]))),
+			exprStmt(push(call(id("BigInt"), [rcall(DRS)]))),
 			breakStmt(),
 		])
 	);
-	// case 9: { var p=readStr(); var f=readStr(); constants.push(new RegExp(p,f)); break; }
+	// case 9: { var p=r.str(); var f=r.str(); cs.push(new RegExp(p,f)); break; }
 	cases.push(
 		caseClause(lit(9), [
 			block(
-				varDecl("p", call(id("readStr"), [])),
-				varDecl("f", call(id("readStr"), [])),
+				varDecl("p", rcall(DRS)),
+				varDecl("f", rcall(DRS)),
 				exprStmt(push(newExpr(id("RegExp"), [id("p"), id("f")]))),
 				breakStmt()
 			),
 		])
 	);
-	// case 11: { var elen=readU16(); var earr=[]; for(var ei=0;ei<elen;ei++){earr.push(readU16());} constants.push(earr); break; }
+	// case 11: { var el=r.u16(); var ea=[]; for(var ei=0;ei<el;ei++){ea.push(r.u16());} cs.push(ea); break; }
 	cases.push(
 		caseClause(lit(11), [
 			block(
-				varDecl("elen", call(id("readU16"), [])),
-				varDecl("earr", { type: "ArrayExpr", elements: [] }),
+				varDecl("el", rcall(DU16)),
+				varDecl("ea", { type: "ArrayExpr", elements: [] }),
 				forStmt(
 					varDecl("ei", lit(0)),
-					bin("<", id("ei"), id("elen")),
+					bin("<", id("ei"), id("el")),
 					update("++", false, id("ei")),
 					[
 						exprStmt(
-							mcall(id("earr"), "push", [call(id("readU16"), [])])
+							call(member(id("ea"), "push"), [rcall(DU16)])
 						),
 					]
 				),
-				exprStmt(push(id("earr"))),
+				exprStmt(push(id("ea"))),
 				breakStmt()
 			),
 		])
 	);
-	// default: constants.push(readStr()); break;
+	// default: cs.push(r.str()); break;
 	cases.push(
-		caseClause(null, [exprStmt(push(call(id("readStr"), []))), breakStmt()])
+		caseClause(null, [exprStmt(push(rcall(DRS))), breakStmt()])
 	);
 
-	// for(var i=0;i<cCount;i++){var tag=readU8();switch(tag){...}}
+	// for(var i=0;i<cc;i++){var tag=r.u8();switch(tag){...}}
 	body.push(
 		forStmt(
 			varDecl("i", lit(0)),
-			bin("<", id("i"), id("cCount")),
+			bin("<", id("i"), id(CC)),
 			update("++", false, id("i")),
 			[
-				varDecl("tag", call(id("readU8"), [])),
-				switchStmt(id("tag"), cases as ReturnType<typeof caseClause>[]),
+				varDecl("tag", rcall(DU8)),
+				switchStmt(
+					id("tag"),
+					cases as ReturnType<typeof caseClause>[]
+				),
 			]
 		)
 	);
 
 	// --- Instruction array ---
 
-	// var iCount=readU32();
-	body.push(varDecl("iCount", call(id("readU32"), [])));
+	// var ic=r.u32();
+	body.push(varDecl(IC, rcall(DU32)));
 
-	// var instrs=new Array(iCount*2);
+	// var ins=new Array(ic*2);
 	body.push(
-		varDecl(
-			"instrs",
-			newExpr(id("Array"), [bin("*", id("iCount"), lit(2))])
-		)
+		varDecl(IN, newExpr(id("Array"), [bin("*", id(IC), lit(2))]))
 	);
 
-	// for(var i=0;i<iCount;i++){instrs[i*2]=readU16();instrs[i*2+1]=readI32();}
+	// for(var i=0;i<ic;i++){ins[i*2]=r.u16();ins[i*2+1]=r.i32();}
 	const iMul2 = bin("*", id("i"), lit(2));
 	const iMul2Plus1 = bin("+", bin("*", id("i"), lit(2)), lit(1));
 	body.push(
 		forStmt(
 			varDecl("i", lit(0)),
-			bin("<", id("i"), id("iCount")),
+			bin("<", id("i"), id(IC)),
 			update("++", false, id("i")),
 			[
-				exprStmt(
-					assign(index(id("instrs"), iMul2), call(id("readU16"), []))
-				),
-				exprStmt(
-					assign(
-						index(id("instrs"), iMul2Plus1),
-						call(id("readI32"), [])
-					)
-				),
+				exprStmt(assign(index(id(IN), iMul2), rcall(DU16))),
+				exprStmt(assign(index(id(IN), iMul2Plus1), rcall(DI32))),
 			]
 		)
 	);
 
-	// --- Flag extraction ---
-
-	// var isGen=!!(flags&1);
-	body.push(varDecl("isGen", un("!", un("!", band(flags, lit(1))))));
-	// var isAsync=!!(flags&2);
-	body.push(varDecl("isAsync", un("!", un("!", band(flags, lit(2))))));
-	// var isStrict=!!(flags&4);
-	body.push(varDecl("isStrict", un("!", un("!", band(flags, lit(4))))));
-	// var isArrow=!!(flags&8);
-	body.push(varDecl("isArrow", un("!", un("!", band(flags, lit(8))))));
-
 	// --- Return object ---
 
-	// return {c:constants,i:instrs,r:rCount,sl:0,p:pCount,g:isGen,s:isAsync,st:isStrict,a:isArrow};
+	// return {c:cs,i:ins,r:rc,sl:0,p:pc,g:!!(fl&1),s:!!(fl&2),st:!!(fl&4),a:!!(fl&8)};
+	const band = (v: JsNode, mask: number): JsNode =>
+		un("!", un("!", bin("&", v, lit(mask))));
 	body.push(
 		returnStmt(
 			obj(
 				["c", constants],
-				["i", id("instrs")],
-				["r", id("rCount")],
+				["i", id(IN)],
+				["r", id(RC)],
 				["sl", lit(0)],
-				["p", id("pCount")],
-				["g", id("isGen")],
-				["s", id("isAsync")],
-				["st", id("isStrict")],
-				["a", id("isArrow")]
+				["p", id(PC)],
+				["g", band(flags, 1)],
+				["s", band(flags, 2)],
+				["st", band(flags, 4)],
+				["a", band(flags, 8)]
 			)
 		)
 	);
