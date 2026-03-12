@@ -15,29 +15,26 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 // Build-time implementations
 // ---------------------------------------------------------------------------
 
-/** RC4 stream cipher — symmetric encrypt / decrypt. */
+/**
+ * Custom symmetric cipher — FNV-1a key derivation + LCG keystream.
+ *
+ * Replaces RC4 with a structure that doesn't exhibit recognizable
+ * cipher patterns (no S-box, no KSA/PRGA, no swap operations).
+ * Symmetric via XOR — same function encrypts and decrypts.
+ */
 export function rc4(data: Uint8Array, key: string): Uint8Array {
-	const S = new Array<number>(256);
-	let j = 0;
-
-	for (let i = 0; i < 256; i++) S[i] = i;
-	for (let i = 0; i < 256; i++) {
-		j = (j + S[i]! + key.charCodeAt(i % key.length)) & 255;
-		const t = S[i]!;
-		S[i] = S[j]!;
-		S[j] = t;
+	// Derive 32-bit state from key via FNV-1a
+	let h = 0x811c9dc5; // FNV offset basis
+	for (let i = 0; i < key.length; i++) {
+		h = Math.imul(h ^ key.charCodeAt(i), 0x01000193); // FNV prime
 	}
+	h >>>= 0;
 
-	let ii = 0;
-	j = 0;
+	// Transform each byte via LCG-driven keystream
 	const out = new Uint8Array(data.length);
-	for (let k = 0; k < data.length; k++) {
-		ii = (ii + 1) & 255;
-		j = (j + S[ii]!) & 255;
-		const t = S[ii]!;
-		S[ii] = S[j]!;
-		S[j] = t;
-		out[k] = data[k]! ^ S[(S[ii]! + S[j]!) & 255]!;
+	for (let i = 0; i < data.length; i++) {
+		h = (Math.imul(h, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+		out[i] = data[i]! ^ ((h >>> 16) & 0xff);
 	}
 	return out;
 }
