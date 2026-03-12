@@ -1,5 +1,6 @@
 /**
- * Decoder builder — assembles RC4, base64, and string decoder functions as AST nodes.
+ * Decoder builder — assembles RC4, custom binary decoder, and string
+ * decoder functions as AST nodes.
  *
  * All runtime JS is generated via pure AST construction — no raw() nodes.
  * Dense bit-manipulation expressions are composed via nested BinOp nodes.
@@ -23,6 +24,7 @@ import {
 	lit,
 	member,
 	newExpr,
+	obj,
 	returnStmt,
 	un,
 	update,
@@ -40,20 +42,178 @@ const band = (a: JsNode, b: JsNode): JsNode => bin("&", a, b);
 /** `(expr) >>> 0` — unsigned coercion */
 const u32 = (expr: JsNode): JsNode => bin(">>>", expr, lit(0));
 
-// --- RC4 + Base64 decoder ---
+// --- Custom binary decoder ---
 
 /**
- * Build the RC4 cipher and base64 decoder functions as JsNode[].
+ * Build the custom binary decoder infrastructure as JsNode[].
  *
- * Produces two function declarations:
- * - RC4 stream cipher (symmetric encrypt/decrypt)
- * - Base64 decoder (atob polyfill with Buffer fallback)
+ * Produces:
+ * 1. Alphabet variable declaration (`var _AL = "shuffled64chars"`)
+ * 2. Binary decode function (same bit-packing as base64, custom alphabet)
+ *
+ * Always emitted — all bytecode units use custom binary encoding.
+ *
+ * @param names    - Randomized runtime identifier names.
+ * @param alphabet - The shuffled 64-char alphabet string (from build-time).
+ * @returns Array of JsNode containing the alphabet var and decode function.
+ */
+export function buildBinaryDecoderSource(
+	names: RuntimeNames,
+	alphabet: string
+): JsNode[] {
+	return [
+		// var _AL = "shuffled64chars";
+		varDecl(names.alpha, lit(alphabet)),
+		buildCustomDecodeFunction(names),
+	];
+}
+
+/**
+ * Build the RC4 cipher function as JsNode[].
+ *
+ * Only emitted when bytecode encryption is enabled.
  *
  * @param names - Randomized runtime identifier names.
- * @returns An array of JsNode containing both function declarations.
+ * @returns Single-element array containing the RC4 function declaration.
  */
-export function buildDecoderSource(names: RuntimeNames): JsNode[] {
-	return [buildRc4Function(names), buildB64Function(names)];
+export function buildRc4Source(names: RuntimeNames): JsNode[] {
+	return [buildRc4Function(names)];
+}
+
+// --- Custom decode function ---
+
+/**
+ * Build the custom binary decode function.
+ *
+ * Reverses the custom 64-char alphabet encoding produced at build time.
+ * Builds a reverse lookup table from the alphabet variable on each call
+ * (O(64) — negligible since decode runs once per unit load).
+ *
+ * ```js
+ * function _bd(str) {
+ *   var T = {};
+ *   var A = _AL;
+ *   for (var k = 0; k < A.length; k++) T[A.charCodeAt(k)] = k;
+ *   var n = str.length;
+ *   var out = new Uint8Array((n * 3 >> 2) + 3);
+ *   var j = 0;
+ *   for (var i = 0; i < n; i += 4) {
+ *     var a = T[str.charCodeAt(i)] | 0;
+ *     var b = T[str.charCodeAt(i + 1)] | 0;
+ *     var c = T[str.charCodeAt(i + 2)] | 0;
+ *     var d = T[str.charCodeAt(i + 3)] | 0;
+ *     out[j++] = (a << 2) | (b >> 4);
+ *     if (i + 2 < n) out[j++] = ((b & 15) << 4) | (c >> 2);
+ *     if (i + 3 < n) out[j++] = ((c & 3) << 6) | d;
+ *   }
+ *   return out.subarray(0, j);
+ * }
+ * ```
+ */
+function buildCustomDecodeFunction(names: RuntimeNames): JsNode {
+	const str = id("str");
+	const T = id("T");
+	const A = id("A");
+	const n = id("n");
+	const out = id("out");
+	const j = id("j");
+	const i = id("i");
+	const k = id("k");
+
+	// Helper: T[str.charCodeAt(idx)] | 0
+	const lookup = (idx: JsNode): JsNode =>
+		bin("|", index(T, call(member(str, "charCodeAt"), [idx])), lit(0));
+
+	// Helper: out[j++] = expr
+	const writeOut = (expr: JsNode): JsNode =>
+		exprStmt(assign(index(out, update("++", false, j)), expr));
+
+	const body: JsNode[] = [
+		// var T = {};
+		varDecl("T", obj()),
+		// var A = _AL;
+		varDecl("A", id(names.alpha)),
+
+		// for (var k = 0; k < A.length; k++) T[A.charCodeAt(k)] = k;
+		forStmt(
+			varDecl("k", lit(0)),
+			bin("<", k, member(A, "length")),
+			update("++", false, k),
+			[
+				exprStmt(
+					assign(
+						index(T, call(member(A, "charCodeAt"), [k])),
+						k
+					)
+				),
+			]
+		),
+
+		// var n = str.length;
+		varDecl("n", member(str, "length")),
+		// var out = new Uint8Array((n * 3 >> 2) + 3);
+		varDecl(
+			"out",
+			newExpr(id("Uint8Array"), [
+				bin("+", bin(">>", bin("*", n, lit(3)), lit(2)), lit(3)),
+			])
+		),
+		// var j = 0;
+		varDecl("j", lit(0)),
+
+		// Decode loop: for (var i = 0; i < n; i += 4) { ... }
+		forStmt(
+			varDecl("i", lit(0)),
+			bin("<", i, n),
+			assign(i, lit(4), "+"),
+			[
+				// var a = T[str.charCodeAt(i)] | 0;
+				varDecl("a", lookup(i)),
+				// var b = T[str.charCodeAt(i + 1)] | 0;
+				varDecl("b", lookup(bin("+", i, lit(1)))),
+				// var c = T[str.charCodeAt(i + 2)] | 0;
+				varDecl("c", lookup(bin("+", i, lit(2)))),
+				// var d = T[str.charCodeAt(i + 3)] | 0;
+				varDecl("d", lookup(bin("+", i, lit(3)))),
+
+				// out[j++] = (a << 2) | (b >> 4);
+				writeOut(
+					bin(
+						"|",
+						bin("<<", id("a"), lit(2)),
+						bin(">>", id("b"), lit(4))
+					)
+				),
+
+				// if (i + 2 < n) out[j++] = ((b & 15) << 4) | (c >> 2);
+				ifStmt(bin("<", bin("+", i, lit(2)), n), [
+					writeOut(
+						bin(
+							"|",
+							bin("<<", band(id("b"), lit(15)), lit(4)),
+							bin(">>", id("c"), lit(2))
+						)
+					),
+				]),
+
+				// if (i + 3 < n) out[j++] = ((c & 3) << 6) | d;
+				ifStmt(bin("<", bin("+", i, lit(3)), n), [
+					writeOut(
+						bin(
+							"|",
+							bin("<<", band(id("c"), lit(3)), lit(6)),
+							id("d")
+						)
+					),
+				]),
+			]
+		),
+
+		// return out.subarray(0, j);
+		returnStmt(call(member(out, "subarray"), [lit(0), j])),
+	];
+
+	return fn(names.b64, ["str"], body);
 }
 
 // --- RC4 ---
@@ -110,16 +270,11 @@ function buildRc4Function(names: RuntimeNames): JsNode {
 		),
 
 		// --- KSA shuffle ---
-		// for(i=0; i<256; i++) {
-		//   j = (j + S[i] + key.charCodeAt(i % key.length)) & 255;
-		//   var t = S[i]; S[i] = S[j]; S[j] = t;
-		// }
 		forStmt(
 			assign(i, lit(0)),
 			bin("<", i, lit(256)),
 			update("++", false, i),
 			[
-				// j = (j + S[i] + key.charCodeAt(i % key.length)) & 255;
 				exprStmt(
 					assign(
 						j,
@@ -135,45 +290,29 @@ function buildRc4Function(names: RuntimeNames): JsNode {
 						)
 					)
 				),
-				// var t = S[i];
 				varDecl("t", Si),
-				// S[i] = S[j];
 				exprStmt(assign(Si, Sj)),
-				// S[j] = t;
 				exprStmt(assign(Sj, t)),
 			]
 		),
 
-		// i = 0;
+		// i = 0; j = 0;
 		exprStmt(assign(i, lit(0))),
-		// j = 0;
 		exprStmt(assign(j, lit(0))),
 		// var out = new Uint8Array(data.length);
 		varDecl("out", newExpr(id("Uint8Array"), [member(data, "length")])),
 
 		// --- PRGA ---
-		// for(var k=0; k<data.length; k++) {
-		//   i = (i + 1) & 255;
-		//   j = (j + S[i]) & 255;
-		//   var t = S[i]; S[i] = S[j]; S[j] = t;
-		//   out[k] = data[k] ^ S[(S[i] + S[j]) & 255];
-		// }
 		forStmt(
 			varDecl("k", lit(0)),
 			bin("<", k, member(data, "length")),
 			update("++", false, k),
 			[
-				// i = (i + 1) & 255;
 				exprStmt(assign(i, band(bin("+", i, lit(1)), lit(255)))),
-				// j = (j + S[i]) & 255;
 				exprStmt(assign(j, band(bin("+", j, Si), lit(255)))),
-				// var t = S[i];
 				varDecl("t", Si),
-				// S[i] = S[j];
 				exprStmt(assign(Si, Sj)),
-				// S[j] = t;
 				exprStmt(assign(Sj, t)),
-				// out[k] = data[k] ^ S[(S[i] + S[j]) & 255];
 				exprStmt(
 					assign(
 						index(out, k),
@@ -191,77 +330,6 @@ function buildRc4Function(names: RuntimeNames): JsNode {
 	];
 
 	return fn(names.rc4, ["data", "key"], body);
-}
-
-// --- Base64 ---
-
-/**
- * Build the base64 decoder function.
- *
- * ```js
- * function b64(str) {
- *   if (typeof atob === 'function') {
- *     var bin = atob(str);
- *     var bytes = new Uint8Array(bin.length);
- *     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
- *     return bytes;
- *   } else {
- *     return new Uint8Array(Buffer.from(str, 'base64'));
- *   }
- * }
- * ```
- */
-function buildB64Function(names: RuntimeNames): JsNode {
-	const str = id("str");
-	const binVar = id("bin");
-	const bytes = id("bytes");
-	const i = id("i");
-
-	const body: JsNode[] = [
-		ifStmt(
-			// typeof atob === 'function'
-			bin("===", un("typeof", id("atob")), lit("function")),
-			// then: atob path
-			[
-				// var bin = atob(str);
-				varDecl("bin", call(id("atob"), [str])),
-				// var bytes = new Uint8Array(bin.length);
-				varDecl(
-					"bytes",
-					newExpr(id("Uint8Array"), [member(binVar, "length")])
-				),
-				// for(var i=0; i<bin.length; i++) bytes[i] = bin.charCodeAt(i);
-				forStmt(
-					varDecl("i", lit(0)),
-					bin("<", i, member(binVar, "length")),
-					update("++", false, i),
-					[
-						exprStmt(
-							assign(
-								index(bytes, i),
-								call(member(binVar, "charCodeAt"), [i])
-							)
-						),
-					]
-				),
-				// return bytes;
-				returnStmt(bytes),
-			],
-			// else: Buffer path
-			[
-				returnStmt(
-					newExpr(id("Uint8Array"), [
-						call(member(id("Buffer"), "from"), [
-							str,
-							lit("base64"),
-						]),
-					])
-				),
-			]
-		),
-	];
-
-	return fn(names.b64, ["str"], body);
 }
 
 // --- String constant decoder ---

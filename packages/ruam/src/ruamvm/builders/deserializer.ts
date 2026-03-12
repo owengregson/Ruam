@@ -85,6 +85,14 @@ export function buildDeserializer(
 	const IC = T("_dic"); // instruction count
 	const IN = T("_din"); // instructions array
 
+	// Switch-case locals (must use temp names to avoid collisions
+	// with obfuscateLocals which can rename 3+ char vars to 2-char
+	// names that clash with hardcoded locals in the same function scope)
+	const DTAG = T("_dtag"); // constant tag
+	const DEL = T("_del"); // encoded string length
+	const DEA = T("_dea"); // encoded string array
+	const DEI = T("_dei"); // encoded string index
+
 	// Shorthand: reader.method() call
 	const rdr = id(DR);
 	const rcall = (m: string, args: JsNode[] = []): JsNode =>
@@ -269,23 +277,23 @@ export function buildDeserializer(
 			),
 		])
 	);
-	// case 11: { var el=r.u16(); var ea=[]; for(var ei=0;ei<el;ei++){ea.push(r.u16());} cs.push(ea); break; }
+	// case 11: { var _del=r.u16(); var _dea=[]; for(var _dei=0;_dei<_del;_dei++){_dea.push(r.u16());} cs.push(_dea); break; }
 	cases.push(
 		caseClause(lit(11), [
 			block(
-				varDecl("el", rcall(DU16)),
-				varDecl("ea", { type: "ArrayExpr", elements: [] }),
+				varDecl(DEL, rcall(DU16)),
+				varDecl(DEA, { type: "ArrayExpr", elements: [] }),
 				forStmt(
-					varDecl("ei", lit(0)),
-					bin("<", id("ei"), id("el")),
-					update("++", false, id("ei")),
+					varDecl(DEI, lit(0)),
+					bin("<", id(DEI), id(DEL)),
+					update("++", false, id(DEI)),
 					[
 						exprStmt(
-							call(member(id("ea"), "push"), [rcall(DU16)])
+							call(member(id(DEA), "push"), [rcall(DU16)])
 						),
 					]
 				),
-				exprStmt(push(id("ea"))),
+				exprStmt(push(id(DEA))),
 				breakStmt()
 			),
 		])
@@ -295,16 +303,16 @@ export function buildDeserializer(
 		caseClause(null, [exprStmt(push(rcall(DRS))), breakStmt()])
 	);
 
-	// for(var i=0;i<cc;i++){var tag=r.u8();switch(tag){...}}
+	// for(var i=0;i<cc;i++){var _dtag=r.u8();switch(_dtag){...}}
 	body.push(
 		forStmt(
 			varDecl("i", lit(0)),
 			bin("<", id("i"), id(CC)),
 			update("++", false, id("i")),
 			[
-				varDecl("tag", rcall(DU8)),
+				varDecl(DTAG, rcall(DU8)),
 				switchStmt(
-					id("tag"),
+					id(DTAG),
 					cases as ReturnType<typeof caseClause>[]
 				),
 			]

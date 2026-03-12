@@ -32,7 +32,8 @@ import {
 import { emit } from "./emit.js";
 import { buildFingerprintSource } from "./builders/fingerprint.js";
 import {
-	buildDecoderSource,
+	buildBinaryDecoderSource,
+	buildRc4Source,
 	buildStringDecoderSource,
 } from "./builders/decoder.js";
 import { buildDebugProtection } from "./builders/debug-protection.js";
@@ -78,6 +79,8 @@ export function generateVmRuntime(options: {
 	cipherSalt?: number;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
+	/** Shuffled 64-char alphabet for custom binary encoding. */
+	alphabet: string;
 }): VmRuntimeResult {
 	const {
 		opcodeShuffleMap,
@@ -98,6 +101,7 @@ export function generateVmRuntime(options: {
 		cipherSalt,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
+		alphabet,
 	} = options;
 
 	// Create constant splitter — replaces well-known numeric literals with
@@ -125,10 +129,13 @@ export function generateVmRuntime(options: {
 		)
 	);
 
-	// Optional encryption support
+	// Custom binary decoder — always emitted (all units use binary encoding)
+	nodes.push(...buildBinaryDecoderSource(names, alphabet));
+
+	// Optional encryption support (RC4 + fingerprint)
 	if (encrypt) {
 		nodes.push(...buildFingerprintSource(names, split));
-		nodes.push(...buildDecoderSource(names));
+		nodes.push(...buildRc4Source(names));
 	}
 
 	// Optional debug protection
@@ -278,6 +285,8 @@ export function generateShieldedVmRuntime(options: {
 	integrityBinding?: boolean;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
+	/** Shuffled 64-char alphabet for custom binary encoding. */
+	alphabet: string;
 }): ShieldedVmRuntimeResult {
 	const {
 		groups,
@@ -291,6 +300,7 @@ export function generateShieldedVmRuntime(options: {
 		integrityBinding = false,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
+		alphabet,
 	} = options;
 
 	// Shared constant splitter for shared builders (fingerprint, decoder)
@@ -311,10 +321,13 @@ export function generateShieldedVmRuntime(options: {
 		)
 	);
 
-	// Shared: encryption support
+	// Shared: custom binary decoder (always emitted)
+	nodes.push(...buildBinaryDecoderSource(sharedNames, alphabet));
+
+	// Shared: encryption support (RC4 + fingerprint)
 	if (encrypt) {
 		nodes.push(...buildFingerprintSource(sharedNames, sharedSplit));
-		nodes.push(...buildDecoderSource(sharedNames));
+		nodes.push(...buildRc4Source(sharedNames));
 	}
 
 	// Shared: debug protection
