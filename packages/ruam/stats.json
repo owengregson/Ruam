@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "collectedAt": "2026-03-07T22:46:16.987Z",
+  "collectedAt": "2026-03-12T05:28:57.863Z",
   "opcodes": {
     "count": 300,
     "categories": 24,
@@ -9,27 +9,28 @@
     "slotOpcodes": 10
   },
   "source": {
-    "files": 31,
-    "lines": 8349,
-    "testFiles": 26,
-    "testLines": 12767,
-    "totalFiles": 57,
-    "totalLines": 21116,
-    "templateFiles": 7,
-    "visitorFiles": 5
+    "files": 62,
+    "lines": 22564,
+    "testFiles": 31,
+    "testLines": 14537,
+    "totalFiles": 93,
+    "totalLines": 37101,
+    "templateFiles": 0,
+    "visitorFiles": 4
   },
   "tests": {
-    "total": 1657,
-    "passed": 1657,
+    "total": 1841,
+    "passed": 1841,
     "failed": 0,
-    "suites": 168,
+    "suites": 196,
     "categories": [
       "core",
       "integration",
-      "security",
-      "stress"
+      "ruamvm",
+      "stress",
+      "security"
     ],
-    "durationMs": 715810
+    "durationMs": 14782
   },
   "performance": {
     "weightedAvg": 39.5,
@@ -122,12 +123,12 @@
     }
   },
   "badges": {
-    "tests": "1,657",
-    "testsPassing": "1,657 passing",
+    "tests": "1,841",
+    "testsPassing": "1,841 passing",
     "opcodes": "300",
     "categories": "24",
-    "loc": "8.3k",
-    "totalLoc": "21.1k",
+    "loc": "22.6k",
+    "totalLoc": "37.1k",
     "overhead": "~39.5x",
     "overheadMedian": "~39.9x",
     "sizeRatioLow": "1328.3x",

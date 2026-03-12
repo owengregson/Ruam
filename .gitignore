@@ -27,6 +27,8 @@ Thumbs.db
 TestInputExt/
 TestOutputExt/
 TestOutputExtRecurs
+packages/ruam/test/RuamTesterO.js
+packages/ruam/test/RuamTesterLiteO.js
 
 # Environment / secrets
 .env
