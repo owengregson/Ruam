@@ -116,8 +116,8 @@ describe("anti-reversing properties", () => {
 			const out1 = obfuscateCode(sampleCode);
 			const out2 = obfuscateCode(sampleCode);
 
-			// Extract function names (like _abc, _x2y)
-			const fnPattern = /function (_\w+)\(/g;
+			// Extract function names (short identifiers like et, qz, l)
+			const fnPattern = /function ([a-z][a-z0-9]*)\(/g;
 			const fns1 = [...out1.matchAll(fnPattern)].map((m) => m[1]);
 			const fns2 = [...out2.matchAll(fnPattern)].map((m) => m[1]);
 

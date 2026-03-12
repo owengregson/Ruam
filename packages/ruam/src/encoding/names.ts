@@ -1,18 +1,19 @@
 /**
  * Runtime identifier name generator.
  *
- * Produces randomized internal variable names for the VM runtime,
- * making the output look like generic minified code rather than
+ * Produces randomized internal variable names for the VM runtime
+ * that look like minifier output (Terser/uglify-style) rather than
  * an obvious VM interpreter.
  *
- * All generated names (RuntimeNames + TempNames) come from a single
- * LCG sequence sharing one `used` set, guaranteeing zero collisions
- * and per-build variation for every `_`-prefixed identifier in the output.
+ * Names are 1–2 character, lowercase letter-only identifiers drawn
+ * from a per-build shuffled pool. All generated names (RuntimeNames +
+ * TempNames) share a single collision-free `used` set.
  *
  * @module encoding/names
  */
 
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import { RESERVED } from "../ruamvm/transforms.js";
 
 /**
  * Mapping of logical role to generated identifier name for all
@@ -150,9 +151,8 @@ export interface RuntimeNames {
  * Randomized names for handler/builder temporary variables and
  * internal object property keys.
  *
- * Every `_`-prefixed identifier in the generated runtime code is
- * represented here. The canonical key (e.g. `"_ci"`) maps to a
- * per-build randomized name, guaranteeing:
+ * Every canonical key (e.g. `"_ci"`) maps to a per-build randomized
+ * 1–2 char name, guaranteeing:
  *   1. No collisions with RuntimeNames
  *   2. No fixed fingerprint across builds
  */
@@ -264,23 +264,74 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_htd", // handler table packed data array
 	"_htk", // handler table decode key
 	"_hti", // handler table decode loop variable
+
+	// --- Handler table decode loop temporaries ---
+	"_htv", // handler table decode value (was hardcoded "_v")
+	"_htw", // handler table decode weight (was hardcoded "_w")
 ] as const;
 
 /** The watermark variable name — always `_ru4m`. */
 export const WATERMARK_NAME = "_ru4m";
 
-const ALPHA = "abcdefghijklmnopqrstuvwxyz";
-const ALNUM = "abcdefghijklmnopqrstuvwxyz0123456789";
+// --- Name pool ---
+
+/**
+ * Letter ordering inspired by English frequency analysis (similar to
+ * what Terser uses for its short name allocator). This determines the
+ * base alphabet for building the shuffled name pool.
+ */
+const LETTERS = "etnoiasuclfdphmgvbwykxjqz";
+
+/**
+ * Names that must NOT appear in the generated name pool.
+ *
+ * This set combines:
+ *   - Handler case-body locals (hardcoded in handler/*.ts files)
+ *   - JS reserved words (from transforms.ts RESERVED set)
+ *   - Short names in the KEEP set that handlers use freely
+ *
+ * This prevents scope-level collisions between generated runtime
+ * names and handler-local variables.
+ */
+const EXCLUDED_NAMES: ReadonlySet<string> = /*@__PURE__*/ (() => {
+	const s = new Set<string>();
+
+	// ALL single letters — excluded because function stubs reference
+	// top-level RuntimeNames identifiers (like vm, scope) inside
+	// function bodies where user parameter names could shadow them.
+	// Single-letter params (n, x, i, etc.) are extremely common in
+	// user code, so any single-letter RuntimeName risks collision.
+	for (const ch of LETTERS) s.add(ch);
+
+	// Two-char handler locals / KEEP entries — these are hardcoded in
+	// handler case bodies and must not collide with RuntimeNames
+	for (const n of [
+		"a1", "a2", "a3", "ai", "ci", "cv", "ei", "eu",
+		"fi", "ki", "ni", "ra", "rb", "ri", "si", "sp",
+		"ti", "it", "id", "cs", "ct", "fn", "ex",
+	]) s.add(n);
+
+	// JS reserved words (1–2 char subset)
+	for (const w of RESERVED) {
+		if (w.length <= 2) s.add(w);
+	}
+
+	return s;
+})();
 
 // --- Name generation ---
 
 /**
- * Create an LCG-based name generator.
+ * Create an LCG-based name generator that produces minifier-style
+ * 1–2 character identifiers from a per-build shuffled pool.
  *
- * All names produced by the returned `genName()` are guaranteed unique
- * within the `used` set. An external `used` set can be provided to
- * enforce cross-generator uniqueness (e.g. across shielding groups
- * that share the same IIFE scope).
+ * The pool contains all single lowercase letters + all two-letter
+ * lowercase combinations, minus reserved words and handler locals.
+ * Fisher-Yates shuffle with the LCG ensures different name
+ * assignments per build seed.
+ *
+ * An external `used` set can be provided to enforce cross-generator
+ * uniqueness (e.g. across shielding groups).
  */
 function createNameGenerator(seed: number, externalUsed?: Set<string>) {
 	const used = externalUsed ?? new Set<string>();
@@ -291,24 +342,50 @@ function createNameGenerator(seed: number, externalUsed?: Set<string>) {
 		return s;
 	}
 
+	// --- Build name pool: two-letter combos (letter + letter) ---
+	// Single letters are excluded to prevent shadowing collisions
+	// with user function parameters in function stubs.
+	const pool: string[] = [];
+
+	for (const c1 of LETTERS) {
+		for (const c2 of LETTERS) {
+			const name = c1 + c2;
+			if (!EXCLUDED_NAMES.has(name)) pool.push(name);
+		}
+	}
+
+	// Shuffle pool deterministically with Fisher-Yates + LCG.
+	// Different seeds produce completely different name orderings.
+	for (let i = pool.length - 1; i > 0; i--) {
+		const j = lcg() % (i + 1);
+		const tmp = pool[i]!;
+		pool[i] = pool[j]!;
+		pool[j] = tmp;
+	}
+
+	let poolIdx = 0;
+
 	function genName(): string {
-		let minLen = 2;
+		// Draw from the shuffled pool — most builds use only a fraction
+		while (poolIdx < pool.length) {
+			const name = pool[poolIdx++]!;
+			if (!used.has(name)) {
+				used.add(name);
+				return name;
+			}
+		}
+
+		// Pool exhausted (very large shielded builds): generate 3-char
+		// names that still look like minifier overflow (e.g. "etn", "oia")
 		for (let attempt = 0; ; attempt++) {
 			if (attempt > 10000) {
 				throw new Error("Runtime name pool exhausted");
 			}
-			// After repeated collisions, increase minimum length
-			// to skip saturated short-name buckets.
-			if (attempt > 0 && attempt % 50 === 0 && minLen < 6) {
-				minLen++;
-			}
-			const range = 7 - minLen; // e.g. minLen=2 → range=5 (2–6)
-			const len = minLen + (lcg() % range); // minLen–6 chars after '_'
-			let name = "_" + ALPHA[lcg() % ALPHA.length]!;
-			for (let i = 1; i < len; i++) {
-				name += ALNUM[lcg() % ALNUM.length]!;
-			}
-			if (!used.has(name)) {
+			const c1 = LETTERS[lcg() % LETTERS.length]!;
+			const c2 = LETTERS[lcg() % LETTERS.length]!;
+			const c3 = LETTERS[lcg() % LETTERS.length]!;
+			const name = c1 + c2 + c3;
+			if (!used.has(name) && !RESERVED.has(name)) {
 				used.add(name);
 				return name;
 			}
@@ -326,7 +403,7 @@ function createNameGenerator(seed: number, externalUsed?: Set<string>) {
  * that no two names in the entire output can collide.
  *
  * @param seed - LCG seed for deterministic name generation.
- * @returns RuntimeNames and TempNames.
+ * @returns RuntimeNames, TempNames, and the shared used set.
  */
 export function generateRuntimeNames(
 	seed: number,
@@ -334,8 +411,9 @@ export function generateRuntimeNames(
 ): {
 	runtime: RuntimeNames;
 	temps: TempNames;
+	used: Set<string>;
 } {
-	const { genName } = createNameGenerator(seed, sharedUsed);
+	const { genName, used } = createNameGenerator(seed, sharedUsed);
 
 	const runtime: RuntimeNames = {
 		bt: genName(),
@@ -398,7 +476,7 @@ export function generateRuntimeNames(
 		temps[key] = genName();
 	}
 
-	return { runtime, temps: temps as TempNames };
+	return { runtime, temps: temps as TempNames, used };
 }
 
 /** Fields of {@link RuntimeNames} that are shared across all shielding groups. */
