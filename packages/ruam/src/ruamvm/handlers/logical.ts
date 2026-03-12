@@ -38,7 +38,7 @@ registry.set(Op.LOGICAL_AND, (ctx: HandlerCtx) => [
 	ifStmt(
 		un("!", id("v")),
 		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
-		[exprStmt(update("--", false, id(ctx.P)))]
+		[exprStmt(ctx.pop())]
 	),
 	breakStmt(),
 ]);
@@ -55,7 +55,7 @@ registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
 	ifStmt(
 		id("v"),
 		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
-		[exprStmt(update("--", false, id(ctx.P)))]
+		[exprStmt(ctx.pop())]
 	),
 	breakStmt(),
 ]);
@@ -76,7 +76,7 @@ registry.set(Op.NULLISH_COALESCE, (ctx: HandlerCtx) => [
 			bin("!==", id("v"), un("void", lit(0)))
 		),
 		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
-		[exprStmt(update("--", false, id(ctx.P)))]
+		[exprStmt(ctx.pop())]
 	),
 	breakStmt(),
 ]);

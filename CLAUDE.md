@@ -45,7 +45,7 @@ src/
     handler-fragmentation.ts Handler fragmentation: splits handlers into interleaved fragments
     builders/
       interpreter.ts        Interpreter builder: assembles sync/async exec from handler registry
-      loader.ts             Bytecode loader, cache, depth tracking, _ru4m watermark
+      loader.ts             Bytecode loader, cache, depth tracking
       runners.ts            VM dispatch functions (run/runAsync) + shielding router
       deserializer.ts       Binary bytecode deserializer
       fingerprint.ts        Environment fingerprinting runtime source
@@ -58,7 +58,7 @@ src/
       registry.ts           Handler registry (Map<Op, HandlerFn>), HandlerCtx type, makeHandlerCtx
       helpers.ts            Shared handler helpers (buildThisBoxing, debugTrace, superProto, etc.)
       index.ts              Barrel module: re-exports + side-effect imports for 19 handler files
-      stack.ts              Stack manipulation opcodes (PUSH, POP, DUP, SWAP, etc.)
+      stack.ts              Stack manipulation opcodes via Array.push/pop/length (PUSH, POP, DUP, SWAP, etc.)
       arithmetic.ts         Arithmetic opcodes (ADD, SUB, MUL, etc.)
       comparison.ts         Comparison opcodes (EQ, NEQ, LT, GT, etc.)
       logical.ts            Logical opcodes (AND, OR, NOT, etc.)
@@ -106,7 +106,9 @@ docs/
 -   **Per-file opcode shuffle**: Seeded Fisher-Yates (LCG) produces different instruction encodings per build. Seed + shuffle constants live in `constants.ts`.
 -   **Constant pool string encoding**: All string constants in both JSON and binary bytecode formats are XOR-encoded with an LCG key stream. JSON format stores encoded strings as number arrays; binary format uses `BINARY_TAG_ENCODED_STRING` (tag 11) with uint16 char codes. Decoded at load time by the `strDec` runtime function. When rolling cipher is on, the encoding key is derived implicitly from bytecode metadata (no plaintext seed). In binary format, this provides defense in depth — strings remain encoded even after RC4 decryption is reversed.
 -   **Per-build identifier randomization**: All internal VM identifiers (`_vm`, `_BT`, `stack`, etc.) are replaced with random 2-3 char names generated via LCG PRNG (same seed as opcode shuffle). Managed by `RuntimeNames` interface in `runtime/names.ts`.
--   **Watermark**: Every output contains `var _ru4m=!0;` — looks random but encodes "ruam" with a `4` for `a`.
+-   **Watermark**: Steganographic — the WATERMARK_MAGIC constant (FNV-1a of "ruam" = `0x2812af9a`) is XOR-folded into the FNV offset basis used for key anchor computation. No visible variable, string, or pattern in output. Verified by comparing key anchor results: using standard FNV basis instead of watermarked basis breaks all rolling cipher decryption.
+-   **Prototypal scope chain**: Scope chain uses `Object.create(parent)` / `Object.getPrototypeOf(scope)` instead of a `{sPar, sVars}` linked list. Variables are own properties on scope objects. `in` operator traverses the prototype chain for reads; `Object.prototype.hasOwnProperty.call` walk for stores. TDZ uses a per-build sentinel object at IIFE scope (identity comparison via `===`). Program scope is `Object.create(null)` with `defineProperty` bindings.
+-   **Array-based stack**: Stack uses native `Array.push()`/`Array.pop()`/`S[S.length-1]` instead of a dedicated stack pointer variable (`S[++P]`/`S[P--]`/`S[P]`). The stack pointer (`stp`) is generated but unused (preserved for LCG sequence stability). Exception handlers save `S.length` as `_sp` and restore via `S.length=_h._sp`. Stack encoding Proxy intercepts `push()` set traps on numeric indices.
 -   **Rolling cipher** (`rollingCipher` option): Position-dependent XOR encryption on every instruction. The master key is derived implicitly from bytecode metadata (instruction count, register count, param count, constant count) via FNV-1a, then XOR'd with the key anchor (closure-entangled with the handler table). No plaintext seed appears in the output. Each instruction is encrypted with `mixState(baseKey, index, index ^ 0x9E3779B9)`. Implemented in `encoding/rolling-cipher.ts` (build-time) and `ruamvm/builders/rolling-cipher.ts` (runtime). When enabled, string encoding also uses the implicit key.
 -   **Integrity binding** (`integrityBinding` option): A per-build hash (FNV-1a of the interpreter template source) is XOR-folded into the key anchor (`_ka = (_ka ^ integrityHash) >>> 0`) instead of stored as a standalone variable. If an attacker modifies the interpreter, the key anchor changes, and all instruction decryption produces garbage. No longer a greppable `var _x = digits^` pattern. Requires `rollingCipher`.
 -   **VM Shielding** (`vmShielding` option): Each root function gets its own micro-interpreter with unique opcode shuffle, identifier names, and rolling cipher key. A shared router function maps unit IDs to group dispatch functions. Shared infrastructure (cache, fingerprint, deserializer) is emitted once. Auto-enables `rollingCipher`. Implemented in `transform.ts` (`assembleShielded()`), `runtime/vm.ts` (`generateShieldedVmRuntime()`), `runtime/names.ts` (`generateShieldedNames()`), and `ruamvm/builders/runners.ts` (`buildRouterSource()`).

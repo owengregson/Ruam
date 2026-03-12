@@ -271,23 +271,20 @@ export interface SpreadElement {
 	type: "SpreadElement";
 	arg: JsNode;
 }
-// --- Stack operations (emit directly as S[++P]=expr, S[P--], S[P]) ---
+// --- Stack operations (emit as S.push(expr), S.pop(), S[S.length-1]) ---
 
 export interface StackPush {
 	type: "StackPush";
 	value: JsNode;
 	S: string;
-	P: string;
 }
 export interface StackPop {
 	type: "StackPop";
 	S: string;
-	P: string;
 }
 export interface StackPeek {
 	type: "StackPeek";
 	S: string;
-	P: string;
 }
 
 // --- Factory functions ---
@@ -488,14 +485,14 @@ export function spread(arg: JsNode): SpreadElement {
 	return { type: "SpreadElement", arg };
 }
 
-export function stackPush(S: string, P: string, value: JsNode): StackPush {
-	return { type: "StackPush", value, S, P };
+export function stackPush(S: string, value: JsNode): StackPush {
+	return { type: "StackPush", value, S };
 }
-export function stackPop(S: string, P: string): StackPop {
-	return { type: "StackPop", S, P };
+export function stackPop(S: string): StackPop {
+	return { type: "StackPop", S };
 }
-export function stackPeek(S: string, P: string): StackPeek {
-	return { type: "StackPeek", S, P };
+export function stackPeek(S: string): StackPeek {
+	return { type: "StackPeek", S };
 }
 
 // --- Convenience ---

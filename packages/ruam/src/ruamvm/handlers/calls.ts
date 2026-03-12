@@ -193,7 +193,7 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 									lit("CALL_ERR"),
 									lit("NOT A FUNCTION:"),
 									id("fn"),
-									bin("+", lit(ctx.S + " depth="), id(ctx.P)),
+									bin("+", lit(ctx.S + " depth="), member(id(ctx.S), "length")),
 								])
 							),
 						]

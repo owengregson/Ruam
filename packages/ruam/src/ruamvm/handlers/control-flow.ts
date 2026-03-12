@@ -48,17 +48,17 @@ function JMP(ctx: HandlerCtx): JsNode[] {
 	return [ipAssign(ctx), breakStmt()];
 }
 
-/** `if(S[P--])IP=O*2;break;` */
+/** `if(S.pop())IP=O*2;break;` */
 function JMP_TRUE(ctx: HandlerCtx): JsNode[] {
 	return [ifStmt(ctx.pop(), [ipAssign(ctx)]), breakStmt()];
 }
 
-/** `if(!S[P--])IP=O*2;break;` */
+/** `if(!S.pop())IP=O*2;break;` */
 function JMP_FALSE(ctx: HandlerCtx): JsNode[] {
 	return [ifStmt(un("!", ctx.pop()), [ipAssign(ctx)]), breakStmt()];
 }
 
-/** `{var v=S[P--];if(v===null||v===void 0)IP=O*2;break;}` */
+/** `{var v=S.pop();if(v===null||v===void 0)IP=O*2;break;}` */
 function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.pop()),
@@ -74,7 +74,7 @@ function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 	];
 }
 
-/** `{var v=S[P--];if(v===void 0)IP=O*2;break;}` */
+/** `{var v=S.pop();if(v===void 0)IP=O*2;break;}` */
 function JMP_UNDEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.pop()),
@@ -83,17 +83,17 @@ function JMP_UNDEFINED(ctx: HandlerCtx): JsNode[] {
 	];
 }
 
-/** `if(S[P])IP=O*2;break;` — keeps value on stack */
+/** `if(S[S.length-1])IP=O*2;break;` — keeps value on stack */
 function JMP_TRUE_KEEP(ctx: HandlerCtx): JsNode[] {
 	return [ifStmt(ctx.peek(), [ipAssign(ctx)]), breakStmt()];
 }
 
-/** `if(!S[P])IP=O*2;break;` — keeps value on stack */
+/** `if(!S[S.length-1])IP=O*2;break;` — keeps value on stack */
 function JMP_FALSE_KEEP(ctx: HandlerCtx): JsNode[] {
 	return [ifStmt(un("!", ctx.peek()), [ipAssign(ctx)]), breakStmt()];
 }
 
-/** `{var v=S[P];if(v===null||v===void 0)IP=O*2;break;}` — keeps value on stack */
+/** `{var v=S[S.length-1];if(v===null||v===void 0)IP=O*2;break;}` — keeps value on stack */
 function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
@@ -115,9 +115,9 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
  * RETURN: pop return value, optionally defer to finally handler, then return.
  *
  * ```
- * var _rv=S[P--];
+ * var _rv=S.pop();
  * <debug trace if enabled>
- * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h._fi>=0){CT=1;CV=_rv;EX.pop();P=_h._sp;IP=_h._fi*2;break;}}
+ * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h._fi>=0){CT=1;CV=_rv;EX.pop();S.length=_h._sp;IP=_h._fi*2;break;}}
  * return _rv;
  * ```
  */
@@ -147,7 +147,7 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
 						exprStmt(call(member(id(ctx.EX), "pop"), [])),
 						exprStmt(
 							assign(
-								id(ctx.P),
+								member(id(ctx.S), "length"),
 								member(id(ctx.t("_h")), ctx.t("_sp"))
 							)
 						),
@@ -175,7 +175,7 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
  *
  * ```
  * <debug trace if enabled>
- * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h._fi>=0){CT=1;CV=void 0;EX.pop();P=_h._sp;IP=_h._fi*2;break;}}
+ * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h._fi>=0){CT=1;CV=void 0;EX.pop();S.length=_h._sp;IP=_h._fi*2;break;}}
  * return void 0;
  * ```
  */
@@ -204,7 +204,7 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 						exprStmt(call(member(id(ctx.EX), "pop"), [])),
 						exprStmt(
 							assign(
-								id(ctx.P),
+								member(id(ctx.S), "length"),
 								member(id(ctx.t("_h")), ctx.t("_sp"))
 							)
 						),

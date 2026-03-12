@@ -42,7 +42,6 @@ import {
 	obj,
 	arr,
 	ternary,
-	stackPush,
 	fnExpr,
 } from "../nodes.js";
 import { registry, makeHandlerCtx } from "../handlers/index.js";
@@ -652,8 +651,7 @@ function buildScaffoldAST(
 	const fnName = isAsync ? n.execAsync : n.exec;
 	const fnLabel = isAsync ? n.execAsync : n.exec;
 
-	const S = n.stk,
-		P = n.stp;
+	const S = n.stk;
 	const O = n.operand,
 		SC = n.scope,
 		R = n.regs,
@@ -728,7 +726,7 @@ function buildScaffoldAST(
 	tryBody.push(
 		varDecl(SC, call(member(id("Object"), "create"), [id(OS)]))
 	);
-	tryBody.push(varDecl(P, un("-", lit(1))));
+	// Stack pointer (P) eliminated — stack uses Array.push/pop/length
 
 	// var _g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{}
 	tryBody.push(
@@ -851,7 +849,7 @@ function buildScaffoldAST(
 	// Optional: debug trace
 	if (debug) {
 		whileBody.push(
-			exprStmt(call(id(n.dbgOp), [id(PH), id(O), id(C), id(P), id(S)]))
+			exprStmt(call(id(n.dbgOp), [id(PH), id(O), id(C), id(S)]))
 		);
 	}
 
@@ -914,10 +912,10 @@ function buildScaffoldAST(
 			)
 		);
 	}
-	// P=_h._sp
-	catchRouteBody.push(exprStmt(assign(id(P), member(id(T("_h")), T("_sp")))));
-	// Push error onto stack: S[++P]=e
-	catchRouteBody.push(exprStmt(stackPush(S, P, id("e"))));
+	// S.length=_h._sp (restore stack to saved depth)
+	catchRouteBody.push(exprStmt(assign(member(id(S), "length"), member(id(T("_h")), T("_sp")))));
+	// Push error onto stack: S.push(e)
+	catchRouteBody.push(exprStmt(call(member(id(S), "push"), [id("e")])));
 	// IP=_h._ci*2
 	catchRouteBody.push(
 		exprStmt(
@@ -944,9 +942,9 @@ function buildScaffoldAST(
 			)
 		);
 	}
-	// P=_h._sp
+	// S.length=_h._sp (restore stack to saved depth)
 	finallyRouteBody.push(
-		exprStmt(assign(id(P), member(id(T("_h")), T("_sp"))))
+		exprStmt(assign(member(id(S), "length"), member(id(T("_h")), T("_sp"))))
 	);
 	// PE=e; HPE=true
 	finallyRouteBody.push(exprStmt(assign(id(PE), id("e"))));
@@ -1033,128 +1031,81 @@ function generateDecoyHandlers(
 	usedOpcodes: Set<number>
 ): CaseClause[] {
 	const S = n.stk,
-		P = n.stp,
 		C = n.cArr,
 		O = n.operand;
 	const R = n.regs,
 		SC = n.scope;
 
-	// AST decoy body factories — look like real arithmetic, stack, register, scope ops
+	/** S[S.length-1] — peek at top of stack */
+	const tos = () =>
+		index(id(S), bin("-", member(id(S), "length"), lit(1)));
+
+	// AST decoy body factories — look like real array push/pop/length ops
 	const decoyBodyFactories: (() => JsNode[])[] = [
-		// var b=S[P--]; S[P]=S[P]+b
+		// var b=S.pop(); S[S.length-1]=S[S.length-1]+b
 		() => [
-			varDecl("b", index(id(S), update("--", false, id(P)))),
-			exprStmt(
-				assign(
-					index(id(S), id(P)),
-					bin("+", index(id(S), id(P)), id("b"))
-				)
-			),
+			varDecl("b", call(member(id(S), "pop"), [])),
+			exprStmt(assign(tos(), bin("+", tos(), id("b")))),
 		],
-		// var b=S[P--]; S[P]=S[P]-b
+		// var b=S.pop(); S[S.length-1]=S[S.length-1]-b
 		() => [
-			varDecl("b", index(id(S), update("--", false, id(P)))),
-			exprStmt(
-				assign(
-					index(id(S), id(P)),
-					bin("-", index(id(S), id(P)), id("b"))
-				)
-			),
+			varDecl("b", call(member(id(S), "pop"), [])),
+			exprStmt(assign(tos(), bin("-", tos(), id("b")))),
 		],
-		// var b=S[P--]; S[P]=S[P]*b
+		// var b=S.pop(); S[S.length-1]=S[S.length-1]*b
 		() => [
-			varDecl("b", index(id(S), update("--", false, id(P)))),
-			exprStmt(
-				assign(
-					index(id(S), id(P)),
-					bin("*", index(id(S), id(P)), id("b"))
-				)
-			),
+			varDecl("b", call(member(id(S), "pop"), [])),
+			exprStmt(assign(tos(), bin("*", tos(), id("b")))),
 		],
-		// S[P]=~S[P]
-		() => [
-			exprStmt(assign(index(id(S), id(P)), un("~", index(id(S), id(P))))),
-		],
-		// S[++P]=C[O]
-		() => [exprStmt(stackPush(S, P, index(id(C), id(O))))],
-		// R[O]=S[P--]
+		// S[S.length-1]=~S[S.length-1]
+		() => [exprStmt(assign(tos(), un("~", tos())))],
+		// S.push(C[O])
+		() => [exprStmt(call(member(id(S), "push"), [index(id(C), id(O))]))],
+		// R[O]=S.pop()
 		() => [
 			exprStmt(
 				assign(
 					index(id(R), id(O)),
-					index(id(S), update("--", false, id(P)))
+					call(member(id(S), "pop"), [])
 				)
 			),
 		],
-		// S[++P]=R[O]
-		() => [exprStmt(stackPush(S, P, index(id(R), id(O))))],
-		// var s=SC; if(s&&C[O]in s){s[C[O]]=S[P--];}
+		// S.push(R[O])
+		() => [exprStmt(call(member(id(S), "push"), [index(id(R), id(O))]))],
+		// var s=SC; if(s&&C[O]in s){s[C[O]]=S.pop();}
 		() => [
 			varDecl("s", id(SC)),
 			ifStmt(bin("&&", id("s"), bin("in", index(id(C), id(O)), id("s"))), [
 				exprStmt(
 					assign(
 						index(id("s"), index(id(C), id(O))),
-						index(id(S), update("--", false, id(P)))
+						call(member(id(S), "pop"), [])
 					)
 				),
 			]),
 		],
-		// S[P]=!S[P]
+		// S[S.length-1]=!S[S.length-1]
+		() => [exprStmt(assign(tos(), un("!", tos())))],
+		// var b=S.pop(); S[S.length-1]=S[S.length-1]&b
 		() => [
-			exprStmt(assign(index(id(S), id(P)), un("!", index(id(S), id(P))))),
+			varDecl("b", call(member(id(S), "pop"), [])),
+			exprStmt(assign(tos(), bin("&", tos(), id("b")))),
 		],
-		// var b=S[P--]; S[P]=S[P]&b
+		// var b=S.pop(); S[S.length-1]=S[S.length-1]|b
 		() => [
-			varDecl("b", index(id(S), update("--", false, id(P)))),
-			exprStmt(
-				assign(
-					index(id(S), id(P)),
-					bin("&", index(id(S), id(P)), id("b"))
-				)
-			),
+			varDecl("b", call(member(id(S), "pop"), [])),
+			exprStmt(assign(tos(), bin("|", tos(), id("b")))),
 		],
-		// var b=S[P--]; S[P]=S[P]|b
-		() => [
-			varDecl("b", index(id(S), update("--", false, id(P)))),
-			exprStmt(
-				assign(
-					index(id(S), id(P)),
-					bin("|", index(id(S), id(P)), id("b"))
-				)
-			),
-		],
-		// S[P]=-S[P]
-		() => [
-			exprStmt(assign(index(id(S), id(P)), un("-", index(id(S), id(P))))),
-		],
-		// S[P]=+S[P]+1
-		() => [
-			exprStmt(
-				assign(
-					index(id(S), id(P)),
-					bin("+", un("+", index(id(S), id(P))), lit(1))
-				)
-			),
-		],
-		// S[P]=typeof S[P]
-		() => [
-			exprStmt(
-				assign(index(id(S), id(P)), un("typeof", index(id(S), id(P))))
-			),
-		],
-		// P--
-		() => [exprStmt(update("--", false, id(P)))],
-		// S[P+1]=S[P]; P++
-		() => [
-			exprStmt(
-				assign(
-					index(id(S), bin("+", id(P), lit(1))),
-					index(id(S), id(P))
-				)
-			),
-			exprStmt(update("++", false, id(P))),
-		],
+		// S[S.length-1]=-S[S.length-1]
+		() => [exprStmt(assign(tos(), un("-", tos())))],
+		// S[S.length-1]=+S[S.length-1]+1
+		() => [exprStmt(assign(tos(), bin("+", un("+", tos()), lit(1))))],
+		// S[S.length-1]=typeof S[S.length-1]
+		() => [exprStmt(assign(tos(), un("typeof", tos())))],
+		// S.pop()
+		() => [exprStmt(call(member(id(S), "pop"), []))],
+		// S.push(S[S.length-1])
+		() => [exprStmt(call(member(id(S), "push"), [tos()]))],
 	];
 
 	// Collect unused logical opcodes

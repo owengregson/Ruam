@@ -74,7 +74,6 @@ export function buildDebugLogging(
 
 	const O = names.operand;
 	const S = names.stk;
-	const P = names.stp;
 	const OP = names.opVar;
 	const cfg = names.dbgCfg;
 
@@ -186,8 +185,8 @@ export function buildDebugLogging(
 	const opId = id(OP);
 	const oId = id(O);
 	const cId = id("C");
-	const pId = id(P);
 	const sId = id(S);
+	const sLen = member(sId, "length");
 	const nameVar = id("name");
 	const topStrVar = id("topStr");
 	const topVar = id("top");
@@ -196,7 +195,7 @@ export function buildDebugLogging(
 
 	const dbgOpFn = fn(
 		names.dbgOp,
-		[OP, O, "C", P, S],
+		[OP, O, "C", S],
 		[
 			// if(!cfg.enabled||cfg.levels[cfg.level]>0)return;
 			ifStmt(
@@ -218,10 +217,10 @@ export function buildDebugLogging(
 			),
 			// var topStr='(empty)';
 			varDecl("topStr", lit("(empty)")),
-			// if(P>=0){...}
-			ifStmt(bin(">=", pId, lit(0)), [
-				// var top=S[P];
-				varDecl("top", index(sId, pId)),
+			// if(S.length>0){...}
+			ifStmt(bin(">", sLen, lit(0)), [
+				// var top=S[S.length-1];
+				varDecl("top", index(sId, bin("-", sLen, lit(1)))),
 				// topStr = typeof top==='function' ? '[fn'+(top.name?':'+top.name:'')+']'
 				//        : typeof top==='object'&&top!==null ? '[obj:'+Object.keys(top).slice(0,3).join(',')+']'
 				//        : String(top);
@@ -343,7 +342,7 @@ export function buildDebugLogging(
 					]),
 				]
 			),
-			// console.log('[VM_TRACE] '+name+' op='+O+constStr+' sp='+P+' top='+topStr);
+			// console.log('[VM_TRACE] '+name+' op='+O+constStr+' len='+S.length+' top='+topStr);
 			exprStmt(
 				call(member(console_, "log"), [
 					bin(
@@ -371,9 +370,9 @@ export function buildDebugLogging(
 										),
 										constStrVar
 									),
-									lit(" sp=")
+									lit(" len=")
 								),
-								pId
+								sLen
 							),
 							lit(" top=")
 						),

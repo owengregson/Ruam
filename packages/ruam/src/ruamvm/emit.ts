@@ -259,11 +259,11 @@ export function emit(node: JsNode): string {
 		case "SpreadElement":
 			return `...${emit(node.arg)}`;
 		case "StackPush":
-			return `${node.S}[++${node.P}]=${emit(node.value)}`;
+			return `${node.S}.push(${emit(node.value)})`;
 		case "StackPop":
-			return `${node.S}[${node.P}--]`;
+			return `${node.S}.pop()`;
 		case "StackPeek":
-			return `${node.S}[${node.P}]`;
+			return `${node.S}[${node.S}.length-1]`;
 		default:
 			return assertNever(node);
 	}
