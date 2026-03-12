@@ -258,6 +258,29 @@ export function buildDeserializer(names: RuntimeNames): JsNode[] {
 			),
 		])
 	);
+	// case 11: { var elen=readU16(); var earr=[]; for(var ei=0;ei<elen;ei++){earr.push(readU16());} constants.push(earr); break; }
+	cases.push(
+		caseClause(lit(11), [
+			block(
+				varDecl("elen", call(id("readU16"), [])),
+				varDecl("earr", { type: "ArrayExpr", elements: [] }),
+				forStmt(
+					varDecl("ei", lit(0)),
+					bin("<", id("ei"), id("elen")),
+					update("++", false, id("ei")),
+					[
+						exprStmt(
+							mcall(id("earr"), "push", [
+								call(id("readU16"), []),
+							])
+						),
+					]
+				),
+				exprStmt(push(id("earr"))),
+				breakStmt()
+			),
+		])
+	);
 	// default: constants.push(readStr()); break;
 	cases.push(
 		caseClause(null, [exprStmt(push(call(id("readStr"), []))), breakStmt()])

@@ -264,7 +264,7 @@ function buildLoadFunction(
 
 	// --- String branch vs Object branch ---
 	const stringBranchBody = encrypt
-		? buildEncryptedPath(names)
+		? buildEncryptedPath(names, hasStringEncoding, rollingCipher)
 		: buildJsonPath(names, hasStringEncoding, rollingCipher);
 
 	const objectBranchBody = buildObjectPath(
@@ -294,12 +294,17 @@ function buildLoadFunction(
  * var key = fp().toString(16);
  * var dec = rc4(bytes, key);
  * var eu = deser(dec);
+ * // string decode loop (if string encoding is on)
  * if(eu && eu.i) eu.i = new Int32Array(eu.i);
  * cache[id] = eu;
  * ```
  */
-function buildEncryptedPath(names: RuntimeNames): JsNode[] {
-	return [
+function buildEncryptedPath(
+	names: RuntimeNames,
+	hasStringEncoding: boolean,
+	rollingCipher: boolean
+): JsNode[] {
+	const nodes: JsNode[] = [
 		// var bytes = b64(raw);
 		varDecl("bytes", call(id(names.b64), [id("raw")])),
 		// var key = fp().toString(16);
@@ -311,6 +316,16 @@ function buildEncryptedPath(names: RuntimeNames): JsNode[] {
 		varDecl("dec", call(id(names.rc4), [id("bytes"), id("key")])),
 		// var eu = deser(dec);
 		varDecl("eu", call(id(names.deser), [id("dec")])),
+	];
+
+	// String decode loop (same revival as JSON path)
+	if (hasStringEncoding) {
+		nodes.push(
+			buildRevivalLoop(names, "eu", hasStringEncoding, rollingCipher)
+		);
+	}
+
+	nodes.push(
 		// if(eu && eu.i) eu.i = new Int32Array(eu.i);
 		ifStmt(bin("&&", id("eu"), member(id("eu"), "i")), [
 			exprStmt(
@@ -321,8 +336,10 @@ function buildEncryptedPath(names: RuntimeNames): JsNode[] {
 			),
 		]),
 		// cache[id] = eu;
-		exprStmt(assign(cacheId(names), id("eu"))),
-	];
+		exprStmt(assign(cacheId(names), id("eu")))
+	);
+
+	return nodes;
 }
 
 /**

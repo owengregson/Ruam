@@ -202,7 +202,7 @@ export function obfuscateCode(
 		decoyOpcodes,
 		stackEncoding,
 		seed: shuffleSeed,
-		stringKey: encryptBytecode ? undefined : shuffleSeed,
+		stringKey: shuffleSeed,
 		rollingCipher,
 		integrityBinding,
 		integrityHash,
@@ -671,6 +671,7 @@ function encodeUnit(
 			integrityHash,
 			cipherSalt,
 			keyAnchor,
+			stringKey,
 		});
 	}
 	return serializeUnitToJson(unit, {
