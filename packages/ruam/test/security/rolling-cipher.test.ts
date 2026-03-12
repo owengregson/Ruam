@@ -64,8 +64,10 @@ describe("rolling cipher build-time", () => {
 			const instrs1 = [100, 5, 200, 10];
 			const instrs2 = [100, 5, 200, 10];
 			const key = 12345;
-			rollingEncrypt(instrs1, key, 0xaabbccdd);
-			rollingEncrypt(instrs2, key, 0x11223344);
+			// Integrity hash is now folded into the master key before calling
+			// rollingEncrypt (via keyAnchor XOR in deriveImplicitKey)
+			rollingEncrypt(instrs1, (key ^ 0xaabbccdd) >>> 0);
+			rollingEncrypt(instrs2, (key ^ 0x11223344) >>> 0);
 			expect(instrs1).not.toEqual(instrs2);
 		});
 
@@ -626,12 +628,13 @@ describe("integrity binding anti-reversing", () => {
 
 	it("modifying the embedded integrity hash breaks execution", () => {
 		const out = obfuscateCode(sampleCode, ibOpts);
-		// The integrity hash is now a computed expression (constant splitting).
-		// Find a var declaration containing a XOR or subtraction expression and
-		// corrupt one operand — this simulates an attacker modifying the hash.
+		// The integrity hash is folded into the key anchor via an XOR:
+		//   _ka = (_ka ^ (DIGITS ^ DIGITS)) >>> 0
+		// Find this pattern and corrupt one of the numeric operands.
 		const modified = out.replace(
-			/var\s+(_\w+)\s*=\s*(\d{6,})\s*\^/,
-			(match, name, num) => `var ${name}=${parseInt(num, 10) + 1}^`
+			/(\w+)\s*=\s*\(\1\s*\^\s*\((\d{6,})\s*\^/,
+			(match, _name, num) =>
+				match.replace(num, String(parseInt(num, 10) + 1))
 		);
 		expect(modified).not.toBe(out); // Sanity: regex must have matched
 		// With a wrong integrity hash, decryption produces garbage opcodes.

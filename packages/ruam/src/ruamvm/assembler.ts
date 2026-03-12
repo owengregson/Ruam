@@ -17,7 +17,17 @@
 import { OPCODE_COUNT } from "../compiler/opcodes.js";
 import type { RuntimeNames, TempNames } from "../encoding/names.js";
 import type { JsNode } from "./nodes.js";
-import { exprStmt, lit, varDecl, arr, obj, un } from "./nodes.js";
+import {
+	exprStmt,
+	lit,
+	varDecl,
+	arr,
+	obj,
+	un,
+	assign,
+	bin,
+	id,
+} from "./nodes.js";
 import { emit } from "./emit.js";
 import { buildFingerprintSource } from "./builders/fingerprint.js";
 import {
@@ -35,10 +45,18 @@ import { buildGlobalExposure } from "./builders/globals.js";
 import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
 
+/** Result from generating the VM runtime. */
+export interface VmRuntimeResult {
+	/** The generated JS source string. */
+	source: string;
+	/** Build-time key anchor value (for rolling cipher key derivation). */
+	keyAnchorValue: number;
+}
+
 /**
  * Generate the complete VM runtime source code.
  *
- * @returns A JS source string containing the runtime IIFE.
+ * @returns A VmRuntimeResult containing the JS source string and key anchor value.
  */
 export function generateVmRuntime(options: {
 	opcodeShuffleMap: number[];
@@ -59,7 +77,7 @@ export function generateVmRuntime(options: {
 	cipherSalt?: number;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
-}): string {
+}): VmRuntimeResult {
 	const {
 		opcodeShuffleMap,
 		names,
@@ -112,41 +130,60 @@ export function generateVmRuntime(options: {
 		nodes.push(...buildDebugLogging(reverseMap, names, temps));
 	}
 
-	// Rolling cipher helpers (must come before interpreter)
+	// Build interpreter core (sync + async) — also produces handler table init
+	const interpResult = buildInterpreterFunctions(
+		names,
+		temps,
+		opcodeShuffleMap,
+		debugLogging,
+		rollingCipher,
+		seed,
+		{
+			dynamicOpcodes,
+			decoyOpcodes,
+			stackEncoding,
+			usedOpcodes,
+			mixedBooleanArithmetic,
+			handlerFragmentation,
+		},
+		split
+	);
+
+	// Handler table + key anchor init (must come before rolling cipher
+	// so rcDeriveKey can reference the key anchor closure variable)
+	nodes.push(...interpResult.handlerTableInit);
+
+	// If integrity binding, fold integrity hash into the key anchor
+	if (rollingCipher && integrityBinding && integrityHash !== undefined) {
+		// _ka = (_ka ^ integrityHash) >>> 0;
+		nodes.push(
+			exprStmt(
+				assign(
+					id(names.keyAnchor),
+					bin(
+						">>>",
+						bin("^", id(names.keyAnchor), split(integrityHash)),
+						lit(0)
+					)
+				)
+			)
+		);
+	}
+
+	// Rolling cipher helpers (must come after handler table + key anchor)
 	if (rollingCipher) {
-		if (integrityBinding && integrityHash !== undefined) {
-			nodes.push(varDecl(names.ihash, split(integrityHash)));
-		}
 		nodes.push(
 			...buildRollingCipherSource(
 				names,
-				integrityBinding ? integrityHash : undefined,
+				true, // hasKeyAnchor — rcDeriveKey references names.keyAnchor
 				split,
 				cipherSalt
 			)
 		);
 	}
 
-	// Interpreter core (sync + async) — uses direct physical dispatch
-	nodes.push(
-		...buildInterpreterFunctions(
-			names,
-			temps,
-			opcodeShuffleMap,
-			debugLogging,
-			rollingCipher,
-			seed,
-			{
-				dynamicOpcodes,
-				decoyOpcodes,
-				stackEncoding,
-				usedOpcodes,
-				mixedBooleanArithmetic,
-				handlerFragmentation,
-			},
-			split
-		)
-	);
+	// Interpreter function bodies
+	nodes.push(...interpResult.interpreters);
 
 	// Runner dispatch functions
 	nodes.push(...buildRunners(debugLogging, names, temps));
@@ -170,7 +207,10 @@ export function generateVmRuntime(options: {
 	nodes.push(...buildGlobalExposure(names.vm));
 
 	// Wrap in IIFE and emit
-	return emitIIFE(nodes);
+	return {
+		source: emitIIFE(nodes),
+		keyAnchorValue: interpResult.keyAnchorValue,
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +237,14 @@ export interface ShieldingGroup {
 	cipherSalt?: number;
 }
 
+/** Result from generating the shielded VM runtime. */
+export interface ShieldedVmRuntimeResult {
+	/** The generated JS source string. */
+	source: string;
+	/** Per-group key anchor values (in group order). */
+	groupKeyAnchors: number[];
+}
+
 /**
  * Generate a shielded VM runtime with per-group micro-interpreters.
  *
@@ -204,7 +252,8 @@ export interface ShieldingGroup {
  * is emitted once. Each group gets its own interpreter, runners, loader, and
  * rolling cipher with unique opcode shuffle and identifier names.
  *
- * @returns A JS source string containing the shielded runtime IIFE.
+ * @returns A ShieldedVmRuntimeResult containing the JS source string and
+ *          per-group key anchor values.
  */
 export function generateShieldedVmRuntime(options: {
 	groups: ShieldingGroup[];
@@ -218,7 +267,7 @@ export function generateShieldedVmRuntime(options: {
 	integrityBinding?: boolean;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
-}): string {
+}): ShieldedVmRuntimeResult {
 	const {
 		groups,
 		sharedNames,
@@ -260,6 +309,7 @@ export function generateShieldedVmRuntime(options: {
 	// Per-group micro-interpreters
 	const groupRegistrations: { unitIds: string[]; dispatchName: string }[] =
 		[];
+	const groupKeyAnchors: number[] = [];
 
 	for (const group of groups) {
 		const gn = group.names;
@@ -277,39 +327,66 @@ export function generateShieldedVmRuntime(options: {
 			nodes.push(...buildDebugLogging(reverseMap, gn, gt));
 		}
 
-		// Rolling cipher (always on with vmShielding)
+		// Build interpreter core (per-group) — produces handler table init
+		// + key anchor + interpreter function bodies
+		const interpResult = buildInterpreterFunctions(
+			gn,
+			gt,
+			group.shuffleMap,
+			debugLogging,
+			true, // rollingCipher always on in shielding mode
+			group.seed,
+			{
+				dynamicOpcodes: true, // always strip unused opcodes in shielding mode
+				decoyOpcodes,
+				stackEncoding,
+				usedOpcodes: group.usedOpcodes,
+				mixedBooleanArithmetic,
+				handlerFragmentation,
+			},
+			groupSplit
+		);
+
+		// Handler table + key anchor init (must come before rolling cipher
+		// so rcDeriveKey can reference the key anchor closure variable)
+		nodes.push(...interpResult.handlerTableInit);
+
+		// Fold integrity hash into the key anchor (if integrityBinding is on)
 		if (integrityBinding && group.integrityHash !== undefined) {
-			nodes.push(varDecl(gn.ihash, groupSplit(group.integrityHash)));
+			// _ka = (_ka ^ integrityHash) >>> 0;
+			nodes.push(
+				exprStmt(
+					assign(
+						id(gn.keyAnchor),
+						bin(
+							">>>",
+							bin(
+								"^",
+								id(gn.keyAnchor),
+								groupSplit(group.integrityHash)
+							),
+							lit(0)
+						)
+					)
+				)
+			);
 		}
+
+		// Rolling cipher helpers (must come after handler table + key anchor)
 		nodes.push(
 			...buildRollingCipherSource(
 				gn,
-				integrityBinding ? group.integrityHash : undefined,
+				true, // hasKeyAnchor — always true in shielding mode
 				groupSplit,
 				group.cipherSalt
 			)
 		);
 
-		// Interpreter core (per-group shuffle, per-group names, per-group opcodes)
-		nodes.push(
-			...buildInterpreterFunctions(
-				gn,
-				gt,
-				group.shuffleMap,
-				debugLogging,
-				true, // rollingCipher always on in shielding mode
-				group.seed,
-				{
-					dynamicOpcodes: true, // always strip unused opcodes in shielding mode
-					decoyOpcodes,
-					stackEncoding,
-					usedOpcodes: group.usedOpcodes,
-					mixedBooleanArithmetic,
-					handlerFragmentation,
-				},
-				groupSplit
-			)
-		);
+		// Interpreter function bodies
+		nodes.push(...interpResult.interpreters);
+
+		// Save key anchor value for caller
+		groupKeyAnchors.push(interpResult.keyAnchorValue);
 
 		// Runners (per-group dispatch function)
 		nodes.push(...buildRunners(debugLogging, gn, gt));
@@ -343,7 +420,10 @@ export function generateShieldedVmRuntime(options: {
 	nodes.push(...buildGlobalExposure(sharedNames.router));
 
 	// Wrap in IIFE and emit
-	return emitIIFE(nodes);
+	return {
+		source: emitIIFE(nodes),
+		groupKeyAnchors,
+	};
 }
 
 // --- Helpers ---

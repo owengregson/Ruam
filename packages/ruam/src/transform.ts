@@ -31,7 +31,7 @@ import {
 	generateVmRuntime,
 	generateShieldedVmRuntime,
 } from "./ruamvm/assembler.js";
-import type { ShieldingGroup } from "./ruamvm/assembler.js";
+import type { ShieldingGroup, VmRuntimeResult } from "./ruamvm/assembler.js";
 import {
 	generateRuntimeNames,
 	generateShieldedNames,
@@ -141,39 +141,13 @@ export function obfuscateCode(
 	// -- Generate per-build cipher salt (if rolling cipher is enabled) --------
 	const cipherSalt = rollingCipher ? generateCryptoSeed() : undefined;
 
-	// -- Compute integrity hash if needed ------------------------------------
-	// Integrity binding hashes the interpreter template source and embeds
-	// the hash in the IIFE.  The same hash is used as part of the rolling
-	// cipher key derivation.  Modifying the interpreter changes the hash
-	// at the source level, but since we embed a precomputed value, the
-	// attacker must locate and preserve it — the value is woven into the
-	// key derivation so removing or changing it breaks all decryption.
-	let integrityHash: number | undefined;
-	if (integrityBinding) {
-		const interpNodes = buildInterpreterFunctions(
-			names,
-			temps,
-			shuffleMap,
-			debugLogging,
-			true,
-			shuffleSeed
-		);
-		const interpSource = interpNodes.map((n) => emit(n)).join("\n");
-		integrityHash = fnv1a(interpSource);
-	}
-
-	// -- Compile each target -------------------------------------------------
-	const compiledUnits = compileTargets(
+	// -- Compile each target (no encoding yet — need keyAnchor first) -------
+	const compiledUnits = compileTargetsOnly(
 		targetPaths,
-		shuffleMap,
-		encryptBytecode,
 		names,
-		shuffleSeed,
-		rollingCipher,
-		integrityHash,
 		deadCodeInjection,
-		temps["_ps"],
-		cipherSalt
+		shuffleSeed,
+		temps["_ps"]
 	);
 
 	if (compiledUnits.size === 0) return code;
@@ -184,14 +158,48 @@ export function obfuscateCode(
 		usedOpcodes = collectUsedOpcodes(compiledUnits);
 	}
 
-	// -- Assemble output -----------------------------------------------------
-	return assembleOutput(ast, compiledUnits, shuffleMap, names, temps, {
+	// -- Compute integrity hash + key anchor --------------------------------
+	// The key anchor is a checksum of the packed handler table, computed
+	// by buildInterpreterFunctions.  We need it before encoding because
+	// it's folded into the rolling cipher key derivation.
+	//
+	// When integrityBinding is on, we also hash the interpreter source
+	// and embed it as a literal — changing the interpreter without
+	// updating the hash breaks all decryption.
+	let integrityHash: number | undefined;
+	if (integrityBinding) {
+		const interpResult = buildInterpreterFunctions(
+			names,
+			temps,
+			shuffleMap,
+			debugLogging,
+			true,
+			shuffleSeed,
+			{
+				dynamicOpcodes,
+				decoyOpcodes,
+				stackEncoding,
+				usedOpcodes,
+				mixedBooleanArithmetic,
+				handlerFragmentation,
+			}
+		);
+		const interpSource = interpResult.interpreters
+			.map((n) => emit(n))
+			.join("\n");
+		integrityHash = fnv1a(interpSource);
+	}
+
+	// -- Generate runtime (produces key anchor value) -----------------------
+	const runtimeResult = generateVmRuntime({
+		opcodeShuffleMap: shuffleMap,
+		names,
+		temps,
 		encrypt: encryptBytecode,
 		debugProtection,
 		debugLogging,
 		dynamicOpcodes,
 		decoyOpcodes,
-		deadCodeInjection,
 		stackEncoding,
 		seed: shuffleSeed,
 		stringKey: encryptBytecode ? undefined : shuffleSeed,
@@ -202,8 +210,33 @@ export function obfuscateCode(
 		cipherSalt,
 		mixedBooleanArithmetic,
 		handlerFragmentation,
-		wrapOutput,
 	});
+
+	// -- Encode all units (now that we have the key anchor) -----------------
+	const keyAnchor = rollingCipher
+		? runtimeResult.keyAnchorValue
+		: undefined;
+	const encodedUnits = encodeAllUnits(
+		compiledUnits,
+		shuffleMap,
+		encryptBytecode,
+		shuffleSeed,
+		rollingCipher,
+		integrityHash,
+		cipherSalt,
+		keyAnchor
+	);
+
+	// -- Assemble output -----------------------------------------------------
+	return assembleOutputFromParts(
+		ast,
+		encodedUnits,
+		names,
+		temps,
+		runtimeResult.source,
+		wrapOutput,
+		encryptBytecode
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -287,65 +320,40 @@ function shouldTarget(
 // ---------------------------------------------------------------------------
 
 /**
- * Compile a list of target function paths into bytecode units.
+ * Compile a list of target function paths into bytecode units (no encoding).
+ *
+ * Compilation and encoding are split into separate phases because the
+ * key anchor value (needed for encoding) comes from the handler table
+ * checksum, which requires knowing which opcodes are used — and that
+ * depends on compilation.
  */
-function compileTargets(
+function compileTargetsOnly(
 	targetPaths: NodePath<t.Function>[],
-	shuffleMap: number[],
-	encryptBytecode: boolean,
 	names: RuntimeNames,
-	stringKey: number,
-	rollingCipher: boolean = false,
-	integrityHash?: number,
 	deadCodeInjection: boolean = false,
-	scopeVarName?: string,
-	cipherSalt?: number
-): Map<string, { unit: BytecodeUnit; encoded: string }> {
-	const compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }> =
-		new Map();
+	seed: number,
+	scopeVarName?: string
+): Map<string, { unit: BytecodeUnit }> {
+	const compiledUnits: Map<string, { unit: BytecodeUnit }> = new Map();
 
 	for (const fnPath of targetPaths) {
 		try {
 			const unit = compileFunction(fnPath);
 
 			if (deadCodeInjection) {
-				injectDeadCode(unit, stringKey);
+				injectDeadCode(unit, seed);
 				for (const child of unit.childUnits) {
-					injectDeadCode(child, stringKey);
+					injectDeadCode(child, seed);
 				}
 			}
 
-			const encoded = encodeUnit(
-				unit,
-				shuffleMap,
-				encryptBytecode,
-				stringKey,
-				rollingCipher,
-				integrityHash,
-				cipherSalt
-			);
-			compiledUnits.set(unit.id, { unit, encoded });
-
+			compiledUnits.set(unit.id, { unit });
 			for (const child of unit.childUnits) {
-				const childEncoded = encodeUnit(
-					child,
-					shuffleMap,
-					encryptBytecode,
-					stringKey,
-					rollingCipher,
-					integrityHash,
-					cipherSalt
-				);
-				compiledUnits.set(child.id, {
-					unit: child,
-					encoded: childEncoded,
-				});
+				compiledUnits.set(child.id, { unit: child });
 			}
 
 			replaceFunctionBody(fnPath, unit.id, names, scopeVarName);
 		} catch (err) {
-			// Skip functions that fail to compile — don't break the whole file.
-			// Extract source location from the Babel path for debugging.
 			const loc = fnPath.node.loc?.start;
 			const locStr = loc ? ` at ${loc.line}:${loc.column}` : "";
 			const fnName =
@@ -358,6 +366,36 @@ function compileTargets(
 	}
 
 	return compiledUnits;
+}
+
+/**
+ * Encode all compiled units with the given key anchor and cipher parameters.
+ */
+function encodeAllUnits(
+	compiledUnits: Map<string, { unit: BytecodeUnit }>,
+	shuffleMap: number[],
+	encrypt: boolean,
+	stringKey: number,
+	rollingCipher: boolean,
+	integrityHash?: number,
+	cipherSalt?: number,
+	keyAnchor?: number
+): Map<string, { unit: BytecodeUnit; encoded: string }> {
+	const result = new Map<string, { unit: BytecodeUnit; encoded: string }>();
+	for (const [id, { unit }] of compiledUnits) {
+		const encoded = encodeUnit(
+			unit,
+			shuffleMap,
+			encrypt,
+			stringKey,
+			rollingCipher,
+			integrityHash,
+			cipherSalt,
+			keyAnchor
+		);
+		result.set(id, { unit, encoded });
+	}
+	return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -603,7 +641,7 @@ function buildBtDecl(
  * Collect all logical opcodes used across all compiled bytecode units.
  */
 function collectUsedOpcodes(
-	compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }>
+	compiledUnits: Map<string, { unit: BytecodeUnit }>
 ): Set<number> {
 	const used = new Set<number>();
 	for (const [, { unit }] of compiledUnits) {
@@ -622,7 +660,8 @@ function encodeUnit(
 	stringKey: number,
 	rollingCipher: boolean = false,
 	integrityHash?: number,
-	cipherSalt?: number
+	cipherSalt?: number,
+	keyAnchor?: number
 ): string {
 	if (encrypt) {
 		return encodeBytecodeUnit(unit, {
@@ -631,6 +670,7 @@ function encodeUnit(
 			rollingCipher,
 			integrityHash,
 			cipherSalt,
+			keyAnchor,
 		});
 	}
 	return serializeUnitToJson(unit, {
@@ -639,6 +679,7 @@ function encodeUnit(
 		rollingCipher,
 		integrityHash,
 		cipherSalt,
+		keyAnchor,
 	});
 }
 
@@ -679,12 +720,19 @@ function assembleShielded(
 		groupTemps: groupTempSets,
 	} = generateShieldedNames(sharedSeed, groupSeeds);
 
-	// Compile each target function into a shielding group
+	// --- Phase 1: Compile all targets (no encoding) ---
 	const groups: ShieldingGroup[] = [];
-	const allCompiledUnits = new Map<
-		string,
-		{ unit: BytecodeUnit; encoded: string }
-	>();
+	const allCompiledUnits = new Map<string, { unit: BytecodeUnit }>();
+	const groupMeta: {
+		unit: BytecodeUnit;
+		shuffleMap: number[];
+		names: RuntimeNames;
+		temps: TempNames;
+		seed: number;
+		unitIds: string[];
+		usedOpcodes: Set<number>;
+		cipherSalt: number;
+	}[] = [];
 
 	for (let gi = 0; gi < targetPaths.length; gi++) {
 		const fnPath = targetPaths[gi]!;
@@ -716,25 +764,10 @@ function assembleShielded(
 			}
 		}
 
-		// Compute per-group integrity hash
-		let groupIntegrityHash: number | undefined;
-		if (opts.integrityBinding) {
-			const interpNodes = buildInterpreterFunctions(
-				groupNames,
-				groupTemps,
-				groupShuffleMap,
-				opts.debugLogging ?? false,
-				true,
-				groupSeed
-			);
-			const interpSource = interpNodes.map((n) => emit(n)).join("\n");
-			groupIntegrityHash = fnv1a(interpSource);
-		}
-
-		// Collect unit IDs for this group
+		// Collect unit IDs
 		const unitIds = [unit.id, ...unit.childUnits.map((c) => c.id)];
 
-		// Collect used opcodes for this group
+		// Collect used opcodes
 		const usedOpcodes = new Set<number>();
 		for (const instr of unit.instructions) usedOpcodes.add(instr.opcode);
 		for (const child of unit.childUnits) {
@@ -742,34 +775,16 @@ function assembleShielded(
 				usedOpcodes.add(instr.opcode);
 		}
 
-		// Per-group cipher salt — makes each group's rolling cipher key
-		// non-derivable from bytecode metadata alone
+		// Per-group cipher salt
 		const groupCipherSalt = generateCryptoSeed();
 
-		// Encode units with this group's shuffle map
-		// Rolling cipher is always on for vmShielding
-		const encodeGroupUnit = (u: BytecodeUnit) =>
-			encodeUnit(
-				u,
-				groupShuffleMap,
-				opts.encryptBytecode,
-				groupSeed,
-				true,
-				groupIntegrityHash,
-				groupCipherSalt
-			);
-
-		const rootEncoded = encodeGroupUnit(unit);
-		allCompiledUnits.set(unit.id, { unit, encoded: rootEncoded });
+		// Store compiled units (no encoding yet)
+		allCompiledUnits.set(unit.id, { unit });
 		for (const child of unit.childUnits) {
-			const childEncoded = encodeGroupUnit(child);
-			allCompiledUnits.set(child.id, {
-				unit: child,
-				encoded: childEncoded,
-			});
+			allCompiledUnits.set(child.id, { unit: child });
 		}
 
-		// Replace function body to use router (uses sharedNames.router as the dispatch name)
+		// Replace function body to use router
 		replaceFunctionBody(
 			fnPath,
 			unit.id,
@@ -780,14 +795,14 @@ function assembleShielded(
 			sharedTemps["_ps"]
 		);
 
-		groups.push({
+		groupMeta.push({
+			unit,
 			shuffleMap: groupShuffleMap,
 			names: groupNames,
 			temps: groupTemps,
 			seed: groupSeed,
 			unitIds,
 			usedOpcodes,
-			integrityHash: groupIntegrityHash,
 			cipherSalt: groupCipherSalt,
 		});
 	}
@@ -795,15 +810,51 @@ function assembleShielded(
 	if (allCompiledUnits.size === 0)
 		return generate(ast, { comments: false }).code;
 
-	// Build bytecode table
-	const btDecl = buildBtDecl(
-		allCompiledUnits,
-		sharedNames.bt,
-		!!opts.encryptBytecode
-	);
+	// --- Phase 2: Generate runtime (produces key anchors per group) ---
+	// First, build groups with integrity hashes computed from interpreter
+	// functions using the same options the runtime generator will use.
+	for (const gm of groupMeta) {
+		let groupIntegrityHash: number | undefined;
+		let groupKeyAnchor: number | undefined;
 
-	// Generate shielded runtime
-	const runtime = generateShieldedVmRuntime({
+		if (opts.integrityBinding) {
+			const interpResult = buildInterpreterFunctions(
+				gm.names,
+				gm.temps,
+				gm.shuffleMap,
+				opts.debugLogging ?? false,
+				true,
+				gm.seed,
+				{
+					dynamicOpcodes: true,
+					decoyOpcodes: opts.decoyOpcodes,
+					stackEncoding: opts.stackEncoding,
+					usedOpcodes: gm.usedOpcodes,
+					mixedBooleanArithmetic: opts.mixedBooleanArithmetic,
+					handlerFragmentation: opts.handlerFragmentation,
+				}
+			);
+			const interpSource = interpResult.interpreters
+				.map((n) => emit(n))
+				.join("\n");
+			groupIntegrityHash = fnv1a(interpSource);
+			groupKeyAnchor = interpResult.keyAnchorValue;
+		}
+
+		groups.push({
+			shuffleMap: gm.shuffleMap,
+			names: gm.names,
+			temps: gm.temps,
+			seed: gm.seed,
+			unitIds: gm.unitIds,
+			usedOpcodes: gm.usedOpcodes,
+			integrityHash: groupIntegrityHash,
+			cipherSalt: gm.cipherSalt,
+		});
+	}
+
+	// Generate shielded runtime → also produces per-group key anchors
+	const runtimeResult = generateShieldedVmRuntime({
 		groups,
 		sharedNames,
 		sharedTemps,
@@ -817,55 +868,47 @@ function assembleShielded(
 		handlerFragmentation: opts.handlerFragmentation,
 	});
 
-	// Collect top-level bindings before adding runtime statements
-	const topLevelBindings = collectTopLevelBindings(ast.program.body);
+	// --- Phase 3: Encode all units (using per-group key anchors) ---
+	const allEncodedUnits = new Map<
+		string,
+		{ unit: BytecodeUnit; encoded: string }
+	>();
 
-	// Build program scope object (uses shared scope property names)
-	const scopeCode = buildScopeSetupCode(
-		sharedTemps["_ps"]!,
-		sharedTemps["_psv"]!,
-		sharedNames.sPar,
-		sharedNames.sVars,
-		topLevelBindings
-	);
-	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;
+	for (let gi = 0; gi < groupMeta.length; gi++) {
+		const gm = groupMeta[gi]!;
+		const group = groups[gi]!;
+		const groupKeyAnchor = runtimeResult.groupKeyAnchors[gi];
 
-	const btNode = parse(btDecl, { sourceType: "script" }).program.body[0]!;
-	const runtimeNode = parse(runtime, { sourceType: "script" }).program
-		.body[0]!;
-	const iifeCall = (runtimeNode as t.ExpressionStatement)
-		.expression as t.CallExpression;
-	const iifeFn = iifeCall.callee as t.FunctionExpression;
+		const encodeGroupUnit = (u: BytecodeUnit) =>
+			encodeUnit(
+				u,
+				gm.shuffleMap,
+				opts.encryptBytecode,
+				gm.seed,
+				true, // rolling cipher always on in shielding mode
+				group.integrityHash,
+				gm.cipherSalt,
+				groupKeyAnchor
+			);
 
-	if (opts.wrapOutput) {
-		// Keep the IIFE wrapper — put bytecode table, scope setup, and
-		// user code inside the IIFE so everything shares one scope.
-		// Avoids TrustedScript CSP issues on pages with strict Trusted
-		// Types (e.g. chrome:// pages for MAIN world content scripts).
-		const userStatements = [...ast.program.body];
-		iifeFn.body.body.unshift(btNode as t.Statement);
-		iifeFn.body.body.push(
-			...(scopeNodes as t.Statement[]),
-			...userStatements
-		);
-		ast.program.body = [runtimeNode as t.Statement];
-		ast.program.directives = [];
-	} else {
-		// Unwrap the IIFE and inject runtime statements directly into the
-		// program scope so top-level declarations are accessible via the
-		// scope object getters.
-		const runtimeStatements = iifeFn.body.body;
-		ast.program.body.unshift(
-			btNode as t.Statement,
-			...runtimeStatements,
-			...(scopeNodes as t.Statement[])
-		);
-		ast.program.directives = [
-			t.directive(t.directiveLiteral("use strict")),
-		];
+		const rootEncoded = encodeGroupUnit(gm.unit);
+		allEncodedUnits.set(gm.unit.id, { unit: gm.unit, encoded: rootEncoded });
+		for (const child of gm.unit.childUnits) {
+			const childEncoded = encodeGroupUnit(child);
+			allEncodedUnits.set(child.id, { unit: child, encoded: childEncoded });
+		}
 	}
 
-	return generate(ast, { comments: false }).code;
+	// --- Phase 4: Assemble output ---
+	return assembleOutputFromParts(
+		ast,
+		allEncodedUnits,
+		sharedNames,
+		sharedTemps,
+		runtimeResult.source,
+		opts.wrapOutput,
+		opts.encryptBytecode
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -873,67 +916,25 @@ function assembleShielded(
 // ---------------------------------------------------------------------------
 
 /**
- * Assemble the final obfuscated source from the modified AST, bytecode
- * table, and VM runtime.
+ * Assemble the final obfuscated source from pre-encoded units,
+ * pre-generated runtime, and the modified AST.
  */
-function assembleOutput(
+function assembleOutputFromParts(
 	ast: t.File,
-	compiledUnits: Map<string, { unit: BytecodeUnit; encoded: string }>,
-	shuffleMap: number[],
+	encodedUnits: Map<string, { unit: BytecodeUnit; encoded: string }>,
 	names: RuntimeNames,
 	temps: TempNames,
-	runtimeOptions: {
-		encrypt: boolean;
-		debugProtection: boolean;
-		debugLogging: boolean;
-		dynamicOpcodes?: boolean;
-		decoyOpcodes?: boolean;
-		deadCodeInjection?: boolean;
-		stackEncoding?: boolean;
-		seed: number;
-		stringKey?: number;
-		rollingCipher?: boolean;
-		integrityBinding?: boolean;
-		integrityHash?: number;
-		usedOpcodes?: Set<number>;
-		cipherSalt?: number;
-		mixedBooleanArithmetic?: boolean;
-		handlerFragmentation?: boolean;
-		wrapOutput?: boolean;
-	}
+	runtimeSource: string,
+	wrapOutput: boolean,
+	encrypt: boolean = false
 ): string {
-	// Build bytecode table declaration (using randomized name)
-	const btDecl = buildBtDecl(compiledUnits, names.bt, runtimeOptions.encrypt);
-
-	// Generate runtime IIFE
-	const runtime = generateVmRuntime({
-		opcodeShuffleMap: shuffleMap,
-		names,
-		temps,
-		encrypt: runtimeOptions.encrypt,
-		debugProtection: runtimeOptions.debugProtection,
-		debugLogging: runtimeOptions.debugLogging,
-		dynamicOpcodes: runtimeOptions.dynamicOpcodes,
-		decoyOpcodes: runtimeOptions.decoyOpcodes,
-		stackEncoding: runtimeOptions.stackEncoding,
-		seed: runtimeOptions.seed,
-		stringKey: runtimeOptions.stringKey,
-		rollingCipher: runtimeOptions.rollingCipher,
-		integrityBinding: runtimeOptions.integrityBinding,
-		integrityHash: runtimeOptions.integrityHash,
-		usedOpcodes: runtimeOptions.usedOpcodes,
-		cipherSalt: runtimeOptions.cipherSalt,
-		mixedBooleanArithmetic: runtimeOptions.mixedBooleanArithmetic,
-		handlerFragmentation: runtimeOptions.handlerFragmentation,
-	});
+	// Build bytecode table declaration
+	const btDecl = buildBtDecl(encodedUnits, names.bt, encrypt);
 
 	// Collect top-level bindings BEFORE adding runtime statements.
-	// These are the names that compiled bytecode may reference via
-	// LOAD_SCOPED / STORE_SCOPED.
 	const topLevelBindings = collectTopLevelBindings(ast.program.body);
 
-	// Build the program scope object.  Getters/setters allow the VM
-	// to resolve module-scoped variables that are not on globalThis.
+	// Build the program scope object.
 	const scopeCode = buildScopeSetupCode(
 		temps["_ps"]!,
 		temps["_psv"]!,
@@ -944,17 +945,13 @@ function assembleOutput(
 	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;
 
 	const btNode = parse(btDecl, { sourceType: "script" }).program.body[0]!;
-	const runtimeNode = parse(runtime, { sourceType: "script" }).program
+	const runtimeNode = parse(runtimeSource, { sourceType: "script" }).program
 		.body[0]!;
 	const iifeCall = (runtimeNode as t.ExpressionStatement)
 		.expression as t.CallExpression;
 	const iifeFn = iifeCall.callee as t.FunctionExpression;
 
-	if (runtimeOptions.wrapOutput) {
-		// Keep the IIFE wrapper — put bytecode table, scope setup, and
-		// user code inside the IIFE so everything shares one scope.
-		// Avoids TrustedScript CSP issues on pages with strict Trusted
-		// Types (e.g. chrome:// pages for MAIN world content scripts).
+	if (wrapOutput) {
 		const userStatements = [...ast.program.body];
 		iifeFn.body.body.unshift(btNode as t.Statement);
 		iifeFn.body.body.push(
@@ -964,9 +961,6 @@ function assembleOutput(
 		ast.program.body = [runtimeNode as t.Statement];
 		ast.program.directives = [];
 	} else {
-		// Unwrap the IIFE and inject runtime statements directly into the
-		// program so that the VM runtime, function stubs, and top-level
-		// declarations all share the same scope.
 		const runtimeStatements = iifeFn.body.body;
 		ast.program.body.unshift(
 			btNode as t.Statement,

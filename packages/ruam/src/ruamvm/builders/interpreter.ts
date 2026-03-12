@@ -66,11 +66,27 @@ export interface InterpreterBuildOptions {
 	handlerFragmentation?: boolean;
 }
 
+/** Result from building interpreter functions. */
+export interface InterpreterBuildResult {
+	/** Sync and async interpreter function AST nodes. */
+	interpreters: JsNode[];
+	/** Handler table + key anchor initialization AST (for IIFE scope). */
+	handlerTableInit: JsNode[];
+	/** Build-time key anchor value (for rolling cipher key derivation). */
+	keyAnchorValue: number;
+}
+
 /**
  * Build both sync and async interpreter functions as JsNode[].
  *
- * Each function is returned as a FnDecl AST node with tree-based
- * obfuscation applied to local variable names.
+ * Returns interpreter function AST nodes plus the handler table
+ * initialization code (to be placed at IIFE scope). The handler table
+ * is shared between sync and async interpreters and is packed as an
+ * XOR-encoded array to resist regex extraction.
+ *
+ * Also computes a "key anchor" — a checksum of the packed handler table
+ * data — stored as a closure variable so that rcDeriveKey cannot be
+ * extracted via `new Function()`.
  */
 export function buildInterpreterFunctions(
 	names: RuntimeNames,
@@ -81,86 +97,127 @@ export function buildInterpreterFunctions(
 	seed: number,
 	interpOpts: InterpreterBuildOptions = {},
 	split?: SplitFn
-): JsNode[] {
-	return [
-		buildExecFunction(names, temps, shuffleMap, {
-			isAsync: false,
-			debug,
-			rollingCipher,
-			seed,
-			interpOpts,
-			split,
-		}),
-		buildExecFunction(names, temps, shuffleMap, {
-			isAsync: true,
-			debug,
-			rollingCipher,
-			seed,
-			interpOpts,
-			split,
-		}),
-	];
+): InterpreterBuildResult {
+	// Build handler table metadata (shared between sync and async interpreters).
+	// This produces the packed XOR-encoded handler table, key anchor, and the
+	// shuffled handler indices — but NOT the case bodies (those depend on
+	// isAsync and must be built per-mode).
+	const htMeta = buildHandlerTableMeta(
+		names,
+		temps,
+		shuffleMap,
+		seed,
+		interpOpts,
+		split
+	);
+
+	// Build case clauses separately for sync and async, because some handlers
+	// (AWAIT, iterators, closures) produce different AST depending on ctx.isAsync.
+	const syncCases = buildCasesForMode(
+		names, temps, shuffleMap, seed, interpOpts,
+		false, debug, htMeta.handlerIndices, split
+	);
+	const asyncCases = buildCasesForMode(
+		names, temps, shuffleMap, seed, interpOpts,
+		true, debug, htMeta.handlerIndices, split
+	);
+
+	const syncFn = buildExecFunction(names, temps, syncCases.cases, {
+		isAsync: false,
+		debug,
+		rollingCipher,
+		seed,
+		interpOpts,
+		split,
+		fragmentLabelMap: syncCases.fragmentLabelMap,
+	});
+
+	const asyncFn = buildExecFunction(names, temps, asyncCases.cases, {
+		isAsync: true,
+		debug,
+		rollingCipher,
+		seed,
+		interpOpts,
+		split,
+		fragmentLabelMap: asyncCases.fragmentLabelMap,
+	});
+
+	return {
+		interpreters: [syncFn, asyncFn],
+		handlerTableInit: htMeta.initNodes,
+		keyAnchorValue: htMeta.keyAnchorValue,
+	};
+}
+
+/** Handler table entry: physical opcode → handler index mapping. */
+interface HtEntry {
+	physicalOp: number;
+	handlerIdx: number;
+}
+
+/** Handler table metadata (shared between sync/async interpreters). */
+interface HandlerTableMeta {
+	/** IIFE-scope initialization AST: packed data array, decode loop, key anchor. */
+	initNodes: JsNode[];
+	/** Shuffled handler indices (one per included opcode, in iteration order). */
+	handlerIndices: number[];
+	/** Build-time key anchor value (checksum of packed handler table data). */
+	keyAnchorValue: number;
+}
+
+/** Result from building case clauses for a specific mode (sync/async). */
+interface CaseBuildResult {
+	/** Switch case clauses (using handler indices as labels). */
+	cases: CaseClause[];
+	/** Fragment label map (handler fragmentation) or undefined. */
+	fragmentLabelMap?: Map<number, number>;
 }
 
 /**
- * Build a single interpreter function (sync or async) as a JsNode.
+ * Build handler table metadata: shuffle handler indices, pack as XOR-encoded
+ * array, compute key anchor, and generate IIFE-scope initialization AST.
  *
- * Builds switch cases from handler registry, constructs the scaffold
- * as AST, applies tree-based obfuscateLocals(), and returns the
- * FnDecl node directly.
+ * This is shared between sync and async interpreters — only the handler
+ * index mapping and table encoding is needed, not the case bodies.
  */
-export function buildExecFunction(
+function buildHandlerTableMeta(
 	names: RuntimeNames,
 	temps: TempNames,
 	shuffleMap: number[],
-	opts: {
-		isAsync: boolean;
-		debug: boolean;
-		rollingCipher: boolean;
-		seed: number;
-		interpOpts: InterpreterBuildOptions;
-		split?: SplitFn;
-	}
-): JsNode {
-	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
+	seed: number,
+	interpOpts: InterpreterBuildOptions,
+	split?: SplitFn
+): HandlerTableMeta {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 
-	// Build raw switch cases from the handler registry
-	const rawCases: CaseClause[] = [];
-	for (const [op, handler] of registry) {
-		// Dynamic opcodes: skip handlers for opcodes not used by any compiled unit
+	// Count how many handlers will be included (real + decoy)
+	let includedCount = 0;
+	const includedPhysicalOps: number[] = [];
+	for (const [op] of registry) {
 		if (
-			opts.interpOpts.dynamicOpcodes &&
-			opts.interpOpts.usedOpcodes &&
-			!opts.interpOpts.usedOpcodes.has(op)
+			interpOpts.dynamicOpcodes &&
+			interpOpts.usedOpcodes &&
+			!interpOpts.usedOpcodes.has(op)
 		) {
 			continue;
 		}
-		const physicalOp = shuffleMap[op]!;
-		rawCases.push(caseClause(lit(physicalOp), handler(ctx)));
+		includedPhysicalOps.push(shuffleMap[op]!);
+		includedCount++;
 	}
 
-	// Generate decoy handlers for unused opcodes
-	if (opts.interpOpts.decoyOpcodes && opts.interpOpts.usedOpcodes) {
-		rawCases.push(
-			...generateDecoyHandlers(
-				names,
-				shuffleMap,
-				opts.interpOpts.usedOpcodes
-			)
+	// Count decoy handlers
+	let decoyPhysicalOps: number[] = [];
+	if (interpOpts.decoyOpcodes && interpOpts.usedOpcodes) {
+		decoyPhysicalOps = getDecoyPhysicalOps(
+			shuffleMap,
+			interpOpts.usedOpcodes
 		);
+		includedCount += decoyPhysicalOps.length;
 	}
 
-	// --- Handler table indirection ---
-	// Assign shuffled handler indices so case labels bear no relationship
-	// to physical opcodes, adding an indirection layer against static analysis.
-	const htName = temps["_ht"];
-	if (htName === undefined) throw new Error("Missing temp: _ht");
-
-	const handlerCount = rawCases.length;
-	const handlerIndices = Array.from({ length: handlerCount }, (_, i) => i);
-
-	// Shuffle handler indices using LCG from seed
-	let hs = opts.seed >>> 0;
+	// --- Handler index shuffling ---
+	const handlerIndices = Array.from({ length: includedCount }, (_, i) => i);
+	let hs = seed >>> 0;
 	for (let i = handlerIndices.length - 1; i > 0; i--) {
 		hs = (hs * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
 		const j = hs % (i + 1);
@@ -170,85 +227,349 @@ export function buildExecFunction(
 		];
 	}
 
-	// Build handler table init statements and remapped cases
-	const htInit: JsNode[] = [varDecl(htName, obj())];
-	let cases: CaseClause[] = [];
+	// --- Collect handler table entries ---
+	const allPhysicalOps = [...includedPhysicalOps, ...decoyPhysicalOps];
+	const entries: HtEntry[] = [];
+	for (let i = 0; i < allPhysicalOps.length; i++) {
+		entries.push({
+			physicalOp: allPhysicalOps[i]!,
+			handlerIdx: handlerIndices[i]!,
+		});
+	}
 
-	for (let i = 0; i < rawCases.length; i++) {
-		const rawCase = rawCases[i]!;
-		const handlerIdx = handlerIndices[i]!;
+	// If handler fragmentation will be applied, we need to compute the
+	// fragment label map from a dummy set of cases with the same handler
+	// indices and statement counts. Since sync and async handlers produce
+	// the same number of statements (await wraps expressions, doesn't add
+	// statements), we use sync mode for the fragmentation preview.
+	if (interpOpts.handlerFragmentation) {
+		const nfName = temps["_nf"];
+		if (nfName === undefined) throw new Error("Missing temp: _nf");
 
-		// Skip default case label (null) — should not appear in rawCases
-		if (rawCase.label === null) continue;
-
-		// _ht[physicalOp] = handlerIdx
-		htInit.push(
-			exprStmt(assign(index(id(htName), rawCase.label), lit(handlerIdx)))
+		// Build a throwaway set of cases just for fragmentation mapping
+		const previewCases = buildCasesForModeInternal(
+			names,
+			temps,
+			shuffleMap,
+			seed,
+			interpOpts,
+			false, // sync mode for preview
+			false, // no debug for preview
+			handlerIndices
 		);
 
-		// case handlerIdx: <body>
-		cases.push(caseClause(lit(handlerIdx), rawCase.body));
+		const fragResult = fragmentCases(previewCases, nfName, seed);
+
+		// Remap handler table entries: handlerIdx → first-fragment ID
+		for (const entry of entries) {
+			const newIdx = fragResult.labelMap.get(entry.handlerIdx);
+			if (newIdx !== undefined) {
+				entry.handlerIdx = newIdx;
+			}
+		}
 	}
+
+	// --- Pack handler table as XOR-encoded array ---
+	const htName = temps["_ht"];
+	if (htName === undefined) throw new Error("Missing temp: _ht");
+	const htdName = temps["_htd"];
+	if (htdName === undefined) throw new Error("Missing temp: _htd");
+	const htkName = temps["_htk"];
+	if (htkName === undefined) throw new Error("Missing temp: _htk");
+	const htiName = temps["_hti"];
+	if (htiName === undefined) throw new Error("Missing temp: _hti");
+
+	// Derive encode key from seed
+	const htEncodeKey = Math.imul(seed, 0x45d9f3b) >>> 0;
+
+	// Build encoded data array
+	const encodedData: number[] = [];
+	let rk = htEncodeKey;
+	for (const { physicalOp, handlerIdx } of entries) {
+		encodedData.push((physicalOp ^ (rk & 0xffff)) & 0xffff);
+		encodedData.push((handlerIdx ^ ((rk >>> 16) & 0xffff)) & 0xffff);
+		rk = (Math.imul(rk ^ physicalOp, 0x45d9f3b) ^ handlerIdx) >>> 0;
+	}
+
+	// Compute key anchor: FNV-1a checksum of encoded data
+	let anchor = 0x811c9dc5;
+	for (const v of encodedData) {
+		anchor = Math.imul(anchor ^ v, 0x01000193) >>> 0;
+	}
+	anchor = anchor >>> 0;
+
+	// --- Build IIFE-scope initialization AST ---
+	const initNodes: JsNode[] = [];
+
+	// var _htd = [encoded values...];
+	initNodes.push(varDecl(htdName, arr(...encodedData.map((v) => lit(v)))));
+
+	// var _ht = {};
+	initNodes.push(varDecl(htName, obj()));
+
+	// Decode loop:
+	// var _htk = HT_ENCODE_KEY;
+	// for(var _hti=0; _hti<_htd.length; _hti+=2) {
+	//   var _v = _htd[_hti] ^ (_htk & 0xFFFF);
+	//   var _w = _htd[_hti+1] ^ ((_htk >>> 16) & 0xFFFF);
+	//   _ht[_v] = _w;
+	//   _htk = (Math.imul(_htk ^ _v, 0x45D9F3B) ^ _w) >>> 0;
+	// }
+	initNodes.push(varDecl(htkName, L(htEncodeKey)));
+	initNodes.push(
+		forStmt(
+			varDecl(htiName, lit(0)),
+			bin("<", id(htiName), member(id(htdName), "length")),
+			assign(id(htiName), lit(2), "+"),
+			[
+				// var _v = _htd[_hti] ^ (_htk & 0xFFFF);
+				varDecl(
+					"_v",
+					bin(
+						"^",
+						index(id(htdName), id(htiName)),
+						bin("&", id(htkName), lit(0xffff))
+					)
+				),
+				// var _w = _htd[_hti+1] ^ ((_htk >>> 16) & 0xFFFF);
+				varDecl(
+					"_w",
+					bin(
+						"^",
+						index(
+							id(htdName),
+							bin("+", id(htiName), lit(1))
+						),
+						bin("&", bin(">>>", id(htkName), lit(16)), lit(0xffff))
+					)
+				),
+				// _ht[_v] = _w;
+				exprStmt(assign(index(id(htName), id("_v")), id("_w"))),
+				// _htk = (Math.imul(_htk ^ _v, 0x45D9F3B) ^ _w) >>> 0;
+				exprStmt(
+					assign(
+						id(htkName),
+						bin(
+							">>>",
+							bin(
+								"^",
+								call(member(id("Math"), "imul"), [
+									bin("^", id(htkName), id("_v")),
+									L(0x45d9f3b),
+								]),
+								id("_w")
+							),
+							lit(0)
+						)
+					)
+				),
+			]
+		)
+	);
+
+	// Key anchor: FNV-1a checksum of packed data
+	// var _ka = 0x811C9DC5;
+	// for(var _hti=0; _hti<_htd.length; _hti++) {
+	//   _ka = Math.imul(_ka ^ _htd[_hti], 0x01000193) >>> 0;
+	// }
+	initNodes.push(varDecl(names.keyAnchor, L(0x811c9dc5)));
+	initNodes.push(
+		forStmt(
+			assign(id(htiName), lit(0)),
+			bin("<", id(htiName), member(id(htdName), "length")),
+			update("++", false, id(htiName)),
+			[
+				exprStmt(
+					assign(
+						id(names.keyAnchor),
+						bin(
+							">>>",
+							call(member(id("Math"), "imul"), [
+								bin(
+									"^",
+									id(names.keyAnchor),
+									index(id(htdName), id(htiName))
+								),
+								L(0x01000193),
+							]),
+							lit(0)
+						)
+					)
+				),
+			]
+		)
+	);
+
+	return { initNodes, handlerIndices, keyAnchorValue: anchor };
+}
+
+/**
+ * Build case clauses for a specific interpreter mode (sync or async).
+ *
+ * Uses the pre-computed handler indices from buildHandlerTableMeta so
+ * that both modes share the same physical-opcode → handler-index mapping.
+ * Some handlers (AWAIT, iterators, closures) produce different AST nodes
+ * depending on ctx.isAsync.
+ */
+function buildCasesForMode(
+	names: RuntimeNames,
+	temps: TempNames,
+	shuffleMap: number[],
+	seed: number,
+	interpOpts: InterpreterBuildOptions,
+	isAsync: boolean,
+	debug: boolean,
+	handlerIndices: number[],
+	split?: SplitFn
+): CaseBuildResult {
+	let cases = buildCasesForModeInternal(
+		names,
+		temps,
+		shuffleMap,
+		seed,
+		interpOpts,
+		isAsync,
+		debug,
+		handlerIndices
+	);
 
 	// Default case
 	cases.push(caseClause(null, [breakStmt()]));
 
-	// --- MBA: replace arithmetic/bitwise ops with MBA expressions ---
-	if (opts.interpOpts.mixedBooleanArithmetic) {
+	// --- MBA ---
+	if (interpOpts.mixedBooleanArithmetic) {
 		cases = cases.map((c) => {
-			if (c.label === null) return c; // skip default case
-			const transformedBody = applyMBA(c.body, opts.seed);
-			return caseClause(c.label, transformedBody);
+			if (c.label === null) return c;
+			return caseClause(c.label, applyMBA(c.body, seed));
 		});
 	}
 
-	// --- Handler fragmentation: split handlers into interleaved fragments ---
-	let dispatchNodes: JsNode[];
-	let finalHtInit: JsNode[];
-
-	if (opts.interpOpts.handlerFragmentation) {
+	// --- Handler fragmentation ---
+	let fragmentLabelMap: Map<number, number> | undefined;
+	if (interpOpts.handlerFragmentation) {
 		const nfName = temps["_nf"];
 		if (nfName === undefined) throw new Error("Missing temp: _nf");
 
-		// Fragment the case bodies
-		const fragResult = fragmentCases(cases, nfName, opts.seed);
+		const fragResult = fragmentCases(cases, nfName, seed);
+		cases = fragResult.cases;
+		fragmentLabelMap = fragResult.labelMap;
+	}
 
-		// Rebuild htInit with remapped labels (physicalOp → first-fragment ID)
-		finalHtInit = [htInit[0]!]; // var _ht = {}
-		for (let h = 1; h < htInit.length; h++) {
-			const stmt = htInit[h]!;
-			if (stmt.type !== "ExprStmt") {
-				finalHtInit.push(stmt);
-				continue;
-			}
-			const expr = (stmt as { type: "ExprStmt"; expr: JsNode }).expr;
-			if (expr.type !== "AssignExpr") {
-				finalHtInit.push(stmt);
-				continue;
-			}
-			const oldLabel =
-				expr.value.type === "Literal"
-					? (expr.value.value as number)
-					: -1;
-			const newLabel = fragResult.labelMap.get(oldLabel);
-			if (newLabel !== undefined) {
-				finalHtInit.push(exprStmt(assign(expr.target, lit(newLabel))));
-			} else {
-				finalHtInit.push(stmt);
-			}
+	return { cases, fragmentLabelMap };
+}
+
+/**
+ * Internal helper: build raw case clauses (without default, MBA, or
+ * fragmentation) for a specific isAsync mode.
+ */
+function buildCasesForModeInternal(
+	names: RuntimeNames,
+	temps: TempNames,
+	shuffleMap: number[],
+	seed: number,
+	interpOpts: InterpreterBuildOptions,
+	isAsync: boolean,
+	debug: boolean,
+	handlerIndices: number[]
+): CaseClause[] {
+	const ctx = makeHandlerCtx(names, temps, isAsync, debug);
+
+	// Build raw cases from the handler registry
+	const rawCases: CaseClause[] = [];
+	for (const [op, handler] of registry) {
+		if (
+			interpOpts.dynamicOpcodes &&
+			interpOpts.usedOpcodes &&
+			!interpOpts.usedOpcodes.has(op)
+		) {
+			continue;
 		}
+		rawCases.push(caseClause(lit(shuffleMap[op]!), handler(ctx)));
+	}
 
-		// Build dispatch: var _nf=_ht[PH]; for(;;){ switch(_nf){...} break; }
-		const fragSwitch = switchStmt(
-			id(nfName),
-			fragResult.cases
-		) as SwitchStmt;
+	// Decoy handlers (isAsync-independent — use default ctx)
+	if (interpOpts.decoyOpcodes && interpOpts.usedOpcodes) {
+		rawCases.push(
+			...generateDecoyHandlers(names, shuffleMap, interpOpts.usedOpcodes)
+		);
+	}
+
+	// Remap to handler indices
+	const cases: CaseClause[] = [];
+	for (let i = 0; i < rawCases.length; i++) {
+		const handlerIdx = handlerIndices[i]!;
+		cases.push(caseClause(lit(handlerIdx), rawCases[i]!.body));
+	}
+
+	return cases;
+}
+
+/**
+ * Get physical opcodes for decoy handlers (without building case bodies).
+ * Must return the same set in the same order as generateDecoyHandlers.
+ */
+function getDecoyPhysicalOps(
+	shuffleMap: number[],
+	usedOpcodes: Set<number>
+): number[] {
+	// Collect unused logical opcodes
+	const unused: number[] = [];
+	for (let i = 0; i < shuffleMap.length; i++) {
+		if (!usedOpcodes.has(i)) unused.push(i);
+	}
+	if (unused.length === 0) return [];
+
+	// Select 8-16 decoys (same logic as generateDecoyHandlers)
+	const count = Math.min(unused.length, 8 + (shuffleMap[0]! % 9));
+	const selected: number[] = [];
+	for (let i = 0; i < count; i++) {
+		const idx =
+			(shuffleMap[i % shuffleMap.length]! + i * 7) % unused.length;
+		const op = unused[idx]!;
+		if (!selected.includes(op)) selected.push(op);
+	}
+
+	return selected.map((logicalOp) => shuffleMap[logicalOp]!);
+}
+
+/**
+ * Build a single interpreter function (sync or async) as a JsNode.
+ *
+ * Takes pre-built case clauses (from buildHandlerTableData) and
+ * constructs the scaffold as AST with tree-based obfuscateLocals().
+ */
+function buildExecFunction(
+	names: RuntimeNames,
+	temps: TempNames,
+	cases: CaseClause[],
+	opts: {
+		isAsync: boolean;
+		debug: boolean;
+		rollingCipher: boolean;
+		seed: number;
+		interpOpts: InterpreterBuildOptions;
+		split?: SplitFn;
+		fragmentLabelMap?: Map<number, number>;
+	}
+): JsNode {
+	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
+	const htName = temps["_ht"];
+	if (htName === undefined) throw new Error("Missing temp: _ht");
+
+	// Build dispatch nodes
+	let dispatchNodes: JsNode[];
+
+	if (opts.interpOpts.handlerFragmentation && opts.fragmentLabelMap) {
+		const nfName = temps["_nf"];
+		if (nfName === undefined) throw new Error("Missing temp: _nf");
+
+		// Fragmented dispatch: var _nf=_ht[PH]; for(;;){ switch(_nf){...} break; }
+		const fragSwitch = switchStmt(id(nfName), cases) as SwitchStmt;
 		dispatchNodes = [
 			varDecl(nfName, index(id(htName), id(ctx.PH))),
 			forStmt(null, null, null, [fragSwitch, breakStmt()]),
 		];
 	} else {
-		finalHtInit = htInit;
 		// Standard dispatch: switch(_ht[PH]){...}
 		dispatchNodes = [switchStmt(index(id(htName), id(ctx.PH)), cases)];
 	}
@@ -261,7 +582,7 @@ export function buildExecFunction(
 		opts.rollingCipher,
 		opts.interpOpts,
 		dispatchNodes,
-		finalHtInit,
+		undefined, // no htInit — handler table is at IIFE scope now
 		opts.split
 	);
 

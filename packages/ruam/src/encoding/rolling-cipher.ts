@@ -37,13 +37,18 @@ import {
  * @param paramCount     Number of parameters the unit accepts.
  * @param constantCount  Number of constants in the constant pool.
  * @param cipherSalt     Optional per-build random salt.
+ * @param keyAnchor      Optional key anchor (XOR-folded into the derived key
+ *                       after avalanche finalization — matches the runtime
+ *                       `rcDeriveKey` which XORs the closure variable `_ka`
+ *                       as the final step).
  */
 export function deriveImplicitKey(
 	instrCount: number,
 	registerCount: number,
 	paramCount: number,
 	constantCount: number,
-	cipherSalt?: number
+	cipherSalt?: number,
+	keyAnchor?: number
 ): number {
 	let h = FNV_OFFSET_BASIS;
 	h = Math.imul(h ^ instrCount, FNV_PRIME);
@@ -56,7 +61,11 @@ export function deriveImplicitKey(
 	h ^= h >>> 16;
 	h = Math.imul(h, AVALANCHE_CONSTANT);
 	h ^= h >>> 13;
-	return h >>> 0;
+	let k = h >>> 0;
+	if (keyAnchor !== undefined) {
+		k = (k ^ keyAnchor) >>> 0;
+	}
+	return k;
 }
 
 /**
@@ -84,17 +93,14 @@ function mixState(state: number, opcode: number, operand: number): number {
  *
  * @param instrs      Flat instruction array `[op0, operand0, op1, operand1, ...]`
  * @param masterKey   Key derived from {@link deriveImplicitKey}.
- * @param integrityHash  Optional integrity hash to fold into the key.
+ *                    If a key anchor + integrity hash are used, they should already
+ *                    be folded into the key via {@link deriveImplicitKey}'s `keyAnchor` param.
  */
 export function rollingEncrypt(
 	instrs: number[],
-	masterKey: number,
-	integrityHash?: number
+	masterKey: number
 ): void {
-	const baseKey =
-		integrityHash !== undefined
-			? (masterKey ^ integrityHash) >>> 0
-			: masterKey;
+	const baseKey = masterKey;
 
 	for (let i = 0; i < instrs.length; i += 2) {
 		const idx = i >>> 1;
