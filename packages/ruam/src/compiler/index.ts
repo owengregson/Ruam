@@ -21,7 +21,7 @@ import {
 } from "./visitors/statements.js";
 import { compileClassExpr } from "./visitors/classes.js";
 import type { BytecodeUnit } from "../types.js";
-import { UNIT_ID_PREFIX, UNIT_ID_PAD_LENGTH } from "../constants.js";
+import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 import {
 	analyzeCapturedVars,
 	type CaptureAnalysisResult,
@@ -32,19 +32,29 @@ import { optimizeInstructions } from "./optimizer.js";
 // Unit ID generation
 // ---------------------------------------------------------------------------
 
-let unitCounter = 0;
+let unitIdState = 0;
+const unitIdSet = new Set<string>();
 
-/** Reset the unit ID counter (call before each file compilation). */
-export function resetUnitCounter(): void {
-	unitCounter = 0;
+/** Reset the unit ID generator (call before each file compilation). */
+export function resetUnitCounter(seed?: number): void {
+	unitIdState = (seed ?? 0) >>> 0;
+	unitIdSet.clear();
 }
 
-/** Generate the next unique bytecode unit ID (e.g. `"u_0000"`). */
+/**
+ * Generate the next unique bytecode unit ID.
+ * Uses a seeded LCG to produce random-looking alphanumeric IDs
+ * (e.g. `"k7m2"`, `"x9fp"`) instead of sequential `u_NNNN`.
+ */
 function genUnitId(): string {
-	return (
-		UNIT_ID_PREFIX +
-		(unitCounter++).toString(16).padStart(UNIT_ID_PAD_LENGTH, "0")
-	);
+	for (;;) {
+		unitIdState = (unitIdState * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+		const id = (unitIdState >>> 0).toString(36).slice(0, 5);
+		if (id.length >= 3 && !unitIdSet.has(id)) {
+			unitIdSet.add(id);
+			return id;
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
