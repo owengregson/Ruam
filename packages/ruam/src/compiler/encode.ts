@@ -51,6 +51,8 @@ export interface EncodeOptions {
 	integrityHash?: number;
 	/** Per-build cipher salt mixed into the rolling cipher key derivation. */
 	cipherSalt?: number;
+	/** Key anchor — replaces FNV offset basis in key derivation, entangled with handler table. */
+	keyAnchor?: number;
 }
 
 /**
@@ -67,7 +69,8 @@ export function encodeBytecodeUnit(
 		options.shuffleMap,
 		options.rollingCipher,
 		options.integrityHash,
-		options.cipherSalt
+		options.cipherSalt,
+		options.keyAnchor
 	);
 	if (options.encrypt) {
 		const key = computeFingerprint().toString(16);
@@ -110,6 +113,8 @@ export interface JsonSerializeOptions {
 	integrityHash?: number;
 	/** Per-build cipher salt mixed into the rolling cipher key derivation. */
 	cipherSalt?: number;
+	/** Key anchor — replaces FNV offset basis in key derivation, entangled with handler table. */
+	keyAnchor?: number;
 }
 
 /**
@@ -142,6 +147,7 @@ export function serializeUnitToJson(
 	let rollingCipher = false;
 	let integrityHash: number | undefined;
 	let cipherSalt: number | undefined;
+	let keyAnchor: number | undefined;
 
 	if (Array.isArray(optsOrMap)) {
 		shuffleMap = optsOrMap;
@@ -152,6 +158,15 @@ export function serializeUnitToJson(
 		rollingCipher = optsOrMap.rollingCipher ?? false;
 		integrityHash = optsOrMap.integrityHash;
 		cipherSalt = optsOrMap.cipherSalt;
+		keyAnchor = optsOrMap.keyAnchor;
+	}
+
+	// Combine key anchor + integrity hash into a single effective anchor
+	// that replaces the FNV offset basis in deriveImplicitKey.
+	// Must match what rcDeriveKey() produces at runtime.
+	let effectiveAnchor = keyAnchor;
+	if (effectiveAnchor !== undefined && integrityHash !== undefined) {
+		effectiveAnchor = (effectiveAnchor ^ integrityHash) >>> 0;
 	}
 
 	// When rolling cipher is on, use the implicit key for string encoding
@@ -159,16 +174,14 @@ export function serializeUnitToJson(
 	// Must match what rcDeriveKey() produces at runtime.
 	let effectiveStringKey = stringKey;
 	if (rollingCipher && stringKey !== undefined) {
-		let k = deriveImplicitKey(
+		const k = deriveImplicitKey(
 			unit.instructions.length,
 			unit.registerCount,
 			unit.paramCount,
 			unit.constants.length,
-			cipherSalt
+			cipherSalt,
+			effectiveAnchor
 		);
-		if (integrityHash !== undefined) {
-			k = (k ^ integrityHash) >>> 0;
-		}
 		effectiveStringKey = k;
 	}
 
@@ -196,9 +209,10 @@ export function serializeUnitToJson(
 			unit.registerCount,
 			unit.paramCount,
 			unit.constants.length,
-			cipherSalt
+			cipherSalt,
+			effectiveAnchor
 		);
-		rollingEncrypt(instrs, masterKey, integrityHash);
+		rollingEncrypt(instrs, masterKey);
 	}
 
 	return JSON.stringify({
@@ -224,7 +238,8 @@ function serializeUnit(
 	shuffleMap: number[],
 	applyRollingCipher: boolean = false,
 	integrityHash?: number,
-	cipherSalt?: number
+	cipherSalt?: number,
+	keyAnchor?: number
 ): Uint8Array {
 	const buf = new ArrayBuffer(estimateSize(unit));
 	const view = new DataView(buf);
@@ -283,14 +298,20 @@ function serializeUnit(
 
 	// Apply rolling cipher encryption if enabled (must happen after shuffle)
 	if (applyRollingCipher) {
+		// Combine key anchor + integrity hash into effective anchor
+		let effectiveAnchor = keyAnchor;
+		if (effectiveAnchor !== undefined && integrityHash !== undefined) {
+			effectiveAnchor = (effectiveAnchor ^ integrityHash) >>> 0;
+		}
 		const masterKey = deriveImplicitKey(
 			unit.instructions.length,
 			unit.registerCount,
 			unit.paramCount,
 			unit.constants.length,
-			cipherSalt
+			cipherSalt,
+			effectiveAnchor
 		);
-		rollingEncrypt(flatInstrs, masterKey, integrityHash);
+		rollingEncrypt(flatInstrs, masterKey);
 	}
 
 	// Write instructions to binary buffer

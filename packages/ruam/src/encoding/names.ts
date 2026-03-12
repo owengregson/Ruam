@@ -128,6 +128,11 @@ export interface RuntimeNames {
 	/** Integrity hash function (FNV-1a). */
 	ihashFn: string;
 
+	// Key anchor — derived from handler table, used in rolling cipher key derivation.
+	// Stored as a closure variable so rcDeriveKey can't be extracted via new Function().
+	/** Key anchor variable (combines handler table checksum + optional integrity hash). */
+	keyAnchor: string;
+
 	// Watermark — looks like an essential variable
 	/** Watermark variable name (_ru4m). */
 	wm: string;
@@ -254,6 +259,11 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	// --- Interpreter dispatch indirection ---
 	"_ht", // handler lookup table (interpreter dispatch indirection)
 	"_nf", // next-fragment variable (handler fragmentation dispatch)
+
+	// --- Packed handler table decoding ---
+	"_htd", // handler table packed data array
+	"_htk", // handler table decode key
+	"_hti", // handler table decode loop variable
 ] as const;
 
 /** The watermark variable name — always `_ru4m`. */
@@ -376,6 +386,7 @@ export function generateRuntimeNames(
 		rcMix: genName(),
 		ihash: genName(),
 		ihashFn: genName(),
+		keyAnchor: genName(),
 		wm: WATERMARK_NAME,
 		router: genName(),
 		routeMap: genName(),

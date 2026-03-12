@@ -45,23 +45,23 @@ const xorAssign = (target: string, value: JsNode): JsNode =>
  *
  * Emits two function declarations:
  * - `rcDeriveKey(unit)` — derives the implicit master key from unit metadata
- *   using FNV-1a, with an optional integrity hash XOR folded in.
+ *   using FNV-1a, with the key anchor XOR folded in as the final step.
  * - `rcMix(state, a, b)` — rolling state update for position-dependent decryption.
  *
  * @param names          Runtime identifier mapping.
- * @param integrityHash  Optional integrity hash literal to fold into the derived key.
+ * @param hasKeyAnchor   Whether to fold the key anchor closure variable into the derived key.
  * @param split          Optional constant splitter for numeric obfuscation.
  * @param cipherSalt     Optional per-build salt folded into the derived key via an extra FNV round.
  * @returns Array of JsNode representing both function declarations.
  */
 export function buildRollingCipherSource(
 	names: RuntimeNames,
-	integrityHash?: number,
+	hasKeyAnchor: boolean,
 	split?: SplitFn,
 	cipherSalt?: number
 ): JsNode[] {
 	return [
-		buildDeriveKeyFunction(names, integrityHash, split, cipherSalt),
+		buildDeriveKeyFunction(names, hasKeyAnchor, split, cipherSalt),
 		buildMixFunction(names, split),
 	];
 }
@@ -73,12 +73,14 @@ export function buildRollingCipherSource(
  *
  * Derives the implicit master key from a bytecode unit's structural
  * properties (instruction count, register count, param count, constant count)
- * via FNV-1a hashing. When an integrity hash is provided, it is XOR-folded
- * into the key before returning.
+ * via FNV-1a hashing. When the key anchor is enabled, it is XOR-folded
+ * into the key before returning. The key anchor is a closure variable
+ * (names.keyAnchor) that combines the handler table checksum and optional
+ * integrity hash — this prevents extraction via `new Function()`.
  */
 function buildDeriveKeyFunction(
 	names: RuntimeNames,
-	integrityHash?: number,
+	hasKeyAnchor: boolean,
 	split?: SplitFn,
 	cipherSalt?: number
 ): JsNode {
@@ -123,9 +125,10 @@ function buildDeriveKeyFunction(
 		varDecl("k", ushr(h, 0))
 	);
 
-	// Optional: k = (k ^ ihash) >>> 0;
-	if (integrityHash !== undefined) {
-		body.push(exprStmt(assign(k, ushr(xor(k, id(names.ihash)), 0))));
+	// Fold in the key anchor (closure variable — blocks new Function() extraction).
+	// The key anchor combines the handler table checksum and optional integrity hash.
+	if (hasKeyAnchor) {
+		body.push(exprStmt(assign(k, ushr(xor(k, id(names.keyAnchor)), 0))));
 	}
 
 	// return k;
