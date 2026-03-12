@@ -48,14 +48,14 @@ function DESTRUCTURE_BIND(_ctx: HandlerCtx): JsNode[] {
  * DESTRUCTURE_DEFAULT: apply default value if top-of-stack is undefined.
  *
  * ```
- * var v=S[P];if(v===void 0){P--;var def=C[O];S[++P]=def;}break;
+ * var v=S[S.length-1];if(v===void 0){S.pop();var def=C[O];S.push(def);}break;
  * ```
  */
 function DESTRUCTURE_DEFAULT(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
 		ifStmt(bin("===", id("v"), un("void", lit(0))), [
-			exprStmt(update("--", false, id(ctx.P))),
+			exprStmt(ctx.pop()),
 			varDecl("def", index(id(ctx.C), id(ctx.O))),
 			exprStmt(ctx.push(id("def"))),
 		]),

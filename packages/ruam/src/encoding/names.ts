@@ -56,7 +56,7 @@ export interface RuntimeNames {
 	// Interpreter local names — disguise the stack-machine pattern
 	/** Stack array (was `stack`). */
 	stk: string;
-	/** Stack pointer (was `sp`). */
+	/** @deprecated Stack pointer eliminated — kept for LCG sequence stability. */
 	stp: string;
 
 	// Interpreter internal locals — disguise the VM pattern
@@ -422,7 +422,7 @@ export function generateRuntimeNames(
 		dbgCfg: genName(),
 		dbgProt: genName(),
 		stk: genName(),
-		stp: genName(),
+		stp: genName(), // reserved — preserves LCG sequence (stack pointer eliminated)
 		operand: genName(),
 		scope: genName(),
 		regs: genName(),

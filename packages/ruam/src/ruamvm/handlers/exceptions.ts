@@ -45,7 +45,7 @@ import { registry } from "./registry.js";
  * ```
  * var _ci=(O>>16)&0xFFFF;var _fi=O&0xFFFF;
  * if(_ci===0xFFFF)_ci=-1;if(_fi===0xFFFF)_fi=-1;
- * if(!EX)EX=[];EX.push({_ci:_ci,_fi:_fi,_sp:P});break;
+ * if(!EX)EX=[];EX.push({_ci:_ci,_fi:_fi,_sp:S.length});break;
  * ```
  */
 function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
@@ -67,7 +67,7 @@ function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
 				obj(
 					[ctx.t("_ci"), id(ctx.t("_ci"))],
 					[ctx.t("_fi"), id(ctx.t("_fi"))],
-					[ctx.t("_sp"), id(ctx.P)]
+					[ctx.t("_sp"), member(id(ctx.S), "length")]
 				),
 			])
 		),

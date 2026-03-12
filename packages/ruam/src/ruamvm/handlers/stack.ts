@@ -2,6 +2,9 @@
  * Stack manipulation opcode handlers in AST node form.
  *
  * Covers push/pop/dup/swap/rotate operations on the VM stack.
+ * Uses Array.push()/pop() and length-based indexing instead of a
+ * dedicated stack pointer variable — the stack looks like normal
+ * array manipulation rather than a VM stack machine.
  *
  * @module ruamvm/handlers/stack
  */
@@ -16,9 +19,10 @@ import {
 	lit,
 	bin,
 	un,
-	update,
 	assign,
 	index,
+	member,
+	call,
 } from "../nodes.js";
 import { type HandlerCtx, registry } from "./registry.js";
 
@@ -74,116 +78,103 @@ function PUSH_NEG_INFINITY(ctx: HandlerCtx): JsNode[] {
 
 // --- Pop / stack pointer handlers ---
 
+/** POP: discard top of stack. */
 function POP(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(update("--", false, id(ctx.P))), breakStmt()];
+	return [exprStmt(ctx.pop()), breakStmt()];
 }
 
+/** POP_N: discard top N elements from stack. */
 function POP_N(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(assign(id(ctx.P), id(ctx.O), "-")), breakStmt()];
-}
-
-// --- Duplication handlers ---
-
-function DUP(ctx: HandlerCtx): JsNode[] {
+	// S.length -= O
 	return [
-		exprStmt(
-			assign(
-				index(id(ctx.S), bin("+", id(ctx.P), lit(1))),
-				index(id(ctx.S), id(ctx.P))
-			)
-		),
-		exprStmt(update("++", false, id(ctx.P))),
+		exprStmt(assign(member(id(ctx.S), "length"), id(ctx.O), "-")),
 		breakStmt(),
 	];
 }
 
+// --- Duplication handlers ---
+
+/** DUP: duplicate top of stack. */
+function DUP(ctx: HandlerCtx): JsNode[] {
+	// S.push(S[S.length-1])
+	return [exprStmt(ctx.push(ctx.peek())), breakStmt()];
+}
+
+/** DUP2: duplicate top two elements. */
 function DUP2(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl(ctx.t("_a"), index(id(ctx.S), bin("-", id(ctx.P), lit(1)))),
-		varDecl(ctx.t("_b"), index(id(ctx.S), id(ctx.P))),
-		exprStmt(
-			assign(
-				index(id(ctx.S), update("++", true, id(ctx.P))),
-				id(ctx.t("_a"))
-			)
+		// var _a=S[S.length-2], _b=S[S.length-1]
+		varDecl(
+			ctx.t("_a"),
+			index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2)))
 		),
-		exprStmt(
-			assign(
-				index(id(ctx.S), update("++", true, id(ctx.P))),
-				id(ctx.t("_b"))
-			)
-		),
+		varDecl(ctx.t("_b"), ctx.peek()),
+		// S.push(_a); S.push(_b)
+		exprStmt(ctx.push(id(ctx.t("_a")))),
+		exprStmt(ctx.push(id(ctx.t("_b")))),
 		breakStmt(),
 	];
 }
 
 // --- Swap / rotate handlers ---
 
+/** SWAP: swap top two elements. */
 function SWAP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("a", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		varDecl("b", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("a"))
-		),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("b"))
-		),
+		varDecl("a", ctx.pop()),
+		varDecl("b", ctx.pop()),
+		exprStmt(ctx.push(id("a"))),
+		exprStmt(ctx.push(id("b"))),
 		breakStmt(),
 	];
 }
 
+/** ROT3: rotate top 3 elements (abc -> cab). */
 function ROT3(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("c", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		varDecl("b", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		varDecl("a", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("c"))
-		),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("a"))
-		),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("b"))
-		),
+		varDecl("c", ctx.pop()),
+		varDecl("b", ctx.pop()),
+		varDecl("a", ctx.pop()),
+		exprStmt(ctx.push(id("c"))),
+		exprStmt(ctx.push(id("a"))),
+		exprStmt(ctx.push(id("b"))),
 		breakStmt(),
 	];
 }
 
+/** ROT4: rotate top 4 elements (abcd -> dabc). */
 function ROT4(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("d", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		varDecl("c", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		varDecl("b", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		varDecl("a", index(id(ctx.S), update("--", false, id(ctx.P)))),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("d"))
-		),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("a"))
-		),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("b"))
-		),
-		exprStmt(
-			assign(index(id(ctx.S), update("++", true, id(ctx.P))), id("c"))
-		),
+		varDecl("d", ctx.pop()),
+		varDecl("c", ctx.pop()),
+		varDecl("b", ctx.pop()),
+		varDecl("a", ctx.pop()),
+		exprStmt(ctx.push(id("d"))),
+		exprStmt(ctx.push(id("a"))),
+		exprStmt(ctx.push(id("b"))),
+		exprStmt(ctx.push(id("c"))),
 		breakStmt(),
 	];
 }
 
 // --- Pick handler ---
 
+/** PICK: copy element at depth O onto top of stack. */
 function PICK(ctx: HandlerCtx): JsNode[] {
+	// S.push(S[S.length-1-O])
 	return [
 		exprStmt(
-			assign(
-				index(id(ctx.S), bin("+", id(ctx.P), lit(1))),
-				index(id(ctx.S), bin("-", id(ctx.P), id(ctx.O)))
+			ctx.push(
+				index(
+					id(ctx.S),
+					bin(
+						"-",
+						bin("-", member(id(ctx.S), "length"), lit(1)),
+						id(ctx.O)
+					)
+				)
 			)
 		),
-		exprStmt(update("++", false, id(ctx.P))),
 		breakStmt(),
 	];
 }

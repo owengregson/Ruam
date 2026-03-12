@@ -33,9 +33,8 @@ import type { Op } from "../../compiler/opcodes.js";
  * Contains obfuscated variable names and feature flags.
  */
 export interface HandlerCtx {
-	// Stack machine
+	// Stack machine (uses Array.push/pop/length — no stack pointer)
 	S: string; // stack array
-	P: string; // stack pointer
 
 	// Interpreter state
 	IP: string; // instruction pointer
@@ -108,7 +107,6 @@ export function makeHandlerCtx(
 ): HandlerCtx {
 	return {
 		S: names.stk,
-		P: names.stp,
 		IP: names.ip,
 		C: names.cArr,
 		O: names.operand,
@@ -143,9 +141,9 @@ export function makeHandlerCtx(
 			}
 			return name;
 		},
-		push: (value: JsNode) => stackPush(names.stk, names.stp, value),
-		pop: () => stackPop(names.stk, names.stp),
-		peek: () => stackPeek(names.stk, names.stp),
+		push: (value: JsNode) => stackPush(names.stk, value),
+		pop: () => stackPop(names.stk),
+		peek: () => stackPeek(names.stk),
 
 		// AST-returning scope helpers — prototypal scope chain
 		sv: (key: JsNode = id("name")) => index(id("s"), key),
