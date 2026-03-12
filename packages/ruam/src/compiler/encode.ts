@@ -29,6 +29,7 @@ import {
 	BINARY_TAG_BIGINT,
 	BINARY_TAG_REGEX,
 	BINARY_TAG_STRING,
+	BINARY_TAG_ENCODED_STRING,
 } from "../constants.js";
 import {
 	deriveImplicitKey,
@@ -53,6 +54,8 @@ export interface EncodeOptions {
 	cipherSalt?: number;
 	/** Key anchor — replaces FNV offset basis in key derivation, entangled with handler table. */
 	keyAnchor?: number;
+	/** XOR string encoding key for constant pool strings. */
+	stringKey?: number;
 }
 
 /**
@@ -70,7 +73,8 @@ export function encodeBytecodeUnit(
 		options.rollingCipher,
 		options.integrityHash,
 		options.cipherSalt,
-		options.keyAnchor
+		options.keyAnchor,
+		options.stringKey
 	);
 	if (options.encrypt) {
 		const key = computeFingerprint().toString(16);
@@ -239,7 +243,8 @@ function serializeUnit(
 	applyRollingCipher: boolean = false,
 	integrityHash?: number,
 	cipherSalt?: number,
-	keyAnchor?: number
+	keyAnchor?: number,
+	stringKey?: number
 ): Uint8Array {
 	const buf = new ArrayBuffer(estimateSize(unit));
 	const view = new DataView(buf);
@@ -271,6 +276,23 @@ function serializeUnit(
 		for (let i = 0; i < bytes.length; i++) writeU8(bytes[i]!);
 	}
 
+	// Compute effective string key (same derivation as JSON path)
+	let effectiveStringKey = stringKey;
+	if (applyRollingCipher && stringKey !== undefined) {
+		let effectiveAnchor = keyAnchor;
+		if (effectiveAnchor !== undefined && integrityHash !== undefined) {
+			effectiveAnchor = (effectiveAnchor ^ integrityHash) >>> 0;
+		}
+		effectiveStringKey = deriveImplicitKey(
+			unit.instructions.length,
+			unit.registerCount,
+			unit.paramCount,
+			unit.constants.length,
+			cipherSalt,
+			effectiveAnchor
+		);
+	}
+
 	// Header
 	const flags =
 		(unit.isGenerator ? 1 : 0) |
@@ -285,8 +307,18 @@ function serializeUnit(
 
 	// Constants
 	writeU32(unit.constants.length);
-	for (const c of unit.constants) {
-		writeConstant(c, writeU8, writeI32, writeF64, writeStr);
+	for (let ci = 0; ci < unit.constants.length; ci++) {
+		const c = unit.constants[ci]!;
+		writeConstant(
+			c,
+			ci,
+			writeU8,
+			writeU16,
+			writeI32,
+			writeF64,
+			writeStr,
+			effectiveStringKey
+		);
 	}
 
 	// Build flat instruction array with shuffled opcodes
@@ -346,10 +378,13 @@ function serializeUnit(
 /** Write a single constant pool entry to the binary buffer. */
 function writeConstant(
 	c: ConstantPoolEntry,
+	constIndex: number,
 	writeU8: (v: number) => void,
+	writeU16: (v: number) => void,
 	writeI32: (v: number) => void,
 	writeF64: (v: number) => void,
-	writeStr: (s: string) => void
+	writeStr: (s: string) => void,
+	stringKey?: number
 ): void {
 	switch (c.type) {
 		case "null":
@@ -385,8 +420,16 @@ function writeConstant(
 			break;
 		}
 		case "string":
-			writeU8(BINARY_TAG_STRING);
-			writeStr(c.value);
+			if (stringKey !== undefined) {
+				// XOR-encode string char codes for defense in depth
+				const encoded = encodeStringChars(c.value, stringKey, constIndex);
+				writeU8(BINARY_TAG_ENCODED_STRING);
+				writeU16(encoded.length); // char count (not byte count)
+				for (const v of encoded) writeU16(v);
+			} else {
+				writeU8(BINARY_TAG_STRING);
+				writeStr(c.value);
+			}
 			break;
 		case "bigint":
 			writeU8(BINARY_TAG_BIGINT);
@@ -411,7 +454,7 @@ function estimateSize(unit: BytecodeUnit): number {
 	size += 4; // constant count
 	for (const c of unit.constants) {
 		size += 1; // type tag
-		if (c.type === "string") size += 4 + c.value.length * 3;
+		if (c.type === "string") size += 4 + c.value.length * 3; // covers both UTF-8 and u16 encoding
 		else if (c.type === "number") size += 8;
 		else if (c.type === "bigint") size += 4 + c.value.length * 3;
 		else if (c.type === "regex") {

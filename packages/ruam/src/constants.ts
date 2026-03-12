@@ -241,3 +241,4 @@ export const BINARY_TAG_FLOAT64 = 7;
 export const BINARY_TAG_BIGINT = 8;
 export const BINARY_TAG_REGEX = 9;
 export const BINARY_TAG_STRING = 10;
+export const BINARY_TAG_ENCODED_STRING = 11;
