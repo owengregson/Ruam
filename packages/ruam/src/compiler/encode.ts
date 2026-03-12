@@ -422,7 +422,11 @@ function writeConstant(
 		case "string":
 			if (stringKey !== undefined) {
 				// XOR-encode string char codes for defense in depth
-				const encoded = encodeStringChars(c.value, stringKey, constIndex);
+				const encoded = encodeStringChars(
+					c.value,
+					stringKey,
+					constIndex
+				);
 				writeU8(BINARY_TAG_ENCODED_STRING);
 				writeU16(encoded.length); // char count (not byte count)
 				for (const v of encoded) writeU16(v);
@@ -454,7 +458,9 @@ function estimateSize(unit: BytecodeUnit): number {
 	size += 4; // constant count
 	for (const c of unit.constants) {
 		size += 1; // type tag
-		if (c.type === "string") size += 4 + c.value.length * 3; // covers both UTF-8 and u16 encoding
+		if (c.type === "string")
+			size +=
+				4 + c.value.length * 3; // covers both UTF-8 and u16 encoding
 		else if (c.type === "number") size += 8;
 		else if (c.type === "bigint") size += 4 + c.value.length * 3;
 		else if (c.type === "regex") {

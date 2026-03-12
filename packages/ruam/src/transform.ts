@@ -213,9 +213,7 @@ export function obfuscateCode(
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
-	const keyAnchor = rollingCipher
-		? runtimeResult.keyAnchorValue
-		: undefined;
+	const keyAnchor = rollingCipher ? runtimeResult.keyAnchorValue : undefined;
 	const encodedUnits = encodeAllUnits(
 		compiledUnits,
 		shuffleMap,
@@ -893,10 +891,16 @@ function assembleShielded(
 			);
 
 		const rootEncoded = encodeGroupUnit(gm.unit);
-		allEncodedUnits.set(gm.unit.id, { unit: gm.unit, encoded: rootEncoded });
+		allEncodedUnits.set(gm.unit.id, {
+			unit: gm.unit,
+			encoded: rootEncoded,
+		});
 		for (const child of gm.unit.childUnits) {
 			const childEncoded = encodeGroupUnit(child);
-			allEncodedUnits.set(child.id, { unit: child, encoded: childEncoded });
+			allEncodedUnits.set(child.id, {
+				unit: child,
+				encoded: childEncoded,
+			});
 		}
 	}
 

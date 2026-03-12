@@ -114,12 +114,26 @@ export function buildInterpreterFunctions(
 	// Build case clauses separately for sync and async, because some handlers
 	// (AWAIT, iterators, closures) produce different AST depending on ctx.isAsync.
 	const syncCases = buildCasesForMode(
-		names, temps, shuffleMap, seed, interpOpts,
-		false, debug, htMeta.handlerIndices, split
+		names,
+		temps,
+		shuffleMap,
+		seed,
+		interpOpts,
+		false,
+		debug,
+		htMeta.handlerIndices,
+		split
 	);
 	const asyncCases = buildCasesForMode(
-		names, temps, shuffleMap, seed, interpOpts,
-		true, debug, htMeta.handlerIndices, split
+		names,
+		temps,
+		shuffleMap,
+		seed,
+		interpOpts,
+		true,
+		debug,
+		htMeta.handlerIndices,
+		split
 	);
 
 	const syncFn = buildExecFunction(names, temps, syncCases.cases, {
@@ -336,10 +350,7 @@ function buildHandlerTableMeta(
 					"_w",
 					bin(
 						"^",
-						index(
-							id(htdName),
-							bin("+", id(htiName), lit(1))
-						),
+						index(id(htdName), bin("+", id(htiName), lit(1))),
 						bin("&", bin(">>>", id(htkName), lit(16)), lit(0xffff))
 					)
 				),

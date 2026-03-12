@@ -270,9 +270,7 @@ export function buildDeserializer(names: RuntimeNames): JsNode[] {
 					update("++", false, id("ei")),
 					[
 						exprStmt(
-							mcall(id("earr"), "push", [
-								call(id("readU16"), []),
-							])
+							mcall(id("earr"), "push", [call(id("readU16"), [])])
 						),
 					]
 				),

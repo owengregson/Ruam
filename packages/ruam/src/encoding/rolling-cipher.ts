@@ -96,10 +96,7 @@ function mixState(state: number, opcode: number, operand: number): number {
  *                    If a key anchor + integrity hash are used, they should already
  *                    be folded into the key via {@link deriveImplicitKey}'s `keyAnchor` param.
  */
-export function rollingEncrypt(
-	instrs: number[],
-	masterKey: number
-): void {
+export function rollingEncrypt(instrs: number[], masterKey: number): void {
 	const baseKey = masterKey;
 
 	for (let i = 0; i < instrs.length; i += 2) {
