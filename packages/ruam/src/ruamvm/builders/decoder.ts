@@ -69,15 +69,21 @@ export function buildBinaryDecoderSource(
 }
 
 /**
- * Build the RC4 cipher function as JsNode[].
+ * Build the custom cipher function as JsNode[].
  *
- * Only emitted when bytecode encryption is enabled.
+ * Only emitted when bytecode encryption is enabled. Uses FNV-1a key
+ * derivation + LCG keystream instead of RC4, avoiding the recognizable
+ * S-box/KSA/PRGA pattern. Constants go through the splitter.
  *
  * @param names - Randomized runtime identifier names.
- * @returns Single-element array containing the RC4 function declaration.
+ * @param split - Optional constant splitter for numeric obfuscation.
+ * @returns Single-element array containing the cipher function declaration.
  */
-export function buildRc4Source(names: RuntimeNames): JsNode[] {
-	return [buildRc4Function(names)];
+export function buildRc4Source(
+	names: RuntimeNames,
+	split?: SplitFn
+): JsNode[] {
+	return [buildCipherFunction(names, split)];
 }
 
 // --- Custom decode function ---
@@ -216,109 +222,104 @@ function buildCustomDecodeFunction(names: RuntimeNames): JsNode {
 	return fn(names.b64, ["str"], body);
 }
 
-// --- RC4 ---
+// --- Custom cipher (replaces RC4) ---
 
 /**
- * Build the RC4 stream cipher function.
+ * Build the custom cipher function — FNV-1a key derivation + LCG keystream.
+ *
+ * Avoids RC4's recognizable S-box/KSA/PRGA pattern. Uses the same
+ * FNV-1a and LCG primitives already present in other runtime code,
+ * making the cipher blend in as a hash-and-transform utility.
  *
  * ```js
- * function rc4(data, key) {
- *   var S = new Array(256); var j = 0; var i;
- *   for (i = 0; i < 256; i++) S[i] = i;
- *   for (i = 0; i < 256; i++) {
- *     j = (j + S[i] + key.charCodeAt(i % key.length)) & 255;
- *     var t = S[i]; S[i] = S[j]; S[j] = t;
+ * function cipher(data, key) {
+ *   var h = FNV_BASIS;
+ *   for (var i = 0; i < key.length; i++) {
+ *     h = Math.imul(h ^ key.charCodeAt(i), FNV_PRIME);
  *   }
- *   i = 0; j = 0;
+ *   h = h >>> 0;
  *   var out = new Uint8Array(data.length);
- *   for (var k = 0; k < data.length; k++) {
- *     i = (i + 1) & 255;
- *     j = (j + S[i]) & 255;
- *     var t = S[i]; S[i] = S[j]; S[j] = t;
- *     out[k] = data[k] ^ S[(S[i] + S[j]) & 255];
+ *   for (var i = 0; i < data.length; i++) {
+ *     h = (Math.imul(h, LCG_MULT) + LCG_INC) >>> 0;
+ *     out[i] = data[i] ^ (h >>> 16 & 255);
  *   }
  *   return out;
  * }
  * ```
  */
-function buildRc4Function(names: RuntimeNames): JsNode {
-	const S = id("S");
-	const i = id("i");
-	const j = id("j");
-	const t = id("t");
+function buildCipherFunction(
+	names: RuntimeNames,
+	split?: SplitFn
+): JsNode {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const data = id("data");
 	const key = id("key");
-	const k = id("k");
+	const h = id("h");
+	const i = id("i");
 	const out = id("out");
-	const Si = index(S, i); // S[i]
-	const Sj = index(S, j); // S[j]
 
 	const body: JsNode[] = [
-		// var S = new Array(256);
-		varDecl("S", newExpr(id("Array"), [lit(256)])),
-		// var j = 0;
-		varDecl("j", lit(0)),
-		// var i;
-		varDecl("i"),
+		// var h = FNV_BASIS;
+		varDecl("h", L(0x811c9dc5)),
 
-		// --- KSA init: for(i=0; i<256; i++) S[i] = i; ---
+		// for(var i=0; i<key.length; i++) {
+		//   h = Math.imul(h ^ key.charCodeAt(i), FNV_PRIME);
+		// }
 		forStmt(
-			assign(i, lit(0)),
-			bin("<", i, lit(256)),
-			update("++", false, i),
-			[exprStmt(assign(Si, i))]
-		),
-
-		// --- KSA shuffle ---
-		forStmt(
-			assign(i, lit(0)),
-			bin("<", i, lit(256)),
+			varDecl("i", lit(0)),
+			bin("<", i, member(key, "length")),
 			update("++", false, i),
 			[
 				exprStmt(
 					assign(
-						j,
-						band(
-							bin(
-								"+",
-								bin("+", j, Si),
-								call(member(key, "charCodeAt"), [
-									bin("%", i, member(key, "length")),
-								])
-							),
-							lit(255)
-						)
+						h,
+						call(member(id("Math"), "imul"), [
+							xor(h, call(member(key, "charCodeAt"), [i])),
+							L(0x01000193),
+						])
 					)
 				),
-				varDecl("t", Si),
-				exprStmt(assign(Si, Sj)),
-				exprStmt(assign(Sj, t)),
 			]
 		),
 
-		// i = 0; j = 0;
-		exprStmt(assign(i, lit(0))),
-		exprStmt(assign(j, lit(0))),
+		// h = h >>> 0;
+		exprStmt(assign(h, u32(h))),
+
 		// var out = new Uint8Array(data.length);
 		varDecl("out", newExpr(id("Uint8Array"), [member(data, "length")])),
 
-		// --- PRGA ---
+		// for(var i=0; i<data.length; i++) {
+		//   h = (Math.imul(h, LCG_MULT) + LCG_INC) >>> 0;
+		//   out[i] = data[i] ^ (h >>> 16 & 255);
+		// }
 		forStmt(
-			varDecl("k", lit(0)),
-			bin("<", k, member(data, "length")),
-			update("++", false, k),
+			assign(i, lit(0)),
+			bin("<", i, member(data, "length")),
+			update("++", false, i),
 			[
-				exprStmt(assign(i, band(bin("+", i, lit(1)), lit(255)))),
-				exprStmt(assign(j, band(bin("+", j, Si), lit(255)))),
-				varDecl("t", Si),
-				exprStmt(assign(Si, Sj)),
-				exprStmt(assign(Sj, t)),
+				// h = (Math.imul(h, LCG_MULT) + LCG_INC) >>> 0;
 				exprStmt(
 					assign(
-						index(out, k),
+						h,
+						u32(
+							bin(
+								"+",
+								call(member(id("Math"), "imul"), [
+									h,
+									L(1664525),
+								]),
+								L(1013904223)
+							)
+						)
+					)
+				),
+				// out[i] = data[i] ^ (h >>> 16 & 255);
+				exprStmt(
+					assign(
+						index(out, i),
 						xor(
-							index(data, k),
-							index(S, band(bin("+", Si, Sj), lit(255)))
+							index(data, i),
+							band(bin(">>>", h, lit(16)), lit(255))
 						)
 					)
 				),

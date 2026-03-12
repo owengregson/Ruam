@@ -135,7 +135,7 @@ export function generateVmRuntime(options: {
 	// Optional encryption support (RC4 + fingerprint)
 	if (encrypt) {
 		nodes.push(...buildFingerprintSource(names, split));
-		nodes.push(...buildRc4Source(names));
+		nodes.push(...buildRc4Source(names, split));
 	}
 
 	// Optional debug protection
@@ -327,7 +327,7 @@ export function generateShieldedVmRuntime(options: {
 	// Shared: encryption support (RC4 + fingerprint)
 	if (encrypt) {
 		nodes.push(...buildFingerprintSource(sharedNames, sharedSplit));
-		nodes.push(...buildRc4Source(sharedNames));
+		nodes.push(...buildRc4Source(sharedNames, sharedSplit));
 	}
 
 	// Shared: debug protection
