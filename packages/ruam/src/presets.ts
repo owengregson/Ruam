@@ -3,7 +3,11 @@
  * @module presets
  */
 
-import type { VmObfuscationOptions, PresetName } from "./types.js";
+import type {
+	VmObfuscationOptions,
+	PresetName,
+	TargetEnvironment,
+} from "./types.js";
 
 /**
  * Preset configurations keyed by name.
@@ -14,7 +18,7 @@ import type { VmObfuscationOptions, PresetName } from "./types.js";
  */
 export const PRESETS: Record<
 	PresetName,
-	Required<Omit<VmObfuscationOptions, "preset" | "debugLogging">>
+	Required<Omit<VmObfuscationOptions, "preset" | "debugLogging" | "target">>
 > = {
 	low: {
 		targetMode: "root",
@@ -29,6 +33,8 @@ export const PRESETS: Record<
 		rollingCipher: false,
 		integrityBinding: false,
 		vmShielding: false,
+		mixedBooleanArithmetic: false,
+		handlerFragmentation: false,
 	},
 	medium: {
 		targetMode: "root",
@@ -43,6 +49,8 @@ export const PRESETS: Record<
 		rollingCipher: true,
 		integrityBinding: false,
 		vmShielding: false,
+		mixedBooleanArithmetic: false,
+		handlerFragmentation: false,
 	},
 	max: {
 		targetMode: "root",
@@ -57,20 +65,42 @@ export const PRESETS: Record<
 		rollingCipher: true,
 		integrityBinding: true,
 		vmShielding: true,
+		mixedBooleanArithmetic: true,
+		handlerFragmentation: true,
 	},
 };
 
 /**
- * Resolve options by merging a preset (if specified) with explicit overrides.
- * Explicit options always win over preset values.
+ * Resolved options with internal fields derived from the target environment.
+ *
+ * `wrapOutput` is not part of the public API — it is set automatically
+ * based on {@link VmObfuscationOptions.target}.
+ */
+export interface ResolvedOptions extends VmObfuscationOptions {
+	/** @internal Wrap the entire output in an IIFE. Set by `target`. */
+	wrapOutput?: boolean;
+}
+
+/** Target-specific default settings. */
+const TARGET_DEFAULTS: Record<TargetEnvironment, Partial<ResolvedOptions>> = {
+	node: {},
+	browser: {},
+	"browser-extension": { wrapOutput: true },
+};
+
+/**
+ * Resolve options by merging a preset (if specified) with explicit overrides,
+ * then applying target-environment defaults.
+ *
+ * Priority: explicit options > preset values > target defaults.
  *
  * @param options - User-supplied options, optionally referencing a preset.
  * @returns Fully resolved options with preset defaults filled in.
  */
 export function resolveOptions(
 	options: VmObfuscationOptions = {}
-): VmObfuscationOptions {
-	let resolved: VmObfuscationOptions;
+): ResolvedOptions {
+	let resolved: ResolvedOptions;
 
 	if (options.preset) {
 		const preset = PRESETS[options.preset];
@@ -84,6 +114,15 @@ export function resolveOptions(
 		}
 	} else {
 		resolved = { ...options };
+	}
+
+	// Apply target-environment defaults (only for fields not explicitly set)
+	const target = resolved.target ?? "browser";
+	const targetDefaults = TARGET_DEFAULTS[target];
+	for (const [key, value] of Object.entries(targetDefaults)) {
+		if ((resolved as Record<string, unknown>)[key] === undefined) {
+			(resolved as Record<string, unknown>)[key] = value;
+		}
 	}
 
 	// integrityBinding requires rollingCipher — auto-enable it

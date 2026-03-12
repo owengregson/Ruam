@@ -204,37 +204,37 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 
 	// --- Debug protection locals ---
 	"_sev", // severity
-	"_dm", // demo array
-	"_now", // current time
-	"_th", // threshold
-	"_tl", // last time
+	"_dm", // (reserved — preserves LCG sequence)
+	"_now", // (reserved — preserves LCG sequence)
+	"_th", // (reserved — preserves LCG sequence)
+	"_tl", // (reserved — preserves LCG sequence)
 	"_pb", // probe list
 	"_fh", // FNV hash initial
-	"_o", // object (coercion)
-	"_hr", // high resolution timer
+	"_o", // object (console formatting detection)
+	"_hr", // (reserved — preserves LCG sequence)
 	"_src", // source code
 	"_it", // timeout ID
 	"_act", // action handler
-	"_gk", // global keys
+	"_gk", // (reserved — preserves LCG sequence)
 	"_k", // key (for-in)
-	"_p1", // detector function 1
-	"_p2", // detector function 2
-	"_p3", // detector function 3
-	"_p4", // detector function 4
-	"_p5", // detector function 5
-	"_p6", // detector function 6
+	"_p1", // detector function 1 (console formatting)
+	"_p2", // (reserved — preserves LCG sequence)
+	"_p3", // detector function 3 (environment analysis)
+	"_p4", // detector function 4 (integrity self-check)
+	"_p5", // (reserved — preserves LCG sequence)
+	"_p6", // (reserved — preserves LCG sequence)
 	"_run", // debug protection runner
-	"_s1", // sample time 1
-	"_s2", // sample time 2
-	"_e1", // elapsed time 1
-	"_e2", // elapsed time 2
-	"_ts", // timestamp array
+	"_s1", // (reserved — preserves LCG sequence)
+	"_s2", // (reserved — preserves LCG sequence)
+	"_e1", // (reserved — preserves LCG sequence)
+	"_e2", // (reserved — preserves LCG sequence)
+	"_ts", // toString result
 	"_i", // loop iterator
-	"_s", // start time
-	"_sm", // sum measurement
-	"_av", // average value
-	"_vr", // variance
-	"_d", // difference
+	"_s", // (reserved — preserves LCG sequence)
+	"_sm", // (reserved — preserves LCG sequence)
+	"_av", // (reserved — preserves LCG sequence)
+	"_vr", // (reserved — preserves LCG sequence)
+	"_d", // difference / detection flag
 	"_st", // stack trace
 	"_cs", // checksum source
 	"_ch", // checksum hash
@@ -253,6 +253,7 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 
 	// --- Interpreter dispatch indirection ---
 	"_ht", // handler lookup table (interpreter dispatch indirection)
+	"_nf", // next-fragment variable (handler fragmentation dispatch)
 ] as const;
 
 /** The watermark variable name — always `_ru4m`. */

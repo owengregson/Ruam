@@ -6,7 +6,7 @@ JS VM obfuscator — compiles JavaScript functions into custom bytecode executed
 
 -   **Build**: `npm run build` (tsup, ESM-only)
 -   **Typecheck**: `npm run typecheck` (tsc --noEmit)
--   **Test**: `npm run test` (vitest, 1803 tests)
+-   **Test**: `npm run test` (vitest, 1841 tests)
 -   **Test watch**: `npm run test:watch`
 -   **Node**: >= 18, **Module**: ESM (`"type": "module"`)
 
@@ -41,6 +41,8 @@ src/
     nodes.ts                JS AST node types (~36 node kinds) + factory functions
     emit.ts                 Recursive emitter: AST -> minified JS with precedence-aware parens
     transforms.ts           AST tree transforms (obfuscateLocals)
+    mba.ts                  Mixed Boolean Arithmetic AST tree transform
+    handler-fragmentation.ts Handler fragmentation: splits handlers into interleaved fragments
     builders/
       interpreter.ts        Interpreter builder: assembles sync/async exec from handler registry
       loader.ts             Bytecode loader, cache, depth tracking, _ru4m watermark
@@ -49,7 +51,7 @@ src/
       fingerprint.ts        Environment fingerprinting runtime source
       decoder.ts            RC4 + base64 codec + string constant XOR decoder
       rolling-cipher.ts     Rolling cipher runtime helpers (deriveKey, mix)
-      debug-protection.ts   Multi-layered anti-debugger (6 detection layers + escalating response)
+      debug-protection.ts   Multi-layered anti-debugger (3 detection layers + escalating response)
       debug-logging.ts      Debug trace infrastructure
       globals.ts            Global exposure (globalThis binding)
     handlers/
@@ -106,7 +108,7 @@ docs/
 -   **Rolling cipher** (`rollingCipher` option): Position-dependent XOR encryption on every instruction. The master key is derived implicitly from bytecode metadata (instruction count, register count, param count, constant count) via FNV-1a — no plaintext seed appears in the output. Each instruction is encrypted with `mixState(baseKey, index, index ^ 0x9E3779B9)`. Implemented in `runtime/rolling-cipher.ts`. When enabled, string encoding also uses the implicit key instead of a plaintext literal.
 -   **Integrity binding** (`integrityBinding` option): A per-build hash (FNV-1a of the interpreter template source) is folded into the rolling cipher's base key (`baseKey = masterKey XOR integrityHash`). The hash is embedded as a numeric literal in the IIFE. If an attacker modifies the hash value, all instruction decryption produces garbage. Requires `rollingCipher`.
 -   **VM Shielding** (`vmShielding` option): Each root function gets its own micro-interpreter with unique opcode shuffle, identifier names, and rolling cipher key. A shared router function maps unit IDs to group dispatch functions. Shared infrastructure (cache, fingerprint, deserializer) is emitted once. Auto-enables `rollingCipher`. Implemented in `transform.ts` (`assembleShielded()`), `runtime/vm.ts` (`generateShieldedVmRuntime()`), `runtime/names.ts` (`generateShieldedNames()`), and `ruamvm/builders/runners.ts` (`buildRouterSource()`).
--   **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `high` (+debug protection, integrity binding, dead code, stack encoding, VM shielding). Defined in `presets.ts`.
+-   **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes), `max` (+debug protection, integrity binding, dead code, stack encoding, VM shielding, MBA, handler fragmentation). Defined in `presets.ts`.
 -   **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
 -   `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
 -   **Home object (`[[HomeObject]]`)**: Class methods get `fn._ho = target` stamped at define-time. The home object is passed through the VM dispatch chain (`_vm.call` → `exec`) so `super` resolves correctly in multi-level inheritance. `GET_SUPER_PROP`, `SET_SUPER_PROP`, `CALL_SUPER_METHOD`, `SUPER_CALL` all use `Object.getPrototypeOf(homeObject)` when available.
@@ -114,10 +116,13 @@ docs/
 -   **Decoy opcodes** (`decoyOpcodes` option): Injects 8-16 realistic-looking fake opcode handlers (arithmetic, stack, register, scope operations) into the interpreter switch for unused opcode slots. Implemented in `ruamvm/builders/interpreter.ts` via `injectDecoyHandlers()`.
 -   **Dead code injection** (`deadCodeInjection` option): Inserts unreachable bytecode sequences after RETURN opcodes in compiled units. Jump targets are patched to maintain correctness. Implemented in `transform.ts` via `injectDeadCode()`.
 -   **Stack encoding** (`stackEncoding` option): Wraps the VM stack array in a Proxy that XOR-encodes numeric values with position-dependent keys on set and decodes on get. Non-numeric values are tagged and stored transparently. Implemented in `ruamvm/builders/interpreter.ts` via `buildStackEncodingProxy()`.
+-   **Mixed Boolean Arithmetic** (`mixedBooleanArithmetic` option, `--mba` CLI): Replaces arithmetic and bitwise operations in the interpreter with equivalent MBA expressions. Bitwise ops (`^`, `&`, `|`) are always transformed. Arithmetic ops (`+`, `-`) are wrapped with a runtime int32 guard: `(a|0)===a && (b|0)===b ? MBA(a,b) : a+b`. MBA expressions are nested to depth 2 for additional opacity. Implemented in `ruamvm/mba.ts` as an AST tree transform applied to handler case bodies.
+-   **Handler Fragmentation** (`handlerFragmentation` option, `--handler-fragmentation` CLI): Splits each opcode handler into 2-3 fragments scattered across the switch as separate case labels. A `_nf` (next-fragment) variable chains fragments via `continue`. The switch becomes a `for(;;){ switch(_nf){...} break; }` flat state machine with hundreds of interleaved micro-states. Fragment IDs are shuffled via Fisher-Yates. Implemented in `ruamvm/handler-fragmentation.ts`.
+-   **Target environment** (`target` option, `--target` CLI): Controls environment-specific output settings. Three targets: `"node"` (Node.js CJS/ESM), `"browser"` (plain `<script>` tags, default), `"browser-extension"` (Chrome extension MAIN world — wraps output in IIFE to avoid TrustedScript CSP errors on pages with `require-trusted-types-for 'script'`). Target defaults can be overridden by explicit options. Not included in presets — set independently.
 -   **CSPRNG seed**: Per-file opcode shuffle seed uses `crypto.randomBytes(4)` instead of `Date.now() ^ Math.random()`.
 -   **Babel compat layer**: Shared `babel-compat.ts` normalizes ESM/CJS dual-export shapes for `@babel/traverse` and `@babel/generator`.
 -   **Auto-enable rollingCipher**: `resolveOptions()` automatically enables `rollingCipher` when `integrityBinding` is set.
--   **Debug protection** (`debugProtection` option, `--no-debug-protection` CLI to override presets): Multi-layered anti-debugger system with 6 independent detection layers: (1) polymorphic debugger invocation via CSP-safe traps (toString/valueOf coercion, Object.defineProperty getter) with dual-clock timing, (2) statistical jitter analysis, (3) environment analysis (--inspect flags, stack traces), (4) function integrity self-verification (FNV-1a checksum), (5) native API integrity (console methods + Function.prototype.toString), (6) global property trap canary (browser DevTools enumeration). No eval() or new Function() — fully Chrome extension CSP-compatible. Escalating response: silent bytecode corruption → cache/constants wipe → infinite debugger loop. Uses recursive setTimeout with jitter and `.unref()` for Node.js compatibility. Error messages mimic native V8 messages. Implemented in `ruamvm/builders/debug-protection.ts`.
+-   **Debug protection** (`debugProtection` option, `--no-debug-protection` CLI to override presets): Multi-layered anti-debugger system with 3 independent detection layers: (1) built-in prototype integrity (Object/Array/JSON method monkey-patch detection), (2) environment analysis (--inspect flags, stack traces), (3) function integrity self-verification (FNV-1a checksum). No eval(), new Function(), `debugger` statements, or console.log() calls — fully Chrome extension CSP/TrustedScript compatible. Escalating response requires 3 consecutive detection rounds before acting: silent bytecode corruption → cache/constants wipe → total bytecode annihilation + infinite busy loop. Uses recursive setTimeout with jitter and `.unref()` for Node.js compatibility. Error messages mimic native V8 messages. Implemented in `ruamvm/builders/debug-protection.ts`.
 
 ## Code Conventions
 

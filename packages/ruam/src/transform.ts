@@ -38,6 +38,7 @@ import {
 } from "./encoding/names.js";
 import type { RuntimeNames, TempNames } from "./encoding/names.js";
 import { resolveOptions } from "./presets.js";
+import type { ResolvedOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
 import { preprocessIdentifiers, resetHexCounter } from "./preprocess.js";
 import {
@@ -91,6 +92,9 @@ export function obfuscateCode(
 		rollingCipher = false,
 		integrityBinding = false,
 		vmShielding = false,
+		mixedBooleanArithmetic = false,
+		handlerFragmentation = false,
+		wrapOutput = false,
 	} = resolved;
 
 	// -- Optional identifier preprocessing -----------------------------------
@@ -128,6 +132,9 @@ export function obfuscateCode(
 			deadCodeInjection,
 			stackEncoding,
 			integrityBinding,
+			mixedBooleanArithmetic,
+			handlerFragmentation,
+			wrapOutput,
 		});
 	}
 
@@ -193,6 +200,9 @@ export function obfuscateCode(
 		integrityHash,
 		usedOpcodes,
 		cipherSalt,
+		mixedBooleanArithmetic,
+		handlerFragmentation,
+		wrapOutput,
 	});
 }
 
@@ -652,6 +662,9 @@ function assembleShielded(
 		deadCodeInjection: boolean;
 		stackEncoding: boolean;
 		integrityBinding: boolean;
+		mixedBooleanArithmetic: boolean;
+		handlerFragmentation: boolean;
+		wrapOutput: boolean;
 	}
 ): string {
 	// Generate per-group seeds (one per root function)
@@ -800,6 +813,8 @@ function assembleShielded(
 		decoyOpcodes: opts.decoyOpcodes,
 		stackEncoding: opts.stackEncoding,
 		integrityBinding: opts.integrityBinding,
+		mixedBooleanArithmetic: opts.mixedBooleanArithmetic,
+		handlerFragmentation: opts.handlerFragmentation,
 	});
 
 	// Collect top-level bindings before adding runtime statements
@@ -815,22 +830,40 @@ function assembleShielded(
 	);
 	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;
 
-	// Unwrap the IIFE and inject runtime statements directly into the
-	// program scope (same approach as non-shielded path).
 	const btNode = parse(btDecl, { sourceType: "script" }).program.body[0]!;
 	const runtimeNode = parse(runtime, { sourceType: "script" }).program
 		.body[0]!;
 	const iifeCall = (runtimeNode as t.ExpressionStatement)
 		.expression as t.CallExpression;
 	const iifeFn = iifeCall.callee as t.FunctionExpression;
-	const runtimeStatements = iifeFn.body.body;
 
-	ast.program.body.unshift(
-		btNode as t.Statement,
-		...runtimeStatements,
-		...(scopeNodes as t.Statement[])
-	);
-	ast.program.directives = [t.directive(t.directiveLiteral("use strict"))];
+	if (opts.wrapOutput) {
+		// Keep the IIFE wrapper — put bytecode table, scope setup, and
+		// user code inside the IIFE so everything shares one scope.
+		// Avoids TrustedScript CSP issues on pages with strict Trusted
+		// Types (e.g. chrome:// pages for MAIN world content scripts).
+		const userStatements = [...ast.program.body];
+		iifeFn.body.body.unshift(btNode as t.Statement);
+		iifeFn.body.body.push(
+			...(scopeNodes as t.Statement[]),
+			...userStatements
+		);
+		ast.program.body = [runtimeNode as t.Statement];
+		ast.program.directives = [];
+	} else {
+		// Unwrap the IIFE and inject runtime statements directly into the
+		// program scope so top-level declarations are accessible via the
+		// scope object getters.
+		const runtimeStatements = iifeFn.body.body;
+		ast.program.body.unshift(
+			btNode as t.Statement,
+			...runtimeStatements,
+			...(scopeNodes as t.Statement[])
+		);
+		ast.program.directives = [
+			t.directive(t.directiveLiteral("use strict")),
+		];
+	}
 
 	return generate(ast, { comments: false }).code;
 }
@@ -864,6 +897,9 @@ function assembleOutput(
 		integrityHash?: number;
 		usedOpcodes?: Set<number>;
 		cipherSalt?: number;
+		mixedBooleanArithmetic?: boolean;
+		handlerFragmentation?: boolean;
+		wrapOutput?: boolean;
 	}
 ): string {
 	// Build bytecode table declaration (using randomized name)
@@ -887,6 +923,8 @@ function assembleOutput(
 		integrityHash: runtimeOptions.integrityHash,
 		usedOpcodes: runtimeOptions.usedOpcodes,
 		cipherSalt: runtimeOptions.cipherSalt,
+		mixedBooleanArithmetic: runtimeOptions.mixedBooleanArithmetic,
+		handlerFragmentation: runtimeOptions.handlerFragmentation,
 	});
 
 	// Collect top-level bindings BEFORE adding runtime statements.
@@ -905,25 +943,40 @@ function assembleOutput(
 	);
 	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;
 
-	// Parse the runtime IIFE, then extract its body statements and inject
-	// them directly into the program (unwrapped) so that the VM runtime,
-	// function stubs, and top-level declarations all share the same scope.
 	const btNode = parse(btDecl, { sourceType: "script" }).program.body[0]!;
 	const runtimeNode = parse(runtime, { sourceType: "script" }).program
 		.body[0]!;
 	const iifeCall = (runtimeNode as t.ExpressionStatement)
 		.expression as t.CallExpression;
 	const iifeFn = iifeCall.callee as t.FunctionExpression;
-	const runtimeStatements = iifeFn.body.body;
 
-	// Prepend: bytecode table + runtime + scope setup before the user code.
-	ast.program.body.unshift(
-		btNode as t.Statement,
-		...runtimeStatements,
-		...(scopeNodes as t.Statement[])
-	);
-
-	ast.program.directives = [t.directive(t.directiveLiteral("use strict"))];
+	if (runtimeOptions.wrapOutput) {
+		// Keep the IIFE wrapper — put bytecode table, scope setup, and
+		// user code inside the IIFE so everything shares one scope.
+		// Avoids TrustedScript CSP issues on pages with strict Trusted
+		// Types (e.g. chrome:// pages for MAIN world content scripts).
+		const userStatements = [...ast.program.body];
+		iifeFn.body.body.unshift(btNode as t.Statement);
+		iifeFn.body.body.push(
+			...(scopeNodes as t.Statement[]),
+			...userStatements
+		);
+		ast.program.body = [runtimeNode as t.Statement];
+		ast.program.directives = [];
+	} else {
+		// Unwrap the IIFE and inject runtime statements directly into the
+		// program so that the VM runtime, function stubs, and top-level
+		// declarations all share the same scope.
+		const runtimeStatements = iifeFn.body.body;
+		ast.program.body.unshift(
+			btNode as t.Statement,
+			...runtimeStatements,
+			...(scopeNodes as t.Statement[])
+		);
+		ast.program.directives = [
+			t.directive(t.directiveLiteral("use strict")),
+		];
+	}
 
 	return generate(ast, { comments: false }).code;
 }

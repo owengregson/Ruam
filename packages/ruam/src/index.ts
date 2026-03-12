@@ -9,7 +9,11 @@ import fs from "fs-extra";
 import path from "path";
 import { globby } from "globby";
 
-export { type VmObfuscationOptions, type PresetName } from "./types.js";
+export {
+	type VmObfuscationOptions,
+	type PresetName,
+	type TargetEnvironment,
+} from "./types.js";
 export { PRESETS } from "./presets.js";
 
 // --- Single-Source Obfuscation ---
