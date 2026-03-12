@@ -12,9 +12,15 @@
  *
  * All handlers use pure AST nodes — no raw() escape hatch.
  *
- * LOAD_SCOPED, STORE_SCOPED, and TYPEOF_GLOBAL use manual while-loop
- * construction (not ctx.scopeWalk()) because they need a global fallback
- * after the while loop instead of a trailing break.
+ * Scope chain is prototypal: `Object.create(parent)` for push,
+ * `Object.getPrototypeOf(scope)` for pop. Variables are own
+ * properties on the scope object. The `in` operator traverses the
+ * prototype chain automatically for reads; stores must walk with
+ * `hasOwnProperty` to find the owning scope.
+ *
+ * TDZ uses a sentinel object (per-build unique, stored at IIFE scope).
+ * `TDZ_CHECK` compares `SC[name] === sentinel`; `TDZ_MARK` is a no-op
+ * (the subsequent assignment overwrites the sentinel).
  *
  * @module ruamvm/handlers/scope
  */
@@ -27,6 +33,7 @@ import {
 	bin,
 	un,
 	assign,
+	call,
 	member,
 	index,
 	varDecl,
@@ -35,74 +42,77 @@ import {
 	whileStmt,
 	throwStmt,
 	breakStmt,
-	obj,
 	newExpr,
 } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
+// --- Helpers ---
+
+/**
+ * Build `Object.prototype.hasOwnProperty.call(obj, key)` AST node.
+ *
+ * Root scopes created via `Object.create(null)` have no prototype,
+ * so `obj.hasOwnProperty(key)` would throw. Using
+ * `Object.prototype.hasOwnProperty.call` is safe for all scopes.
+ */
+function hasOwn(obj: JsNode, key: JsNode): JsNode {
+	return call(
+		member(
+			member(member(id("Object"), "prototype"), "hasOwnProperty"),
+			"call"
+		),
+		[obj, key]
+	);
+}
+
 // --- Load / store scoped ---
 
 /**
- * LOAD_SCOPED: walk scope chain to find variable, fall back to global.
+ * LOAD_SCOPED: use `in` operator to check prototype chain, fall back to global.
  *
- * Fast path checks current scope first, then walks parent chain.
- * Does NOT use ctx.scopeWalk() because the global fallback runs after
- * the while loop instead of a trailing break.
+ * The `in` operator traverses the prototype chain automatically, so a
+ * single check replaces the old manual while-loop.
  */
 function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		// Fast path: check current scope first
-		ifStmt(bin("in", id("name"), member(id(ctx.SC), ctx.sV)), [
+		ifStmt(bin("in", id("name"), id(ctx.SC)), [
 			exprStmt(ctx.push(ctx.curSv())),
 			breakStmt(),
 		]),
-		// Walk parent scopes
-		varDecl("s", member(id(ctx.SC), ctx.sPar)),
-		varDecl("found", lit(false)),
-		whileStmt(id("s"), [
-			ifStmt(bin("in", id("name"), member(id("s"), ctx.sV)), [
-				exprStmt(ctx.push(ctx.sv())),
-				exprStmt(assign(id("found"), lit(true))),
-				breakStmt(),
-			]),
-			exprStmt(assign(id("s"), member(id("s"), ctx.sPar))),
-		]),
 		// Global fallback
-		ifStmt(un("!", id("found")), [
-			exprStmt(ctx.push(index(id(ctx.t("_g")), id("name")))),
-		]),
+		exprStmt(ctx.push(index(id(ctx.t("_g")), id("name")))),
 		breakStmt(),
 	];
 }
 
 /**
- * STORE_SCOPED: walk scope chain to find variable slot, fall back to global.
+ * STORE_SCOPED: walk scope chain with hasOwnProperty to find owning scope.
  *
- * Pops value from stack, assigns to first scope that contains the name.
- * Does NOT use ctx.scopeWalk() because the global fallback runs after
- * the while loop instead of a trailing break.
+ * Must find the specific scope that owns the variable (can't use `in`
+ * because that would always match the first scope in the chain). Falls
+ * back to global assignment.
  */
 function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
 		varDecl("val", ctx.pop()),
-		// Fast path: check current scope first
-		ifStmt(bin("in", id("name"), member(id(ctx.SC), ctx.sV)), [
-			exprStmt(assign(ctx.curSv(), id("val"))),
-			breakStmt(),
-		]),
-		// Walk parent scopes
-		varDecl("s", member(id(ctx.SC), ctx.sPar)),
+		// Walk to find owning scope
+		varDecl("s", id(ctx.SC)),
 		varDecl("found", lit(false)),
 		whileStmt(id("s"), [
-			ifStmt(bin("in", id("name"), member(id("s"), ctx.sV)), [
+			ifStmt(hasOwn(id("s"), id("name")), [
 				exprStmt(assign(ctx.sv(), id("val"))),
 				exprStmt(assign(id("found"), lit(true))),
 				breakStmt(),
 			]),
-			exprStmt(assign(id("s"), member(id("s"), ctx.sPar))),
+			exprStmt(
+				assign(
+					id("s"),
+					call(member(id("Object"), "getPrototypeOf"), [id("s")])
+				)
+			),
 		]),
 		// Global fallback
 		ifStmt(un("!", id("found")), [
@@ -115,16 +125,31 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
 // --- Declarations ---
 
 /**
- * DECLARE_VAR / DECLARE_LET / DECLARE_CONST: declare variable in current scope.
+ * DECLARE_VAR: declare variable as own property on current scope.
  *
- * Only initializes to undefined if the name is not already present.
+ * Only initializes to undefined if the name is not already an own property.
  */
-function declareHandler(ctx: HandlerCtx): JsNode[] {
+function declareVarHandler(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		ifStmt(un("!", bin("in", id("name"), member(id(ctx.SC), ctx.sV))), [
-			exprStmt(assign(ctx.curSv(), un("void", lit(0)))),
-		]),
+		ifStmt(
+			un("!", hasOwn(id(ctx.SC), id("name"))),
+			[exprStmt(assign(ctx.curSv(), un("void", lit(0))))]
+		),
+		breakStmt(),
+	];
+}
+
+/**
+ * DECLARE_LET / DECLARE_CONST: declare variable with TDZ sentinel.
+ *
+ * Sets the variable to the TDZ sentinel value. TDZ_CHECK will throw
+ * if the variable is still the sentinel when accessed.
+ */
+function declareLetConstHandler(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		exprStmt(assign(ctx.curSv(), id(ctx.tdzSentinel))),
 		breakStmt(),
 	];
 }
@@ -132,27 +157,38 @@ function declareHandler(ctx: HandlerCtx): JsNode[] {
 // --- Push / pop scope ---
 
 /**
- * PUSH_SCOPE / PUSH_BLOCK_SCOPE / PUSH_CATCH_SCOPE: create a new scope frame.
+ * PUSH_SCOPE / PUSH_BLOCK_SCOPE / PUSH_CATCH_SCOPE: create a new scope.
  *
- * All three share the same handler — a new scope with empty vars and a parent
- * pointer to the current scope.
+ * Uses `Object.create(SC)` — the current scope becomes the prototype,
+ * so `in` operator and property lookups naturally traverse the chain.
  */
 function pushScopeHandler(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			assign(id(ctx.SC), obj([ctx.sPar, id(ctx.SC)], [ctx.sV, obj()]))
+			assign(
+				id(ctx.SC),
+				call(member(id("Object"), "create"), [id(ctx.SC)])
+			)
 		),
 		breakStmt(),
 	];
 }
 
-/** POP_SCOPE: restore parent scope (or stay if already at root). */
+/**
+ * POP_SCOPE: restore parent scope via Object.getPrototypeOf.
+ *
+ * If already at root (prototype is null), stay at current scope.
+ */
 function POP_SCOPE(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
 			assign(
 				id(ctx.SC),
-				bin("||", member(id(ctx.SC), ctx.sPar), id(ctx.SC))
+				bin(
+					"||",
+					call(member(id("Object"), "getPrototypeOf"), [id(ctx.SC)]),
+					id(ctx.SC)
+				)
 			)
 		),
 		breakStmt(),
@@ -162,59 +198,59 @@ function POP_SCOPE(ctx: HandlerCtx): JsNode[] {
 // --- TDZ (Temporal Dead Zone) ---
 
 /**
- * TDZ_CHECK: throw ReferenceError if variable is still in temporal dead zone.
+ * TDZ_CHECK: throw ReferenceError if variable is still the TDZ sentinel.
  */
 function TDZ_CHECK(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		ifStmt(
-			bin(
-				"&&",
-				member(id(ctx.SC), ctx.sTdz),
-				index(member(id(ctx.SC), ctx.sTdz), id("name"))
-			),
-			[
-				throwStmt(
-					newExpr(id("ReferenceError"), [
-						bin(
-							"+",
-							bin("+", lit("Cannot access '"), id("name")),
-							lit("' before initialization")
-						),
-					])
-				),
-			]
-		),
-		breakStmt(),
-	];
-}
-
-/** TDZ_MARK: remove variable from TDZ set (it has been initialized). */
-function TDZ_MARK(ctx: HandlerCtx): JsNode[] {
-	return [
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		ifStmt(member(id(ctx.SC), ctx.sTdz), [
-			exprStmt(
-				un("delete", index(member(id(ctx.SC), ctx.sTdz), id("name")))
+		ifStmt(bin("===", ctx.curSv(), id(ctx.tdzSentinel)), [
+			throwStmt(
+				newExpr(id("ReferenceError"), [
+					bin(
+						"+",
+						bin("+", lit("Cannot access '"), id("name")),
+						lit("' before initialization")
+					),
+				])
 			),
 		]),
 		breakStmt(),
 	];
 }
 
+/**
+ * TDZ_MARK: variable has been initialized — no-op.
+ *
+ * The subsequent STORE_SCOPED / assignment overwrites the sentinel,
+ * so TDZ_MARK doesn't need to do anything.
+ */
+function TDZ_MARK(_ctx: HandlerCtx): JsNode[] {
+	return [breakStmt()];
+}
+
 // --- With scope ---
 
 /**
- * PUSH_WITH_SCOPE: pop an object from the stack and use it as the scope's
- * variable bag (for `with` statements).
+ * PUSH_WITH_SCOPE: pop an object from the stack and create a scope
+ * that delegates to it via `Object.create`.
+ *
+ * The `with` object's properties become the scope's own properties
+ * through prototype delegation — `in` operator finds them naturally.
  */
 function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("wObj", ctx.pop()),
+		// Create a scope whose prototype is the current scope,
+		// then copy the with-object's properties as own properties.
+		// Object.assign(Object.create(SC), wObj) gives us both:
+		// with-object properties as own, parent chain as prototype.
 		exprStmt(
 			assign(
 				id(ctx.SC),
-				obj([ctx.sPar, id(ctx.SC)], [ctx.sV, id("wObj")])
+				call(member(id("Object"), "assign"), [
+					call(member(id("Object"), "create"), [id(ctx.SC)]),
+					id("wObj"),
+				])
 			)
 		),
 		breakStmt(),
@@ -227,7 +263,6 @@ function PUSH_WITH_SCOPE(ctx: HandlerCtx): JsNode[] {
  * DELETE_SCOPED: walk scope chain to find and delete variable.
  *
  * Pushes the result of `delete` onto the stack.
- * Uses ctx.scopeWalk() since the trailing break after the while loop is correct.
  */
 function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
@@ -260,30 +295,21 @@ function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
 }
 
 /**
- * TYPEOF_GLOBAL: walk scope chain first (for closures), then fall back to
- * `typeof _g[name]` for true globals.
+ * TYPEOF_GLOBAL: check prototype chain first (for closures), then fall
+ * back to `typeof _g[name]` for true globals.
  *
- * Does NOT use ctx.scopeWalk() because the global `typeof` fallback runs
- * after the while loop instead of a trailing break.
+ * Uses `in` operator on SC (traverses prototype chain) for fast check.
  */
 function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
-		varDecl(ctx.t("_tf"), lit(false)),
-		whileStmt(id("s"), [
-			ifStmt(bin("in", id("name"), member(id("s"), ctx.sV)), [
-				exprStmt(ctx.push(un("typeof", ctx.sv()))),
-				exprStmt(assign(id(ctx.t("_tf")), lit(true))),
-				breakStmt(),
-			]),
-			exprStmt(assign(id("s"), member(id("s"), ctx.sPar))),
+		ifStmt(bin("in", id("name"), id(ctx.SC)), [
+			exprStmt(ctx.push(un("typeof", ctx.curSv()))),
+			breakStmt(),
 		]),
-		ifStmt(un("!", id(ctx.t("_tf"))), [
-			exprStmt(
-				ctx.push(un("typeof", index(id(ctx.t("_g")), id("name"))))
-			),
-		]),
+		exprStmt(
+			ctx.push(un("typeof", index(id(ctx.t("_g")), id("name"))))
+		),
 		breakStmt(),
 	];
 }
@@ -292,9 +318,9 @@ function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
 
 registry.set(Op.LOAD_SCOPED, LOAD_SCOPED);
 registry.set(Op.STORE_SCOPED, STORE_SCOPED);
-registry.set(Op.DECLARE_VAR, declareHandler);
-registry.set(Op.DECLARE_LET, declareHandler);
-registry.set(Op.DECLARE_CONST, declareHandler);
+registry.set(Op.DECLARE_VAR, declareVarHandler);
+registry.set(Op.DECLARE_LET, declareLetConstHandler);
+registry.set(Op.DECLARE_CONST, declareLetConstHandler);
 registry.set(Op.PUSH_SCOPE, pushScopeHandler);
 registry.set(Op.PUSH_BLOCK_SCOPE, pushScopeHandler);
 registry.set(Op.PUSH_CATCH_SCOPE, pushScopeHandler);

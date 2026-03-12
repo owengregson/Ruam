@@ -101,13 +101,9 @@ export interface RuntimeNames {
 	/** threshold (debug protection) */
 	thresh: string;
 
-	// Scope object property names
-	/** scope.parent */
-	sPar: string;
-	/** scope.vars */
-	sVars: string;
-	/** scope.tdzVars */
-	sTdz: string;
+	// TDZ sentinel — unique per-build object for temporal dead zone checks
+	/** TDZ sentinel variable (IIFE-scope empty object for `===` checks). */
+	tdzSentinel: string;
 
 	// String constant decoder
 	/** String decoder function (XOR-decodes encoded constant pool strings). */
@@ -250,7 +246,7 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_ue", // user entry
 	"_ji", // jitter index
 	"_ps", // program scope (outer scope for top-level dispatch)
-	"_psv", // program scope vars reference
+	"_psv", // (reserved — preserves LCG sequence)
 
 	// --- Interpreter dispatch indirection ---
 	"_ht", // handler lookup table (interpreter dispatch indirection)
@@ -447,9 +443,7 @@ export function generateRuntimeNames(
 		phys: genName(),
 		opVar: genName(),
 		thresh: genName(),
-		sPar: genName(),
-		sVars: genName(),
-		sTdz: genName(),
+		tdzSentinel: genName(),
 		strDec: genName(),
 		fSlots: genName(),
 		rcState: genName(),
@@ -487,9 +481,7 @@ const SHARED_NAME_KEYS = [
 	"dbgProt",
 	"router",
 	"routeMap",
-	"sPar",
-	"sVars",
-	"sTdz",
+	"tdzSentinel",
 ] as const;
 
 /**

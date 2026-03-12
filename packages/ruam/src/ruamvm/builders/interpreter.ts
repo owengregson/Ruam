@@ -669,8 +669,7 @@ function buildScaffoldAST(
 		A = n.args,
 		OS = n.outer;
 	const PH = n.phys;
-	const sPar = n.sPar,
-		sV = n.sVars;
+	// Scope property names removed — prototypal scope uses Object.create chain
 
 	/** Temp name lookup shorthand. */
 	const T = (key: string): string => {
@@ -726,7 +725,9 @@ function buildScaffoldAST(
 	tryBody.push(varDecl(HPE, lit(false)));
 	tryBody.push(varDecl(CT, lit(0)));
 	tryBody.push(varDecl(CV, un("void", lit(0))));
-	tryBody.push(varDecl(SC, obj([sPar, id(OS)], [sV, obj()])));
+	tryBody.push(
+		varDecl(SC, call(member(id("Object"), "create"), [id(OS)]))
+	);
 	tryBody.push(varDecl(P, un("-", lit(1))));
 
 	// var _g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{}
@@ -1036,8 +1037,7 @@ function generateDecoyHandlers(
 		C = n.cArr,
 		O = n.operand;
 	const R = n.regs,
-		SC = n.scope,
-		sV = n.sVars;
+		SC = n.scope;
 
 	// AST decoy body factories — look like real arithmetic, stack, register, scope ops
 	const decoyBodyFactories: (() => JsNode[])[] = [
@@ -1088,13 +1088,13 @@ function generateDecoyHandlers(
 		],
 		// S[++P]=R[O]
 		() => [exprStmt(stackPush(S, P, index(id(R), id(O))))],
-		// var s=SC; if(s&&s.sV){s.sV[C[O]]=S[P--];}
+		// var s=SC; if(s&&C[O]in s){s[C[O]]=S[P--];}
 		() => [
 			varDecl("s", id(SC)),
-			ifStmt(bin("&&", id("s"), member(id("s"), sV)), [
+			ifStmt(bin("&&", id("s"), bin("in", index(id(C), id(O)), id("s"))), [
 				exprStmt(
 					assign(
-						index(member(id("s"), sV), index(id(C), id(O))),
+						index(id("s"), index(id(C), id(O))),
 						index(id(S), update("--", false, id(P)))
 					)
 				),
