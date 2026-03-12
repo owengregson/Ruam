@@ -43,6 +43,8 @@ import {
 	arr,
 	ternary,
 	fnExpr,
+	seq,
+	mapChildren,
 } from "../nodes.js";
 import { registry, makeHandlerCtx } from "../handlers/index.js";
 import {
@@ -54,7 +56,6 @@ import {
 import { obfuscateLocals } from "../transforms.js";
 import { applyMBA } from "../mba.js";
 import { fragmentCases } from "../handler-fragmentation.js";
-import type { SwitchStmt } from "../nodes.js";
 
 /** Options for interpreter filtering and hardening. */
 export interface InterpreterBuildOptions {
@@ -98,6 +99,14 @@ export function buildInterpreterFunctions(
 	interpOpts: InterpreterBuildOptions = {},
 	split?: SplitFn
 ): InterpreterBuildResult {
+	// Function table dispatch replaces the switch — disable handler
+	// fragmentation since handlers are naturally isolated in separate
+	// function expressions (each handler is its own closure).
+	const effectiveOpts: InterpreterBuildOptions = {
+		...interpOpts,
+		handlerFragmentation: false,
+	};
+
 	// Build handler table metadata (shared between sync and async interpreters).
 	// This produces the packed XOR-encoded handler table, key anchor, and the
 	// shuffled handler indices — but NOT the case bodies (those depend on
@@ -107,7 +116,7 @@ export function buildInterpreterFunctions(
 		temps,
 		shuffleMap,
 		seed,
-		interpOpts,
+		effectiveOpts,
 		split
 	);
 
@@ -118,7 +127,7 @@ export function buildInterpreterFunctions(
 		temps,
 		shuffleMap,
 		seed,
-		interpOpts,
+		effectiveOpts,
 		false,
 		debug,
 		htMeta.handlerIndices,
@@ -129,7 +138,7 @@ export function buildInterpreterFunctions(
 		temps,
 		shuffleMap,
 		seed,
-		interpOpts,
+		effectiveOpts,
 		true,
 		debug,
 		htMeta.handlerIndices,
@@ -141,7 +150,7 @@ export function buildInterpreterFunctions(
 		debug,
 		rollingCipher,
 		seed,
-		interpOpts,
+		interpOpts: effectiveOpts,
 		split,
 		fragmentLabelMap: syncCases.fragmentLabelMap,
 	});
@@ -151,7 +160,7 @@ export function buildInterpreterFunctions(
 		debug,
 		rollingCipher,
 		seed,
-		interpOpts,
+		interpOpts: effectiveOpts,
 		split,
 		fragmentLabelMap: asyncCases.fragmentLabelMap,
 	});
@@ -576,23 +585,15 @@ function buildExecFunction(
 	const htName = temps["_ht"];
 	if (htName === undefined) throw new Error("Missing temp: _ht");
 
-	// Build dispatch nodes
-	let dispatchNodes: JsNode[];
-
-	if (opts.interpOpts.handlerFragmentation && opts.fragmentLabelMap) {
-		const nfName = temps["_nf"];
-		if (nfName === undefined) throw new Error("Missing temp: _nf");
-
-		// Fragmented dispatch: var _nf=_ht[PH]; for(;;){ switch(_nf){...} break; }
-		const fragSwitch = switchStmt(id(nfName), cases) as SwitchStmt;
-		dispatchNodes = [
-			varDecl(nfName, index(id(htName), id(ctx.PH))),
-			forStmt(null, null, null, [fragSwitch, breakStmt()]),
-		];
-	} else {
-		// Standard dispatch: switch(_ht[PH]){...}
-		dispatchNodes = [switchStmt(index(id(htName), id(ctx.PH)), cases)];
-	}
+	// Build function table dispatch — grouped handler function arrays
+	// with if-else routing. Replaces the giant switch statement.
+	const ftResult = buildFunctionTableDispatch(
+		cases,
+		temps,
+		htName,
+		ctx.PH,
+		opts.isAsync
+	);
 
 	const fnNode = buildScaffoldAST(
 		names,
@@ -601,8 +602,8 @@ function buildExecFunction(
 		opts.debug,
 		opts.rollingCipher,
 		opts.interpOpts,
-		dispatchNodes,
-		undefined, // no htInit — handler table is at IIFE scope now
+		ftResult.dispatchNodes,
+		ftResult.preLoopDecls,
 		opts.split
 	);
 
@@ -1131,6 +1132,207 @@ function generateDecoyHandlers(
 		const physicalOp = shuffleMap[logicalOp]!;
 		return caseClause(lit(physicalOp), [...factory(), breakStmt()]);
 	});
+}
+
+// --- Function table dispatch (Sig 3: eliminates switch pattern) ---
+
+/** Maximum number of handler groups for function table dispatch. */
+const FT_MAX_GROUPS = 4;
+
+/**
+ * Walk a JsNode tree bottom-up, applying a visitor to each node.
+ * Skips nested function bodies (FnDecl, FnExpr, ArrowFn) so that
+ * break/return transforms only affect the handler scope.
+ */
+function walkSkipFns(
+	node: JsNode,
+	visitor: (n: JsNode) => JsNode | null
+): JsNode {
+	if (
+		node.type === "FnDecl" ||
+		node.type === "FnExpr" ||
+		node.type === "ArrowFn"
+	) {
+		return node;
+	}
+	const walked = mapChildren(node, (child) =>
+		walkSkipFns(child, visitor)
+	);
+	return visitor(walked) ?? walked;
+}
+
+/**
+ * Transform a handler case body for use inside a function table closure.
+ *
+ * - `BreakStmt` → `ReturnStmt()` (exit handler, continue dispatch loop)
+ * - `ReturnStmt(expr)` → `ReturnStmt(seq(assign(_frv, expr), _frs))`
+ *   (signal exec to return _frv via the sentinel)
+ * - Nested function bodies (FnDecl/FnExpr/ArrowFn) are NOT walked
+ *   (their break/return are for their own scope)
+ */
+function transformBodyForFT(
+	body: JsNode[],
+	frsName: string,
+	frvName: string
+): JsNode[] {
+	return body.map((node) =>
+		walkSkipFns(node, (n) => {
+			if (n.type === "BreakStmt") {
+				return returnStmt();
+			}
+			if (n.type === "ReturnStmt") {
+				const value =
+					(n as { type: "ReturnStmt"; value?: JsNode }).value ??
+					un("void", lit(0));
+				return returnStmt(
+					seq(assign(id(frvName), value), id(frsName))
+				);
+			}
+			return null;
+		})
+	);
+}
+
+/**
+ * Build function table dispatch — grouped handler function arrays
+ * with if-else routing. Replaces the giant switch statement.
+ *
+ * Each handler body becomes a closure (function expression) that
+ * captures interpreter locals (S, R, C, I, IP, etc.). Handlers
+ * are split into groups stored as separate arrays, with a balanced
+ * if-else tree routing to the correct group by handler index.
+ *
+ * Return control flow uses a sentinel pattern:
+ * - Normal handlers return `undefined` → dispatch loop continues
+ * - Return-type handlers do `return (_frv = value, _frs)` → dispatch
+ *   loop detects the sentinel and returns `_frv` from exec
+ *
+ * @param cases - Switch case clauses (handler index labels + bodies)
+ * @param temps - Per-build randomized temp name mapping
+ * @param htName - Handler table variable name
+ * @param phName - Physical opcode variable name
+ * @param isAsync - Whether this is the async interpreter (handler functions
+ *                  must be async and calls must be awaited)
+ * @returns preLoopDecls (goes before while loop) and dispatchNodes
+ *          (goes inside while loop body)
+ */
+function buildFunctionTableDispatch(
+	cases: CaseClause[],
+	temps: TempNames,
+	htName: string,
+	phName: string,
+	isAsync: boolean
+): { preLoopDecls: JsNode[]; dispatchNodes: JsNode[] } {
+	const FRS = temps["_frs"];
+	const FRV = temps["_frv"];
+	const FDI = temps["_fdi"];
+	if (!FRS || !FRV || !FDI) {
+		throw new Error("Missing function table temp names");
+	}
+
+	const groupTempNames = [
+		temps["_fg0"],
+		temps["_fg1"],
+		temps["_fg2"],
+		temps["_fg3"],
+	];
+
+	// Filter default case, sort by handler index (label value)
+	const handlerCases = cases
+		.filter((c): c is CaseClause & { label: JsNode } => c.label !== null)
+		.sort((a, b) => {
+			const aVal = (a.label as { type: "Literal"; value: number }).value;
+			const bVal = (b.label as { type: "Literal"; value: number }).value;
+			return aVal - bVal;
+		});
+
+	// Transform each handler body and wrap in a function expression.
+	// Async interpreter handlers must be async functions so that
+	// `await` expressions inside handler bodies remain valid.
+	const handlerFns: JsNode[] = handlerCases.map((c) => {
+		const body = transformBodyForFT(c.body, FRS, FRV);
+		return fnExpr(undefined, [], body, isAsync ? { async: true } : undefined);
+	});
+
+	// Determine group count based on total handler count
+	const totalHandlers = handlerFns.length;
+	const numGroups = Math.min(
+		FT_MAX_GROUPS,
+		totalHandlers < 80 ? 2 : totalHandlers < 160 ? 3 : 4
+	);
+	const groupSize = Math.ceil(totalHandlers / numGroups);
+
+	// Pre-loop declarations: sentinel, return value, group arrays
+	const preLoopDecls: JsNode[] = [
+		// var _frs = {} (unique sentinel object — identity-checked via ===)
+		varDecl(FRS, obj()),
+		// var _frv (return value placeholder)
+		varDecl(FRV, un("void", lit(0))),
+	];
+
+	const activeGroupNames: string[] = [];
+	for (let i = 0; i < numGroups; i++) {
+		const name = groupTempNames[i];
+		if (!name) throw new Error(`Missing function table group temp: _fg${i}`);
+		activeGroupNames.push(name);
+		const start = i * groupSize;
+		const end = Math.min(start + groupSize, totalHandlers);
+		const group = handlerFns.slice(start, end);
+		preLoopDecls.push(varDecl(name, arr(...group)));
+	}
+
+	// Dispatch nodes (inside while loop body)
+	const dispatchNodes: JsNode[] = [];
+
+	// var _fdi = _ht[PH]
+	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+
+	// Build if-else routing tree with grouped dispatch calls.
+	// Each branch: if (_fgN[_fdi - offset]() === _frs) return _frv;
+	// For async: if ((await _fgN[_fdi - offset]()) === _frs) return _frv;
+	const awaitNode = (expr: JsNode): JsNode =>
+		({ type: "AwaitExpr", expr }) as JsNode;
+
+	const buildCallCheck = (
+		groupName: string,
+		offset: number
+	): JsNode[] => {
+		const indexExpr =
+			offset === 0
+				? id(FDI)
+				: bin("-", id(FDI), lit(offset));
+		const callExpr = call(index(id(groupName), indexExpr), []);
+		const result = isAsync ? awaitNode(callExpr) : callExpr;
+		return [
+			ifStmt(
+				bin("===", result, id(FRS)),
+				[returnStmt(id(FRV))]
+			),
+		];
+	};
+
+	if (numGroups === 1) {
+		dispatchNodes.push(...buildCallCheck(activeGroupNames[0]!, 0));
+	} else {
+		// Build if-else chain: route to correct group by handler index
+		let current: JsNode[] = buildCallCheck(
+			activeGroupNames[numGroups - 1]!,
+			(numGroups - 1) * groupSize
+		);
+
+		for (let i = numGroups - 2; i >= 0; i--) {
+			const threshold = (i + 1) * groupSize;
+			const body = buildCallCheck(
+				activeGroupNames[i]!,
+				i * groupSize
+			);
+			current = [ifStmt(bin("<", id(FDI), lit(threshold)), body, current)];
+		}
+
+		dispatchNodes.push(...current);
+	}
+
+	return { preLoopDecls, dispatchNodes };
 }
 
 // --- Stack encoding proxy (AST) ---
