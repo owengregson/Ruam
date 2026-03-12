@@ -45,6 +45,8 @@ import {
 	BABEL_PARSER_PLUGINS,
 	FNV_OFFSET_BASIS,
 	FNV_PRIME,
+	LCG_MULTIPLIER,
+	LCG_INCREMENT,
 } from "./constants.js";
 import { buildInterpreterFunctions } from "./ruamvm/builders/interpreter.js";
 import { emit } from "./ruamvm/emit.js";
@@ -104,10 +106,10 @@ export function obfuscateCode(
 		code = preprocessIdentifiers(code);
 	}
 
-	resetUnitCounter();
-
 	// -- Generate per-file opcode shuffle ------------------------------------
 	const shuffleSeed = generateCryptoSeed();
+
+	resetUnitCounter(shuffleSeed);
 	const shuffleMap = generateShuffleMap(shuffleSeed);
 
 	// -- Generate randomized runtime identifiers -----------------------------
@@ -233,7 +235,8 @@ export function obfuscateCode(
 		temps,
 		runtimeResult.source,
 		wrapOutput,
-		encryptBytecode
+		encryptBytecode,
+		shuffleSeed
 	);
 }
 
@@ -613,18 +616,21 @@ function buildScopeSetupCode(
 	return lines.join("");
 }
 
-/** Build a `var <name>={...}` declaration for the bytecode table. */
-function buildBtDecl(
+/**
+ * Build bytecode table declarations: an empty table init + individual
+ * assignment statements that can be scattered throughout the output.
+ */
+function buildBtParts(
 	units: Map<string, { encoded: string }>,
 	btName: string,
 	encrypt: boolean
-): string {
-	const entries: string[] = [];
+): { init: string; assignments: string[] } {
+	const assignments: string[] = [];
 	for (const [id, { encoded }] of units) {
 		const value = encrypt ? `"${encoded}"` : encoded;
-		entries.push(`"${id}":${value}`);
+		assignments.push(`${btName}["${id}"]=${value};`);
 	}
-	return `var ${btName}={${entries.join(",")}};`;
+	return { init: `var ${btName}={};`, assignments };
 }
 
 /**
@@ -904,7 +910,8 @@ function assembleShielded(
 		sharedTemps,
 		runtimeResult.source,
 		opts.wrapOutput,
-		opts.encryptBytecode
+		opts.encryptBytecode,
+		sharedSeed
 	);
 }
 
@@ -923,10 +930,11 @@ function assembleOutputFromParts(
 	temps: TempNames,
 	runtimeSource: string,
 	wrapOutput: boolean,
-	encrypt: boolean = false
+	encrypt: boolean = false,
+	seed: number = 0
 ): string {
-	// Build bytecode table declaration
-	const btDecl = buildBtDecl(encodedUnits, names.bt, encrypt);
+	// Build bytecode table: empty init + individual assignment statements
+	const btParts = buildBtParts(encodedUnits, names.bt, encrypt);
 
 	// Collect top-level bindings BEFORE adding runtime statements.
 	const topLevelBindings = collectTopLevelBindings(ast.program.body);
@@ -938,16 +946,40 @@ function assembleOutputFromParts(
 	);
 	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;
 
-	const btNode = parse(btDecl, { sourceType: "script" }).program.body[0]!;
+	const btInitNode = parse(btParts.init, { sourceType: "script" }).program
+		.body[0]!;
+	const btAssignNodes = btParts.assignments.map(
+		(s) => parse(s, { sourceType: "script" }).program.body[0]! as t.Statement
+	);
 	const runtimeNode = parse(runtimeSource, { sourceType: "script" }).program
 		.body[0]!;
 	const iifeCall = (runtimeNode as t.ExpressionStatement)
 		.expression as t.CallExpression;
 	const iifeFn = iifeCall.callee as t.FunctionExpression;
 
+	// Scatter unit assignments among runtime statements using seeded positions
+	const scatterStatements = (base: t.Statement[]): t.Statement[] => {
+		if (btAssignNodes.length === 0) return base;
+
+		// Insert assignments at evenly-distributed positions with seeded jitter
+		const result = [...base];
+		let s = seed >>> 0;
+		for (let i = 0; i < btAssignNodes.length; i++) {
+			s = (s * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+			// Insert in the second half of the runtime statements
+			// (after variable declarations but before user code)
+			const minPos = Math.max(1, Math.floor(result.length / 3));
+			const maxPos = result.length;
+			const pos = minPos + (s % Math.max(1, maxPos - minPos));
+			result.splice(pos, 0, btAssignNodes[i]!);
+		}
+		return result;
+	};
+
 	if (wrapOutput) {
 		const userStatements = [...ast.program.body];
-		iifeFn.body.body.unshift(btNode as t.Statement);
+		iifeFn.body.body.unshift(btInitNode as t.Statement);
+		iifeFn.body.body = scatterStatements(iifeFn.body.body);
 		iifeFn.body.body.push(
 			...(scopeNodes as t.Statement[]),
 			...userStatements
@@ -956,9 +988,12 @@ function assembleOutputFromParts(
 		ast.program.directives = [];
 	} else {
 		const runtimeStatements = iifeFn.body.body;
-		ast.program.body.unshift(
-			btNode as t.Statement,
+		const scattered = scatterStatements([
+			btInitNode as t.Statement,
 			...runtimeStatements,
+		]);
+		ast.program.body.unshift(
+			...scattered,
 			...(scopeNodes as t.Statement[])
 		);
 		ast.program.directives = [

@@ -187,13 +187,7 @@ export const GLOBAL_IDENTIFIERS = new Set([
 	"FinalizationRegistry",
 ] as const);
 
-// --- Bytecode Unit ID Generation ---
-
-/** Prefix used for all bytecode unit IDs. */
-export const UNIT_ID_PREFIX = "u_";
-
-/** Number of hex digits used to pad the unit counter. */
-export const UNIT_ID_PAD_LENGTH = 4;
+// (Unit ID generation constants removed — IDs are now randomized via LCG)
 
 // --- VM Execution Limits ---
 
