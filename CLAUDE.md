@@ -30,7 +30,7 @@ src/
     optimizer.ts            Peephole optimizer (Tier 2) + superinstruction fusion (Tier 3)
     emitter.ts              Bytecode emitter + constant pool
     scope.ts                Compile-time scope analysis + register allocation
-    encode.ts               Bytecode serialization (JSON + binary + RC4) + string constant encoding
+    encode.ts               Bytecode serialization (binary + custom encoding + RC4) + string constant encoding
     visitors/
       index.ts              Barrel exports
       statements.ts         Statement compilation (if, for, while, switch, try, etc.)
@@ -45,7 +45,7 @@ src/
     handler-fragmentation.ts Handler fragmentation: splits handlers into interleaved fragments
     builders/
       interpreter.ts        Interpreter builder: assembles sync/async exec from handler registry
-      loader.ts             Bytecode loader, cache, depth tracking
+      loader.ts             Bytecode loader (binary-only: customDecode → RC4 → deser), cache, depth tracking
       runners.ts            VM dispatch functions (run/runAsync) + shielding router
       deserializer.ts       Binary bytecode deserializer
       fingerprint.ts        Environment fingerprinting runtime source
@@ -82,7 +82,7 @@ src/
     vm.ts                   VM runtime orchestrator (assembles IIFE from AST builders, incl. shielded mode)
     names.ts                RuntimeNames interface + per-build randomized name generation (LCG PRNG)
     fingerprint.ts          Build-time fingerprint computation
-    decoder.ts              Build-time RC4 + base64 codec
+    decoder.ts              Build-time RC4 + custom alphabet encoding + alphabet generation
     rolling-cipher.ts       Build-time rolling cipher encryption + implicit key derivation
 
 test/
@@ -104,7 +104,8 @@ docs/
 -   **Key anchor**: FNV-1a checksum of the packed handler table data array, stored as a closure variable (`_ka`). Folded into the rolling cipher key derivation as the final XOR step. Prevents extraction of `rcDeriveKey` via `new Function()` (it references the closure variable). When `integrityBinding` is on, the integrity hash is also XOR'd into the key anchor. Computed by `buildHandlerTableMeta()`, consumed by `deriveImplicitKey()`'s `keyAnchor` parameter.
 -   **2-pass compilation**: Units are compiled first (without encoding) to determine used opcodes. Then the VM runtime is generated (producing the key anchor value from the handler table). Finally units are encoded using the key anchor. Required because the key anchor depends on handler table structure, which depends on which opcodes are used.
 -   **Per-file opcode shuffle**: Seeded Fisher-Yates (LCG) produces different instruction encodings per build. Seed + shuffle constants live in `constants.ts`.
--   **Constant pool string encoding**: All string constants in both JSON and binary bytecode formats are XOR-encoded with an LCG key stream. JSON format stores encoded strings as number arrays; binary format uses `BINARY_TAG_ENCODED_STRING` (tag 11) with uint16 char codes. Decoded at load time by the `strDec` runtime function. When rolling cipher is on, the encoding key is derived implicitly from bytecode metadata (no plaintext seed). In binary format, this provides defense in depth — strings remain encoded even after RC4 decryption is reversed.
+-   **Always-binary format**: All bytecode units are serialized to compact binary (`Uint8Array`) and encoded with a per-build shuffled 64-char alphabet (`A-Za-z0-9_$`). Same bit-packing as base64 (3 bytes → 4 chars) but no padding and a randomized alphabet per build. Output looks like random identifier strings. Alphabet generated via Fisher-Yates shuffle seeded from build seed. JSON serialization path has been eliminated. Runtime decoder builds a reverse lookup table from the embedded alphabet string.
+-   **Constant pool string encoding**: All string constants are XOR-encoded with an LCG key stream. Binary format uses `BINARY_TAG_ENCODED_STRING` (tag 11) with uint16 char codes. Decoded at load time by the `strDec` runtime function. When rolling cipher is on, the encoding key is derived implicitly from bytecode metadata (no plaintext seed). Strings remain encoded even after RC4 decryption is reversed.
 -   **Per-build identifier randomization**: All internal VM identifiers (`_vm`, `_BT`, `stack`, etc.) are replaced with random 2-3 char names generated via LCG PRNG (same seed as opcode shuffle). Managed by `RuntimeNames` interface in `runtime/names.ts`.
 -   **Watermark**: Steganographic — the WATERMARK_MAGIC constant (FNV-1a of "ruam" = `0x2812af9a`) is XOR-folded into the FNV offset basis used for key anchor computation. No visible variable, string, or pattern in output. Verified by comparing key anchor results: using standard FNV basis instead of watermarked basis breaks all rolling cipher decryption.
 -   **Prototypal scope chain**: Scope chain uses `Object.create(parent)` / `Object.getPrototypeOf(scope)` instead of a `{sPar, sVars}` linked list. Variables are own properties on scope objects. `in` operator traverses the prototype chain for reads; `Object.prototype.hasOwnProperty.call` walk for stores. TDZ uses a per-build sentinel object at IIFE scope (identity comparison via `===`). Program scope is `Object.create(null)` with `defineProperty` bindings.
