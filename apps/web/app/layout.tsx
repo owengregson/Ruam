@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 	description:
 		"Compile JavaScript functions into encrypted custom bytecode executed by an embedded virtual machine. Open-source. Per-build unique. No deobfuscator exists.",
 	icons: {
-		icon: "/ruam.svg",
+		icon: `${process.env.NEXT_PUBLIC_BASE_PATH}/ruam.svg`,
 	},
 };
 
