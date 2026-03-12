@@ -25,8 +25,7 @@ import {
 	ALL_JUMP_OPS,
 	PACKED_JUMP_OPS,
 } from "./compiler/opcodes.js";
-import { serializeUnitToJson, encodeBytecodeUnit } from "./compiler/encode.js";
-import type { JsonSerializeOptions } from "./compiler/encode.js";
+import { encodeBytecodeUnit } from "./compiler/encode.js";
 import {
 	generateVmRuntime,
 	generateShieldedVmRuntime,
@@ -50,6 +49,7 @@ import {
 } from "./constants.js";
 import { buildInterpreterFunctions } from "./ruamvm/builders/interpreter.js";
 import { emit } from "./ruamvm/emit.js";
+import { generateAlphabet } from "./encoding/decoder.js";
 
 import { randomBytes } from "node:crypto";
 
@@ -114,6 +114,9 @@ export function obfuscateCode(
 
 	// -- Generate randomized runtime identifiers -----------------------------
 	const { runtime: names, temps } = generateRuntimeNames(shuffleSeed);
+
+	// -- Generate custom encoding alphabet -----------------------------------
+	const alphabet = generateAlphabet(shuffleSeed);
 
 	// -- Parse ---------------------------------------------------------------
 	const ast = parse(code, {
@@ -212,6 +215,7 @@ export function obfuscateCode(
 		cipherSalt,
 		mixedBooleanArithmetic,
 		handlerFragmentation,
+		alphabet,
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
@@ -224,7 +228,8 @@ export function obfuscateCode(
 		rollingCipher,
 		integrityHash,
 		cipherSalt,
-		keyAnchor
+		keyAnchor,
+		alphabet
 	);
 
 	// -- Assemble output -----------------------------------------------------
@@ -235,7 +240,6 @@ export function obfuscateCode(
 		temps,
 		runtimeResult.source,
 		wrapOutput,
-		encryptBytecode,
 		shuffleSeed
 	);
 }
@@ -380,7 +384,8 @@ function encodeAllUnits(
 	rollingCipher: boolean,
 	integrityHash?: number,
 	cipherSalt?: number,
-	keyAnchor?: number
+	keyAnchor?: number,
+	alphabet?: string
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
 	const result = new Map<string, { unit: BytecodeUnit; encoded: string }>();
 	for (const [id, { unit }] of compiledUnits) {
@@ -392,7 +397,8 @@ function encodeAllUnits(
 			rollingCipher,
 			integrityHash,
 			cipherSalt,
-			keyAnchor
+			keyAnchor,
+			alphabet!
 		);
 		result.set(id, { unit, encoded });
 	}
@@ -619,16 +625,16 @@ function buildScopeSetupCode(
 /**
  * Build bytecode table declarations: an empty table init + individual
  * assignment statements that can be scattered throughout the output.
+ *
+ * All units are custom-encoded binary strings, so values are always quoted.
  */
 function buildBtParts(
 	units: Map<string, { encoded: string }>,
-	btName: string,
-	encrypt: boolean
+	btName: string
 ): { init: string; assignments: string[] } {
 	const assignments: string[] = [];
 	for (const [id, { encoded }] of units) {
-		const value = encrypt ? `"${encoded}"` : encoded;
-		assignments.push(`${btName}["${id}"]=${value};`);
+		assignments.push(`${btName}["${id}"]="${encoded}";`);
 	}
 	return { init: `var ${btName}={};`, assignments };
 }
@@ -648,7 +654,7 @@ function collectUsedOpcodes(
 	return used;
 }
 
-/** Encode a single bytecode unit in the configured format. */
+/** Encode a single bytecode unit to custom binary format. */
 function encodeUnit(
 	unit: BytecodeUnit,
 	shuffleMap: number[],
@@ -657,26 +663,18 @@ function encodeUnit(
 	rollingCipher: boolean = false,
 	integrityHash?: number,
 	cipherSalt?: number,
-	keyAnchor?: number
+	keyAnchor?: number,
+	alphabet: string = ""
 ): string {
-	if (encrypt) {
-		return encodeBytecodeUnit(unit, {
-			shuffleMap,
-			encrypt: true,
-			rollingCipher,
-			integrityHash,
-			cipherSalt,
-			keyAnchor,
-			stringKey,
-		});
-	}
-	return serializeUnitToJson(unit, {
+	return encodeBytecodeUnit(unit, {
 		shuffleMap,
-		stringKey,
+		encrypt,
 		rollingCipher,
 		integrityHash,
 		cipherSalt,
 		keyAnchor,
+		stringKey,
+		alphabet,
 	});
 }
 
@@ -716,6 +714,9 @@ function assembleShielded(
 		groups: groupNameSets,
 		groupTemps: groupTempSets,
 	} = generateShieldedNames(sharedSeed, groupSeeds);
+
+	// Generate shared encoding alphabet (shared across all groups)
+	const shieldedAlphabet = generateAlphabet(sharedSeed);
 
 	// --- Phase 1: Compile all targets (no encoding) ---
 	const groups: ShieldingGroup[] = [];
@@ -863,6 +864,7 @@ function assembleShielded(
 		integrityBinding: opts.integrityBinding,
 		mixedBooleanArithmetic: opts.mixedBooleanArithmetic,
 		handlerFragmentation: opts.handlerFragmentation,
+		alphabet: shieldedAlphabet,
 	});
 
 	// --- Phase 3: Encode all units (using per-group key anchors) ---
@@ -885,7 +887,8 @@ function assembleShielded(
 				true, // rolling cipher always on in shielding mode
 				group.integrityHash,
 				gm.cipherSalt,
-				groupKeyAnchor
+				groupKeyAnchor,
+				shieldedAlphabet
 			);
 
 		const rootEncoded = encodeGroupUnit(gm.unit);
@@ -910,7 +913,6 @@ function assembleShielded(
 		sharedTemps,
 		runtimeResult.source,
 		opts.wrapOutput,
-		opts.encryptBytecode,
 		sharedSeed
 	);
 }
@@ -930,11 +932,10 @@ function assembleOutputFromParts(
 	temps: TempNames,
 	runtimeSource: string,
 	wrapOutput: boolean,
-	encrypt: boolean = false,
 	seed: number = 0
 ): string {
 	// Build bytecode table: empty init + individual assignment statements
-	const btParts = buildBtParts(encodedUnits, names.bt, encrypt);
+	const btParts = buildBtParts(encodedUnits, names.bt);
 
 	// Collect top-level bindings BEFORE adding runtime statements.
 	const topLevelBindings = collectTopLevelBindings(ast.program.body);

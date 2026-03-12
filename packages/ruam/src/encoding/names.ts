@@ -135,6 +135,10 @@ export interface RuntimeNames {
 	router: string;
 	/** Route map object (maps unit IDs to group dispatch functions). */
 	routeMap: string;
+
+	// Custom binary encoding
+	/** Shuffled alphabet variable for custom binary encoding. */
+	alpha: string;
 }
 
 // --- TempNames ---
@@ -278,6 +282,12 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_dcs", // constants array variable
 	"_dic", // instruction count variable
 	"_din", // instructions array variable
+
+	// --- Deserializer switch-case locals (same function scope as reader) ---
+	"_dtag", // constant tag variable
+	"_del", // encoded string length
+	"_dea", // encoded string array
+	"_dei", // encoded string index
 ] as const;
 
 // --- Name pool ---
@@ -472,6 +482,7 @@ export function generateRuntimeNames(
 		keyAnchor: genName(),
 		router: genName(),
 		routeMap: genName(),
+		alpha: genName(),
 	};
 
 	// Generate temp names from the same LCG + used set
@@ -500,6 +511,7 @@ const SHARED_NAME_KEYS = [
 	"router",
 	"routeMap",
 	"tdzSentinel",
+	"alpha",
 ] as const;
 
 /**

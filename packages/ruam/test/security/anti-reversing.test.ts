@@ -134,15 +134,16 @@ describe("anti-reversing properties", () => {
 			const out1 = obfuscateCode(code);
 			const out2 = obfuscateCode(code);
 
-			// Extract the bytecode instruction arrays
-			const instrPattern = /"i":\s*\[([^\]]+)\]/;
-			const match1 = out1.match(instrPattern);
-			const match2 = out2.match(instrPattern);
-			expect(match1).not.toBeNull();
-			expect(match2).not.toBeNull();
+			// Extract the encoded bytecode strings (custom-alphabet binary)
+			// They appear as string assignments to the bytecode table
+			const bcPattern = /=\s*"([A-Za-z0-9_$]{20,})"/g;
+			const strings1 = [...out1.matchAll(bcPattern)].map((m) => m[1]);
+			const strings2 = [...out2.matchAll(bcPattern)].map((m) => m[1]);
+			expect(strings1.length).toBeGreaterThan(0);
+			expect(strings2.length).toBeGreaterThan(0);
 
-			// Same function but different instruction encodings
-			expect(match1![1]).not.toBe(match2![1]);
+			// Same function but different bytecode encodings per build
+			expect(strings1).not.toEqual(strings2);
 		});
 	});
 

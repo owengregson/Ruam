@@ -13,7 +13,7 @@
 
 import type { BytecodeUnit, ConstantPoolEntry } from "../types.js";
 import { computeFingerprint } from "../encoding/fingerprint.js";
-import { rc4, b64encode } from "../encoding/decoder.js";
+import { rc4, customEncode } from "../encoding/decoder.js";
 import {
 	LCG_MULTIPLIER,
 	LCG_INCREMENT,
@@ -56,6 +56,8 @@ export interface EncodeOptions {
 	keyAnchor?: number;
 	/** XOR string encoding key for constant pool strings. */
 	stringKey?: number;
+	/** Custom encoding alphabet (shuffled 64-char string). */
+	alphabet: string;
 }
 
 /**
@@ -79,9 +81,9 @@ export function encodeBytecodeUnit(
 	if (options.encrypt) {
 		const key = computeFingerprint().toString(16);
 		const encrypted = rc4(bytes, key);
-		return b64encode(encrypted);
+		return customEncode(encrypted, options.alphabet);
 	}
-	return b64encode(bytes);
+	return customEncode(bytes, options.alphabet);
 }
 
 /**

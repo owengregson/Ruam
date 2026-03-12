@@ -413,12 +413,13 @@ describe("rolling cipher anti-reversing", () => {
 	it("two rolling cipher builds produce different instruction encodings", () => {
 		const out1 = obfuscateCode(sampleCode, rcOpts);
 		const out2 = obfuscateCode(sampleCode, rcOpts);
-		const instrPattern = /"i":\s*\[([^\]]+)\]/;
-		const match1 = out1.match(instrPattern);
-		const match2 = out2.match(instrPattern);
-		expect(match1).not.toBeNull();
-		expect(match2).not.toBeNull();
-		expect(match1![1]).not.toBe(match2![1]);
+		// Extract encoded bytecode strings (custom-alphabet binary)
+		const bcPattern = /=\s*"([A-Za-z0-9_$]{20,})"/g;
+		const strings1 = [...out1.matchAll(bcPattern)].map((m) => m[1]);
+		const strings2 = [...out2.matchAll(bcPattern)].map((m) => m[1]);
+		expect(strings1.length).toBeGreaterThan(0);
+		expect(strings2.length).toBeGreaterThan(0);
+		expect(strings1).not.toEqual(strings2);
 	});
 
 	it("strings are still encoded (not plaintext)", () => {
@@ -706,12 +707,12 @@ describe("integrity binding anti-reversing", () => {
 		const out2 = obfuscateCode(sampleCode, ibOpts);
 		// The integrity hash depends on the interpreter source which depends
 		// on randomized names, so it should differ between builds
-		const instrPattern = /"i":\s*\[([^\]]+)\]/;
-		const m1 = out1.match(instrPattern);
-		const m2 = out2.match(instrPattern);
-		expect(m1).not.toBeNull();
-		expect(m2).not.toBeNull();
-		expect(m1![1]).not.toBe(m2![1]);
+		const bcPattern = /=\s*"([A-Za-z0-9_$]{20,})"/g;
+		const strings1 = [...out1.matchAll(bcPattern)].map((m) => m[1]);
+		const strings2 = [...out2.matchAll(bcPattern)].map((m) => m[1]);
+		expect(strings1.length).toBeGreaterThan(0);
+		expect(strings2.length).toBeGreaterThan(0);
+		expect(strings1).not.toEqual(strings2);
 	});
 });
 
