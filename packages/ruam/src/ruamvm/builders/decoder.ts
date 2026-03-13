@@ -12,6 +12,7 @@ import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
 import type { SplitFn } from "../constant-splitting.js";
 import {
+	arr,
 	assign,
 	bin,
 	call,
@@ -400,7 +401,6 @@ function buildStrDecFunction(
 	const b = id("b");
 	const x = id("x");
 	const k = id("k");
-	const s = id("s");
 	const i = id("i");
 
 	// The key source: either the `mk` parameter or the embedded numeric literal
@@ -409,12 +409,12 @@ function buildStrDecFunction(
 	const body: JsNode[] = [
 		// var k = (keySource ^ (x * 0x9E3779B9)) >>> 0;
 		varDecl("k", u32(xor(keySource, bin("*", x, L(0x9e3779b9))))),
-		// var s = '';
-		varDecl("s", lit("")),
+		// var _ca = [];
+		varDecl("_ca", arr()),
 
 		// for(var i=0; i<b.length; i++) {
 		//   k = (k * 1664525 + 1013904223) >>> 0;
-		//   s += String.fromCharCode(b[i] ^ (k & 65535));
+		//   _ca.push(b[i] ^ (k & 65535));
 		// }
 		forStmt(
 			varDecl("i", lit(0)),
@@ -428,21 +428,22 @@ function buildStrDecFunction(
 						u32(bin("+", bin("*", k, L(1664525)), L(1013904223)))
 					)
 				),
-				// s += String.fromCharCode(b[i] ^ (k & 65535));
+				// _ca.push(b[i] ^ (k & 65535));
 				exprStmt(
-					assign(
-						s,
-						call(member(id("String"), "fromCharCode"), [
-							xor(index(b, i), band(k, lit(65535))),
-						]),
-						"+"
-					)
+					call(member(id("_ca"), "push"), [
+						xor(index(b, i), band(k, lit(65535))),
+					])
 				),
 			]
 		),
 
-		// return s;
-		returnStmt(s),
+		// return String.fromCharCode.apply(null, _ca);
+		returnStmt(
+			call(
+				member(member(id("String"), "fromCharCode"), "apply"),
+				[lit(null), id("_ca")]
+			)
+		),
 	];
 
 	return fn(names.strDec, params, body);
