@@ -833,22 +833,50 @@ function buildScaffoldAST(
 	whileBody.push(varDecl(O, index(id(I), bin("+", id(IP), lit(1)))));
 	whileBody.push(exprStmt(assign(id(IP), lit(2), "+")));
 
-	// Optional: rolling cipher decrypt
+	// Optional: rolling cipher decrypt (inlined rcMix for performance)
 	if (rollingCipher) {
 		// var _ri=(IP-2)>>>1
 		whileBody.push(
 			varDecl(T("_ri"), bin(">>>", bin("-", id(IP), lit(2)), lit(1)))
 		);
-		// var _ks=rcMix(rcState,_ri,_ri^0x9E3779B9)
+		// Inline rcMix(rcState, _ri, _ri ^ 0x9E3779B9):
+		// var _ks = rcState;
 		whileBody.push(
-			varDecl(
-				T("_ks"),
-				call(id(n.rcMix), [
-					id(n.rcState),
-					id(T("_ri")),
-					bin("^", id(T("_ri")), L(0x9e3779b9)),
-				])
-			)
+			varDecl(T("_ks"), id(n.rcState))
+		);
+		// _ks = imul(_ks ^ _ri, 0x85EBCA6B) >>> 0;
+		whileBody.push(
+			exprStmt(assign(
+				id(T("_ks")),
+				bin(">>>",
+					call(id(n.imul), [
+						bin("^", id(T("_ks")), id(T("_ri"))),
+						L(0x85ebca6b),
+					]),
+					lit(0)
+				)
+			))
+		);
+		// _ks = imul(_ks ^ (_ri ^ 0x9E3779B9), 0xC2B2AE35) >>> 0;
+		whileBody.push(
+			exprStmt(assign(
+				id(T("_ks")),
+				bin(">>>",
+					call(id(n.imul), [
+						bin("^", id(T("_ks")), bin("^", id(T("_ri")), L(0x9e3779b9))),
+						L(0xc2b2ae35),
+					]),
+					lit(0)
+				)
+			))
+		);
+		// _ks ^= _ks >>> 16;
+		whileBody.push(
+			exprStmt(assign(id(T("_ks")), bin("^", id(T("_ks")), bin(">>>", id(T("_ks")), lit(16)))))
+		);
+		// _ks = _ks >>> 0;
+		whileBody.push(
+			exprStmt(assign(id(T("_ks")), bin(">>>", id(T("_ks")), lit(0))))
 		);
 		// PH=(PH^(_ks&0xFFFF))&0xFFFF
 		whileBody.push(
