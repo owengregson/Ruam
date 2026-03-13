@@ -343,6 +343,47 @@ fibonacci(10);`;
 	};
 }
 
+// ─── Hero Snippet ────────────────────────────────────────────────────────────
+
+async function generateHeroSnippet() {
+	const distIndex = join(PKG_ROOT, "dist/index.js");
+	if (!existsSync(distIndex)) return null;
+
+	const { obfuscateCode } = await import(distIndex);
+
+	const sampleCode = `function fibonacci(n) {
+  if (n <= 1) return n;
+  let a = 0, b = 1;
+  for (let i = 2; i <= n; i++) {
+    [a, b] = [b, a + b];
+  }
+  return b;
+}`;
+
+	const output = obfuscateCode(sampleCode);
+	const allLines = output.split("\n");
+	const totalLines = allLines.length;
+
+	// Skip "use strict" and blank lines at the top
+	const contentStart = allLines.findIndex(
+		(l) => l.trim() && l.trim() !== '"use strict";'
+	);
+
+	// First 5 interesting lines, truncate long ones
+	const MAX_LEN = 55;
+	const head = allLines.slice(contentStart, contentStart + 5).map((l) =>
+		l.length > MAX_LEN ? l.slice(0, MAX_LEN - 3) + "..." : l
+	);
+
+	// Find the function replacement at the end
+	const fnIdx = allLines.findIndex((l) => /function\s+fibonacci/.test(l));
+	const tail = fnIdx >= 0
+		? allLines.slice(fnIdx).filter((l) => l.trim())
+		: allLines.slice(-3).filter((l) => l.trim());
+
+	return { head, totalLines, tail };
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
@@ -392,16 +433,16 @@ if (!tests && prev?.tests) {
 	);
 }
 
-// Benchmarks
+// Benchmarks — always run when build is available, fall back to cached only if no build
 let perfData = null;
 let sizeData = null;
-if (runBench) {
-	console.log("\n  Running benchmarks...");
+if (runBench || existsSync(join(PKG_ROOT, "dist/index.js"))) {
+	if (runBench) console.log("\n  Running benchmarks...");
 	const bench = await collectBenchmarks();
 	if (bench) {
 		perfData = bench.performance;
 		sizeData = bench.size;
-		console.log(`\n  Weighted avg overhead: ${perfData.weightedAvg}x`);
+		console.log(`  Weighted avg overhead: ${perfData.weightedAvg}x`);
 		console.log(`  Median overhead:      ${perfData.median}x`);
 		console.log(
 			`  Size (low preset):    ${sizeData.low.ratio}x (${fmtNum(
@@ -419,10 +460,27 @@ if (runBench) {
 	sizeData = prev?.size ?? null;
 	if (perfData)
 		console.log(
-			`  Performance:  ${perfData.weightedAvg}x weighted avg (cached)`
+			`  Performance:  ${perfData.weightedAvg}x weighted avg (cached — no build)`
 		);
 	if (sizeData)
-		console.log(`  Size (low):   ${sizeData.low.ratio}x ratio (cached)`);
+		console.log(`  Size (low):   ${sizeData.low.ratio}x ratio (cached — no build)`);
+}
+
+// Hero snippet
+let heroSnippet = null;
+try {
+	heroSnippet = await generateHeroSnippet();
+	if (heroSnippet) {
+		console.log(`  Hero snippet: ${fmtNum(heroSnippet.totalLines)} lines`);
+	}
+} catch (e) {
+	console.error("  Hero snippet: failed -", e.message);
+}
+if (!heroSnippet && prev?.heroSnippet) {
+	heroSnippet = prev.heroSnippet;
+	console.log(
+		`  Hero snippet: ${fmtNum(heroSnippet.totalLines)} lines (cached)`
+	);
 }
 
 // ─── Build stats.json ────────────────────────────────────────────────────────
@@ -437,6 +495,7 @@ const stats = {
 	tests,
 	performance: perfData,
 	size: sizeData,
+	heroSnippet,
 
 	// Pre-formatted display values for shields.io dynamic JSON badges.
 	// Query with e.g. $.badges.tests — no suffix/formatting needed client-side.
