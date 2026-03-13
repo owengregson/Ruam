@@ -45,6 +45,7 @@ coverage/
 
 # Vitest JSON output (consumed by stats script)
 test-results.json
+stats.json
 
 # Screenshots (dev only)
 screenshots/
