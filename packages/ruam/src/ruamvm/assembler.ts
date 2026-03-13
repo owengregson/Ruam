@@ -19,11 +19,7 @@ import type { RuntimeNames, TempNames } from "../encoding/names.js";
 import type { JsNode } from "./nodes.js";
 import {
 	exprStmt,
-	fn,
-	fnExpr,
-	ifStmt,
 	lit,
-	returnStmt,
 	varDecl,
 	arr,
 	obj,
@@ -57,45 +53,6 @@ export interface VmRuntimeResult {
 	source: string;
 	/** Build-time key anchor value (for rolling cipher key derivation). */
 	keyAnchorValue: number;
-}
-
-/**
- * Build the arrow closure factory function declaration.
- *
- * Emits at IIFE scope:
- * ```js
- * function mkArrow(u, cs, ct) {
- *   if (u.s) return async function(..._a) { return execAsync(u, _a, cs, ct); };
- *   return function(..._a) { return exec(u, _a, cs, ct); };
- * }
- * ```
- *
- * Replaces per-closure IIFEs with a single shared factory function.
- */
-function buildArrowFactory(names: RuntimeNames, temps: TempNames): JsNode {
-	const aName = temps["_a"];
-	if (!aName) throw new Error("Missing temp: _a");
-
-	const execCall = (isAsync: boolean): JsNode =>
-		returnStmt(
-			call(id(isAsync ? names.execAsync : names.exec), [
-				id("u"),
-				id(aName),
-				id("cs"),
-				id("ct"),
-			])
-		);
-
-	return fn(
-		names.mkArrow,
-		["u", "cs", "ct"],
-		[
-			ifStmt(member(id("u"), "s"), [
-				returnStmt(fnExpr(undefined, ["..." + aName], [execCall(true)], { async: true })),
-			]),
-			returnStmt(fnExpr(undefined, ["..." + aName], [execCall(false)])),
-		]
-	);
 }
 
 /**
@@ -257,9 +214,6 @@ export function generateVmRuntime(options: {
 
 	// Interpreter function bodies
 	nodes.push(...interpResult.interpreters);
-
-	// Arrow closure factory — shared function replaces per-closure IIFEs
-	nodes.push(buildArrowFactory(names, temps));
 
 	// Runner dispatch functions
 	nodes.push(...buildRunners(debugLogging, names, temps));
@@ -484,9 +438,6 @@ export function generateShieldedVmRuntime(options: {
 
 		// Interpreter function bodies
 		nodes.push(...interpResult.interpreters);
-
-		// Arrow closure factory (per-group — references group-specific exec/execAsync)
-		nodes.push(buildArrowFactory(gn, gt));
 
 		// Save key anchor value for caller
 		groupKeyAnchors.push(interpResult.keyAnchorValue);

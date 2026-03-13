@@ -1355,65 +1355,56 @@ function buildFunctionTableDispatch(
 		preLoopDecls.push(varDecl(name, arr(...group)));
 	}
 
-	// Pre-resolved handler function array: _hfn[physicalOp] = handlerFunction
-	const HFN = temps["_hfn"];
-	if (!HFN) throw new Error("Missing temp: _hfn");
-
-	preLoopDecls.push(varDecl(HFN, arr()));
-
-	// Resolution loop: for each entry in _ht, resolve through the group arrays
-	const resolveBranches: JsNode[] = [];
-	if (numGroups === 1) {
-		resolveBranches.push(
-			exprStmt(assign(
-				index(id(HFN), id("_k")),
-				index(id(activeGroupNames[0]!), id("_idx"))
-			))
-		);
-	} else {
-		// if-else resolution chain
-		let current: JsNode[] = [exprStmt(assign(
-			index(id(HFN), id("_k")),
-			index(id(activeGroupNames[numGroups - 1]!),
-				bin("-", id("_idx"), lit((numGroups - 1) * groupSize)))
-		))];
-		for (let gi = numGroups - 2; gi >= 0; gi--) {
-			const body = [exprStmt(assign(
-				index(id(HFN), id("_k")),
-				index(id(activeGroupNames[gi]!),
-					gi === 0 ? id("_idx") : bin("-", id("_idx"), lit(gi * groupSize)))
-			))];
-			current = [ifStmt(bin("<", id("_idx"), lit((gi + 1) * groupSize)), body, current)];
-		}
-		resolveBranches.push(...current);
-	}
-
-	preLoopDecls.push(
-		forStmt(
-			varDecl("_k", lit(0)),
-			bin("<", id("_k"), member(id(htName), "length")),
-			update("++", false, id("_k")),
-			[
-				varDecl("_idx", index(id(htName), id("_k"))),
-				ifStmt(
-					bin("!==", id("_idx"), un("void", lit(0))),
-					resolveBranches
-				),
-			]
-		)
-	);
-
 	// Dispatch nodes (inside while loop body)
-	// Simplified dispatch: _hfn[PH]() === _frs → return _frv
+	const dispatchNodes: JsNode[] = [];
+
+	// var _fdi = _ht[PH]
+	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+
+	// Build if-else routing tree with grouped dispatch calls.
+	// Each branch: if (_fgN[_fdi - offset]() === _frs) return _frv;
+	// For async: if ((await _fgN[_fdi - offset]()) === _frs) return _frv;
 	const awaitNode = (expr: JsNode): JsNode =>
 		({ type: "AwaitExpr", expr }) as JsNode;
 
-	const callExpr = call(index(id(HFN), id(phName)), []);
-	const result = isAsync ? awaitNode(callExpr) : callExpr;
+	const buildCallCheck = (
+		groupName: string,
+		offset: number
+	): JsNode[] => {
+		const indexExpr =
+			offset === 0
+				? id(FDI)
+				: bin("-", id(FDI), lit(offset));
+		const callExpr = call(index(id(groupName), indexExpr), []);
+		const result = isAsync ? awaitNode(callExpr) : callExpr;
+		return [
+			ifStmt(
+				bin("===", result, id(FRS)),
+				[returnStmt(id(FRV))]
+			),
+		];
+	};
 
-	const dispatchNodes: JsNode[] = [
-		ifStmt(bin("===", result, id(FRS)), [returnStmt(id(FRV))]),
-	];
+	if (numGroups === 1) {
+		dispatchNodes.push(...buildCallCheck(activeGroupNames[0]!, 0));
+	} else {
+		// Build if-else chain: route to correct group by handler index
+		let current: JsNode[] = buildCallCheck(
+			activeGroupNames[numGroups - 1]!,
+			(numGroups - 1) * groupSize
+		);
+
+		for (let i = numGroups - 2; i >= 0; i--) {
+			const threshold = (i + 1) * groupSize;
+			const body = buildCallCheck(
+				activeGroupNames[i]!,
+				i * groupSize
+			);
+			current = [ifStmt(bin("<", id(FDI), lit(threshold)), body, current)];
+		}
+
+		dispatchNodes.push(...current);
+	}
 
 	return { preLoopDecls, dispatchNodes };
 }
