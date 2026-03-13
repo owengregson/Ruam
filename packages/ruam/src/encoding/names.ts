@@ -139,6 +139,10 @@ export interface RuntimeNames {
 	// Custom binary encoding
 	/** Shuffled alphabet variable for custom binary encoding. */
 	alpha: string;
+
+	// Built-in aliases (hoisted to IIFE scope for performance)
+	/** Local alias for Math.imul. */
+	imul: string;
 }
 
 // --- TempNames ---
@@ -492,6 +496,7 @@ export function generateRuntimeNames(
 		router: genName(),
 		routeMap: genName(),
 		alpha: genName(),
+		imul: genName(),
 	};
 
 	// Generate temp names from the same LCG + used set
@@ -521,6 +526,7 @@ const SHARED_NAME_KEYS = [
 	"routeMap",
 	"tdzSentinel",
 	"alpha",
+	"imul",
 ] as const;
 
 /**
