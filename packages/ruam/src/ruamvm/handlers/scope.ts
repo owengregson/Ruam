@@ -77,8 +77,33 @@ function hasOwn(obj: JsNode, key: JsNode): JsNode {
 function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
+		// Fast path: read once, check for sentinel/undefined
+		varDecl("_v", ctx.curSv()),
+		// If the value is not undefined and not TDZ sentinel, push directly
+		// (avoids the `in` prototype chain traversal entirely)
+		ifStmt(
+			bin("!==", id("_v"), un("void", lit(0))),
+			[
+				// TDZ check: if _v === tdzSentinel, throw
+				ifStmt(bin("===", id("_v"), id(ctx.tdzSentinel)), [
+					throwStmt(
+						newExpr(id("ReferenceError"), [
+							bin(
+								"+",
+								bin("+", lit("Cannot access '"), id("name")),
+								lit("' before initialization")
+							),
+						])
+					),
+				]),
+				exprStmt(ctx.push(id("_v"))),
+				breakStmt(),
+			]
+		),
+		// Slow path: value was undefined — need `in` to distinguish
+		// "property exists with value undefined" from "property not found"
 		ifStmt(bin("in", id("name"), id(ctx.SC)), [
-			exprStmt(ctx.push(ctx.curSv())),
+			exprStmt(ctx.push(id("_v"))),
 			breakStmt(),
 		]),
 		// Global fallback
