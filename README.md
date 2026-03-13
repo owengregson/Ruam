@@ -16,9 +16,9 @@ No deobfuscator exists for RuamVM bytecode.</p>
 <img src="https://img.shields.io/badge/license-LGPL--2.1-yellow?style=flat-square&logo=googledocs&logoColor=white&color=3659BD" alt="LGPL-2.1">
 <img src="https://img.shields.io/badge/typescript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white&color=4D6ACD" alt="TypeScript Strict">
 
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.testsPassing&label=tests&color=637ADE&style=flat-square&logo=vitest&logoColor=white" alt="Tests Passing">
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.sizeRatioLow&label=Avg.%20Size%20Ratio&color=7A8BEE&style=flat-square&logo=onlyoffice&logoColor=white" alt="Avg Size Ratio">
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.overheadMedian&label=VM%20Overhead&color=919BFF&style=flat-square&logo=speedtest&logoColor=white" alt="VM Overhead">
+<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fowengregson.github.io%2FRuam%2Fstats.json&query=%24.badges.testsPassing&label=tests&color=637ADE&style=flat-square&logo=vitest&logoColor=white" alt="Tests Passing">
+<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fowengregson.github.io%2FRuam%2Fstats.json&query=%24.badges.sizeRatioLow&label=Avg.%20Size%20Ratio&color=7A8BEE&style=flat-square&logo=onlyoffice&logoColor=white" alt="Avg Size Ratio">
+<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fowengregson.github.io%2FRuam%2Fstats.json&query=%24.badges.overheadMedian&label=VM%20Overhead&color=919BFF&style=flat-square&logo=speedtest&logoColor=white" alt="VM Overhead">
 
 <hr>
 <h3> Quick Links </h3>
