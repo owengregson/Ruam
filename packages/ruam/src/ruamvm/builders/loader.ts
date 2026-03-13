@@ -194,18 +194,7 @@ function buildLoadFunction(
 		body.push(buildStringDecodeLoop(names, "eu", rollingCipher));
 	}
 
-	// --- Convert instructions to Int32Array ---
-	// if(eu && eu.i) eu.i = new Int32Array(eu.i);
-	body.push(
-		ifStmt(bin("&&", id("eu"), member(id("eu"), "i")), [
-			exprStmt(
-				assign(
-					member(id("eu"), "i"),
-					newExpr(id("Int32Array"), [member(id("eu"), "i")])
-				)
-			),
-		])
-	);
+	// Instructions are already Int32Array from the deserializer — no conversion needed.
 
 	// --- Cache: cache[id] = eu; ---
 	body.push(exprStmt(assign(cacheId(names), id("eu"))));

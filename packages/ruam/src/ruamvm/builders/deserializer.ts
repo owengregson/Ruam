@@ -323,9 +323,9 @@ export function buildDeserializer(
 	// var ic=r.u32();
 	body.push(varDecl(IC, rcall(DU32)));
 
-	// var ins=new Array(ic*2);
+	// var ins=new Int32Array(ic*2);
 	body.push(
-		varDecl(IN, newExpr(id("Array"), [bin("*", id(IC), lit(2))]))
+		varDecl(IN, newExpr(id("Int32Array"), [bin("*", id(IC), lit(2))]))
 	);
 
 	// for(var i=0;i<ic;i++){ins[i*2]=r.u16();ins[i*2+1]=r.i32();}
