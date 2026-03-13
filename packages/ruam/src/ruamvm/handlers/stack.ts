@@ -138,30 +138,35 @@ function SWAP(ctx: HandlerCtx): JsNode[] {
 	];
 }
 
-/** ROT3: rotate top 3 elements (abc -> cab). */
+/** ROT3: rotate top 3 elements (abc -> cab) via direct index access. */
 function ROT3(ctx: HandlerCtx): JsNode[] {
+	// abc -> cab: S[top-2]=c, S[top-1]=a, S[top]=b
+	const sLen = member(id(ctx.S), "length");
+	const s = (offset: number) => index(id(ctx.S), bin("-", sLen, lit(offset)));
 	return [
-		varDecl("c", ctx.pop()),
-		varDecl("b", ctx.pop()),
-		varDecl("a", ctx.pop()),
-		exprStmt(ctx.push(id("c"))),
-		exprStmt(ctx.push(id("a"))),
-		exprStmt(ctx.push(id("b"))),
+		varDecl("_c", s(1)),   // _c = S[S.length-1] (top)
+		varDecl("_b", s(2)),   // _b = S[S.length-2]
+		varDecl("_a", s(3)),   // _a = S[S.length-3]
+		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(3))), id("_c"))),
+		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))), id("_a"))),
+		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))), id("_b"))),
 		breakStmt(),
 	];
 }
 
-/** ROT4: rotate top 4 elements (abcd -> dabc). */
+/** ROT4: rotate top 4 elements (abcd -> dabc) via direct index access. */
 function ROT4(ctx: HandlerCtx): JsNode[] {
+	// abcd -> dabc
+	const sLen = member(id(ctx.S), "length");
 	return [
-		varDecl("d", ctx.pop()),
-		varDecl("c", ctx.pop()),
-		varDecl("b", ctx.pop()),
-		varDecl("a", ctx.pop()),
-		exprStmt(ctx.push(id("d"))),
-		exprStmt(ctx.push(id("a"))),
-		exprStmt(ctx.push(id("b"))),
-		exprStmt(ctx.push(id("c"))),
+		varDecl("_d", index(id(ctx.S), bin("-", sLen, lit(1)))),
+		varDecl("_c", index(id(ctx.S), bin("-", sLen, lit(2)))),
+		varDecl("_b", index(id(ctx.S), bin("-", sLen, lit(3)))),
+		varDecl("_a", index(id(ctx.S), bin("-", sLen, lit(4)))),
+		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(4))), id("_d"))),
+		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(3))), id("_a"))),
+		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))), id("_b"))),
+		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))), id("_c"))),
 		breakStmt(),
 	];
 }
