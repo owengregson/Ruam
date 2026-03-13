@@ -351,8 +351,8 @@ function buildHandlerTableMeta(
 	// var _htd = [encoded values...];
 	initNodes.push(varDecl(htdName, arr(...encodedData.map((v) => lit(v)))));
 
-	// var _ht = {};
-	initNodes.push(varDecl(htName, obj()));
+	// var _ht = [];
+	initNodes.push(varDecl(htName, arr()));
 
 	// Decode loop:
 	// var _htk = HT_ENCODE_KEY;
