@@ -36,6 +36,7 @@ import {
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 import {
+	buildArrowClosureIIFE,
 	buildRegularClosureIIFE,
 	buildThisBoxing,
 	debugTrace,
@@ -272,7 +273,7 @@ function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 		),
 		ifStmt(
 			member(id(ctx.t("_cu")), "a"),
-			[exprStmt(ctx.push(call(id(ctx.mkArrow), [id(ctx.t("_cu")), id(ctx.SC), id(ctx.TV)])))],
+			[exprStmt(ctx.push(buildArrowClosureIIFE(ctx)))],
 			[exprStmt(ctx.push(buildRegularClosureIIFE(ctx)))]
 		),
 		breakStmt(),
@@ -335,7 +336,7 @@ function NEW_ARROW(ctx: HandlerCtx): JsNode[] {
 			ctx.t("_cu"),
 			call(id(ctx.load), [index(id(ctx.C), id(ctx.O))])
 		),
-		exprStmt(ctx.push(call(id(ctx.mkArrow), [id(ctx.t("_cu")), id(ctx.SC), id(ctx.TV)]))),
+		exprStmt(ctx.push(buildArrowClosureIIFE(ctx))),
 		breakStmt(),
 	];
 }

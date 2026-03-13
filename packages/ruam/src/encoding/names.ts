@@ -144,10 +144,6 @@ export interface RuntimeNames {
 	/** Local alias for Math.imul. */
 	imul: string;
 
-	// Closure factories (hoisted to IIFE scope)
-	/** Arrow closure factory function. */
-	mkArrow: string;
-
 	// Spread marker
 	/** Spread marker Symbol. */
 	spreadSym: string;
@@ -309,7 +305,6 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_fg1", // function table handler group 1
 	"_fg2", // function table handler group 2
 	"_fg3", // function table handler group 3
-	"_hfn",  // pre-resolved handler function array (direct dispatch)
 ] as const;
 
 // --- Name pool ---
@@ -506,7 +501,6 @@ export function generateRuntimeNames(
 		routeMap: genName(),
 		alpha: genName(),
 		imul: genName(),
-		mkArrow: genName(),
 		spreadSym: genName(),
 	};
 
