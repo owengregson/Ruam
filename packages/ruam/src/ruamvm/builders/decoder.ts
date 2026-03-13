@@ -61,10 +61,29 @@ export function buildBinaryDecoderSource(
 	names: RuntimeNames,
 	alphabet: string
 ): JsNode[] {
+	// Use a name derived from the alpha name for the reverse table
+	const alphaRevName = names.alpha + "R";
+
 	return [
 		// var _AL = "shuffled64chars";
 		varDecl(names.alpha, lit(alphabet)),
-		buildCustomDecodeFunction(names),
+		// var _ALR = {};
+		// for (var k = 0; k < _AL.length; k++) _ALR[_AL.charCodeAt(k)] = k;
+		varDecl(alphaRevName, obj()),
+		forStmt(
+			varDecl("k", lit(0)),
+			bin("<", id("k"), member(id(names.alpha), "length")),
+			update("++", false, id("k")),
+			[
+				exprStmt(
+					assign(
+						index(id(alphaRevName), call(member(id(names.alpha), "charCodeAt"), [id("k")])),
+						id("k")
+					)
+				),
+			]
+		),
+		buildCustomDecodeFunction(names, alphaRevName),
 	];
 }
 
@@ -116,15 +135,13 @@ export function buildRc4Source(
  * }
  * ```
  */
-function buildCustomDecodeFunction(names: RuntimeNames): JsNode {
+function buildCustomDecodeFunction(names: RuntimeNames, alphaRevName: string): JsNode {
 	const str = id("str");
 	const T = id("T");
-	const A = id("A");
 	const n = id("n");
 	const out = id("out");
 	const j = id("j");
 	const i = id("i");
-	const k = id("k");
 
 	// Helper: T[str.charCodeAt(idx)] | 0
 	const lookup = (idx: JsNode): JsNode =>
@@ -135,25 +152,8 @@ function buildCustomDecodeFunction(names: RuntimeNames): JsNode {
 		exprStmt(assign(index(out, update("++", false, j)), expr));
 
 	const body: JsNode[] = [
-		// var T = {};
-		varDecl("T", obj()),
-		// var A = _AL;
-		varDecl("A", id(names.alpha)),
-
-		// for (var k = 0; k < A.length; k++) T[A.charCodeAt(k)] = k;
-		forStmt(
-			varDecl("k", lit(0)),
-			bin("<", k, member(A, "length")),
-			update("++", false, k),
-			[
-				exprStmt(
-					assign(
-						index(T, call(member(A, "charCodeAt"), [k])),
-						k
-					)
-				),
-			]
-		),
+		// var T = _ALR;  (reference the pre-built reverse table)
+		varDecl("T", id(alphaRevName)),
 
 		// var n = str.length;
 		varDecl("n", member(str, "length")),
