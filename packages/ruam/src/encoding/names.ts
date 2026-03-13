@@ -301,6 +301,7 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_fg1", // function table handler group 1
 	"_fg2", // function table handler group 2
 	"_fg3", // function table handler group 3
+	"_hfn",  // pre-resolved handler function array (direct dispatch)
 ] as const;
 
 // --- Name pool ---
