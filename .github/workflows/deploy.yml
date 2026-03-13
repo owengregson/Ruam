@@ -5,9 +5,8 @@ on:
     branches: [main]
     paths:
       - 'apps/web/**'
+      - 'packages/ruam/src/**'
       - '.github/workflows/deploy.yml'
-    paths-ignore:
-      - 'packages/ruam/**'
 
 concurrency:
   group: deploy-pages
@@ -43,6 +42,10 @@ jobs:
       - run: npx turbo run build test stats --filter=ruam
       - name: Copy stats.json into site
         run: cp packages/ruam/stats.json apps/web/public/stats.json
+
+      # Build browser worker bundle for the playground
+      - name: Build browser worker bundle
+        run: npx turbo run build:browser --filter=ruam
 
       - run: npx turbo run build --filter=web
 

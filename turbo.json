@@ -6,6 +6,11 @@
       "outputs": ["dist/**", ".next/**"],
       "inputs": ["src/**", "app/**", "components/**", "public/**", "tsconfig.json", "tsup.config.ts", "next.config.ts", "postcss.config.mjs", "package.json"]
     },
+    "build:browser": {
+      "dependsOn": ["^build:browser"],
+      "outputs": ["../../apps/web/public/ruam-worker.mjs"],
+      "inputs": ["src/**", "scripts/build-browser.mjs"]
+    },
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []

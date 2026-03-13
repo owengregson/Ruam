@@ -9,10 +9,15 @@
 		"lint": "next lint"
 	},
 	"dependencies": {
+		"@codemirror/lang-javascript": "^6.2.5",
+		"@codemirror/language": "^6.12.2",
+		"@codemirror/state": "^6.6.0",
+		"@codemirror/view": "^6.40.0",
 		"@fortawesome/fontawesome-svg-core": "^7.2.0",
 		"@fortawesome/free-brands-svg-icons": "^7.2.0",
 		"@fortawesome/free-solid-svg-icons": "^7.2.0",
 		"@fortawesome/react-fontawesome": "^3.2.0",
+		"codemirror": "^6.0.2",
 		"framer-motion": "^12.35.0",
 		"lucide-react": "^0.513.0",
 		"next": "^15.3.3",
