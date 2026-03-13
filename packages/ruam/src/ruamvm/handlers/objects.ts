@@ -404,6 +404,23 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 		varDecl("excludeKeys", ctx.pop()),
 		varDecl("src", ctx.pop()),
 		varDecl("target", ctx.peek()),
+		// Build exclude set as plain object for O(1) lookup
+		varDecl("_ex", obj()),
+		ifStmt(id("excludeKeys"), [
+			forStmt(
+				varDecl("_ei", lit(0)),
+				bin("<", id("_ei"), member(id("excludeKeys"), "length")),
+				update("++", false, id("_ei")),
+				[
+					exprStmt(
+						assign(
+							index(id("_ex"), index(id("excludeKeys"), id("_ei"))),
+							lit(1)
+						)
+					),
+				]
+			),
+		]),
 		varDecl("keys", call(member(id("Object"), "keys"), [id("src")])),
 		forStmt(
 			varDecl("ki", lit(0)),
@@ -411,17 +428,7 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 			update("++", false, id("ki")),
 			[
 				ifStmt(
-					bin(
-						"||",
-						un("!", id("excludeKeys")),
-						bin(
-							"<",
-							call(member(id("excludeKeys"), "indexOf"), [
-								index(id("keys"), id("ki")),
-							]),
-							lit(0)
-						)
-					),
+					un("!", index(id("_ex"), index(id("keys"), id("ki")))),
 					[
 						exprStmt(
 							assign(
