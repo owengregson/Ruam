@@ -147,6 +147,12 @@ export interface RuntimeNames {
 	// Spread marker
 	/** Spread marker Symbol. */
 	spreadSym: string;
+
+	// Cached built-in references (hoisted to IIFE scope for performance)
+	/** Cached Object.prototype.hasOwnProperty reference. */
+	hop: string;
+	/** Cached globalThis reference (avoids per-call typeof chain). */
+	globalRef: string;
 }
 
 // --- TempNames ---
@@ -340,10 +346,31 @@ const EXCLUDED_NAMES: ReadonlySet<string> = /*@__PURE__*/ (() => {
 	// Two-char handler locals / KEEP entries — these are hardcoded in
 	// handler case bodies and must not collide with RuntimeNames
 	for (const n of [
-		"a1", "a2", "a3", "ai", "ci", "cv", "ei", "eu",
-		"fi", "ki", "ni", "ra", "rb", "ri", "si", "sp",
-		"ti", "it", "id", "cs", "ct", "fn", "ex",
-	]) s.add(n);
+		"a1",
+		"a2",
+		"a3",
+		"ai",
+		"ci",
+		"cv",
+		"ei",
+		"eu",
+		"fi",
+		"ki",
+		"ni",
+		"ra",
+		"rb",
+		"ri",
+		"si",
+		"sp",
+		"ti",
+		"it",
+		"id",
+		"cs",
+		"ct",
+		"fn",
+		"ex",
+	])
+		s.add(n);
 
 	// JS reserved words (1–2 char subset)
 	for (const w of RESERVED) {
@@ -502,6 +529,8 @@ export function generateRuntimeNames(
 		alpha: genName(),
 		imul: genName(),
 		spreadSym: genName(),
+		hop: genName(),
+		globalRef: genName(),
 	};
 
 	// Generate temp names from the same LCG + used set
@@ -533,6 +562,8 @@ const SHARED_NAME_KEYS = [
 	"alpha",
 	"imul",
 	"spreadSym",
+	"hop",
+	"globalRef",
 ] as const;
 
 /**

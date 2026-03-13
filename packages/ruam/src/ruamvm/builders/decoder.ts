@@ -78,7 +78,12 @@ export function buildBinaryDecoderSource(
 			[
 				exprStmt(
 					assign(
-						index(id(alphaRevName), call(member(id(names.alpha), "charCodeAt"), [id("k")])),
+						index(
+							id(alphaRevName),
+							call(member(id(names.alpha), "charCodeAt"), [
+								id("k"),
+							])
+						),
 						id("k")
 					)
 				),
@@ -99,10 +104,7 @@ export function buildBinaryDecoderSource(
  * @param split - Optional constant splitter for numeric obfuscation.
  * @returns Single-element array containing the cipher function declaration.
  */
-export function buildRc4Source(
-	names: RuntimeNames,
-	split?: SplitFn
-): JsNode[] {
+export function buildRc4Source(names: RuntimeNames, split?: SplitFn): JsNode[] {
 	return [buildCipherFunction(names, split)];
 }
 
@@ -136,7 +138,10 @@ export function buildRc4Source(
  * }
  * ```
  */
-function buildCustomDecodeFunction(names: RuntimeNames, alphaRevName: string): JsNode {
+function buildCustomDecodeFunction(
+	names: RuntimeNames,
+	alphaRevName: string
+): JsNode {
 	const str = id("str");
 	const T = id("T");
 	const n = id("n");
@@ -169,52 +174,39 @@ function buildCustomDecodeFunction(names: RuntimeNames, alphaRevName: string): J
 		varDecl("j", lit(0)),
 
 		// Decode loop: for (var i = 0; i < n; i += 4) { ... }
-		forStmt(
-			varDecl("i", lit(0)),
-			bin("<", i, n),
-			assign(i, lit(4), "+"),
-			[
-				// var a = T[str.charCodeAt(i)] | 0;
-				varDecl("a", lookup(i)),
-				// var b = T[str.charCodeAt(i + 1)] | 0;
-				varDecl("b", lookup(bin("+", i, lit(1)))),
-				// var c = T[str.charCodeAt(i + 2)] | 0;
-				varDecl("c", lookup(bin("+", i, lit(2)))),
-				// var d = T[str.charCodeAt(i + 3)] | 0;
-				varDecl("d", lookup(bin("+", i, lit(3)))),
+		forStmt(varDecl("i", lit(0)), bin("<", i, n), assign(i, lit(4), "+"), [
+			// var a = T[str.charCodeAt(i)] | 0;
+			varDecl("a", lookup(i)),
+			// var b = T[str.charCodeAt(i + 1)] | 0;
+			varDecl("b", lookup(bin("+", i, lit(1)))),
+			// var c = T[str.charCodeAt(i + 2)] | 0;
+			varDecl("c", lookup(bin("+", i, lit(2)))),
+			// var d = T[str.charCodeAt(i + 3)] | 0;
+			varDecl("d", lookup(bin("+", i, lit(3)))),
 
-				// out[j++] = (a << 2) | (b >> 4);
+			// out[j++] = (a << 2) | (b >> 4);
+			writeOut(
+				bin("|", bin("<<", id("a"), lit(2)), bin(">>", id("b"), lit(4)))
+			),
+
+			// if (i + 2 < n) out[j++] = ((b & 15) << 4) | (c >> 2);
+			ifStmt(bin("<", bin("+", i, lit(2)), n), [
 				writeOut(
 					bin(
 						"|",
-						bin("<<", id("a"), lit(2)),
-						bin(">>", id("b"), lit(4))
+						bin("<<", band(id("b"), lit(15)), lit(4)),
+						bin(">>", id("c"), lit(2))
 					)
 				),
+			]),
 
-				// if (i + 2 < n) out[j++] = ((b & 15) << 4) | (c >> 2);
-				ifStmt(bin("<", bin("+", i, lit(2)), n), [
-					writeOut(
-						bin(
-							"|",
-							bin("<<", band(id("b"), lit(15)), lit(4)),
-							bin(">>", id("c"), lit(2))
-						)
-					),
-				]),
-
-				// if (i + 3 < n) out[j++] = ((c & 3) << 6) | d;
-				ifStmt(bin("<", bin("+", i, lit(3)), n), [
-					writeOut(
-						bin(
-							"|",
-							bin("<<", band(id("c"), lit(3)), lit(6)),
-							id("d")
-						)
-					),
-				]),
-			]
-		),
+			// if (i + 3 < n) out[j++] = ((c & 3) << 6) | d;
+			ifStmt(bin("<", bin("+", i, lit(3)), n), [
+				writeOut(
+					bin("|", bin("<<", band(id("c"), lit(3)), lit(6)), id("d"))
+				),
+			]),
+		]),
 
 		// return out.subarray(0, j);
 		returnStmt(call(member(out, "subarray"), [lit(0), j])),
@@ -248,10 +240,7 @@ function buildCustomDecodeFunction(names: RuntimeNames, alphaRevName: string): J
  * }
  * ```
  */
-function buildCipherFunction(
-	names: RuntimeNames,
-	split?: SplitFn
-): JsNode {
+function buildCipherFunction(names: RuntimeNames, split?: SplitFn): JsNode {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const data = id("data");
 	const key = id("key");
@@ -305,10 +294,7 @@ function buildCipherFunction(
 						u32(
 							bin(
 								"+",
-								call(id(names.imul), [
-									h,
-									L(1664525),
-								]),
+								call(id(names.imul), [h, L(1664525)]),
 								L(1013904223)
 							)
 						)
@@ -439,10 +425,10 @@ function buildStrDecFunction(
 
 		// return String.fromCharCode.apply(null, _ca);
 		returnStmt(
-			call(
-				member(member(id("String"), "fromCharCode"), "apply"),
-				[lit(null), id("_ca")]
-			)
+			call(member(member(id("String"), "fromCharCode"), "apply"), [
+				lit(null),
+				id("_ca"),
+			])
 		),
 	];
 

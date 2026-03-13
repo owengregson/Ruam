@@ -50,20 +50,15 @@ import { registry } from "./registry.js";
 // --- Helpers ---
 
 /**
- * Build `Object.prototype.hasOwnProperty.call(obj, key)` AST node.
+ * Build `_hop.call(obj, key)` AST node using cached hasOwnProperty.
  *
  * Root scopes created via `Object.create(null)` have no prototype,
- * so `obj.hasOwnProperty(key)` would throw. Using
- * `Object.prototype.hasOwnProperty.call` is safe for all scopes.
+ * so `obj.hasOwnProperty(key)` would throw. The cached `_hop`
+ * reference (Object.prototype.hasOwnProperty) at IIFE scope avoids
+ * a 4-level property chain on every call.
  */
-function hasOwn(obj: JsNode, key: JsNode): JsNode {
-	return call(
-		member(
-			member(member(id("Object"), "prototype"), "hasOwnProperty"),
-			"call"
-		),
-		[obj, key]
-	);
+function hasOwn(hopName: string, obj: JsNode, key: JsNode): JsNode {
+	return call(member(id(hopName), "call"), [obj, key]);
 }
 
 // --- Load / store scoped ---
@@ -81,25 +76,22 @@ function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
 		varDecl("_v", ctx.curSv()),
 		// If the value is not undefined and not TDZ sentinel, push directly
 		// (avoids the `in` prototype chain traversal entirely)
-		ifStmt(
-			bin("!==", id("_v"), un("void", lit(0))),
-			[
-				// TDZ check: if _v === tdzSentinel, throw
-				ifStmt(bin("===", id("_v"), id(ctx.tdzSentinel)), [
-					throwStmt(
-						newExpr(id("ReferenceError"), [
-							bin(
-								"+",
-								bin("+", lit("Cannot access '"), id("name")),
-								lit("' before initialization")
-							),
-						])
-					),
-				]),
-				exprStmt(ctx.push(id("_v"))),
-				breakStmt(),
-			]
-		),
+		ifStmt(bin("!==", id("_v"), un("void", lit(0))), [
+			// TDZ check: if _v === tdzSentinel, throw
+			ifStmt(bin("===", id("_v"), id(ctx.tdzSentinel)), [
+				throwStmt(
+					newExpr(id("ReferenceError"), [
+						bin(
+							"+",
+							bin("+", lit("Cannot access '"), id("name")),
+							lit("' before initialization")
+						),
+					])
+				),
+			]),
+			exprStmt(ctx.push(id("_v"))),
+			breakStmt(),
+		]),
 		// Slow path: value was undefined — need `in` to distinguish
 		// "property exists with value undefined" from "property not found"
 		ifStmt(bin("in", id("name"), id(ctx.SC)), [
@@ -124,15 +116,18 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
 		varDecl("val", ctx.pop()),
 		// Fast path: check current scope first (most stores are local)
-		ifStmt(hasOwn(id(ctx.SC), id("name")), [
+		ifStmt(hasOwn(ctx.hop, id(ctx.SC), id("name")), [
 			exprStmt(assign(ctx.curSv(), id("val"))),
 			breakStmt(),
 		]),
 		// Slow path: walk parent scopes
-		varDecl("s", call(member(id("Object"), "getPrototypeOf"), [id(ctx.SC)])),
+		varDecl(
+			"s",
+			call(member(id("Object"), "getPrototypeOf"), [id(ctx.SC)])
+		),
 		varDecl("found", lit(false)),
 		whileStmt(id("s"), [
-			ifStmt(hasOwn(id("s"), id("name")), [
+			ifStmt(hasOwn(ctx.hop, id("s"), id("name")), [
 				exprStmt(assign(ctx.sv(), id("val"))),
 				exprStmt(assign(id("found"), lit(true))),
 				breakStmt(),
@@ -162,10 +157,9 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
 function declareVarHandler(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		ifStmt(
-			un("!", hasOwn(id(ctx.SC), id("name"))),
-			[exprStmt(assign(ctx.curSv(), un("void", lit(0))))]
-		),
+		ifStmt(un("!", hasOwn(ctx.hop, id(ctx.SC), id("name"))), [
+			exprStmt(assign(ctx.curSv(), un("void", lit(0)))),
+		]),
 		breakStmt(),
 	];
 }
@@ -337,9 +331,7 @@ function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
 			exprStmt(ctx.push(un("typeof", ctx.curSv()))),
 			breakStmt(),
 		]),
-		exprStmt(
-			ctx.push(un("typeof", index(id(ctx.t("_g")), id("name"))))
-		),
+		exprStmt(ctx.push(un("typeof", index(id(ctx.t("_g")), id("name"))))),
 		breakStmt(),
 	];
 }

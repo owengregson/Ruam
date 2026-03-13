@@ -128,9 +128,7 @@ function buildStringDecodeLoop(
 			varDecl("cv", cJ),
 			// if(Array.isArray(cv)){ target.c[j] = strDec(...); }
 			ifStmt(call(member(id("Array"), "isArray"), [id("cv")]), [
-				exprStmt(
-					assign(cJ, call(id(names.strDec), decodeArgs))
-				),
+				exprStmt(assign(cJ, call(id(names.strDec), decodeArgs))),
 			]),
 		]
 	);

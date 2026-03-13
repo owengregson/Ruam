@@ -108,10 +108,7 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 									exprStmt(
 										call(member(id("flat"), "push"), [
 											index(
-												index(
-													id("callArgs"),
-													id("ai")
-												),
+												index(id("callArgs"), id("ai")),
 												id("si")
 											),
 										])
@@ -188,7 +185,11 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 									lit("CALL_ERR"),
 									lit("NOT A FUNCTION:"),
 									id("fn"),
-									bin("+", lit(ctx.S + " depth="), member(id(ctx.S), "length")),
+									bin(
+										"+",
+										lit(ctx.S + " depth="),
+										member(id(ctx.S), "length")
+									),
 								])
 							),
 						]

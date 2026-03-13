@@ -4,13 +4,50 @@ import vm from "node:vm";
 
 function makeContext(): vm.Context {
 	return vm.createContext({
-		console, Array, Object, String, Number, Boolean, Symbol, Math, JSON, Date,
-		RegExp, Error, TypeError, RangeError, SyntaxError, ReferenceError,
-		Map, Set, WeakMap, WeakSet, Promise, Proxy, Reflect,
-		parseInt, parseFloat, isNaN, isFinite, undefined, NaN, Infinity,
-		setTimeout, setInterval, clearTimeout, clearInterval, queueMicrotask,
-		Uint8Array, Int8Array, Int32Array, Float64Array, ArrayBuffer, DataView,
-		TextEncoder, TextDecoder, Buffer,
+		console,
+		Array,
+		Object,
+		String,
+		Number,
+		Boolean,
+		Symbol,
+		Math,
+		JSON,
+		Date,
+		RegExp,
+		Error,
+		TypeError,
+		RangeError,
+		SyntaxError,
+		ReferenceError,
+		Map,
+		Set,
+		WeakMap,
+		WeakSet,
+		Promise,
+		Proxy,
+		Reflect,
+		parseInt,
+		parseFloat,
+		isNaN,
+		isFinite,
+		undefined,
+		NaN,
+		Infinity,
+		setTimeout,
+		setInterval,
+		clearTimeout,
+		clearInterval,
+		queueMicrotask,
+		Uint8Array,
+		Int8Array,
+		Int32Array,
+		Float64Array,
+		ArrayBuffer,
+		DataView,
+		TextEncoder,
+		TextDecoder,
+		Buffer,
 	});
 }
 
@@ -51,7 +88,9 @@ describe("regression: try/catch property name collision", () => {
 				encryptBytecode: false,
 				preprocessIdentifiers: false,
 			});
-			const result = new vm.Script(obfuscated).runInContext(makeContext());
+			const result = new vm.Script(obfuscated).runInContext(
+				makeContext()
+			);
 			expect(result).toEqual(expected);
 		});
 	}

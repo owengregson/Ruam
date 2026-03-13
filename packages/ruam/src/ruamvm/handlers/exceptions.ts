@@ -101,10 +101,7 @@ function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
 					bin("===", un("typeof", id("cname")), lit("string")),
 					[
 						exprStmt(
-							assign(
-								index(id(ctx.SC), id("cname")),
-								id("err")
-							)
+							assign(index(id(ctx.SC), id("cname")), id("err"))
 						),
 					],
 					[exprStmt(assign(index(id(ctx.R), id(ctx.O)), id("err")))]

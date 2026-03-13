@@ -134,7 +134,7 @@ export function buildInterpreterFunctions(
 		split
 	);
 
-	const syncFn = buildExecFunction(names, temps, syncCases.cases, {
+	const syncResult = buildExecFunction(names, temps, syncCases.cases, {
 		isAsync: false,
 		debug,
 		rollingCipher,
@@ -144,6 +144,41 @@ export function buildInterpreterFunctions(
 		fragmentLabelMap: syncCases.fragmentLabelMap,
 	});
 
+	// Hoist sentinel/return-value declarations to IIFE scope
+	// (shared across all exec invocations — avoids per-call allocation)
+	const iifeDecls = [...syncResult.iifeDecls];
+
+	// IIFE-scope slot variable declarations for sync handler hoisting.
+	// These are the 17 variables that handler closures reference —
+	// declared once at IIFE scope, set/restored per exec() call.
+	const T = (key: string): string => {
+		const name = temps[key];
+		if (name === undefined) throw new Error(`Unknown temp: ${key}`);
+		return name;
+	};
+	const slotNames = [
+		names.stk,
+		names.regs,
+		names.ip,
+		names.cArr,
+		names.operand,
+		names.scope,
+		names.exStk,
+		names.pEx,
+		names.hPEx,
+		names.cType,
+		names.cVal,
+		names.unit,
+		names.args,
+		names.tVal,
+		names.nTgt,
+		names.ho,
+		T("_g"),
+	];
+	for (const name of slotNames) {
+		iifeDecls.push(varDecl(name, un("void", lit(0))));
+	}
+
 	// When no async units exist, skip the full async interpreter.
 	// Emit a simple alias: var execAsync = exec
 	// The closure IIFE code references execAsync by name but never
@@ -152,8 +187,8 @@ export function buildInterpreterFunctions(
 	if (!hasAsyncUnits) {
 		const alias = varDecl(names.execAsync, id(names.exec));
 		return {
-			interpreters: [syncFn, alias],
-			handlerTableInit: htMeta.initNodes,
+			interpreters: [syncResult.fnNode, alias],
+			handlerTableInit: [...htMeta.initNodes, ...iifeDecls],
 			keyAnchorValue: htMeta.keyAnchorValue,
 		};
 	}
@@ -173,7 +208,7 @@ export function buildInterpreterFunctions(
 		split
 	);
 
-	const asyncFn = buildExecFunction(names, temps, asyncCases.cases, {
+	const asyncResult = buildExecFunction(names, temps, asyncCases.cases, {
 		isAsync: true,
 		debug,
 		rollingCipher,
@@ -186,9 +221,12 @@ export function buildInterpreterFunctions(
 		asyncGroupOffset: 1,
 	});
 
+	// Async iifeDecls are the same sentinel/return-value vars — already declared
+	// by sync, so we don't re-emit them (they share the same temp names).
+
 	return {
-		interpreters: [syncFn, asyncFn],
-		handlerTableInit: htMeta.initNodes,
+		interpreters: [syncResult.fnNode, asyncResult.fnNode],
+		handlerTableInit: [...htMeta.initNodes, ...iifeDecls],
 		keyAnchorValue: htMeta.keyAnchorValue,
 	};
 }
@@ -389,11 +427,17 @@ function buildHandlerTableMeta(
 						bin(
 							"^",
 							index(id(htdName), bin("+", id(htiName), lit(1))),
-							bin("&", bin(">>>", id(htkName), lit(16)), lit(0xffff))
+							bin(
+								"&",
+								bin(">>>", id(htkName), lit(16)),
+								lit(0xffff)
+							)
 						)
 					),
 					// _ht[htv] = htw;
-					exprStmt(assign(index(id(htName), id(htvName)), id(htwName))),
+					exprStmt(
+						assign(index(id(htName), id(htvName)), id(htwName))
+					),
 					// _htk = (Math.imul(_htk ^ htv, 0x45D9F3B) ^ htw) >>> 0;
 					exprStmt(
 						assign(
@@ -603,7 +647,7 @@ function buildExecFunction(
 		/** Offset to apply to group count for structural differentiation. */
 		asyncGroupOffset?: number;
 	}
-): JsNode {
+): { fnNode: JsNode; iifeDecls: JsNode[] } {
 	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
 	const htName = temps["_ht"];
 	if (htName === undefined) throw new Error("Missing temp: _ht");
@@ -619,6 +663,10 @@ function buildExecFunction(
 		opts.asyncGroupOffset
 	);
 
+	// For sync mode, hoist handler closures to IIFE scope. Async keeps
+	// closures per-call because concurrent async calls interleave state.
+	const hoistHandlers = !opts.isAsync;
+
 	const fnNode = buildScaffoldAST(
 		names,
 		temps,
@@ -628,7 +676,8 @@ function buildExecFunction(
 		opts.interpOpts,
 		ftResult.dispatchNodes,
 		ftResult.preLoopDecls,
-		opts.split
+		opts.split,
+		hoistHandlers
 	);
 
 	// Apply tree-based obfuscation of local variable names.
@@ -639,7 +688,15 @@ function buildExecFunction(
 		...Object.values(temps),
 	]);
 	const [obfuscated] = obfuscateLocals([fnNode], opts.seed, reserved);
-	return obfuscated!;
+
+	// Also obfuscate handler closures when hoisted to IIFE scope
+	// (they contain handler-local variables like `name`, `val`, etc.)
+	let iifeDecls = ftResult.iifeDecls;
+	if (hoistHandlers && iifeDecls.length > 0) {
+		iifeDecls = obfuscateLocals(iifeDecls, opts.seed ^ 0x1234, reserved);
+	}
+
+	return { fnNode: obfuscated!, iifeDecls };
 }
 
 // --- Scaffolding (AST) ---
@@ -670,7 +727,8 @@ function buildScaffoldAST(
 	interpOpts: InterpreterBuildOptions,
 	dispatchNodes: JsNode[],
 	htInit?: JsNode[],
-	split?: SplitFn
+	split?: SplitFn,
+	hoistHandlers = false
 ): JsNode {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const fnName = isAsync ? n.execAsync : n.exec;
@@ -701,46 +759,121 @@ function buildScaffoldAST(
 		return name;
 	};
 
+	// --- Hoisted handler slot variables ---
+	// When hoistHandlers is true (sync mode), handler closures live at IIFE
+	// scope and reference these variables directly. On each exec call we save
+	// the current values to a local array, set new values, and restore in
+	// finally. This eliminates ~290 closure allocations per call.
+	//
+	// The 17 slot variables: S, R, IP, C, O, SC, EX, PE, HPE, CT, CV,
+	// U, A, TV, NT, HO, _g. All are referenced by handler code.
+	const slotNames = hoistHandlers
+		? [
+				S,
+				R,
+				IP,
+				C,
+				O,
+				SC,
+				EX,
+				PE,
+				HPE,
+				CT,
+				CV,
+				U,
+				A,
+				n.tVal,
+				n.nTgt,
+				n.ho,
+				T("_g"),
+		  ]
+		: [];
+
+	// When hoisting, use distinct parameter names so they don't shadow
+	// the IIFE-scope slot variables. These names (length >= 3, no _ prefix)
+	// will be renamed by obfuscateLocals to short 2-char names.
+	const paramU = hoistHandlers ? "unitP" : U;
+	const paramA = hoistHandlers ? "argsP" : A;
+	const paramOS = hoistHandlers ? "osP" : OS;
+	const paramTV = hoistHandlers ? "tvP" : n.tVal;
+	const paramNT = hoistHandlers ? "ntP" : n.nTgt;
+	const paramHO = hoistHandlers ? "hoP" : n.ho;
+
 	// --- Outer body ---
 	const outerBody: JsNode[] = [];
 
 	// depth++
 	outerBody.push(exprStmt(update("++", false, id(n.depth))));
 
-	// var _uid_=(U._dbgId||'?')
-	outerBody.push(
-		varDecl(T("_uid_"), bin("||", member(id(U), T("_dbgId")), lit("?")))
-	);
+	// When hoisting, save current IIFE-scope slot values and copy params
+	if (hoistHandlers) {
+		// var saved = [S, R, IP, C, O, SC, EX, PE, HPE, CT, CV, U, A, TV, NT, HO, _g]
+		outerBody.push(
+			varDecl("saved", arr(...slotNames.map((name) => id(name))))
+		);
+		// Copy params to IIFE-scope slots
+		outerBody.push(exprStmt(assign(id(U), id(paramU))));
+		outerBody.push(exprStmt(assign(id(A), id(paramA))));
+		outerBody.push(exprStmt(assign(id(n.tVal), id(paramTV))));
+		outerBody.push(exprStmt(assign(id(n.nTgt), id(paramNT))));
+		outerBody.push(exprStmt(assign(id(n.ho), id(paramHO))));
+	}
 
-	// callStack.push(_uid_)
-	outerBody.push(
-		exprStmt(call(member(id(n.callStack), "push"), [id(T("_uid_"))]))
-	);
+	// callStack tracking — only in debug mode (avoids per-call array push/pop)
+	if (debug) {
+		// var _uid_=(U._dbgId||'?')
+		outerBody.push(
+			varDecl(T("_uid_"), bin("||", member(id(U), T("_dbgId")), lit("?")))
+		);
+		// callStack.push(_uid_)
+		outerBody.push(
+			exprStmt(call(member(id(n.callStack), "push"), [id(T("_uid_"))]))
+		);
+	}
 
-	// Recursion guard: if(depth>500){depth--;callStack.pop();throw new RangeError('Maximum call '+'s'+'tack size exceeded');}
+	// Recursion guard: if(depth>500){depth--;throw new RangeError(...)}
+	const guardBody: JsNode[] = [exprStmt(update("--", false, id(n.depth)))];
+	if (debug) {
+		guardBody.push(exprStmt(call(member(id(n.callStack), "pop"), [])));
+	}
+	if (hoistHandlers) {
+		// Restore slot values before throwing (save array is still in scope)
+		for (let i = 0; i < slotNames.length; i++) {
+			guardBody.push(
+				exprStmt(assign(id(slotNames[i]!), index(id("saved"), lit(i))))
+			);
+		}
+	}
+	guardBody.push(
+		throwStmt(
+			newExpr(id("RangeError"), [
+				bin(
+					"+",
+					bin("+", lit("Maximum call "), lit("s")),
+					lit("tack size exceeded")
+				),
+			])
+		)
+	);
 	outerBody.push(
-		ifStmt(bin(">", id(n.depth), lit(VM_MAX_RECURSION_DEPTH)), [
-			exprStmt(update("--", false, id(n.depth))),
-			exprStmt(call(member(id(n.callStack), "pop"), [])),
-			throwStmt(
-				newExpr(id("RangeError"), [
-					bin(
-						"+",
-						bin("+", lit("Maximum call "), lit("s")),
-						lit("tack size exceeded")
-					),
-				])
-			),
-		])
+		ifStmt(bin(">", id(n.depth), lit(VM_MAX_RECURSION_DEPTH)), guardBody)
 	);
 
 	// --- Try body (main interpreter logic) ---
 	const tryBody: JsNode[] = [];
 
-	// Variable declarations
-	tryBody.push(varDecl(S, arr()));
+	// Helper: declare or assign depending on hoisting mode.
+	// Slot variables are IIFE-scope when hoisting (assigned, not declared).
+	const slotSet = new Set(slotNames);
+	const declOrAssign = (name: string, init: JsNode): JsNode =>
+		slotSet.has(name)
+			? exprStmt(assign(id(name), init))
+			: varDecl(name, init);
+
+	// Variable declarations (or assignments for hoisted slots)
+	tryBody.push(declOrAssign(S, arr()));
 	// Build packed register array (no holes) for V8 fast element access
-	tryBody.push(varDecl(R, arr()));
+	tryBody.push(declOrAssign(R, arr()));
 	tryBody.push(
 		forStmt(
 			varDecl("_rl", member(id(U), "r")),
@@ -749,50 +882,26 @@ function buildScaffoldAST(
 			[exprStmt(call(member(id(R), "push"), [un("void", lit(0))]))]
 		)
 	);
-	tryBody.push(varDecl(IP, lit(0)));
-	tryBody.push(varDecl(C, member(id(U), "c")));
-	tryBody.push(varDecl(I, member(id(U), "i")));
-	tryBody.push(varDecl(EX, lit(null)));
-	tryBody.push(varDecl(PE, lit(null)));
-	tryBody.push(varDecl(HPE, lit(false)));
-	tryBody.push(varDecl(CT, lit(0)));
-	tryBody.push(varDecl(CV, un("void", lit(0))));
+	tryBody.push(declOrAssign(IP, lit(0)));
+	tryBody.push(declOrAssign(C, member(id(U), "c")));
+	tryBody.push(varDecl(I, member(id(U), "i"))); // I is not a slot (dispatch-only)
+	tryBody.push(declOrAssign(EX, lit(null)));
+	tryBody.push(declOrAssign(PE, lit(null)));
+	tryBody.push(declOrAssign(HPE, lit(false)));
+	tryBody.push(declOrAssign(CT, lit(0)));
+	tryBody.push(declOrAssign(CV, un("void", lit(0))));
 	tryBody.push(
-		varDecl(SC, call(member(id("Object"), "create"), [id(OS)]))
+		declOrAssign(
+			SC,
+			call(member(id("Object"), "create"), [
+				hoistHandlers ? id(paramOS) : id(OS),
+			])
+		)
 	);
 	// Stack pointer (P) eliminated — stack uses Array.push/pop/length
 
-	// var _g=typeof globalThis!=='undefined'?globalThis:typeof window!=='undefined'?window:typeof global!=='undefined'?global:typeof self!=='undefined'?self:{}
-	tryBody.push(
-		varDecl(
-			T("_g"),
-			ternary(
-				bin("!==", un("typeof", id("globalThis")), lit("undefined")),
-				id("globalThis"),
-				ternary(
-					bin("!==", un("typeof", id("window")), lit("undefined")),
-					id("window"),
-					ternary(
-						bin(
-							"!==",
-							un("typeof", id("global")),
-							lit("undefined")
-						),
-						id("global"),
-						ternary(
-							bin(
-								"!==",
-								un("typeof", id("self")),
-								lit("undefined")
-							),
-							id("self"),
-							obj()
-						)
-					)
-				)
-			)
-		)
-	);
+	// _g = <cachedGlobalRef> — resolved once at IIFE scope
+	tryBody.push(declOrAssign(T("_g"), id(n.globalRef)));
 
 	// Optional: debug entry logging
 	if (debug) {
@@ -837,9 +946,9 @@ function buildScaffoldAST(
 	// While loop body inside the inner try
 	const whileBody: JsNode[] = [];
 
-	// var PH=I[IP]; var O=I[IP+1]; IP+=2;
+	// var PH=I[IP]; O=I[IP+1]; IP+=2;
 	whileBody.push(varDecl(PH, index(id(I), id(IP))));
-	whileBody.push(varDecl(O, index(id(I), bin("+", id(IP), lit(1)))));
+	whileBody.push(declOrAssign(O, index(id(I), bin("+", id(IP), lit(1)))));
 	whileBody.push(exprStmt(assign(id(IP), lit(2), "+")));
 
 	// Optional: rolling cipher decrypt (inlined rcMix for performance)
@@ -850,38 +959,51 @@ function buildScaffoldAST(
 		);
 		// Inline rcMix(rcState, _ri, _ri ^ 0x9E3779B9):
 		// var _ks = rcState;
-		whileBody.push(
-			varDecl(T("_ks"), id(n.rcState))
-		);
+		whileBody.push(varDecl(T("_ks"), id(n.rcState)));
 		// _ks = imul(_ks ^ _ri, 0x85EBCA6B) >>> 0;
 		whileBody.push(
-			exprStmt(assign(
-				id(T("_ks")),
-				bin(">>>",
-					call(id(n.imul), [
-						bin("^", id(T("_ks")), id(T("_ri"))),
-						L(0x85ebca6b),
-					]),
-					lit(0)
+			exprStmt(
+				assign(
+					id(T("_ks")),
+					bin(
+						">>>",
+						call(id(n.imul), [
+							bin("^", id(T("_ks")), id(T("_ri"))),
+							L(0x85ebca6b),
+						]),
+						lit(0)
+					)
 				)
-			))
+			)
 		);
 		// _ks = imul(_ks ^ (_ri ^ 0x9E3779B9), 0xC2B2AE35) >>> 0;
 		whileBody.push(
-			exprStmt(assign(
-				id(T("_ks")),
-				bin(">>>",
-					call(id(n.imul), [
-						bin("^", id(T("_ks")), bin("^", id(T("_ri")), L(0x9e3779b9))),
-						L(0xc2b2ae35),
-					]),
-					lit(0)
+			exprStmt(
+				assign(
+					id(T("_ks")),
+					bin(
+						">>>",
+						call(id(n.imul), [
+							bin(
+								"^",
+								id(T("_ks")),
+								bin("^", id(T("_ri")), L(0x9e3779b9))
+							),
+							L(0xc2b2ae35),
+						]),
+						lit(0)
+					)
 				)
-			))
+			)
 		);
 		// _ks ^= _ks >>> 16;
 		whileBody.push(
-			exprStmt(assign(id(T("_ks")), bin("^", id(T("_ks")), bin(">>>", id(T("_ks")), lit(16)))))
+			exprStmt(
+				assign(
+					id(T("_ks")),
+					bin("^", id(T("_ks")), bin(">>>", id(T("_ks")), lit(16)))
+				)
+			)
 		);
 		// _ks = _ks >>> 0;
 		whileBody.push(
@@ -975,7 +1097,9 @@ function buildScaffoldAST(
 		);
 	}
 	// S.length=_h._sp (restore stack to saved depth)
-	catchRouteBody.push(exprStmt(assign(member(id(S), "length"), member(id(T("_h")), T("_sp")))));
+	catchRouteBody.push(
+		exprStmt(assign(member(id(S), "length"), member(id(T("_h")), T("_sp"))))
+	);
 	// Push error onto stack: S.push(e)
 	catchRouteBody.push(exprStmt(call(member(id(S), "push"), [id("e")])));
 	// IP=_h._ci*2
@@ -1066,17 +1190,30 @@ function buildScaffoldAST(
 	tryBody.push(foreverLoop);
 
 	// --- Outer finally ---
-	const finallyBody: JsNode[] = [
-		exprStmt(update("--", false, id(n.depth))),
-		exprStmt(call(member(id(n.callStack), "pop"), [])),
-	];
+	const finallyBody: JsNode[] = [exprStmt(update("--", false, id(n.depth)))];
+	if (debug) {
+		finallyBody.push(exprStmt(call(member(id(n.callStack), "pop"), [])));
+	}
+	// Restore saved slot values when hoisting
+	if (hoistHandlers) {
+		for (let i = 0; i < slotNames.length; i++) {
+			finallyBody.push(
+				exprStmt(assign(id(slotNames[i]!), index(id("saved"), lit(i))))
+			);
+		}
+	}
 
 	// Outer try-finally wrapping the whole body
 	outerBody.push(tryCatch(tryBody, undefined, undefined, finallyBody));
 
-	return fn(fnName, [U, A, OS, n.tVal, n.nTgt, n.ho], outerBody, {
-		async: isAsync,
-	});
+	return fn(
+		fnName,
+		[paramU, paramA, paramOS, paramTV, paramNT, paramHO],
+		outerBody,
+		{
+			async: isAsync,
+		}
+	);
 }
 
 // --- Decoy handlers ---
@@ -1099,8 +1236,7 @@ function generateDecoyHandlers(
 		SC = n.scope;
 
 	/** S[S.length-1] — peek at top of stack */
-	const tos = () =>
-		index(id(S), bin("-", member(id(S), "length"), lit(1)));
+	const tos = () => index(id(S), bin("-", member(id(S), "length"), lit(1)));
 
 	// AST decoy body factories — look like real array push/pop/length ops
 	const decoyBodyFactories: (() => JsNode[])[] = [
@@ -1126,10 +1262,7 @@ function generateDecoyHandlers(
 		// R[O]=S.pop()
 		() => [
 			exprStmt(
-				assign(
-					index(id(R), id(O)),
-					call(member(id(S), "pop"), [])
-				)
+				assign(index(id(R), id(O)), call(member(id(S), "pop"), []))
 			),
 		],
 		// S.push(R[O])
@@ -1137,14 +1270,17 @@ function generateDecoyHandlers(
 		// var s=SC; if(s&&C[O]in s){s[C[O]]=S.pop();}
 		() => [
 			varDecl("s", id(SC)),
-			ifStmt(bin("&&", id("s"), bin("in", index(id(C), id(O)), id("s"))), [
-				exprStmt(
-					assign(
-						index(id("s"), index(id(C), id(O))),
-						call(member(id(S), "pop"), [])
-					)
-				),
-			]),
+			ifStmt(
+				bin("&&", id("s"), bin("in", index(id(C), id(O)), id("s"))),
+				[
+					exprStmt(
+						assign(
+							index(id("s"), index(id(C), id(O))),
+							call(member(id(S), "pop"), [])
+						)
+					),
+				]
+			),
 		],
 		// S[S.length-1]=!S[S.length-1]
 		() => [exprStmt(assign(tos(), un("!", tos())))],
@@ -1216,9 +1352,7 @@ function walkSkipFns(
 	) {
 		return node;
 	}
-	const walked = mapChildren(node, (child) =>
-		walkSkipFns(child, visitor)
-	);
+	const walked = mapChildren(node, (child) => walkSkipFns(child, visitor));
 	return visitor(walked) ?? walked;
 }
 
@@ -1245,9 +1379,7 @@ function transformBodyForFT(
 				const value =
 					(n as { type: "ReturnStmt"; value?: JsNode }).value ??
 					un("void", lit(0));
-				return returnStmt(
-					seq(assign(id(frvName), value), id(frsName))
-				);
+				return returnStmt(seq(assign(id(frvName), value), id(frsName)));
 			}
 			return null;
 		})
@@ -1284,7 +1416,7 @@ function buildFunctionTableDispatch(
 	phName: string,
 	isAsync: boolean,
 	groupCountOffset = 0
-): { preLoopDecls: JsNode[]; dispatchNodes: JsNode[] } {
+): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
 	const FRS = temps["_frs"];
 	const FRV = temps["_frv"];
 	const FDI = temps["_fdi"];
@@ -1313,46 +1445,66 @@ function buildFunctionTableDispatch(
 	// `await` expressions inside handler bodies remain valid.
 	const handlerFns: JsNode[] = handlerCases.map((c) => {
 		const body = transformBodyForFT(c.body, FRS, FRV);
-		return fnExpr(undefined, [], body, isAsync ? { async: true } : undefined);
+		return fnExpr(
+			undefined,
+			[],
+			body,
+			isAsync ? { async: true } : undefined
+		);
 	});
 
 	// Determine group count based on total handler count.
-	// groupCountOffset differentiates sync vs async structure: when
-	// nonzero, shift the group count (subtract if at ceiling, add if
-	// below) so the two interpreters don't look like carbon copies.
+	// Sync interpreter uses a single flat array — all call sites are
+	// megamorphic regardless, so grouped routing adds overhead without
+	// benefiting V8 inline caching. Async interpreter keeps 2-4 groups
+	// for structural differentiation (so it doesn't look like the sync).
 	const totalHandlers = handlerFns.length;
-	const baseGroups =
-		totalHandlers < 80 ? 2 : totalHandlers < 160 ? 3 : 4;
 	let numGroups: number;
-	if (groupCountOffset !== 0) {
-		// Shift away from the base: up if room, down otherwise
-		const shifted =
-			baseGroups + groupCountOffset <= FT_MAX_GROUPS
-				? baseGroups + groupCountOffset
-				: baseGroups - groupCountOffset;
-		numGroups = Math.max(2, Math.min(FT_MAX_GROUPS, shifted));
+	if (isAsync) {
+		// Async: grouped for structural differentiation
+		const baseGroups = totalHandlers < 80 ? 2 : totalHandlers < 160 ? 3 : 4;
+		if (groupCountOffset !== 0) {
+			const shifted =
+				baseGroups + groupCountOffset <= FT_MAX_GROUPS
+					? baseGroups + groupCountOffset
+					: baseGroups - groupCountOffset;
+			numGroups = Math.max(2, Math.min(FT_MAX_GROUPS, shifted));
+		} else {
+			numGroups = Math.min(FT_MAX_GROUPS, baseGroups);
+		}
 	} else {
-		numGroups = Math.min(FT_MAX_GROUPS, baseGroups);
+		// Sync: single flat array — eliminates if-else routing overhead
+		numGroups = 1;
 	}
 	const groupSize = Math.ceil(totalHandlers / numGroups);
 
-	// Pre-loop declarations: sentinel, return value, group arrays
-	const preLoopDecls: JsNode[] = [
-		// var _frs = {} (unique sentinel object — identity-checked via ===)
-		varDecl(FRS, obj()),
-		// var _frv (return value placeholder)
-		varDecl(FRV, un("void", lit(0))),
-	];
+	// IIFE-scope declarations: sentinel object (identity-checked via ===)
+	// Shared across all exec calls — safe because it's a constant identity marker.
+	const iifeDecls: JsNode[] = [varDecl(FRS, obj())];
+
+	// For sync: FRV goes to IIFE scope (handlers reference it and they're hoisted).
+	// For async: FRV stays exec-local (interleaving can clobber shared state).
+	const preLoopDecls: JsNode[] = [];
+	if (isAsync) {
+		preLoopDecls.push(varDecl(FRV, un("void", lit(0))));
+	} else {
+		iifeDecls.push(varDecl(FRV, un("void", lit(0))));
+	}
 
 	const activeGroupNames: string[] = [];
+	// For sync: handler group arrays go to IIFE scope (closures created once).
+	// For async: handler group arrays stay in exec (closures recreated per call
+	// because they capture exec-local async state that can interleave).
+	const handlerTarget = isAsync ? preLoopDecls : iifeDecls;
 	for (let i = 0; i < numGroups; i++) {
 		const name = groupTempNames[i];
-		if (!name) throw new Error(`Missing function table group temp: _fg${i}`);
+		if (!name)
+			throw new Error(`Missing function table group temp: _fg${i}`);
 		activeGroupNames.push(name);
 		const start = i * groupSize;
 		const end = Math.min(start + groupSize, totalHandlers);
 		const group = handlerFns.slice(start, end);
-		preLoopDecls.push(varDecl(name, arr(...group)));
+		handlerTarget.push(varDecl(name, arr(...group)));
 	}
 
 	// Dispatch nodes (inside while loop body)
@@ -1365,24 +1517,14 @@ function buildFunctionTableDispatch(
 	// Each branch: if (_fgN[_fdi - offset]() === _frs) return _frv;
 	// For async: if ((await _fgN[_fdi - offset]()) === _frs) return _frv;
 	const awaitNode = (expr: JsNode): JsNode =>
-		({ type: "AwaitExpr", expr }) as JsNode;
+		({ type: "AwaitExpr", expr } as JsNode);
 
-	const buildCallCheck = (
-		groupName: string,
-		offset: number
-	): JsNode[] => {
+	const buildCallCheck = (groupName: string, offset: number): JsNode[] => {
 		const indexExpr =
-			offset === 0
-				? id(FDI)
-				: bin("-", id(FDI), lit(offset));
+			offset === 0 ? id(FDI) : bin("-", id(FDI), lit(offset));
 		const callExpr = call(index(id(groupName), indexExpr), []);
 		const result = isAsync ? awaitNode(callExpr) : callExpr;
-		return [
-			ifStmt(
-				bin("===", result, id(FRS)),
-				[returnStmt(id(FRV))]
-			),
-		];
+		return [ifStmt(bin("===", result, id(FRS)), [returnStmt(id(FRV))])];
 	};
 
 	if (numGroups === 1) {
@@ -1396,17 +1538,16 @@ function buildFunctionTableDispatch(
 
 		for (let i = numGroups - 2; i >= 0; i--) {
 			const threshold = (i + 1) * groupSize;
-			const body = buildCallCheck(
-				activeGroupNames[i]!,
-				i * groupSize
-			);
-			current = [ifStmt(bin("<", id(FDI), lit(threshold)), body, current)];
+			const body = buildCallCheck(activeGroupNames[i]!, i * groupSize);
+			current = [
+				ifStmt(bin("<", id(FDI), lit(threshold)), body, current),
+			];
 		}
 
 		dispatchNodes.push(...current);
 	}
 
-	return { preLoopDecls, dispatchNodes };
+	return { preLoopDecls, iifeDecls, dispatchNodes };
 }
 
 // --- Stack encoding proxy (AST) ---

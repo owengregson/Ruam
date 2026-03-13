@@ -122,66 +122,95 @@ export function buildDeserializer(
 		[DOF, lit(0)],
 
 		// u8() { return this.v.getUint8(this.o++); }
-		method(DU8, [], [
-			returnStmt(
-				call(member(tprop(DV), "getUint8"), [
-					update("++", false, tprop(DOF)),
-				])
-			),
-		]),
+		method(
+			DU8,
+			[],
+			[
+				returnStmt(
+					call(member(tprop(DV), "getUint8"), [
+						update("++", false, tprop(DOF)),
+					])
+				),
+			]
+		),
 
 		// u16() { var x=this.v.getUint16(this.o,true); this.o+=2; return x; }
-		method(DU16, [], [
-			varDecl("x", call(member(tprop(DV), "getUint16"), [tprop(DOF), TRUE])),
-			exprStmt(assign(tprop(DOF), lit(2), "+")),
-			returnStmt(id("x")),
-		]),
+		method(
+			DU16,
+			[],
+			[
+				varDecl(
+					"x",
+					call(member(tprop(DV), "getUint16"), [tprop(DOF), TRUE])
+				),
+				exprStmt(assign(tprop(DOF), lit(2), "+")),
+				returnStmt(id("x")),
+			]
+		),
 
 		// u32() { var x=this.v.getUint32(this.o,true); this.o+=4; return x; }
-		method(DU32, [], [
-			varDecl("x", call(member(tprop(DV), "getUint32"), [tprop(DOF), TRUE])),
-			exprStmt(assign(tprop(DOF), lit(4), "+")),
-			returnStmt(id("x")),
-		]),
+		method(
+			DU32,
+			[],
+			[
+				varDecl(
+					"x",
+					call(member(tprop(DV), "getUint32"), [tprop(DOF), TRUE])
+				),
+				exprStmt(assign(tprop(DOF), lit(4), "+")),
+				returnStmt(id("x")),
+			]
+		),
 
 		// i32() { var x=this.v.getInt32(this.o,true); this.o+=4; return x; }
-		method(DI32, [], [
-			varDecl("x", call(member(tprop(DV), "getInt32"), [tprop(DOF), TRUE])),
-			exprStmt(assign(tprop(DOF), lit(4), "+")),
-			returnStmt(id("x")),
-		]),
+		method(
+			DI32,
+			[],
+			[
+				varDecl(
+					"x",
+					call(member(tprop(DV), "getInt32"), [tprop(DOF), TRUE])
+				),
+				exprStmt(assign(tprop(DOF), lit(4), "+")),
+				returnStmt(id("x")),
+			]
+		),
 
 		// f64() { var x=this.v.getFloat64(this.o,true); this.o+=8; return x; }
-		method(DF64, [], [
-			varDecl(
-				"x",
-				call(member(tprop(DV), "getFloat64"), [tprop(DOF), TRUE])
-			),
-			exprStmt(assign(tprop(DOF), lit(8), "+")),
-			returnStmt(id("x")),
-		]),
+		method(
+			DF64,
+			[],
+			[
+				varDecl(
+					"x",
+					call(member(tprop(DV), "getFloat64"), [tprop(DOF), TRUE])
+				),
+				exprStmt(assign(tprop(DOF), lit(8), "+")),
+				returnStmt(id("x")),
+			]
+		),
 
 		// str() { var n=this.u32(); var a=[]; for(var i=0;i<n;i++){a.push(this.u8());} return String.fromCharCode.apply(null,a); }
-		method(DRS, [], [
-			varDecl("n", tcall(DU32)),
-			varDecl("a", { type: "ArrayExpr", elements: [] }),
-			forStmt(
-				varDecl("i", lit(0)),
-				bin("<", id("i"), id("n")),
-				update("++", false, id("i")),
-				[
-					exprStmt(
-						call(member(id("a"), "push"), [tcall(DU8)])
-					),
-				]
-			),
-			returnStmt(
-				call(
-					member(member(id("String"), "fromCharCode"), "apply"),
-					[lit(null), id("a")]
-				)
-			),
-		]),
+		method(
+			DRS,
+			[],
+			[
+				varDecl("n", tcall(DU32)),
+				varDecl("a", { type: "ArrayExpr", elements: [] }),
+				forStmt(
+					varDecl("i", lit(0)),
+					bin("<", id("i"), id("n")),
+					update("++", false, id("i")),
+					[exprStmt(call(member(id("a"), "push"), [tcall(DU8)]))]
+				),
+				returnStmt(
+					call(
+						member(member(id("String"), "fromCharCode"), "apply"),
+						[lit(null), id("a")]
+					)
+				),
+			]
+		),
 	];
 
 	// var r = { v: ..., o: 0, u8() {...}, ... };
@@ -251,13 +280,9 @@ export function buildDeserializer(
 		])
 	);
 	// case 6: cs.push(r.i32()); break;
-	cases.push(
-		caseClause(lit(6), [exprStmt(push(rcall(DI32))), breakStmt()])
-	);
+	cases.push(caseClause(lit(6), [exprStmt(push(rcall(DI32))), breakStmt()]));
 	// case 7: cs.push(r.f64()); break;
-	cases.push(
-		caseClause(lit(7), [exprStmt(push(rcall(DF64))), breakStmt()])
-	);
+	cases.push(caseClause(lit(7), [exprStmt(push(rcall(DF64))), breakStmt()]));
 	// case 8: cs.push(BigInt(r.str())); break;
 	cases.push(
 		caseClause(lit(8), [
@@ -286,11 +311,7 @@ export function buildDeserializer(
 					varDecl(DEI, lit(0)),
 					bin("<", id(DEI), id(DEL)),
 					update("++", false, id(DEI)),
-					[
-						exprStmt(
-							call(member(id(DEA), "push"), [rcall(DU16)])
-						),
-					]
+					[exprStmt(call(member(id(DEA), "push"), [rcall(DU16)]))]
 				),
 				exprStmt(push(id(DEA))),
 				breakStmt()
@@ -298,9 +319,7 @@ export function buildDeserializer(
 		])
 	);
 	// default: cs.push(r.str()); break;
-	cases.push(
-		caseClause(null, [exprStmt(push(rcall(DRS))), breakStmt()])
-	);
+	cases.push(caseClause(null, [exprStmt(push(rcall(DRS))), breakStmt()]));
 
 	// for(var i=0;i<cc;i++){var _dtag=r.u8();switch(_dtag){...}}
 	body.push(
@@ -310,10 +329,7 @@ export function buildDeserializer(
 			update("++", false, id("i")),
 			[
 				varDecl(DTAG, rcall(DU8)),
-				switchStmt(
-					id(DTAG),
-					cases as ReturnType<typeof caseClause>[]
-				),
+				switchStmt(id(DTAG), cases as ReturnType<typeof caseClause>[]),
 			]
 		)
 	);
