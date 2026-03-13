@@ -1,6 +1,6 @@
 {
   "version": "2.0.0",
-  "collectedAt": "2026-03-12T05:28:57.863Z",
+  "collectedAt": "2026-03-12T23:58:24.303Z",
   "opcodes": {
     "count": 300,
     "categories": 24,
@@ -10,128 +10,144 @@
   },
   "source": {
     "files": 62,
-    "lines": 22564,
-    "testFiles": 31,
-    "testLines": 14537,
-    "totalFiles": 93,
-    "totalLines": 37101,
+    "lines": 23002,
+    "testFiles": 32,
+    "testLines": 14631,
+    "totalFiles": 94,
+    "totalLines": 37633,
     "templateFiles": 0,
     "visitorFiles": 4
   },
   "tests": {
-    "total": 1841,
-    "passed": 1841,
+    "total": 1843,
+    "passed": 1842,
     "failed": 0,
-    "suites": 196,
+    "suites": 198,
     "categories": [
       "core",
       "integration",
       "ruamvm",
-      "stress",
-      "security"
+      "security",
+      "stress"
     ],
-    "durationMs": 14782
+    "durationMs": 98010
   },
   "performance": {
-    "weightedAvg": 39.5,
-    "median": 39.9,
+    "weightedAvg": 99.2,
+    "median": 59.1,
     "fastest": {
       "name": "try/catch",
-      "multiplier": 24.7
+      "multiplier": 11.3
     },
     "slowest": {
       "name": "fibonacci (n=20)",
-      "multiplier": 85.9
+      "multiplier": 463.3
     },
     "workloadCount": 10,
     "workloads": [
       {
         "name": "arithmetic loop (10k)",
-        "multiplier": 42,
-        "nativeMs": 0.051,
-        "vmMs": 2.127
+        "multiplier": 25.7,
+        "nativeMs": 0.061,
+        "vmMs": 1.571
       },
       {
         "name": "fibonacci (n=20)",
-        "multiplier": 85.9,
-        "nativeMs": 0.062,
-        "vmMs": 5.304
+        "multiplier": 463.3,
+        "nativeMs": 0.069,
+        "vmMs": 32.041
       },
       {
         "name": "array ops",
-        "multiplier": 26.5,
-        "nativeMs": 0.057,
-        "vmMs": 1.498
+        "multiplier": 132.2,
+        "nativeMs": 0.055,
+        "vmMs": 7.325
       },
       {
         "name": "string ops",
-        "multiplier": 38,
-        "nativeMs": 0.009,
-        "vmMs": 0.331
+        "multiplier": 55.5,
+        "nativeMs": 0.01,
+        "vmMs": 0.538
       },
       {
         "name": "object creation",
-        "multiplier": 34.9,
-        "nativeMs": 0.014,
-        "vmMs": 0.483
+        "multiplier": 59.1,
+        "nativeMs": 0.013,
+        "vmMs": 0.796
       },
       {
         "name": "closures + HOF",
-        "multiplier": 45.4,
+        "multiplier": 313.9,
         "nativeMs": 0.007,
-        "vmMs": 0.304
+        "vmMs": 2.171
       },
       {
         "name": "class + methods",
-        "multiplier": 39.9,
-        "nativeMs": 0.013,
-        "vmMs": 0.518
+        "multiplier": 111.6,
+        "nativeMs": 0.015,
+        "vmMs": 1.688
       },
       {
         "name": "nested loops",
-        "multiplier": 37.5,
-        "nativeMs": 0.096,
-        "vmMs": 3.598
+        "multiplier": 22.9,
+        "nativeMs": 0.107,
+        "vmMs": 2.442
       },
       {
         "name": "switch dispatch",
-        "multiplier": 46.2,
-        "nativeMs": 0.027,
-        "vmMs": 1.261
+        "multiplier": 51.3,
+        "nativeMs": 0.028,
+        "vmMs": 1.413
       },
       {
         "name": "try/catch",
-        "multiplier": 24.7,
-        "nativeMs": 0.149,
-        "vmMs": 3.685
+        "multiplier": 11.3,
+        "nativeMs": 0.157,
+        "vmMs": 1.766
       }
     ]
   },
   "size": {
     "sampleInputBytes": 110,
     "low": {
-      "bytes": 146109,
-      "ratio": 1328.3
+      "bytes": 56961,
+      "ratio": 517.8
     },
     "medium": {
-      "bytes": 147639,
-      "ratio": 1342.2
+      "bytes": 12524,
+      "ratio": 113.9
     },
     "high": {
-      "bytes": 147925,
-      "ratio": 1344.8
+      "bytes": 56967,
+      "ratio": 517.9
     }
   },
+  "heroSnippet": {
+    "head": [
+      "var qj = {};",
+      "var tv = Object.create(null);",
+      "var ye = 'ODVFNriW1wJxmAB9$ljgP5TpL4XzuGhta_S0eIb2Rk...",
+      "function ia(str) {",
+      "  var T = {};"
+    ],
+    "totalLines": 2248,
+    "tail": [
+      "function fibonacci(...__args) {",
+      "  var _n = __args.length | 0;",
+      "  return sf(\"74ivz\", __args, ub, this);",
+      "}"
+    ]
+  },
   "badges": {
-    "tests": "1,841",
-    "testsPassing": "1,841 passing",
+    "tests": "1,842",
+    "testsPassing": "1,842 passing",
     "opcodes": "300",
     "categories": "24",
-    "loc": "22.6k",
-    "totalLoc": "37.1k",
-    "overhead": "~39.5x",
-    "overheadMedian": "~39.9x",
-    "sizeRatioLow": "1328.3x",
-    "sizeRatioHigh": "1344.8x"
+    "loc": "23.0k",
+    "totalLoc": "37.6k",
+    "overhead": "~99.2x",
+    "overheadMedian": "~59.1x",
+    "sizeRatioLow": "517.8x",
+    "sizeRatioHigh": "517.9x"
   }
 }

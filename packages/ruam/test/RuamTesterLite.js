@@ -616,3 +616,4 @@ if (results.length > 0) {
 	summary += "\n" + results.join("\n");
 }
 console.log(summary);
+summary;

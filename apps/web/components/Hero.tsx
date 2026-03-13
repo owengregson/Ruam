@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowDown } from "@fortawesome/free-solid-svg-icons";
@@ -14,11 +14,10 @@ const scrambleChar = () =>
 
 /* ── Syntax color classes ── */
 const K = "text-syn-keyword";
-const F = "text-syn-fn";
-const P = "text-syn-param";
 const N = "text-syn-number";
 const S = "text-syn-string";
 const D = "text-snow";
+const CMT = "text-ash";
 
 interface Cell {
 	ch: string;
@@ -32,14 +31,105 @@ function line(...parts: Cell[][]): Cell[] {
 	return parts.flat();
 }
 
+/* ── Snippet type from stats.json ── */
+export interface HeroSnippet {
+	head: string[];
+	totalLines: number;
+	tail: string[];
+}
+
+/* ── JS syntax tokenizer (simple, for visual effect) ── */
+const JS_KEYWORDS = new Set([
+	"var",
+	"let",
+	"const",
+	"function",
+	"return",
+	"if",
+	"for",
+	"while",
+	"do",
+	"else",
+	"new",
+	"this",
+	"typeof",
+	"void",
+	"true",
+	"false",
+	"null",
+	"undefined",
+	"class",
+	"extends",
+]);
+
+function tokenizeLine(src: string): Cell[] {
+	const cells: Cell[] = [];
+	let i = 0;
+	while (i < src.length) {
+		const ch = src[i]!;
+		// String literals
+		if (ch === '"' || ch === "'") {
+			const quote = ch;
+			let j = i + 1;
+			while (j < src.length && src[j] !== quote) {
+				if (src[j] === "\\") j++;
+				j++;
+			}
+			j++; // closing quote
+			cells.push(...seg(src.slice(i, j), S));
+			i = j;
+		}
+		// Comments
+		else if (ch === "/" && src[i + 1] === "/") {
+			cells.push(...seg(src.slice(i), CMT));
+			break;
+		}
+		// Numbers (not part of identifiers)
+		else if (/[0-9]/.test(ch) && (i === 0 || !/[a-zA-Z_$]/.test(src[i - 1]!))) {
+			let j = i;
+			while (j < src.length && /[0-9.]/.test(src[j]!)) j++;
+			cells.push(...seg(src.slice(i, j), N));
+			i = j;
+		}
+		// Identifiers / keywords
+		else if (/[a-zA-Z_$]/.test(ch)) {
+			let j = i;
+			while (j < src.length && /[a-zA-Z0-9_$]/.test(src[j]!)) j++;
+			const word = src.slice(i, j);
+			cells.push(...seg(word, JS_KEYWORDS.has(word) ? K : D));
+			i = j;
+		}
+		// Everything else
+		else {
+			cells.push({ ch, cls: D });
+			i++;
+		}
+	}
+	return cells;
+}
+
+/* ── Build afterMap from snippet data (must match beforeMap line count) ── */
+function buildAfterMap(snippet: HeroSnippet): Cell[][] {
+	const target = beforeMap.length; // 8 lines
+	const tail = snippet.tail.map(tokenizeLine);
+	// 1 line reserved for the comment, rest split between head and tail
+	const headCount = target - tail.length - 1;
+	const head = snippet.head.slice(0, headCount).map(tokenizeLine);
+
+	const count = snippet.totalLines.toLocaleString("en-US");
+	return [
+		...head,
+		line(seg(`  // ... ${count}+ lines of VM runtime`, CMT)),
+		...tail,
+	];
+}
+
 /* ── Source code character map (syntax-colored) ── */
 const beforeMap: Cell[][] = [
 	line(
 		seg("function", K),
-		seg(" ", D),
-		seg("fibonacci", F),
-		seg("(", D),
-		seg("n", P),
+		seg(" fibonacci(", D),
+		seg("n", D),
 		seg(") {", D)
 	),
 	line(
@@ -74,102 +164,19 @@ const beforeMap: Cell[][] = [
 	line(seg("  ", D), seg("return", K), seg(" b;", D)),
 	line(seg("}", D)),
 ];
-
-/* ── Obfuscated code character map (based on real Ruam output) ── */
-const afterMap: Cell[][] = [
-	line(
-		seg("var", K),
-		seg(" _ru4m=!", D),
-		seg("0", N),
-		seg(";", D),
-		seg("var", K),
-		seg(" _khs={", D)
-	),
-	line(
-		seg("  ", D),
-		seg('"u_0000"', S),
-		seg(":{", D),
-		seg('"c"', S),
-		seg(":[", D)
-	),
-	line(
-		seg("    [", D),
-		seg("3187", N),
-		seg(",", D),
-		seg("60953", N),
-		seg(",", D),
-		seg("44909", N),
-		seg(",", D),
-		seg("53581", N),
-		seg("],", D)
-	),
-	line(
-		seg("    ", D),
-		seg('"i"', S),
-		seg(":[", D),
-		seg("250", N),
-		seg(",", D),
-		seg("0", N),
-		seg(",", D),
-		seg("78", N),
-		seg(",", D),
-		seg("0", N),
-		seg(",", D),
-		seg("209", N),
-		seg(",", D),
-		seg("0", N),
-		seg("],", D)
-	),
-	line(
-		seg("    ", D),
-		seg('"r"', S),
-		seg(":", D),
-		seg("9", N),
-		seg(",", D),
-		seg('"p"', S),
-		seg(":", D),
-		seg("1", N),
-		seg(",", D),
-		seg('"a"', S),
-		seg(":", D),
-		seg("false", K),
-		seg("}};", D)
-	),
-	line(seg("  ", D), seg("// ... 4500+ lines of VM runtime", D)),
-	line(seg("function", K), seg(" ", D), seg("fibonacci", F), seg("(n){", D)),
-	line(
-		seg("  ", D),
-		seg("return", K),
-		seg(" _mds.", D),
-		seg("call", F),
-		seg("(", D),
-		seg("this", K),
-		seg(",", D),
-		seg('"u_0000"', S),
-		seg(",", D),
-		seg("[n])}", D)
-	),
-];
-
-/* ── Normalize line lengths for stable layout ── */
 const beforeLens = beforeMap.map((r) => r.length);
-const afterLens = afterMap.map((r) => r.length);
-const MAX_COLS = Math.max(...beforeLens, ...afterLens);
-const LINE_COUNT = Math.max(beforeMap.length, afterMap.length);
 
-/* Per-line active columns — only scramble within actual content bounds */
-const activeCols: number[] = [];
-for (let li = 0; li < LINE_COUNT; li++) {
-	activeCols.push(Math.max(beforeLens[li] ?? 0, afterLens[li] ?? 0));
-}
-
-function pad(cells: Cell[]): Cell[] {
-	const padded = [...cells];
-	while (padded.length < MAX_COLS) padded.push({ ch: " ", cls: D });
-	return padded;
-}
-const beforePadded = beforeMap.map(pad);
-const afterPadded = afterMap.map(pad);
+/* ── Hardcoded fallback (must be same line count as beforeMap) ── */
+const defaultAfterMap: Cell[][] = [
+	line(seg("var", K), seg(" qv = {};", D)),
+	line(seg("var", K), seg(" wi = Object.create(", D), seg("null", K), seg(");", D)),
+	line(seg("var", K), seg(" od = ", D), seg("'cMGDq0EItS9gFzAosmU7y5akwh...'", S), seg(";", D)),
+	line(seg("  // ... 2,200+ lines of VM runtime", CMT)),
+	line(seg("function", K), seg(" fibonacci(...__args) {", D)),
+	line(seg("  ", D), seg("var", K), seg(" _n = __args.length | ", D), seg("0", N), seg(";", D)),
+	line(seg("  ", D), seg("return", K), seg(" tg(", D), seg('"hny2l"', S), seg(", __args, up, ", D), seg("this", K), seg(");", D)),
+	line(seg("}", D)),
+];
 
 /* ── Per-cell resolve time (organic cascade with noise) ── */
 function resolveTime(li: number, ci: number): number {
@@ -189,8 +196,48 @@ const CROSSFADE_MS = 500;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/* ── Animation config ── */
+interface AnimConfig {
+	beforePadded: Cell[][];
+	afterPadded: Cell[][];
+	beforeLens: number[];
+	afterLens: number[];
+	maxCols: number;
+	lineCount: number;
+	activeCols: number[];
+}
+
+function buildAnimConfig(afterMap: Cell[][]): AnimConfig {
+	const afterLens = afterMap.map((r) => r.length);
+	const maxCols = Math.max(...beforeLens, ...afterLens);
+	const lineCount = Math.max(beforeMap.length, afterMap.length);
+
+	const activeCols: number[] = [];
+	for (let li = 0; li < lineCount; li++) {
+		activeCols.push(Math.max(beforeLens[li] ?? 0, afterLens[li] ?? 0));
+	}
+
+	const pad = (cells: Cell[]): Cell[] => {
+		const padded = [...cells];
+		while (padded.length < maxCols) padded.push({ ch: " ", cls: D });
+		return padded;
+	};
+
+	return {
+		beforePadded: beforeMap.map(pad),
+		afterPadded: afterMap.map(pad),
+		beforeLens,
+		afterLens,
+		maxCols,
+		lineCount,
+		activeCols,
+	};
+}
+
 /* ── Animation hook ── */
-function useTerminalAnimation() {
+function useTerminalAnimation(config: AnimConfig) {
+	const { beforePadded, afterPadded, beforeLens: bLens, maxCols, lineCount, activeCols } = config;
+
 	const [cells, setCells] = useState<Cell[][]>(() =>
 		beforePadded.map((row) => row.map((c) => ({ ...c })))
 	);
@@ -216,18 +263,16 @@ function useTerminalAnimation() {
 					const colorsInThreshold = SCRAMBLE_DURATION - 800;
 					const newCells: Cell[][] = [];
 
-					for (let li = 0; li < LINE_COUNT; li++) {
+					for (let li = 0; li < lineCount; li++) {
 						const srcLine = source[li] ?? [];
 						const tgtLine = target[li] ?? [];
 						const row: Cell[] = [];
 						const maxActive = activeCols[li] ?? 0;
 
-						for (let ci = 0; ci < MAX_COLS; ci++) {
+						for (let ci = 0; ci < maxCols; ci++) {
 							const src = srcLine[ci] ?? { ch: " ", cls: D };
 							const tgt = tgtLine[ci] ?? { ch: " ", cls: D };
 
-							/* Skip padding — positions beyond both source and
-							   target content stay as invisible spaces */
 							if (ci >= maxActive) {
 								row.push({ ch: " ", cls: D });
 								continue;
@@ -235,21 +280,14 @@ function useTerminalAnimation() {
 
 							const rt = resolveTime(li, ci);
 							const srcLen = sourceLens[li] ?? 0;
-
-							/* Each char starts scrambling individually,
-							   500ms before its resolve time — creates
-							   a cascade wave instead of a global snap */
 							const scrambleStart = Math.max(0, rt - 500);
 
 							if (elapsed < rt) {
 								if (ci >= srcLen) {
-									// Beyond source content — invisible until resolved
 									row.push({ ch: " ", cls: D });
 								} else if (elapsed < scrambleStart) {
-									// Source char still visible, colors draining via CSS
 									row.push({ ch: src.ch, cls: "text-ash" });
 								} else {
-									// Within source content — scramble
 									const timeToResolve = rt - elapsed;
 									const isBright =
 										timeToResolve < 200 &&
@@ -262,8 +300,6 @@ function useTerminalAnimation() {
 									});
 								}
 							} else {
-								// Resolved — show target char
-								// Colors cascade in behind the resolve wave
 								const showColor =
 									elapsed > rt + COLOR_TRAIL_DELAY &&
 									elapsed > colorsInThreshold;
@@ -289,7 +325,7 @@ function useTerminalAnimation() {
 				};
 				rafRef.current = requestAnimationFrame(animate);
 			}),
-		[]
+		[lineCount, maxCols, activeCols]
 	);
 
 	useEffect(() => {
@@ -297,7 +333,6 @@ function useTerminalAnimation() {
 
 		const cycle = async () => {
 			while (!cancelledRef.current) {
-				// Show source code
 				setCells(beforePadded.map((row) => row.map((c) => ({ ...c }))));
 				setBarState({
 					label: "fibonacci.js",
@@ -307,22 +342,19 @@ function useTerminalAnimation() {
 				setGlowing(false);
 				setContentOpacity(1);
 
-				// Short initial hold, normal hold after
 				const hold = firstRun.current ? INITIAL_HOLD : HOLD_BEFORE;
 				firstRun.current = false;
 				await sleep(hold);
 				if (cancelledRef.current) return;
 
-				// Forward scramble
 				setBarState({
 					label: "compiling...",
 					badge: "compiling...",
 					badgeClass: "bg-accent/10 text-accent",
 				});
-				await runScramble(beforePadded, afterPadded, beforeLens);
+				await runScramble(beforePadded, afterPadded, bLens);
 				if (cancelledRef.current) return;
 
-				// Show obfuscated code
 				setBarState({
 					label: "fibonacci.protected.js",
 					badge: "protected",
@@ -332,13 +364,11 @@ function useTerminalAnimation() {
 				await sleep(HOLD_AFTER);
 				if (cancelledRef.current) return;
 
-				// Crossfade back to source (no reverse scramble)
 				setContentOpacity(0);
 				setGlowing(false);
 				await sleep(CROSSFADE_MS);
 				if (cancelledRef.current) return;
 
-				// Switch content while invisible
 				setCells(beforePadded.map((row) => row.map((c) => ({ ...c }))));
 				setBarState({
 					label: "fibonacci.js",
@@ -356,14 +386,20 @@ function useTerminalAnimation() {
 			cancelledRef.current = true;
 			cancelAnimationFrame(rafRef.current);
 		};
-	}, [runScramble]);
+	}, [runScramble, beforePadded, afterPadded, bLens]);
 
 	return { cells, barState, glowing, contentOpacity };
 }
 
 /* ── Component ── */
-export default function Hero() {
-	const { cells, barState, glowing, contentOpacity } = useTerminalAnimation();
+export default function Hero({ snippet }: { snippet?: HeroSnippet | null }) {
+	const config = useMemo(() => {
+		const afterMap = snippet ? buildAfterMap(snippet) : defaultAfterMap;
+		return buildAnimConfig(afterMap);
+	}, [snippet]);
+
+	const { cells, barState, glowing, contentOpacity } =
+		useTerminalAnimation(config);
 	const [tilt, setTilt] = useState({ x: 0, y: 0 });
 	const wrapperRef = useRef<HTMLDivElement>(null);
 
