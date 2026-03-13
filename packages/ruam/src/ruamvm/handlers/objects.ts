@@ -414,7 +414,10 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 				[
 					exprStmt(
 						assign(
-							index(id("_ex"), index(id("excludeKeys"), id("_ei"))),
+							index(
+								id("_ex"),
+								index(id("excludeKeys"), id("_ei"))
+							),
 							lit(1)
 						)
 					),
@@ -427,20 +430,14 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 			bin("<", id("ki"), member(id("keys"), "length")),
 			update("++", false, id("ki")),
 			[
-				ifStmt(
-					un("!", index(id("_ex"), index(id("keys"), id("ki")))),
-					[
-						exprStmt(
-							assign(
-								index(
-									id("target"),
-									index(id("keys"), id("ki"))
-								),
-								index(id("src"), index(id("keys"), id("ki")))
-							)
-						),
-					]
-				),
+				ifStmt(un("!", index(id("_ex"), index(id("keys"), id("ki")))), [
+					exprStmt(
+						assign(
+							index(id("target"), index(id("keys"), id("ki"))),
+							index(id("src"), index(id("keys"), id("ki")))
+						)
+					),
+				]),
 			]
 		),
 		breakStmt(),

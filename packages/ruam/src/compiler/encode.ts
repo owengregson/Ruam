@@ -460,9 +460,8 @@ function estimateSize(unit: BytecodeUnit): number {
 	size += 4; // constant count
 	for (const c of unit.constants) {
 		size += 1; // type tag
-		if (c.type === "string")
-			size +=
-				4 + c.value.length * 3; // covers both UTF-8 and u16 encoding
+		if (c.type === "string") size += 4 + c.value.length * 3;
+		// covers both UTF-8 and u16 encoding
 		else if (c.type === "number") size += 8;
 		else if (c.type === "bigint") size += 4 + c.value.length * 3;
 		else if (c.type === "regex") {

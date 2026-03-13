@@ -65,6 +65,7 @@ export interface HandlerCtx {
 	execAsync: string; // async exec function name
 	load: string; // loader function name
 	spreadSym: string; // spread marker Symbol name
+	hop: string; // cached Object.prototype.hasOwnProperty reference
 	depth: string; // recursion depth counter
 	callStack: string; // call stack for error messages
 	dbg: string; // debug log function name
@@ -130,6 +131,7 @@ export function makeHandlerCtx(
 		execAsync: names.execAsync,
 		load: names.load,
 		spreadSym: names.spreadSym,
+		hop: names.hop,
 		depth: names.depth,
 		callStack: names.callStack,
 		dbg: names.dbg,
@@ -152,19 +154,10 @@ export function makeHandlerCtx(
 		curSv: (key: JsNode = id("name")) => index(id(names.scope), key),
 		scopeWalk: (body: JsNode[], key: JsNode = id("name")): JsNode[] => [
 			whileStmt(id("s"), [
-				ifStmt(
-					call(
-						member(
-							member(
-								member(id("Object"), "prototype"),
-								"hasOwnProperty"
-							),
-							"call"
-						),
-						[id("s"), key]
-					),
-					[...body, breakStmt()]
-				),
+				ifStmt(call(member(id(names.hop), "call"), [id("s"), key]), [
+					...body,
+					breakStmt(),
+				]),
 				exprStmt(
 					assign(
 						id("s"),

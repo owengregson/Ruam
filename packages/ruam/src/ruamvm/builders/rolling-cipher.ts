@@ -33,8 +33,10 @@ const xor = (a: JsNode, b: JsNode): JsNode => bin("^", a, b);
 const ushr = (a: JsNode, n: number): JsNode => bin(">>>", a, lit(n));
 
 /** `imulAlias(a, b)` — uses the IIFE-scope alias for Math.imul */
-const makeImul = (imulName: string) => (a: JsNode, b: JsNode): JsNode =>
-	call(id(imulName), [a, b]);
+const makeImul =
+	(imulName: string) =>
+	(a: JsNode, b: JsNode): JsNode =>
+		call(id(imulName), [a, b]);
 
 /** `h ^= expr` — shorthand for `exprStmt(assign(id("h"), expr, "^"))` */
 const xorAssign = (target: string, value: JsNode): JsNode =>
@@ -148,7 +150,11 @@ function buildDeriveKeyFunction(
  * Advances the rolling cipher state by mixing in the decrypted opcode
  * and operand values using two multiply-xor rounds with avalanche shift.
  */
-function buildMixFunction(names: RuntimeNames, split?: SplitFn, imulId?: string): JsNode {
+function buildMixFunction(
+	names: RuntimeNames,
+	split?: SplitFn,
+	imulId?: string
+): JsNode {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const imul = makeImul(imulId ?? "Math.imul");
 	const h = id("h");

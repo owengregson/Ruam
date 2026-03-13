@@ -126,14 +126,18 @@ function SWAP(ctx: HandlerCtx): JsNode[] {
 	const second = index(id(ctx.S), bin("-", sLen, lit(2)));
 	return [
 		varDecl("_t", top),
-		exprStmt(assign(
-			index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))),
-			index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2)))
-		)),
-		exprStmt(assign(
-			index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))),
-			id("_t")
-		)),
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))),
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2)))
+			)
+		),
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))),
+				id("_t")
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -144,12 +148,27 @@ function ROT3(ctx: HandlerCtx): JsNode[] {
 	const sLen = member(id(ctx.S), "length");
 	const s = (offset: number) => index(id(ctx.S), bin("-", sLen, lit(offset)));
 	return [
-		varDecl("_c", s(1)),   // _c = S[S.length-1] (top)
-		varDecl("_b", s(2)),   // _b = S[S.length-2]
-		varDecl("_a", s(3)),   // _a = S[S.length-3]
-		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(3))), id("_c"))),
-		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))), id("_a"))),
-		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))), id("_b"))),
+		varDecl("_c", s(1)), // _c = S[S.length-1] (top)
+		varDecl("_b", s(2)), // _b = S[S.length-2]
+		varDecl("_a", s(3)), // _a = S[S.length-3]
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(3))),
+				id("_c")
+			)
+		),
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))),
+				id("_a")
+			)
+		),
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))),
+				id("_b")
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -163,10 +182,30 @@ function ROT4(ctx: HandlerCtx): JsNode[] {
 		varDecl("_c", index(id(ctx.S), bin("-", sLen, lit(2)))),
 		varDecl("_b", index(id(ctx.S), bin("-", sLen, lit(3)))),
 		varDecl("_a", index(id(ctx.S), bin("-", sLen, lit(4)))),
-		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(4))), id("_d"))),
-		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(3))), id("_a"))),
-		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))), id("_b"))),
-		exprStmt(assign(index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))), id("_c"))),
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(4))),
+				id("_d")
+			)
+		),
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(3))),
+				id("_a")
+			)
+		),
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))),
+				id("_b")
+			)
+		),
+		exprStmt(
+			assign(
+				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))),
+				id("_c")
+			)
+		),
 		breakStmt(),
 	];
 }

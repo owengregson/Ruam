@@ -25,9 +25,11 @@ import {
 	obj,
 	assign,
 	bin,
+	un,
 	call,
 	member,
 	id,
+	ternary,
 } from "./nodes.js";
 import { emit } from "./emit.js";
 import { buildFingerprintSource } from "./builders/fingerprint.js";
@@ -127,6 +129,44 @@ export function generateVmRuntime(options: {
 
 	// Spread marker symbol — tags spread arrays without object allocation
 	nodes.push(varDecl(names.spreadSym, call(id("Symbol"), [])));
+
+	// Cached built-in references — avoid repeated property chain lookups
+	nodes.push(
+		varDecl(
+			names.hop,
+			member(member(id("Object"), "prototype"), "hasOwnProperty")
+		)
+	);
+	nodes.push(
+		varDecl(
+			names.globalRef,
+			ternary(
+				bin("!==", un("typeof", id("globalThis")), lit("undefined")),
+				id("globalThis"),
+				ternary(
+					bin("!==", un("typeof", id("window")), lit("undefined")),
+					id("window"),
+					ternary(
+						bin(
+							"!==",
+							un("typeof", id("global")),
+							lit("undefined")
+						),
+						id("global"),
+						ternary(
+							bin(
+								"!==",
+								un("typeof", id("self")),
+								lit("undefined")
+							),
+							id("self"),
+							obj()
+						)
+					)
+				)
+			)
+		)
+	);
 
 	// TDZ sentinel — unique prototype-less object for temporal dead zone checks.
 	// Declared at IIFE scope so all interpreter invocations share the
@@ -332,6 +372,44 @@ export function generateShieldedVmRuntime(options: {
 
 	// Spread marker symbol — tags spread arrays without object allocation
 	nodes.push(varDecl(sharedNames.spreadSym, call(id("Symbol"), [])));
+
+	// Cached built-in references — avoid repeated property chain lookups
+	nodes.push(
+		varDecl(
+			sharedNames.hop,
+			member(member(id("Object"), "prototype"), "hasOwnProperty")
+		)
+	);
+	nodes.push(
+		varDecl(
+			sharedNames.globalRef,
+			ternary(
+				bin("!==", un("typeof", id("globalThis")), lit("undefined")),
+				id("globalThis"),
+				ternary(
+					bin("!==", un("typeof", id("window")), lit("undefined")),
+					id("window"),
+					ternary(
+						bin(
+							"!==",
+							un("typeof", id("global")),
+							lit("undefined")
+						),
+						id("global"),
+						ternary(
+							bin(
+								"!==",
+								un("typeof", id("self")),
+								lit("undefined")
+							),
+							id("self"),
+							obj()
+						)
+					)
+				)
+			)
+		)
+	);
 
 	// TDZ sentinel — shared across all groups
 	nodes.push(

@@ -617,10 +617,7 @@ function collectTopLevelBindings(body: t.Statement[]): string[] {
  * @param bindings - Top-level binding names to register.
  * @returns JS source string for the scope setup statements.
  */
-function buildScopeSetupCode(
-	psName: string,
-	bindings: string[]
-): string {
+function buildScopeSetupCode(psName: string, bindings: string[]): string {
 	const lines: string[] = [];
 	lines.push(`var ${psName}=Object.create(null);`);
 	for (const name of bindings) {
@@ -962,16 +959,14 @@ function assembleOutputFromParts(
 	const topLevelBindings = collectTopLevelBindings(ast.program.body);
 
 	// Build the program scope object.
-	const scopeCode = buildScopeSetupCode(
-		temps["_ps"]!,
-		topLevelBindings
-	);
+	const scopeCode = buildScopeSetupCode(temps["_ps"]!, topLevelBindings);
 	const scopeNodes = parse(scopeCode, { sourceType: "script" }).program.body;
 
 	const btInitNode = parse(btParts.init, { sourceType: "script" }).program
 		.body[0]!;
 	const btAssignNodes = btParts.assignments.map(
-		(s) => parse(s, { sourceType: "script" }).program.body[0]! as t.Statement
+		(s) =>
+			parse(s, { sourceType: "script" }).program.body[0]! as t.Statement
 	);
 	const runtimeNode = parse(runtimeSource, { sourceType: "script" }).program
 		.body[0]!;
@@ -1051,10 +1046,7 @@ function replaceFunctionBody(
 	node.params = [restParam];
 
 	if (node.type === "ArrowFunctionExpression") {
-		const arrowArgs: t.Expression[] = [
-			t.stringLiteral(unitId),
-			argsId,
-		];
+		const arrowArgs: t.Expression[] = [t.stringLiteral(unitId), argsId];
 		if (scopeVarName) {
 			arrowArgs.push(t.identifier(scopeVarName));
 		}
@@ -1067,10 +1059,7 @@ function replaceFunctionBody(
 	// Regular functions: call vm(id, args, scope, this) directly.
 	// The vm dispatcher handles this-boxing internally when TV is
 	// provided, so no .call() or Array.prototype.slice needed.
-	const vmArgs: t.Expression[] = [
-		t.stringLiteral(unitId),
-		argsId,
-	];
+	const vmArgs: t.Expression[] = [t.stringLiteral(unitId), argsId];
 	if (scopeVarName) {
 		vmArgs.push(t.identifier(scopeVarName));
 	} else {
@@ -1087,7 +1076,11 @@ function replaceFunctionBody(
 	const decoy = t.variableDeclaration("var", [
 		t.variableDeclarator(
 			t.identifier("_n"),
-			t.binaryExpression("|", t.memberExpression(argsId, t.identifier("length")), t.numericLiteral(0))
+			t.binaryExpression(
+				"|",
+				t.memberExpression(argsId, t.identifier("length")),
+				t.numericLiteral(0)
+			)
 		),
 	]);
 

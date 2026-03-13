@@ -156,10 +156,12 @@ describe("anti-reversing properties", () => {
 			// switches within individual handlers, not the main dispatch)
 			expect(cases.length).toBeLessThan(50);
 
-			// Should have multiple handler group arrays (2-4 groups)
+			// Should have at least one handler group array (sync uses flat
+			// single array for performance; async uses 2-4 groups for
+			// structural differentiation when present)
 			const groupArrayPattern = /\[function\s*\(/g;
 			const groups = [...out.matchAll(groupArrayPattern)];
-			expect(groups.length).toBeGreaterThanOrEqual(2);
+			expect(groups.length).toBeGreaterThanOrEqual(1);
 			expect(groups.length).toBeLessThanOrEqual(8); // sync + async
 
 			// Handler closures should be abundant
