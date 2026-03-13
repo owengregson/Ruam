@@ -143,6 +143,10 @@ export interface RuntimeNames {
 	// Built-in aliases (hoisted to IIFE scope for performance)
 	/** Local alias for Math.imul. */
 	imul: string;
+
+	// Closure factories (hoisted to IIFE scope)
+	/** Arrow closure factory function. */
+	mkArrow: string;
 }
 
 // --- TempNames ---
@@ -498,6 +502,7 @@ export function generateRuntimeNames(
 		routeMap: genName(),
 		alpha: genName(),
 		imul: genName(),
+		mkArrow: genName(),
 	};
 
 	// Generate temp names from the same LCG + used set
