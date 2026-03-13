@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { config } from "@fortawesome/fontawesome-svg-core";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import "./globals.css";
+import SiteProtection from "@/components/SiteProtection";
 
 config.autoAddCss = false;
 
@@ -33,7 +34,10 @@ export default function RootLayout({
 					rel="stylesheet"
 				/>
 			</head>
-			<body className="noise font-body antialiased">{children}</body>
+			<body className="noise font-body antialiased">
+				<SiteProtection />
+				{children}
+			</body>
 		</html>
 	);
 }
