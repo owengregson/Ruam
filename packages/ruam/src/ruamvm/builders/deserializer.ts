@@ -161,27 +161,26 @@ export function buildDeserializer(
 			returnStmt(id("x")),
 		]),
 
-		// str() { var n=this.u32(); var s=''; for(var i=0;i<n;i++){s+=String.fromCharCode(this.u8());} return s; }
+		// str() { var n=this.u32(); var a=[]; for(var i=0;i<n;i++){a.push(this.u8());} return String.fromCharCode.apply(null,a); }
 		method(DRS, [], [
 			varDecl("n", tcall(DU32)),
-			varDecl("s", lit("")),
+			varDecl("a", { type: "ArrayExpr", elements: [] }),
 			forStmt(
 				varDecl("i", lit(0)),
 				bin("<", id("i"), id("n")),
 				update("++", false, id("i")),
 				[
 					exprStmt(
-						assign(
-							id("s"),
-							call(member(id("String"), "fromCharCode"), [
-								tcall(DU8),
-							]),
-							"+"
-						)
+						call(member(id("a"), "push"), [tcall(DU8)])
 					),
 				]
 			),
-			returnStmt(id("s")),
+			returnStmt(
+				call(
+					member(member(id("String"), "fromCharCode"), "apply"),
+					[lit(null), id("a")]
+				)
+			),
 		]),
 	];
 
