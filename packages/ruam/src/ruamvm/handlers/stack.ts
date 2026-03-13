@@ -118,13 +118,22 @@ function DUP2(ctx: HandlerCtx): JsNode[] {
 
 // --- Swap / rotate handlers ---
 
-/** SWAP: swap top two elements. */
+/** SWAP: swap top two elements via direct index access (no pop/push). */
 function SWAP(ctx: HandlerCtx): JsNode[] {
+	// Direct index swap: var _t=S[S.length-1]; S[S.length-1]=S[S.length-2]; S[S.length-2]=_t;
+	const sLen = member(id(ctx.S), "length");
+	const top = index(id(ctx.S), bin("-", sLen, lit(1)));
+	const second = index(id(ctx.S), bin("-", sLen, lit(2)));
 	return [
-		varDecl("a", ctx.pop()),
-		varDecl("b", ctx.pop()),
-		exprStmt(ctx.push(id("a"))),
-		exprStmt(ctx.push(id("b"))),
+		varDecl("_t", top),
+		exprStmt(assign(
+			index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))),
+			index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2)))
+		)),
+		exprStmt(assign(
+			index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))),
+			id("_t")
+		)),
 		breakStmt(),
 	];
 }
