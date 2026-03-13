@@ -6,6 +6,8 @@ on:
     paths:
       - 'apps/web/**'
       - '.github/workflows/deploy.yml'
+    paths-ignore:
+      - 'packages/ruam/**'
 
 concurrency:
   group: deploy-pages
@@ -22,9 +24,9 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -44,7 +46,7 @@ jobs:
 
       - run: npx turbo run build --filter=web
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         with:
           path: apps/web/out
 

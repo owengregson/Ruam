@@ -26,9 +26,9 @@ jobs:
     name: Build, Test & Stats
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -59,7 +59,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: npx turbo run build --filter=web
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v4
         if: github.ref == 'refs/heads/main'
         with:
           path: apps/web/out
