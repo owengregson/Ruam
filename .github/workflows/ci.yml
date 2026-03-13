@@ -2,6 +2,8 @@ name: CI
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 on:
   push:
@@ -47,3 +49,35 @@ jobs:
         with:
           name: stats
           path: packages/ruam/stats.json
+
+      # Publish stats.json to GitHub Pages alongside the Next.js site
+      - name: Copy stats.json into site
+        if: github.ref == 'refs/heads/main'
+        run: cp packages/ruam/stats.json apps/web/public/stats.json
+
+      - name: Build site with stats
+        if: github.ref == 'refs/heads/main'
+        run: npx turbo run build --filter=web
+
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: apps/web/out
+
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    if: github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-pages
+      cancel-in-progress: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

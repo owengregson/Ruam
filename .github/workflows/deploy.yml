@@ -30,6 +30,18 @@ jobs:
           cache: npm
 
       - run: npm ci
+
+      # macOS-generated lockfile doesn't resolve Linux optional deps (npm/cli#4828).
+      - name: Fix rollup platform binary
+        run: |
+          ROLLUP_V=$(node -p "require('./node_modules/rollup/package.json').version")
+          npm install --no-save "@rollup/rollup-linux-x64-gnu@${ROLLUP_V}"
+
+      # Build ruam + collect stats so the site always includes stats.json
+      - run: npx turbo run build test stats --filter=ruam
+      - name: Copy stats.json into site
+        run: cp packages/ruam/stats.json apps/web/public/stats.json
+
       - run: npx turbo run build --filter=web
 
       - uses: actions/upload-pages-artifact@v3
