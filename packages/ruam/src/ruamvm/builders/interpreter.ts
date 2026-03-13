@@ -739,7 +739,16 @@ function buildScaffoldAST(
 
 	// Variable declarations
 	tryBody.push(varDecl(S, arr()));
-	tryBody.push(varDecl(R, newExpr(id("Array"), [member(id(U), "r")])));
+	// Build packed register array (no holes) for V8 fast element access
+	tryBody.push(varDecl(R, arr()));
+	tryBody.push(
+		forStmt(
+			varDecl("_rl", member(id(U), "r")),
+			bin(">", id("_rl"), lit(0)),
+			update("--", false, id("_rl")),
+			[exprStmt(call(member(id(R), "push"), [un("void", lit(0))]))]
+		)
+	);
 	tryBody.push(varDecl(IP, lit(0)));
 	tryBody.push(varDecl(C, member(id(U), "c")));
 	tryBody.push(varDecl(I, member(id(U), "i")));
