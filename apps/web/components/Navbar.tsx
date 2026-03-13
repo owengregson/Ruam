@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBars, faXmark, faTerminal } from "@fortawesome/free-solid-svg-icons";
+import { faBars, faXmark, faPlay } from "@fortawesome/free-solid-svg-icons";
 import { faGithub, faNpm } from "@fortawesome/free-brands-svg-icons";
 import { faBook } from "@fortawesome/free-solid-svg-icons";
 import Image from "next/image";
@@ -36,7 +36,7 @@ export default function Navbar() {
 		<header className="fixed top-0 z-40 w-full border-b border-edge/60 bg-void/80 backdrop-blur-xl">
 			<div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-6">
 				{/* Logo */}
-				<a href="#" className="flex items-center gap-2.5">
+				<a href={`${process.env.NEXT_PUBLIC_BASE_PATH || "/"}`} className="flex items-center gap-2.5">
 					<Image src={`${process.env.NEXT_PUBLIC_BASE_PATH}/ruam.svg`} alt="Ruam" width={26} height={26} />
 					<span className="font-display text-lg italic text-snow">
 						ruam
@@ -74,14 +74,14 @@ export default function Navbar() {
 				{/* CTA */}
 				<div className="hidden md:block">
 					<a
-						href="#get-started"
+						href={`${process.env.NEXT_PUBLIC_BASE_PATH}/playground`}
 						className="inline-flex items-center gap-2 rounded-md border border-accent/15 bg-accent/6 px-4 py-1.5 font-mono text-xs font-medium text-accent transition-all hover:border-accent/30 hover:bg-accent/12"
 					>
 						<FontAwesomeIcon
-							icon={faTerminal}
+							icon={faPlay}
 							className="h-3 w-3"
 						/>
-						get started
+						playground
 					</a>
 				</div>
 
@@ -123,14 +123,14 @@ export default function Navbar() {
 								</a>
 							))}
 							<a
-								href="#get-started"
+								href={`${process.env.NEXT_PUBLIC_BASE_PATH}/playground`}
 								className="mt-2 flex items-center justify-center gap-2 rounded-md border border-accent/15 bg-accent/6 px-4 py-2 font-mono text-xs text-accent"
 							>
 								<FontAwesomeIcon
-									icon={faTerminal}
+									icon={faPlay}
 									className="h-3 w-3"
 								/>
-								get started
+								playground
 							</a>
 						</nav>
 					</motion.div>

@@ -53,3 +53,9 @@ obfuscator-io-full.png
 
 # Git worktrees
 .worktrees/
+
+# Browser worker bundle (build artifact)
+apps/web/public/ruam-worker.mjs
+
+# Superpowers brainstorm sessions
+.superpowers/
