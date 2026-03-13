@@ -274,7 +274,7 @@ function buildCipherFunction(
 				exprStmt(
 					assign(
 						h,
-						call(member(id("Math"), "imul"), [
+						call(id(names.imul), [
 							xor(h, call(member(key, "charCodeAt"), [i])),
 							L(0x01000193),
 						])
@@ -305,7 +305,7 @@ function buildCipherFunction(
 						u32(
 							bin(
 								"+",
-								call(member(id("Math"), "imul"), [
+								call(id(names.imul), [
 									h,
 									L(1664525),
 								]),

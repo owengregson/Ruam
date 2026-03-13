@@ -32,9 +32,9 @@ const xor = (a: JsNode, b: JsNode): JsNode => bin("^", a, b);
 /** `a >>> n` */
 const ushr = (a: JsNode, n: number): JsNode => bin(">>>", a, lit(n));
 
-/** `Math.imul(a, b)` */
-const imul = (a: JsNode, b: JsNode): JsNode =>
-	call(member(id("Math"), "imul"), [a, b]);
+/** `imulAlias(a, b)` — uses the IIFE-scope alias for Math.imul */
+const makeImul = (imulName: string) => (a: JsNode, b: JsNode): JsNode =>
+	call(id(imulName), [a, b]);
 
 /** `h ^= expr` — shorthand for `exprStmt(assign(id("h"), expr, "^"))` */
 const xorAssign = (target: string, value: JsNode): JsNode =>
@@ -60,9 +60,10 @@ export function buildRollingCipherSource(
 	split?: SplitFn,
 	cipherSalt?: number
 ): JsNode[] {
+	const imulId = names.imul;
 	return [
-		buildDeriveKeyFunction(names, hasKeyAnchor, split, cipherSalt),
-		buildMixFunction(names, split),
+		buildDeriveKeyFunction(names, hasKeyAnchor, split, cipherSalt, imulId),
+		buildMixFunction(names, split, imulId),
 	];
 }
 
@@ -82,15 +83,17 @@ function buildDeriveKeyFunction(
 	names: RuntimeNames,
 	hasKeyAnchor: boolean,
 	split?: SplitFn,
-	cipherSalt?: number
+	cipherSalt?: number,
+	imulId?: string
 ): JsNode {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
+	const imul = makeImul(imulId ?? "Math.imul");
 	const h = id("h");
 	const u = id("u");
 	const k = id("k");
 	const FNV_PRIME = L(0x01000193);
 
-	// h = Math.imul(h ^ expr, FNV_PRIME)
+	// h = imul(h ^ expr, FNV_PRIME)
 	const fnvRound = (expr: JsNode): JsNode =>
 		exprStmt(assign(h, imul(xor(h, expr), FNV_PRIME)));
 
@@ -145,8 +148,9 @@ function buildDeriveKeyFunction(
  * Advances the rolling cipher state by mixing in the decrypted opcode
  * and operand values using two multiply-xor rounds with avalanche shift.
  */
-function buildMixFunction(names: RuntimeNames, split?: SplitFn): JsNode {
+function buildMixFunction(names: RuntimeNames, split?: SplitFn, imulId?: string): JsNode {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
+	const imul = makeImul(imulId ?? "Math.imul");
 	const h = id("h");
 	const a = id("a");
 	const b = id("b");
@@ -157,9 +161,9 @@ function buildMixFunction(names: RuntimeNames, split?: SplitFn): JsNode {
 		[
 			// var h = s;
 			varDecl("h", id("s")),
-			// h = Math.imul(h ^ a, 0x85EBCA6B) >>> 0;
+			// h = imul(h ^ a, 0x85EBCA6B) >>> 0;
 			exprStmt(assign(h, ushr(imul(xor(h, a), L(0x85ebca6b)), 0))),
-			// h = Math.imul(h ^ b, 0xC2B2AE35) >>> 0;
+			// h = imul(h ^ b, 0xC2B2AE35) >>> 0;
 			exprStmt(assign(h, ushr(imul(xor(h, b), L(0xc2b2ae35)), 0))),
 			// h ^= h >>> 16;
 			xorAssign("h", ushr(h, 16)),

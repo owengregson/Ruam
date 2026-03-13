@@ -402,7 +402,7 @@ function buildHandlerTableMeta(
 								">>>",
 								bin(
 									"^",
-									call(member(id("Math"), "imul"), [
+									call(id(names.imul), [
 										bin("^", id(htkName), id(htvName)),
 										L(0x45d9f3b),
 									]),
@@ -434,7 +434,7 @@ function buildHandlerTableMeta(
 						id(names.keyAnchor),
 						bin(
 							">>>",
-							call(member(id("Math"), "imul"), [
+							call(id(names.imul), [
 								bin(
 									"^",
 									id(names.keyAnchor),

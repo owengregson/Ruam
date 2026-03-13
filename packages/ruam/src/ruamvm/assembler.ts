@@ -122,6 +122,9 @@ export function generateVmRuntime(options: {
 	// "use strict" directive
 	nodes.push(exprStmt(lit("use strict")));
 
+	// Built-in alias — eliminate repeated member chain lookups
+	nodes.push(varDecl(names.imul, member(id("Math"), "imul")));
+
 	// TDZ sentinel — unique prototype-less object for temporal dead zone checks.
 	// Declared at IIFE scope so all interpreter invocations share the
 	// same sentinel identity (checked via `===`).
@@ -320,6 +323,9 @@ export function generateShieldedVmRuntime(options: {
 
 	// "use strict" directive
 	nodes.push(exprStmt(lit("use strict")));
+
+	// Built-in alias — eliminate repeated member chain lookups
+	nodes.push(varDecl(sharedNames.imul, member(id("Math"), "imul")));
 
 	// TDZ sentinel — shared across all groups
 	nodes.push(
