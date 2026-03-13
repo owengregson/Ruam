@@ -86,22 +86,20 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 						bin(
 							"&&",
 							index(id("callArgs"), id("ai")),
-							member(
+							index(
 								index(id("callArgs"), id("ai")),
-								"__spread__"
+								id(ctx.spreadSym)
 							)
 						),
 						[
+							// Spread value IS the array now — iterate directly
 							forStmt(
 								varDecl("si", lit(0)),
 								bin(
 									"<",
 									id("si"),
 									member(
-										member(
-											index(id("callArgs"), id("ai")),
-											"items"
-										),
+										index(id("callArgs"), id("ai")),
 										"length"
 									)
 								),
@@ -110,12 +108,9 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 									exprStmt(
 										call(member(id("flat"), "push"), [
 											index(
-												member(
-													index(
-														id("callArgs"),
-														id("ai")
-													),
-													"items"
+												index(
+													id("callArgs"),
+													id("ai")
 												),
 												id("si")
 											),
@@ -332,16 +327,11 @@ function SUPER_CALL(ctx: HandlerCtx): JsNode[] {
  * `S[P]={__spread__:true,items:Array.from(S[P])};break;`
  */
 function SPREAD_ARGS(ctx: HandlerCtx): JsNode[] {
+	// Tag the array with a Symbol instead of wrapping in a marker object
 	return [
-		exprStmt(
-			assign(
-				ctx.peek(),
-				obj(
-					["__spread__", lit(true)],
-					["items", call(member(id("Array"), "from"), [ctx.peek()])]
-				)
-			)
-		),
+		varDecl("_sa", call(member(id("Array"), "from"), [ctx.peek()])),
+		exprStmt(assign(index(id("_sa"), id(ctx.spreadSym)), lit(true))),
+		exprStmt(assign(ctx.peek(), id("_sa"))),
 		breakStmt(),
 	];
 }

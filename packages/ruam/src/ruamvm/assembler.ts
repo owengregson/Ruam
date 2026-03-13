@@ -168,6 +168,9 @@ export function generateVmRuntime(options: {
 	// Built-in alias — eliminate repeated member chain lookups
 	nodes.push(varDecl(names.imul, member(id("Math"), "imul")));
 
+	// Spread marker symbol — tags spread arrays without object allocation
+	nodes.push(varDecl(names.spreadSym, call(id("Symbol"), [])));
+
 	// TDZ sentinel — unique prototype-less object for temporal dead zone checks.
 	// Declared at IIFE scope so all interpreter invocations share the
 	// same sentinel identity (checked via `===`).
@@ -372,6 +375,9 @@ export function generateShieldedVmRuntime(options: {
 
 	// Built-in alias — eliminate repeated member chain lookups
 	nodes.push(varDecl(sharedNames.imul, member(id("Math"), "imul")));
+
+	// Spread marker symbol — tags spread arrays without object allocation
+	nodes.push(varDecl(sharedNames.spreadSym, call(id("Symbol"), [])));
 
 	// TDZ sentinel — shared across all groups
 	nodes.push(

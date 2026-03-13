@@ -147,6 +147,10 @@ export interface RuntimeNames {
 	// Closure factories (hoisted to IIFE scope)
 	/** Arrow closure factory function. */
 	mkArrow: string;
+
+	// Spread marker
+	/** Spread marker Symbol. */
+	spreadSym: string;
 }
 
 // --- TempNames ---
@@ -503,6 +507,7 @@ export function generateRuntimeNames(
 		alpha: genName(),
 		imul: genName(),
 		mkArrow: genName(),
+		spreadSym: genName(),
 	};
 
 	// Generate temp names from the same LCG + used set
@@ -533,6 +538,7 @@ const SHARED_NAME_KEYS = [
 	"tdzSentinel",
 	"alpha",
 	"imul",
+	"spreadSym",
 ] as const;
 
 /**
