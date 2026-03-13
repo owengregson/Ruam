@@ -134,3 +134,19 @@ section[id] {
 .cursor-blink {
 	animation: blink 1s step-end infinite;
 }
+
+/* ── Site protection ── */
+.terminal,
+header,
+footer,
+button,
+a {
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+img {
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-user-drag: none;
+}

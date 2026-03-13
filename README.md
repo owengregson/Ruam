@@ -16,18 +16,18 @@ No deobfuscator exists for RuamVM bytecode.</p>
 <img src="https://img.shields.io/badge/license-LGPL--2.1-yellow?style=flat-square&logo=googledocs&logoColor=white" alt="LGPL-2.1">
 <img src="https://img.shields.io/badge/typescript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript Strict">
 
-<!-- Dynamic badges — auto-update from packages/ruam/stats.json on main -->
-<!--<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.testsPassing&label=tests&color=4CAF50&style=flat-square&logo=vitest&logoColor=white" alt="Tests Passing">
+<br>
+
+<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.testsPassing&label=tests&color=4CAF50&style=flat-square&logo=vitest&logoColor=white" alt="Tests Passing">
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.opcodes&label=opcodes&color=5C6BC0&style=flat-square" alt="Opcodes">
 <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.loc&label=source&suffix=%20LoC&color=607D8B&style=flat-square" alt="Lines of Code">
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.overhead&label=VM%20overhead&color=FF9800&style=flat-square" alt="VM Overhead">
+<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.overheadMedian&label=VM%20overhead%20(median)&color=FF9800&style=flat-square" alt="VM Overhead">
 
-<br><br>-->
+<br><br>
 
 <a href="#installation">Installation</a>&ensp;&middot;&ensp;
 <a href="#quick-start">Quick Start</a>&ensp;&middot;&ensp;
 <a href="#how-it-works">How It Works</a>&ensp;&middot;&ensp;
-<a href="#protection-layers">Layers</a>&ensp;&middot;&ensp;
 <a href="#presets">Presets</a>&ensp;&middot;&ensp;
 <a href="#api-reference">API</a>
 
@@ -38,11 +38,11 @@ No deobfuscator exists for RuamVM bytecode.</p>
 <h2 id="why-ruam">Why Ruam?</h2>
 
 <p>
-  Most JavaScript obfuscators apply surface-level <i>transformations</i> &mdash; renaming variables, encoding strings, inserting dead code. A motivated attacker can understand your code with off-the-shelf tools, logic analysis, or by patching functions at runtime.
+  Most JavaScript obfuscators apply surface-level <i>transformations</i> &mdash; renaming variables, encoding strings, inserting dead code. A motivated attacker can undo these with off-the-shelf tools, logic analysis, or by patching functions at runtime.
 </p>
 
 <p>
-  <strong>Ruam takes a fundamentally different approach.</strong> It <i>compiles</i> your JavaScript into a custom bytecode instruction set and replaces the original source with a compact virtual machine that executes an unintelligible instruction stream.
+  <strong>Ruam takes a fundamentally different approach.</strong> It <i>compiles</i> your JavaScript into a custom bytecode instruction set and replaces the original source with a compact virtual machine that executes an unintelligible instruction stream. The original code is destroyed &mdash; it does not exist anywhere in the output.
 </p>
 
 <table>
@@ -76,27 +76,27 @@ No deobfuscator exists for RuamVM bytecode.</p>
   <tbody>
     <tr>
       <td><strong>300+ opcode custom ISA</strong></td>
-      <td>A nearly full-coverage instruction set across 26 categories &mdash; stack, arithmetic, bitwise, comparison, control flow, property access, scoping, calls, classes, iterators, destructuring, async/await, generators, and more.</td>
+      <td>Full-coverage instruction set spanning 26 categories &mdash; stack, arithmetic, bitwise, comparison, control flow, property access, scoping, calls, classes, iterators, destructuring, async/await, generators, and more.</td>
     </tr>
     <tr>
       <td><strong>Per-build polymorphism</strong></td>
-      <td>Every build is structurally unique. Opcode assignments are shuffled via seeded Fisher-Yates permutation &mdash; the same logical instruction maps to different physical values each time. No two builds share the same encoding.</td>
+      <td>Every build produces structurally unique output. No two builds share the same encoding, identifier names, or internal structure &mdash; even from the same source.</td>
     </tr>
     <tr>
-      <td><strong>Rolling cipher encryption</strong></td>
-      <td>Every instruction is XOR-encrypted with a position-dependent rolling state. The master key is implicitly derived from bytecode metadata via FNV-1a &mdash; no key appears in the output.</td>
+      <td><strong>Multi-layer encryption</strong></td>
+      <td>Bytecode is encrypted with multiple independent layers. Keys are derived implicitly from the output's own structure &mdash; no key material appears in plaintext.</td>
     </tr>
     <tr>
-      <td><strong>Integrity binding</strong></td>
-      <td>A hash of the VM interpreter is woven into the decryption key. If an attacker modifies the VM (e.g. to add logging), all bytecode decryption produces garbage.</td>
+      <td><strong>Anti-tamper binding</strong></td>
+      <td>The VM's decryption logic is entangled with its own source. Modifying the interpreter to add logging or breakpoints corrupts all decryption &mdash; the bytecode becomes unrecoverable.</td>
     </tr>
     <tr>
       <td><strong>Optimizing compiler</strong></td>
-      <td>Register promotion, superinstruction fusion, peephole optimization, and inline stack ops minimize the performance cost of virtualization.</td>
+      <td>Multi-tier optimization pipeline minimizes the performance cost of virtualization. Fused instructions, register promotion, and inline operations keep overhead competitive for a JS-in-JS interpreter.</td>
     </tr>
     <tr>
-      <td><strong>Thousands of tests passing</strong></td>
-      <td>Comprehensive coverage of core JS semantics, stress/edge cases, security properties, and integration scenarios &mdash; including randomized fuzz tests.</td>
+      <td><strong>Thousands of tests</strong></td>
+      <td>Comprehensive test suite covering core JS semantics, stress/edge cases, security properties, and integration scenarios &mdash; including randomized fuzz tests.</td>
     </tr>
   </tbody>
 </table>
@@ -124,7 +124,10 @@ ruam app.js -o app.obf.js
 ruam dist/ --preset medium
 
 # Maximum protection
-ruam dist/ --preset high</code></pre>
+ruam dist/ --preset max
+
+# Interactive wizard (or just run `ruam` with no args)
+ruam -I</code></pre>
 
 <h3>Programmatic API</h3>
 
@@ -140,7 +143,7 @@ await obfuscateFile("src/app.js", "dist/app.js");
 await runVmObfuscation("dist/", {
   include: ["**/*.js"],
   exclude: ["**/node_modules/**"],
-  options: { preset: "high" },
+  options: { preset: "max" },
 });</code></pre>
 
 <h3>Selective Obfuscation</h3>
@@ -160,58 +163,54 @@ function publicHelper() {
 
 <hr>
 
-<h2 id="protection-layers">Protection Layers</h2>
+<h2 id="how-it-works">How It Works</h2>
 
-<p>Ruam applies six independent layers that compound the difficulty of reverse engineering. Each layer forces an attacker to solve a distinct problem.</p>
+<p>Ruam applies multiple independent protection layers that compound the difficulty of reverse engineering. Each layer forces an attacker to solve a distinct problem before they can make progress on the next.</p>
 
 <table>
   <thead>
     <tr>
-      <th width="30">Layer</th>
-      <th width="200">Name</th>
-      <th>What it does</th>
-      <th width="160">Defeats</th>
+      <th width="200">Layer</th>
+      <th>Description</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td align="center"><strong>1</strong></td>
       <td><strong>Virtualization</strong></td>
-      <td>Original JS is compiled to custom bytecode. An attacker must reverse-engineer the entire VM to even begin recovering logic.</td>
-      <td>Source recovery, AST analysis</td>
+      <td>Original JS is compiled to a custom bytecode ISA. The source code is destroyed &mdash; an attacker must reverse-engineer the entire VM to recover any logic.</td>
     </tr>
     <tr>
-      <td align="center"><strong>2</strong></td>
-      <td><strong>Polymorphic Encoding</strong></td>
-      <td>Opcode-to-instruction mapping is shuffled per build via seeded Fisher-Yates. Reversing one build gives zero knowledge about any other.</td>
-      <td>Pattern reuse, universal decompilers</td>
+      <td><strong>Polymorphic encoding</strong></td>
+      <td>The instruction encoding, identifiers, and internal structure are randomized per build. Reversing one build provides zero reusable knowledge about any other build.</td>
     </tr>
     <tr>
-      <td align="center"><strong>3</strong></td>
-      <td><strong>Rolling Cipher</strong></td>
-      <td>Every instruction is encrypted with a position-dependent XOR. The key is derived from bytecode metadata via FNV-1a &mdash; no seed appears in output. Decryption requires sequential execution from instruction 0.</td>
-      <td>Static analysis, random-access disassembly</td>
+      <td><strong>Instruction encryption</strong></td>
+      <td>Every instruction is individually encrypted. The key is derived from properties of the output itself &mdash; no key material is stored in plaintext. Sequential decryption is required; you cannot jump into the middle of a bytecode stream.</td>
     </tr>
     <tr>
-      <td align="center"><strong>4</strong></td>
-      <td><strong>Integrity Binding</strong></td>
-      <td>The rolling cipher's base key incorporates a hash of the VM source. Any modification to the interpreter (logging, patching, breakpoints) changes the hash, corrupting all decryption.</td>
-      <td>VM instrumentation, dynamic analysis</td>
+      <td><strong>Integrity binding</strong></td>
+      <td>The decryption process is entangled with the VM interpreter's own source. Modifying the VM in any way (adding logging, setting breakpoints, patching behavior) silently corrupts all decryption.</td>
     </tr>
     <tr>
-      <td align="center"><strong>5</strong></td>
-      <td><strong>String Obfuscation</strong></td>
-      <td>All string constants in the bytecode (variable names, property keys, literals) are XOR-encoded with an LCG key stream. No plaintext survives compilation.</td>
-      <td>String scanning, grep-based analysis</td>
+      <td><strong>VM shielding</strong></td>
+      <td>Each function can receive its own isolated micro-interpreter with unique encoding, encryption keys, and internal structure. Reversing one function's interpreter does not help with any other.</td>
     </tr>
     <tr>
-      <td align="center"><strong>6</strong></td>
-      <td><strong>Identifier Randomization</strong></td>
-      <td>All internal VM identifiers are replaced with random names from the build seed. Combined with opcode shuffling, the VM structure looks different every time.</td>
-      <td>Structural fingerprinting, signature matching</td>
+      <td><strong>String encoding</strong></td>
+      <td>All string constants in the bytecode are independently encrypted. No plaintext strings survive compilation &mdash; not variable names, property keys, or literal values.</td>
+    </tr>
+    <tr>
+      <td><strong>Anti-debug</strong></td>
+      <td>Multi-layered runtime detection with escalating response. No <code>eval()</code>, <code>new Function()</code>, <code>debugger</code> statements, or <code>console</code> calls &mdash; fully compatible with strict CSP environments including Chrome extensions.</td>
+    </tr>
+    <tr>
+      <td><strong>Arithmetic obfuscation</strong></td>
+      <td>Arithmetic and bitwise operations within the interpreter are replaced with mathematically equivalent but opaque compound expressions, making the interpreter logic harder to follow.</td>
     </tr>
   </tbody>
 </table>
+
+<p><i>Additional hardening options include dead bytecode injection, stack value encryption, decoy opcode handlers, and handler fragmentation &mdash; all configurable independently or via presets.</i></p>
 
 <hr>
 
@@ -235,18 +234,18 @@ function publicHelper() {
     </tr>
     <tr>
       <td><strong><code>medium</code></strong></td>
-      <td>+ identifier renaming, bytecode encryption, rolling cipher, decoy &amp; dynamic opcodes</td>
+      <td>+ identifier renaming, bytecode encryption, instruction encryption, decoy &amp; dynamic opcodes</td>
       <td>Production &mdash; balanced protection and size</td>
     </tr>
     <tr>
-      <td><strong><code>high</code></strong></td>
-      <td>+ debug protection, integrity binding, dead code injection, stack encoding</td>
+      <td><strong><code>max</code></strong></td>
+      <td>Everything &mdash; all encryption layers, VM shielding, debug protection, integrity binding, arithmetic obfuscation, dead code, stack encoding, handler fragmentation</td>
       <td>High-value targets &mdash; maximum protection</td>
     </tr>
   </tbody>
 </table>
 
-<pre><code>ruam dist/ --preset high</code></pre>
+<pre><code>ruam dist/ --preset max</code></pre>
 
 <pre><code>obfuscateCode(source, {
   preset: "medium",
@@ -257,44 +256,9 @@ function publicHelper() {
 
 <h2 id="performance">Performance</h2>
 
-<p>Virtualization inherently adds overhead &mdash; this is the tradeoff for protection that surface-level transforms cannot provide. Ruam's compiler includes several optimizations to minimize the cost:</p>
+<p>Virtualization inherently adds overhead &mdash; this is the tradeoff for protection that surface-level transforms cannot provide. Ruam's multi-tier optimization pipeline minimizes the cost.</p>
 
-<table>
-  <thead>
-    <tr>
-      <th>Optimization</th>
-      <th>Technique</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>Register promotion</strong></td>
-      <td>Non-captured locals bypass the scope chain via O(1) register access</td>
-    </tr>
-    <tr>
-      <td><strong>Superinstructions</strong></td>
-      <td>~22 fused opcodes (e.g. <code>REG_ADD</code>, <code>REG_LT_CONST_JF</code>) reduce dispatch count</td>
-    </tr>
-    <tr>
-      <td><strong>Inline stack ops</strong></td>
-      <td>Push/pop/peek inlined directly (<code>S[++P]=val</code>) &mdash; zero function call overhead</td>
-    </tr>
-    <tr>
-      <td><strong>Direct closure dispatch</strong></td>
-      <td>Closures call <code>exec()</code> directly with pre-loaded units, bypassing the load chain</td>
-    </tr>
-    <tr>
-      <td><strong>Int32Array storage</strong></td>
-      <td>Bytecode loaded into typed arrays for fast indexed access</td>
-    </tr>
-    <tr>
-      <td><strong>Compound opcodes</strong></td>
-      <td><code>i++</code> compiles to 1 op instead of 6 (e.g. <code>POST_INC_SCOPED</code>, <code>ADD_ASSIGN_REG</code>)</td>
-    </tr>
-  </tbody>
-</table>
-
-<p>Typical overhead: <strong>~38&ndash;45x native speed</strong> on compute-heavy benchmarks, competitive for a pure JS-in-JS interpreter. The theoretical floor for this approach is ~25x native.</p>
+<p>Typical overhead: <strong>~38&ndash;45x native speed</strong> on compute-heavy benchmarks, competitive for a pure JS-in-JS interpreter.</p>
 
 <p><i>Use <a href="#quick-start">selective obfuscation</a> (<code>-m comment</code>) to protect only sensitive functions and leave hot paths running as native JS.</i></p>
 
@@ -305,35 +269,41 @@ function publicHelper() {
 <pre><code>ruam &lt;input&gt; [options]
 
 Presets:
-  --preset &lt;name&gt;           Apply a preset: low, medium, high
+  --preset &lt;name&gt;           Apply a preset: low, medium, max
 
 Output:
   -o, --output &lt;path&gt;       Output file or directory (default: overwrite input)
 
 Compilation:
   -m, --mode &lt;mode&gt;         Target mode: "root" (default) or "comment"
-  -e, --encrypt             Enable bytecode encryption (RC4 + environment fingerprint)
+  -e, --encrypt             Enable bytecode encryption
   -p, --preprocess          Rename all identifiers before compilation
 
 Security:
-  -d, --debug-protection    Inject anti-debugger timing loop
-  --rolling-cipher          Rolling cipher on bytecode instructions
+  -d, --debug-protection    Enable anti-debugger protection
+  --no-debug-protection     Disable anti-debugger (overrides preset)
+  --rolling-cipher          Enable instruction encryption
   --integrity-binding       Bind decryption to interpreter integrity
+  --vm-shielding            Per-function isolated micro-interpreters
 
 Hardening:
-  --dynamic-opcodes         Filter unused opcodes and shuffle case order
-  --decoy-opcodes           Add fake opcode handlers to the interpreter
+  --dynamic-opcodes         Filter unused opcodes from the interpreter
+  --decoy-opcodes           Add fake opcode handlers
   --dead-code               Inject dead bytecode sequences
   --stack-encoding          Encrypt values on the VM stack
+  --mba                     Arithmetic obfuscation (mixed boolean arithmetic)
+  --handler-fragmentation   Split handler logic into interleaved fragments
+
+Environment:
+  --target &lt;env&gt;            Target environment: node, browser (default), browser-extension
 
 File Selection:
   --include &lt;glob&gt;          File glob for directory mode (default: "**/*.js")
   --exclude &lt;glob&gt;          Exclude glob (default: "**/node_modules/**")
 
-Debug:
+Other:
   --debug-logging           Inject verbose VM trace logging
-
-Info:
+  -I, --interactive         Launch interactive configuration wizard
   -h, --help                Show help
   -v, --version             Show version</code></pre>
 
@@ -358,7 +328,7 @@ const output = obfuscateCode(source, {
 
 <pre><code>import { obfuscateFile } from "ruam";
 
-await obfuscateFile("src/app.js", "dist/app.js", { preset: "high" });</code></pre>
+await obfuscateFile("src/app.js", "dist/app.js", { preset: "max" });</code></pre>
 
 <h3><code>runVmObfuscation(directory, config?)</code></h3>
 
@@ -386,7 +356,7 @@ await runVmObfuscation("dist/", {
   <tbody>
     <tr>
       <td><code>preset</code></td>
-      <td><code>"low" | "medium" | "high"</code></td>
+      <td><code>"low" | "medium" | "max"</code></td>
       <td>&mdash;</td>
       <td>Apply a preset configuration</td>
     </tr>
@@ -403,52 +373,58 @@ await runVmObfuscation("dist/", {
       <td>Probability (0&ndash;1) that an eligible function is compiled</td>
     </tr>
     <tr>
+      <td><code>target</code></td>
+      <td><code>"node" | "browser" | "browser-extension"</code></td>
+      <td><code>"browser"</code></td>
+      <td>Target execution environment</td>
+    </tr>
+    <tr>
       <td><code>preprocessIdentifiers</code></td>
       <td><code>boolean</code></td>
       <td><code>false</code></td>
-      <td>Rename all local identifiers to hex names before compilation</td>
+      <td>Rename all local identifiers before compilation</td>
     </tr>
     <tr>
       <td><code>encryptBytecode</code></td>
       <td><code>boolean</code></td>
       <td><code>false</code></td>
-      <td>RC4-encrypt bytecode using an environment fingerprint key</td>
-    </tr>
-    <tr>
-      <td><code>debugProtection</code></td>
-      <td><code>boolean</code></td>
-      <td><code>false</code></td>
-      <td>Inject anti-debugger timing side-channel</td>
-    </tr>
-    <tr>
-      <td><code>debugLogging</code></td>
-      <td><code>boolean</code></td>
-      <td><code>false</code></td>
-      <td>Inject verbose trace logging into the interpreter</td>
+      <td>Encrypt bytecode using an environment fingerprint key</td>
     </tr>
     <tr>
       <td><code>rollingCipher</code></td>
       <td><code>boolean</code></td>
       <td><code>false</code></td>
-      <td>Position-dependent instruction encryption with implicit key</td>
+      <td>Per-instruction encryption with implicit key derivation</td>
     </tr>
     <tr>
       <td><code>integrityBinding</code></td>
       <td><code>boolean</code></td>
       <td><code>false</code></td>
-      <td>Bind decryption to interpreter source integrity</td>
+      <td>Bind decryption to interpreter source integrity (auto-enables <code>rollingCipher</code>)</td>
+    </tr>
+    <tr>
+      <td><code>vmShielding</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Per-function micro-interpreters with unique encoding (auto-enables <code>rollingCipher</code>)</td>
+    </tr>
+    <tr>
+      <td><code>debugProtection</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Multi-layered anti-debugger with escalating response</td>
     </tr>
     <tr>
       <td><code>dynamicOpcodes</code></td>
       <td><code>boolean</code></td>
       <td><code>false</code></td>
-      <td>Filter unused opcodes, shuffle case order</td>
+      <td>Filter unused opcodes from the interpreter</td>
     </tr>
     <tr>
       <td><code>decoyOpcodes</code></td>
       <td><code>boolean</code></td>
       <td><code>false</code></td>
-      <td>Add fake opcode handlers</td>
+      <td>Add fake opcode handlers to the interpreter</td>
     </tr>
     <tr>
       <td><code>deadCodeInjection</code></td>
@@ -462,82 +438,76 @@ await runVmObfuscation("dist/", {
       <td><code>false</code></td>
       <td>Encrypt values on the VM stack at runtime</td>
     </tr>
+    <tr>
+      <td><code>mixedBooleanArithmetic</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Replace arithmetic/bitwise ops with opaque MBA expressions</td>
+    </tr>
+    <tr>
+      <td><code>handlerFragmentation</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Split opcode handlers into interleaved fragments</td>
+    </tr>
+    <tr>
+      <td><code>debugLogging</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Inject verbose trace logging into the interpreter</td>
+    </tr>
   </tbody>
 </table>
 
 <hr>
 
-<h2 id="architecture">Architecture</h2>
+<h2 id="supported-syntax">Supported Syntax</h2>
 
-<details>
-<summary><strong>Project structure</strong> &mdash; ~30 source files, ~8,300 lines of TypeScript</summary>
+<p>Ruam compiles the full range of modern JavaScript:</p>
 
-<br>
+<ul>
+  <li>Functions (declarations, expressions, arrows, generators, async, async generators)</li>
+  <li>Classes (inheritance, constructors, methods, getters/setters, computed properties, static members, <code>super</code>)</li>
+  <li>Control flow (<code>if</code>, <code>for</code>, <code>for-in</code>, <code>for-of</code>, <code>while</code>, <code>do-while</code>, <code>switch</code>, labeled statements)</li>
+  <li>Exception handling (<code>try</code>/<code>catch</code>/<code>finally</code>, <code>throw</code>)</li>
+  <li>Destructuring (array and object patterns, defaults, rest elements, nested)</li>
+  <li>Spread/rest (<code>...args</code> in calls, arrays, and object literals)</li>
+  <li>Closures and lexical scoping (<code>let</code>/<code>const</code> with proper TDZ, per-iteration bindings)</li>
+  <li>Async/await, generators (<code>yield</code>, <code>yield*</code>), async generators</li>
+  <li>Template literals, tagged templates, optional chaining, nullish coalescing</li>
+  <li>Computed property names, shorthand properties/methods, symbol keys</li>
+</ul>
 
-<pre>
-src/
-  index.ts                  Public API (obfuscateCode, obfuscateFile, runVmObfuscation)
-  cli.ts                    CLI entry point (bin: ruam)
-  transform.ts              Orchestrator: parse → compile → assemble
-  types.ts                  TypeScript interfaces
-  constants.ts              Shared constants (parser plugins, globals, limits)
-  presets.ts                Preset definitions + resolveOptions()
-  preprocess.ts             Identifier renaming preprocessor
+<hr>
 
-  compiler/
-    index.ts                Function compilation entry point
-    opcodes.ts              300-opcode ISA + per-file shuffle map
-    emitter.ts              Bytecode emitter + constant pool
-    scope.ts                Scope analysis + register allocation
-    capture-analysis.ts     Captured vs non-captured local detection
-    optimizer.ts            Peephole optimizer (constant folding, jump threading, fusion)
-    encode.ts               Bytecode serialization (JSON + binary + RC4) + string encoding
-    visitors/
-      statements.ts         Statement compilation (if, for, while, switch, try, etc.)
-      expressions.ts        Expression compilation (calls, members, operators, etc.)
-      classes.ts            Class compilation (methods, properties, super, inheritance)
-      patterns.ts           Destructuring pattern compilation
+<h2 id="target-environments">Target Environments</h2>
 
-  runtime/
-    vm.ts                   VM runtime code generator (~100 lines, assembles IIFE)
-    names.ts                RuntimeNames interface + per-build randomized identifiers
-    fingerprint.ts          Environment fingerprinting for encryption
-    decoder.ts              RC4 + base64 codec + string constant XOR decoder
-    rolling-cipher.ts       Rolling cipher: position-dependent encryption + implicit key
-    templates/
-      interpreter.ts        Core interpreter (sync + async exec, 300-opcode switch)
-      loader.ts             Bytecode loader, cache, depth tracking
-      runners.ts            VM dispatch functions (run/runAsync)
-      deserializer.ts       Binary bytecode deserializer
-      debug-protection.ts   Anti-debugger timing side-channel
-      debug-logging.ts      Debug trace infrastructure
-      globals.ts            Global exposure (globalThis binding)
-</pre>
+<p>Use <code>--target</code> to optimize output for your deployment environment:</p>
 
-</details>
+<table>
+  <thead>
+    <tr>
+      <th>Target</th>
+      <th>Description</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>browser</code></td>
+      <td>Plain <code>&lt;script&gt;</code> tags. <strong>Default.</strong></td>
+    </tr>
+    <tr>
+      <td><code>node</code></td>
+      <td>Node.js (CJS or ESM modules).</td>
+    </tr>
+    <tr>
+      <td><code>browser-extension</code></td>
+      <td>Chrome extension MAIN world content scripts. Wraps output to avoid TrustedScript CSP errors.</td>
+    </tr>
+  </tbody>
+</table>
 
-<details>
-<summary><strong>Test suite</strong> &mdash; 1,500+ tests across ~25 files</summary>
-
-<br>
-
-<pre>
-test/
-  helpers.ts                Shared utility (wraps obfuscateCode + eval for round-trip verification)
-
-  core/                     Core JS language feature tests
-                            (arithmetic, strings, arrays, objects, functions, closures,
-                             control flow, classes, destructuring, async/await, generators, etc.)
-
-  stress/                   Stress tests, VM-breaker patterns, performance benchmarks,
-                            randomized fuzz tests (822 randomized iterations)
-
-  security/                 Anti-reversing, string encoding, rolling cipher, integrity binding
-
-  integration/              Real-world patterns (Chrome extension, RuamTester)
-</pre>
-
-</details>
+<pre><code>ruam content-script.js --target browser-extension --preset max</code></pre>
 
 <hr>
 

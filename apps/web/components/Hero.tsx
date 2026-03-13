@@ -434,7 +434,7 @@ export default function Hero({ snippet }: { snippet?: HeroSnippet | null }) {
 						transition={{ duration: 0.7 }}
 						className="flex flex-col justify-center lg:col-span-5"
 					>
-						<h1 className="font-display text-5xl leading-[1.05] tracking-tight sm:text-7xl">
+						<h1 className="font-display text-5xl leading-[1.05] tracking-tight sm:text-7xl select-none">
 							<span className="text-snow">
 								Don&apos;t just
 								<br />

@@ -93,7 +93,7 @@ function CompileCard() {
 
 	return (
 		<div className="flex h-full flex-col rounded-xl border border-edge bg-ink p-6">
-			<div className="mb-4 flex items-center gap-3">
+			<div className="mb-4 flex items-center gap-3 select-none">
 				<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
 					<FontAwesomeIcon icon={faShuffle} className="h-4 w-4" />
 				</div>
@@ -105,7 +105,7 @@ function CompileCard() {
 				</div>
 			</div>
 
-			<div className="mb-4 flex-1 rounded-lg border border-edge bg-void/60 p-3 font-mono text-[11px] leading-[1.7] text-smoke">
+			<div className="mb-4 flex-1 rounded-lg border border-edge bg-void/60 p-3 font-mono text-[11px] leading-[1.7] text-smoke select-none">
 				{lines.map((line, i) => (
 					<div key={i}>{line}</div>
 				))}
@@ -131,7 +131,7 @@ function CompileCard() {
 function IrreversibleCard() {
 	return (
 		<div className="flex h-full flex-col rounded-xl border border-edge bg-ink p-6">
-			<div className="mb-4 flex items-center gap-3">
+			<div className="mb-4 flex items-center gap-3 select-none">
 				<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
 					<FontAwesomeIcon icon={faLock} className="h-4 w-4" />
 				</div>
@@ -141,7 +141,7 @@ function IrreversibleCard() {
 			</div>
 
 			<div className="mb-4 flex-1 space-y-3">
-				<div className="rounded-lg border border-edge bg-void/60 p-3">
+				<div className="rounded-lg border border-edge bg-void/60 p-3 select-none">
 					<span className="mb-1 block font-mono text-[10px] font-semibold text-ember uppercase tracking-wider">
 						Classic Obfuscation
 					</span>
@@ -153,7 +153,7 @@ function IrreversibleCard() {
 						the logic is inevitably traceable.
 					</p>
 				</div>
-				<div className="rounded-lg border border-accent/15 bg-accent/[0.03] p-3">
+				<div className="rounded-lg border border-accent/15 bg-accent/[0.03] p-3 select-none">
 					<span className="mb-1 block font-mono text-[10px] font-semibold text-accent uppercase tracking-wider">
 						Ruam
 					</span>
@@ -179,7 +179,7 @@ function IrreversibleCard() {
 /* ── Instant card ── */
 function InstantCard() {
 	const [copied, setCopied] = useState(false);
-	const cmd = "npx ruam input.js -o output.js --preset high";
+	const cmd = "npx ruam input.js -o output.js --preset max --target node";
 
 	const copy = () => {
 		navigator.clipboard.writeText(cmd);
@@ -189,7 +189,7 @@ function InstantCard() {
 
 	return (
 		<div className="flex h-full flex-col rounded-xl border border-edge bg-ink p-6">
-			<div className="mb-4 flex items-center gap-3">
+			<div className="mb-4 flex items-center gap-3 select-none">
 				<div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
 					<FontAwesomeIcon icon={faTerminal} className="h-4 w-4" />
 				</div>
@@ -217,8 +217,9 @@ function InstantCard() {
 				<div className="mt-3 space-y-2">
 					{[
 						"Works with Node.js, Deno, Bun, etc.",
+						"Supports MV2 & MV3 Browser Extensions",
 						"Compatible with any framework",
-						"Supports ESM & CommonJS",
+						"Customizable obfuscation layers",
 						"Full project scope",
 					].map((item) => (
 						<div key={item} className="flex items-center gap-2">
