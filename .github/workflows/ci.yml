@@ -55,6 +55,11 @@ jobs:
         if: github.ref == 'refs/heads/main'
         run: cp packages/ruam/stats.json apps/web/public/stats.json
 
+      # Build browser worker bundle for the playground
+      - name: Build browser worker bundle
+        if: github.ref == 'refs/heads/main'
+        run: npx turbo run build:browser --filter=ruam
+
       - name: Build site with stats
         if: github.ref == 'refs/heads/main'
         run: npx turbo run build --filter=web

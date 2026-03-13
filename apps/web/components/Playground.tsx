@@ -321,6 +321,7 @@ function useWorker() {
 	const workerRef = useRef<Worker | null>(null);
 	const idRef = useRef(0);
 	const [ready, setReady] = useState(false);
+	const [initError, setInitError] = useState<string | null>(null);
 
 	useEffect(() => {
 		const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -328,7 +329,23 @@ function useWorker() {
 			type: "module",
 		});
 		workerRef.current = w;
-		setReady(true);
+
+		// Wait for the worker module to signal readiness
+		const onReady = (e: MessageEvent) => {
+			if (e.data.ready) {
+				w.removeEventListener("message", onReady);
+				w.removeEventListener("error", onInitErr);
+				setReady(true);
+			}
+		};
+		const onInitErr = (e: ErrorEvent) => {
+			w.removeEventListener("message", onReady);
+			w.removeEventListener("error", onInitErr);
+			setInitError(e.message || "Worker failed to load");
+		};
+		w.addEventListener("message", onReady);
+		w.addEventListener("error", onInitErr);
+
 		return () => {
 			w.terminate();
 			workerRef.current = null;
@@ -382,7 +399,7 @@ function useWorker() {
 		[]
 	);
 
-	return { ready, obfuscate };
+	return { ready, obfuscate, initError };
 }
 
 // --- Playground component ---
@@ -423,7 +440,7 @@ export default function Playground() {
 		{ current: null }
 	);
 
-	const { ready: workerReady, obfuscate } = useWorker();
+	const { ready: workerReady, obfuscate, initError: workerError } = useWorker();
 
 	const allLoaded = inputLoaded && outputLoaded && workerReady;
 
@@ -814,13 +831,26 @@ export default function Playground() {
 				{!allLoaded && (
 					<div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
 						<div className="flex flex-col items-center gap-4">
-							<FontAwesomeIcon
-								icon={faSpinner}
-								className="h-8 w-8 animate-spin text-accent"
-							/>
-							<p className="font-mono text-sm text-smoke">
-								Loading Ruam engine...
-							</p>
+							{workerError ? (
+								<>
+									<p className="font-mono text-sm text-alert">
+										Failed to load Ruam engine
+									</p>
+									<p className="max-w-md text-center font-mono text-xs text-ash">
+										{workerError}
+									</p>
+								</>
+							) : (
+								<>
+									<FontAwesomeIcon
+										icon={faSpinner}
+										className="h-8 w-8 animate-spin text-accent"
+									/>
+									<p className="font-mono text-sm text-smoke">
+										Loading Ruam engine...
+									</p>
+								</>
+							)}
 						</div>
 					</div>
 				)}
