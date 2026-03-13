@@ -123,8 +123,13 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
 		varDecl("val", ctx.pop()),
-		// Walk to find owning scope
-		varDecl("s", id(ctx.SC)),
+		// Fast path: check current scope first (most stores are local)
+		ifStmt(hasOwn(id(ctx.SC), id("name")), [
+			exprStmt(assign(ctx.curSv(), id("val"))),
+			breakStmt(),
+		]),
+		// Slow path: walk parent scopes
+		varDecl("s", call(member(id("Object"), "getPrototypeOf"), [id(ctx.SC)])),
 		varDecl("found", lit(false)),
 		whileStmt(id("s"), [
 			ifStmt(hasOwn(id("s"), id("name")), [
