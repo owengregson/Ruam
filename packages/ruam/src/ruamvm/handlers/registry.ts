@@ -65,6 +65,7 @@ export interface HandlerCtx {
 	execAsync: string; // async exec function name
 	load: string; // loader function name
 	mkArrow: string; // arrow closure factory function name
+	spreadSym: string; // spread marker Symbol name
 	depth: string; // recursion depth counter
 	callStack: string; // call stack for error messages
 	dbg: string; // debug log function name
@@ -130,6 +131,7 @@ export function makeHandlerCtx(
 		execAsync: names.execAsync,
 		load: names.load,
 		mkArrow: names.mkArrow,
+		spreadSym: names.spreadSym,
 		depth: names.depth,
 		callStack: names.callStack,
 		dbg: names.dbg,
