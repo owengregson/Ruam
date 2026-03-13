@@ -12,18 +12,15 @@
 <p>Compiles JavaScript functions into custom bytecode executed by an embedded virtual machine.<br>
 No deobfuscator exists for RuamVM bytecode.</p>
 
-<a href="https://nodejs.org/en/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js >= 18"></a>
-<img src="https://img.shields.io/badge/license-LGPL--2.1-yellow?style=flat-square&logo=googledocs&logoColor=white" alt="LGPL-2.1">
-<img src="https://img.shields.io/badge/typescript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript Strict">
+<a href="https://nodejs.org/en/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white&color=1F49AC" alt="Node.js >= 18"></a>
+<img src="https://img.shields.io/badge/license-LGPL--2.1-yellow?style=flat-square&logo=googledocs&logoColor=white&color=3659BD" alt="LGPL-2.1">
+<img src="https://img.shields.io/badge/typescript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white&color=4D6ACD" alt="TypeScript Strict">
+
+<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.testsPassing&label=tests&color=637ADE&style=flat-square&logo=vitest&logoColor=white" alt="Tests Passing">
+<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.sizeRatioLow&label=Avg.%20Size%20Ratio&color=7A8BEE&style=flat-square&logo=onlyoffice&logoColor=white" alt="Avg Size Ratio">
+<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.overheadMedian&label=VM%20Overhead&color=919BFF&style=flat-square&logo=speedtest&logoColor=white" alt="VM Overhead">
 
 <br>
-
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.testsPassing&label=tests&color=4CAF50&style=flat-square&logo=vitest&logoColor=white" alt="Tests Passing">
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.opcodes&label=opcodes&color=5C6BC0&style=flat-square" alt="Opcodes">
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.loc&label=source&suffix=%20LoC&color=607D8B&style=flat-square" alt="Lines of Code">
-<img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fowengregson%2FRuam%2Fmain%2Fpackages%2Fruam%2Fstats.json&query=%24.badges.overheadMedian&label=VM%20overhead%20(median)&color=FF9800&style=flat-square" alt="VM Overhead">
-
-<br><br>
 
 <a href="#installation">Installation</a>&ensp;&middot;&ensp;
 <a href="#quick-start">Quick Start</a>&ensp;&middot;&ensp;
@@ -45,37 +42,29 @@ No deobfuscator exists for RuamVM bytecode.</p>
   <strong>Ruam takes a fundamentally different approach.</strong> It <i>compiles</i> your JavaScript into a custom bytecode instruction set and replaces the original source with a compact virtual machine that executes an unintelligible instruction stream. The original code is destroyed &mdash; it does not exist anywhere in the output.
 </p>
 
-<table>
-  <tr>
-    <td width="50%">
-      <h4>Traditional Obfuscators</h4>
-      <pre>Source JS  →  Transformed JS
-               (still JS)</pre>
-      <ul>
-        <li>Same language, same semantics</li>
-        <li>AST-reversible transformations</li>
-        <li>Automated deobfuscation tools exist</li>
-      </ul>
-    </td>
-    <td width="50%">
-      <h4>Ruam</h4>
-      <pre>Source JS  →  Custom Bytecode
-             + Embedded VM</pre>
-      <ul>
-        <li>Original source is destroyed</li>
-        <li>Must reverse-engineer the VM itself</li>
-		<li>No deobfuscator exists</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+<h4>Traditional Obfuscators</h4>
+<p>Source JS  →  Transformed JS
+		(still JS)</p>
+<ul>
+<li>Same language, same semantics</li>
+<li>AST-reversible transformations</li>
+<li>Automated deobfuscation tools exist</li>
+</ul>
 
+<h4>Ruam</h4>
+<p>Source JS  →  Custom Bytecode
+		+ Embedded VM</p>
+<ul>
+<li>Original source is destroyed</li>
+<li>Must reverse-engineer the VM itself</li>
+<li>No deobfuscator exists</li>
+</ul>
 <br>
 
 <table>
   <tbody>
     <tr>
-      <td><strong>300+ opcode custom ISA</strong></td>
+      <td><strong>300+ opcode open-source ISA</strong></td>
       <td>Full-coverage instruction set spanning 26 categories &mdash; stack, arithmetic, bitwise, comparison, control flow, property access, scoping, calls, classes, iterators, destructuring, async/await, generators, and more.</td>
     </tr>
     <tr>
