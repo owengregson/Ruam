@@ -13,6 +13,15 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "./constants.js";
 
 // --- Public interfaces ---
 
+/** Dispatch architecture style for the interpreter. */
+export type DispatchStyle =
+	| "function-table"
+	| "direct-array"
+	| "object-lookup";
+
+/** Return signaling mechanism for handler → dispatch loop. */
+export type ReturnMechanism = "sentinel" | "tagged" | "flag";
+
 /** Per-build choices that affect runtime code structure. */
 export interface StructuralChoices {
 	/** Shuffled indices for runtime component ordering within each tier. */
@@ -23,6 +32,18 @@ export interface StructuralChoices {
 		tier3: number[];
 		tier4: number[];
 	};
+
+	/** Interpreter dispatch architecture. */
+	dispatchStyle: DispatchStyle;
+
+	/** Return signaling mechanism. */
+	returnMechanism: ReturnMechanism;
+
+	/**
+	 * Random tag value for tagged-return mechanism (1-254).
+	 * Only meaningful when `returnMechanism === "tagged"`.
+	 */
+	returnTag: number;
 
 	/** Control flow style preferences. */
 	controlFlow: {
@@ -36,6 +57,9 @@ export interface StructuralChoices {
 
 	/** How consecutive var declarations are grouped. */
 	declarationStyle: "individual" | "chained" | "mixed";
+
+	/** Probability of converting FnDecl to var = FnExpr (0-1). */
+	functionFormBias: number;
 
 	/** Expression-level noise toggles. */
 	expressionNoise: {
@@ -145,6 +169,15 @@ export function generateStructuralChoices(seed: number): StructuralChoices {
 			tier4: shuffle(TIER_4_MAX),
 		},
 
+		dispatchStyle: pick([
+			"function-table",
+			"direct-array",
+			"object-lookup",
+		]),
+
+		returnMechanism: pick(["sentinel", "tagged", "flag"]),
+		returnTag: (lcg() % 254) + 1, // 1-254
+
 		controlFlow: {
 			ternaryBias: 0.15 + float() * 0.45, // 15-60%
 			loopStyle: pick(["for", "while"]),
@@ -152,6 +185,7 @@ export function generateStructuralChoices(seed: number): StructuralChoices {
 		},
 
 		declarationStyle: pick(["individual", "chained", "mixed"]),
+		functionFormBias: 0.2 + float() * 0.4, // 20-60%
 
 		expressionNoise: {
 			dotToBracketBias: 0.1 + float() * 0.35, // 10-45%

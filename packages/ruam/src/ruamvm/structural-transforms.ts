@@ -14,7 +14,16 @@
  * @module ruamvm/structural-transforms
  */
 
-import type { JsNode, MemberExpr, BinOp, Literal, VarDecl } from "./nodes.js";
+import type {
+	JsNode,
+	MemberExpr,
+	BinOp,
+	Literal,
+	VarDecl,
+	FnDecl,
+	IfStmt,
+	ForStmt,
+} from "./nodes.js";
 import type { StructuralChoices } from "../structural-choices.js";
 
 // --- Public API ---
@@ -78,18 +87,13 @@ function walkNode(node: JsNode, ch: StructuralChoices): JsNode {
 				? { ...node, init: walkNode(node.init, ch) }
 				: node;
 		case "FnDecl":
-			return { ...node, body: node.body.map((n) => walkNode(n, ch)) };
+			return transformFnDecl(node, ch);
 		case "ExprStmt":
 			return { ...node, expr: walkNode(node.expr, ch) };
 		case "Block":
 			return { ...node, body: node.body.map((n) => walkNode(n, ch)) };
 		case "IfStmt":
-			return {
-				...node,
-				test: walkNode(node.test, ch),
-				then: node.then.map((n) => walkNode(n, ch)),
-				else: node.else?.map((n) => walkNode(n, ch)),
-			};
+			return transformIfStmt(node, ch);
 		case "WhileStmt":
 			return {
 				...node,
@@ -97,13 +101,7 @@ function walkNode(node: JsNode, ch: StructuralChoices): JsNode {
 				body: node.body.map((n) => walkNode(n, ch)),
 			};
 		case "ForStmt":
-			return {
-				...node,
-				init: node.init ? walkNode(node.init, ch) : null,
-				test: node.test ? walkNode(node.test, ch) : null,
-				update: node.update ? walkNode(node.update, ch) : null,
-				body: node.body.map((n) => walkNode(n, ch)),
-			};
+			return transformForStmt(node, ch);
 		case "ForInStmt":
 			return {
 				...node,
@@ -209,8 +207,44 @@ function walkNode(node: JsNode, ch: StructuralChoices): JsNode {
 /** Safe property names that can be converted to bracket notation. */
 const SAFE_BRACKET_RE = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
+/** Built-in global names — don't transform member access on these
+ *  because the alias declarations (e.g. `var _im = Math.imul`) are
+ *  foundational and must stay in dot notation for downstream checks. */
+const GLOBAL_SKIP = new Set([
+	"Math",
+	"Object",
+	"Array",
+	"Symbol",
+	"JSON",
+	"String",
+	"Number",
+	"Boolean",
+	"Function",
+	"RegExp",
+	"Date",
+	"Error",
+	"Promise",
+	"Map",
+	"Set",
+	"globalThis",
+	"window",
+	"global",
+	"self",
+	"console",
+	"parseInt",
+	"Uint8Array",
+	"Int32Array",
+	"DataView",
+	"ArrayBuffer",
+]);
+
 function transformMember(node: MemberExpr, ch: StructuralChoices): JsNode {
 	const obj = walkNode(node.obj, ch);
+	// Skip transformation on global built-in objects to preserve
+	// recognizable alias patterns (Math.imul, Object.create, etc.)
+	if (obj.type === "Id" && GLOBAL_SKIP.has(obj.name)) {
+		return { ...node, obj };
+	}
 	// Only convert if the property name is a valid identifier
 	if (
 		SAFE_BRACKET_RE.test(node.prop) &&
@@ -297,6 +331,129 @@ function transformLiteral(node: Literal, ch: StructuralChoices): JsNode {
 		},
 		right: { type: "Literal", value: offset },
 	};
+}
+
+// --- If statement: simple if/else → ternary ---
+
+/**
+ * Convert simple if/else with single ExprStmt bodies to ternary.
+ * Only applies when both branches are single expression statements
+ * (safe — no control flow changes).
+ */
+function transformIfStmt(node: IfStmt, ch: StructuralChoices): JsNode {
+	const test = walkNode(node.test, ch);
+	const thenBody = node.then.map((n) => walkNode(n, ch));
+	const elseBody = node.else?.map((n) => walkNode(n, ch));
+
+	// Only convert if both branches are single ExprStmts
+	if (
+		elseBody &&
+		thenBody.length === 1 &&
+		elseBody.length === 1 &&
+		thenBody[0]!.type === "ExprStmt" &&
+		elseBody[0]!.type === "ExprStmt" &&
+		ch.prng() < ch.controlFlow.ternaryBias
+	) {
+		return {
+			type: "ExprStmt",
+			expr: {
+				type: "TernaryExpr",
+				test,
+				then: thenBody[0]!.expr,
+				else: elseBody[0]!.expr,
+			},
+		} as JsNode;
+	}
+
+	return { ...node, test, then: thenBody, else: elseBody };
+}
+
+// --- For loop: for → while ---
+
+/**
+ * Convert `for(init; test; update) { body }` to
+ * `init; while(test) { body; update; }`.
+ * Only applies when the for loop has all three parts.
+ */
+function transformForStmt(node: ForStmt, ch: StructuralChoices): JsNode {
+	const init = node.init ? walkNode(node.init, ch) : null;
+	const test = node.test ? walkNode(node.test, ch) : null;
+	const update = node.update ? walkNode(node.update, ch) : null;
+	const body = node.body.map((n) => walkNode(n, ch));
+
+	if (
+		ch.controlFlow.loopStyle === "while" &&
+		init &&
+		test &&
+		update &&
+		!containsContinue(body) &&
+		ch.prng() < 0.5
+	) {
+		// Wrap init + while in a Block
+		const whileBody = [
+			...body,
+			{ type: "ExprStmt" as const, expr: update },
+		];
+		return {
+			type: "Block",
+			body: [
+				{ type: "ExprStmt" as const, expr: init },
+				{
+					type: "WhileStmt" as const,
+					test,
+					body: whileBody,
+				},
+			],
+		};
+	}
+
+	return { ...node, init, test, update, body };
+}
+
+// --- Function form: FnDecl → var = FnExpr ---
+
+/**
+ * Convert function declarations to function expressions assigned to
+ * a variable. Does not convert to arrow functions because runtime
+ * handlers use `this` and `arguments`.
+ */
+function transformFnDecl(node: FnDecl, ch: StructuralChoices): JsNode {
+	const body = node.body.map((n) => walkNode(n, ch));
+
+	if (ch.prng() < ch.functionFormBias) {
+		// FnDecl → var name = function name(...) { ... }
+		return {
+			type: "VarDecl",
+			name: node.name,
+			init: {
+				type: "FnExpr",
+				name: node.name,
+				params: node.params,
+				body,
+				async: node.async,
+			},
+		};
+	}
+
+	return { ...node, body };
+}
+
+// --- Helpers ---
+
+/** Check if a body contains a ContinueStmt (shallow — doesn't enter nested loops). */
+function containsContinue(body: JsNode[]): boolean {
+	for (const n of body) {
+		if (n.type === "ContinueStmt") return true;
+		if (n.type === "IfStmt") {
+			if (containsContinue(n.then)) return true;
+			if (n.else && containsContinue(n.else)) return true;
+		}
+		if (n.type === "Block") {
+			if (containsContinue(n.body)) return true;
+		}
+		// Don't enter nested loops — their continue is scoped to them
+	}
+	return false;
 }
 
 // --- Declaration style: merge/split consecutive var declarations ---
