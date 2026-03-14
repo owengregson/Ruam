@@ -221,7 +221,8 @@ export function generateVmRuntime(options: {
 			handlerFragmentation,
 		},
 		split,
-		hasAsyncUnits
+		hasAsyncUnits,
+		structuralChoices
 	);
 
 	const tier2Nodes: JsNode[] = [];
