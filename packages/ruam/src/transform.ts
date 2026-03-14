@@ -203,7 +203,8 @@ export function obfuscateCode(
 				handlerFragmentation,
 			},
 			undefined,
-			hasAsyncUnits
+			hasAsyncUnits,
+			structuralChoices
 		);
 		const interpSource = interpResult.interpreters
 			.map((n) => emit(n))

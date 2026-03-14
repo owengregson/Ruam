@@ -56,6 +56,7 @@ import {
 import { obfuscateLocals } from "../transforms.js";
 import { applyMBA } from "../mba.js";
 import { fragmentCases } from "../handler-fragmentation.js";
+import type { StructuralChoices } from "../../structural-choices.js";
 
 /** Options for interpreter filtering and hardening. */
 export interface InterpreterBuildOptions {
@@ -98,7 +99,8 @@ export function buildInterpreterFunctions(
 	seed: number,
 	interpOpts: InterpreterBuildOptions = {},
 	split?: SplitFn,
-	hasAsyncUnits = true
+	hasAsyncUnits = true,
+	structuralChoices?: StructuralChoices
 ): InterpreterBuildResult {
 	// Function table dispatch replaces the switch — disable handler
 	// fragmentation since handlers are naturally isolated in separate
@@ -142,6 +144,7 @@ export function buildInterpreterFunctions(
 		interpOpts: effectiveOpts,
 		split,
 		fragmentLabelMap: syncCases.fragmentLabelMap,
+		structuralChoices,
 	});
 
 	// Hoist sentinel/return-value declarations to IIFE scope
@@ -219,6 +222,7 @@ export function buildInterpreterFunctions(
 		// Structural differentiation: async uses a different group count
 		// so it doesn't look like a carbon copy of the sync interpreter
 		asyncGroupOffset: 1,
+		structuralChoices,
 	});
 
 	// Async iifeDecls are the same sentinel/return-value vars — already declared
@@ -646,22 +650,57 @@ function buildExecFunction(
 		fragmentLabelMap?: Map<number, number>;
 		/** Offset to apply to group count for structural differentiation. */
 		asyncGroupOffset?: number;
+		structuralChoices?: StructuralChoices;
 	}
 ): { fnNode: JsNode; iifeDecls: JsNode[] } {
 	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
 	const htName = temps["_ht"];
 	if (htName === undefined) throw new Error("Missing temp: _ht");
 
-	// Build function table dispatch — grouped handler function arrays
-	// with if-else routing. Replaces the giant switch statement.
-	const ftResult = buildFunctionTableDispatch(
-		cases,
-		temps,
-		htName,
-		ctx.PH,
-		opts.isAsync,
-		opts.asyncGroupOffset
-	);
+	// Select dispatch style based on structural choices (default: function-table)
+	const dispatchStyle =
+		opts.structuralChoices?.dispatchStyle ?? "function-table";
+	const returnMech =
+		opts.structuralChoices?.returnMechanism ?? "sentinel";
+	const returnTag = opts.structuralChoices?.returnTag ?? 1;
+
+	let ftResult: {
+		preLoopDecls: JsNode[];
+		iifeDecls: JsNode[];
+		dispatchNodes: JsNode[];
+	};
+
+	if (dispatchStyle === "direct-array") {
+		ftResult = buildDirectArrayDispatch(
+			cases,
+			temps,
+			htName,
+			ctx.PH,
+			opts.isAsync,
+			returnMech,
+			returnTag
+		);
+	} else if (dispatchStyle === "object-lookup") {
+		ftResult = buildObjectLookupDispatch(
+			cases,
+			temps,
+			htName,
+			ctx.PH,
+			opts.isAsync,
+			returnMech,
+			returnTag
+		);
+	} else {
+		// "function-table" — the original grouped dispatch
+		ftResult = buildFunctionTableDispatch(
+			cases,
+			temps,
+			htName,
+			ctx.PH,
+			opts.isAsync,
+			opts.asyncGroupOffset
+		);
+	}
 
 	// For sync mode, hoist handler closures to IIFE scope. Async keeps
 	// closures per-call because concurrent async calls interleave state.
@@ -1545,6 +1584,297 @@ function buildFunctionTableDispatch(
 		}
 
 		dispatchNodes.push(...current);
+	}
+
+	return { preLoopDecls, iifeDecls, dispatchNodes };
+}
+
+// --- Return mechanism transforms ---
+
+/**
+ * Transform handler body for "tagged" return mechanism.
+ * - `BreakStmt` → `ReturnStmt()` (exit handler)
+ * - `ReturnStmt(expr)` → `ReturnStmt({ t: TAG, v: expr })`
+ */
+function transformBodyForTagged(
+	body: JsNode[],
+	tag: number
+): JsNode[] {
+	return body.map((node) =>
+		walkSkipFns(node, (n) => {
+			if (n.type === "BreakStmt") return returnStmt();
+			if (n.type === "ReturnStmt") {
+				const value =
+					(n as { type: "ReturnStmt"; value?: JsNode }).value ??
+					un("void", lit(0));
+				return returnStmt(
+					obj([lit("t"), lit(tag)], [lit("v"), value])
+				);
+			}
+			return null;
+		})
+	);
+}
+
+/**
+ * Transform handler body for "flag" return mechanism.
+ * - `BreakStmt` → `ReturnStmt()` (exit handler)
+ * - `ReturnStmt(expr)` → `_done = true; _rv = expr; return;`
+ *   (sequence: assign flag, assign value, return void)
+ */
+function transformBodyForFlag(
+	body: JsNode[],
+	doneName: string,
+	rvName: string
+): JsNode[] {
+	return body.map((node) =>
+		walkSkipFns(node, (n) => {
+			if (n.type === "BreakStmt") return returnStmt();
+			if (n.type === "ReturnStmt") {
+				const value =
+					(n as { type: "ReturnStmt"; value?: JsNode }).value ??
+					un("void", lit(0));
+				// Use a sequence expression: (_done = true, _rv = value, void 0)
+				// then return. This keeps it as a single return statement.
+				return returnStmt(
+					seq(
+						assign(id(doneName), lit(true)),
+						assign(id(rvName), value)
+					)
+				);
+			}
+			return null;
+		})
+	);
+}
+
+// --- Direct array dispatch ---
+
+/**
+ * Direct array dispatch — flat handler array indexed by handler index.
+ * No grouping, no if-else chain. Just `_ha[_fdi]()`.
+ *
+ * Structurally different from function-table: one array instead of
+ * 2-4 groups, no routing tree.
+ */
+function buildDirectArrayDispatch(
+	cases: CaseClause[],
+	temps: TempNames,
+	htName: string,
+	phName: string,
+	isAsync: boolean,
+	returnMech: string,
+	returnTag: number
+): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
+	const FRS = temps["_frs"];
+	const FRV = temps["_frv"];
+	const FDI = temps["_fdi"];
+	if (!FRS || !FRV || !FDI) {
+		throw new Error("Missing function table temp names");
+	}
+
+	const groupName = temps["_fg0"];
+	if (!groupName) throw new Error("Missing temp: _fg0");
+
+	const handlerCases = cases
+		.filter((c): c is CaseClause & { label: JsNode } => c.label !== null)
+		.sort((a, b) => {
+			const aVal = (a.label as { type: "Literal"; value: number }).value;
+			const bVal = (b.label as { type: "Literal"; value: number }).value;
+			return aVal - bVal;
+		});
+
+	// Transform and wrap each handler
+	const handlerFns: JsNode[] = handlerCases.map((c) => {
+		let body: JsNode[];
+		if (returnMech === "tagged") {
+			body = transformBodyForTagged(c.body, returnTag);
+		} else if (returnMech === "flag") {
+			body = transformBodyForFlag(c.body, FRS, FRV);
+		} else {
+			body = transformBodyForFT(c.body, FRS, FRV);
+		}
+		return fnExpr(undefined, [], body, isAsync ? { async: true } : undefined);
+	});
+
+	const iifeDecls: JsNode[] = [];
+	const preLoopDecls: JsNode[] = [];
+
+	// For sentinel/flag: declare sentinel/flag + return value at appropriate scope.
+	// For async mode, both go to preLoopDecls to avoid clobbering from
+	// concurrent async calls that interleave on the same IIFE scope.
+	if (returnMech === "flag") {
+		const flagTarget = isAsync ? preLoopDecls : iifeDecls;
+		flagTarget.push(varDecl(FRS, lit(false)));
+	} else if (returnMech === "tagged") {
+		// Tagged: no sentinel needed
+	} else {
+		// Sentinel (identity-constant, safe at IIFE scope even for async)
+		iifeDecls.push(varDecl(FRS, obj()));
+	}
+
+	if (isAsync) {
+		preLoopDecls.push(varDecl(FRV, un("void", lit(0))));
+	} else {
+		iifeDecls.push(varDecl(FRV, un("void", lit(0))));
+	}
+
+	// Single flat array — no grouping
+	const handlerTarget = isAsync ? preLoopDecls : iifeDecls;
+	handlerTarget.push(varDecl(groupName, arr(...handlerFns)));
+
+	// Dispatch nodes
+	const dispatchNodes: JsNode[] = [];
+	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+
+	const awaitNode = (expr: JsNode): JsNode =>
+		({ type: "AwaitExpr", expr } as JsNode);
+
+	const callExpr = call(index(id(groupName), id(FDI)), []);
+	const result = isAsync ? awaitNode(callExpr) : callExpr;
+
+	if (returnMech === "tagged") {
+		// var _r = fn(); if (_r && _r.t === TAG) return _r.v;
+		// Reuse FRV to hold tagged result (declared above)
+		dispatchNodes.push(exprStmt(assign(id(FRV), result)));
+		dispatchNodes.push(
+			ifStmt(
+				bin(
+					"&&",
+					id(FRV),
+					bin("===", member(id(FRV), "t"), lit(returnTag))
+				),
+				[returnStmt(member(id(FRV), "v"))]
+			)
+		);
+	} else if (returnMech === "flag") {
+		// fn(); if (_frs) return _frv;
+		dispatchNodes.push(exprStmt(result));
+		dispatchNodes.push(
+			ifStmt(id(FRS), [
+				exprStmt(assign(id(FRS), lit(false))),
+				returnStmt(id(FRV)),
+			])
+		);
+	} else {
+		// Sentinel: if (fn() === _frs) return _frv;
+		dispatchNodes.push(ifStmt(bin("===", result, id(FRS)), [returnStmt(id(FRV))]));
+	}
+
+	return { preLoopDecls, iifeDecls, dispatchNodes };
+}
+
+// --- Object lookup dispatch ---
+
+/**
+ * Object lookup dispatch — handlers stored as properties on a plain
+ * object, keyed by handler index. Dispatch is a property access + call.
+ *
+ * Structurally different from function-table: uses an object literal
+ * instead of array grouping, property access instead of index access.
+ */
+function buildObjectLookupDispatch(
+	cases: CaseClause[],
+	temps: TempNames,
+	htName: string,
+	phName: string,
+	isAsync: boolean,
+	returnMech: string,
+	returnTag: number
+): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
+	const FRS = temps["_frs"];
+	const FRV = temps["_frv"];
+	const FDI = temps["_fdi"];
+	if (!FRS || !FRV || !FDI) {
+		throw new Error("Missing function table temp names");
+	}
+
+	const groupName = temps["_fg0"];
+	if (!groupName) throw new Error("Missing temp: _fg0");
+
+	const handlerCases = cases
+		.filter((c): c is CaseClause & { label: JsNode } => c.label !== null)
+		.sort((a, b) => {
+			const aVal = (a.label as { type: "Literal"; value: number }).value;
+			const bVal = (b.label as { type: "Literal"; value: number }).value;
+			return aVal - bVal;
+		});
+
+	// Build object entries: { 0: function(){...}, 1: function(){...}, ... }
+	const entries: [string | JsNode, JsNode][] = handlerCases.map((c, i) => {
+		let body: JsNode[];
+		if (returnMech === "tagged") {
+			body = transformBodyForTagged(c.body, returnTag);
+		} else if (returnMech === "flag") {
+			body = transformBodyForFlag(c.body, FRS, FRV);
+		} else {
+			body = transformBodyForFT(c.body, FRS, FRV);
+		}
+		const handler = fnExpr(
+			undefined,
+			[],
+			body,
+			isAsync ? { async: true } : undefined
+		);
+		return [String(i), handler] as [string, JsNode];
+	});
+
+	const handlerObj: JsNode = { type: "ObjectExpr", entries };
+
+	const iifeDecls: JsNode[] = [];
+	const preLoopDecls: JsNode[] = [];
+
+	if (returnMech === "flag") {
+		const flagTarget = isAsync ? preLoopDecls : iifeDecls;
+		flagTarget.push(varDecl(FRS, lit(false)));
+	} else if (returnMech === "tagged") {
+		// No sentinel needed
+	} else {
+		iifeDecls.push(varDecl(FRS, obj()));
+	}
+
+	if (isAsync) {
+		preLoopDecls.push(varDecl(FRV, un("void", lit(0))));
+	} else {
+		iifeDecls.push(varDecl(FRV, un("void", lit(0))));
+	}
+
+	const handlerTarget = isAsync ? preLoopDecls : iifeDecls;
+	handlerTarget.push(varDecl(groupName, handlerObj));
+
+	// Dispatch nodes
+	const dispatchNodes: JsNode[] = [];
+	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+
+	const awaitNode = (expr: JsNode): JsNode =>
+		({ type: "AwaitExpr", expr } as JsNode);
+
+	const callExpr = call(index(id(groupName), id(FDI)), []);
+	const result = isAsync ? awaitNode(callExpr) : callExpr;
+
+	if (returnMech === "tagged") {
+		// Reuse FRV to hold tagged result (declared above)
+		dispatchNodes.push(exprStmt(assign(id(FRV), result)));
+		dispatchNodes.push(
+			ifStmt(
+				bin(
+					"&&",
+					id(FRV),
+					bin("===", member(id(FRV), "t"), lit(returnTag))
+				),
+				[returnStmt(member(id(FRV), "v"))]
+			)
+		);
+	} else if (returnMech === "flag") {
+		dispatchNodes.push(exprStmt(result));
+		dispatchNodes.push(
+			ifStmt(id(FRS), [
+				exprStmt(assign(id(FRS), lit(false))),
+				returnStmt(id(FRV)),
+			])
+		);
+	} else {
+		dispatchNodes.push(ifStmt(bin("===", result, id(FRS)), [returnStmt(id(FRV))]));
 	}
 
 	return { preLoopDecls, iifeDecls, dispatchNodes };
