@@ -489,11 +489,26 @@ export default function Playground() {
 			target,
 		};
 
+		// Deterministic minimum delay (300-450ms) so the UI
+		// feels weighty. Hash is seeded from input length +
+		// first/last chars so the same code always gets the
+		// same delay.
+		const code = codeRef.current;
+		const h =
+			(code.length * 2654435761 +
+				(code.charCodeAt(0) || 0) * 31 +
+				(code.charCodeAt(code.length - 1) || 0)) >>>
+			0;
+		const minDelay = 300 + (h % 151); // 300-450ms
+		const delayPromise = new Promise<void>((r) =>
+			setTimeout(r, minDelay)
+		);
+
 		try {
-			const { result, elapsed: ms } = await obfuscate(
-				codeRef.current,
-				options
-			);
+			const [{ result, elapsed: ms }] = await Promise.all([
+				obfuscate(code, options),
+				delayPromise,
+			]);
 			setOutput(result);
 			setElapsed(ms);
 

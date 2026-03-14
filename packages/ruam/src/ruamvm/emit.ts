@@ -7,7 +7,7 @@
  * @module ruamvm/emit
  */
 
-import type { JsNode, ReturnStmt, ObjectEntry } from "./nodes.js";
+import type { JsNode, VarDecl, ReturnStmt, ObjectEntry } from "./nodes.js";
 import { assertNever } from "./nodes.js";
 
 // --- Operator precedence table (higher = tighter binding) ---
@@ -104,8 +104,23 @@ function needsParens(
 export function emit(node: JsNode): string {
 	switch (node.type) {
 		// --- Declarations ---
-		case "VarDecl":
+		case "VarDecl": {
+			// Chained declaration group (from structural transforms)
+			const chain = (node as VarDecl & { _chain?: VarDecl[] })._chain;
+			if (chain) {
+				return (
+					"var " +
+					chain
+						.map(
+							(d) =>
+								d.name +
+								(d.init ? "=" + emit(d.init) : "")
+						)
+						.join(",")
+				);
+			}
 			return `var ${node.name}${node.init ? "=" + emit(node.init) : ""}`;
+		}
 		case "ConstDecl":
 			return `const ${node.name}${
 				node.init ? "=" + emit(node.init) : ""

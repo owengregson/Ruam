@@ -50,6 +50,8 @@ import {
 import { buildInterpreterFunctions } from "./ruamvm/builders/interpreter.js";
 import { emit } from "./ruamvm/emit.js";
 import { generateAlphabet } from "./encoding/decoder.js";
+import { generateStructuralChoices } from "./structural-choices.js";
+import type { StructuralChoices } from "./structural-choices.js";
 
 import { randomBytes } from "node:crypto";
 
@@ -117,6 +119,9 @@ export function obfuscateCode(
 
 	// -- Generate custom encoding alphabet -----------------------------------
 	const alphabet = generateAlphabet(shuffleSeed);
+
+	// -- Generate per-build structural variation choices --------------------
+	const structuralChoices = generateStructuralChoices(shuffleSeed);
 
 	// -- Parse ---------------------------------------------------------------
 	const ast = parse(code, {
@@ -228,6 +233,7 @@ export function obfuscateCode(
 		handlerFragmentation,
 		alphabet,
 		hasAsyncUnits,
+		structuralChoices,
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
