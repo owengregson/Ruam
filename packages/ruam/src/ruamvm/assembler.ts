@@ -48,6 +48,8 @@ import { buildDeserializer } from "./builders/deserializer.js";
 import { buildGlobalExposure } from "./builders/globals.js";
 import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
+import type { StructuralChoices } from "../structural-choices.js";
+import { applyStructuralTransforms } from "./structural-transforms.js";
 
 /** Result from generating the VM runtime. */
 export interface VmRuntimeResult {
@@ -85,6 +87,8 @@ export function generateVmRuntime(options: {
 	alphabet: string;
 	/** Whether any compiled units are async (controls async interpreter emit). */
 	hasAsyncUnits?: boolean;
+	/** Per-build structural variation choices. */
+	structuralChoices?: StructuralChoices;
 }): VmRuntimeResult {
 	const {
 		opcodeShuffleMap,
@@ -107,6 +111,7 @@ export function generateVmRuntime(options: {
 		handlerFragmentation = false,
 		alphabet,
 		hasAsyncUnits = true,
+		structuralChoices,
 	} = options;
 
 	// Create constant splitter — replaces well-known numeric literals with
@@ -119,87 +124,87 @@ export function generateVmRuntime(options: {
 		reverseMap[opcodeShuffleMap[i]!] = i;
 	}
 
-	const nodes: JsNode[] = [];
-
-	// "use strict" directive
-	nodes.push(exprStmt(lit("use strict")));
-
-	// Built-in alias — eliminate repeated member chain lookups
-	nodes.push(varDecl(names.imul, member(id("Math"), "imul")));
-
-	// Spread marker symbol — tags spread arrays without object allocation
-	nodes.push(varDecl(names.spreadSym, call(id("Symbol"), [])));
-
-	// Cached built-in references — avoid repeated property chain lookups
-	nodes.push(
-		varDecl(
-			names.hop,
-			member(member(id("Object"), "prototype"), "hasOwnProperty")
-		)
-	);
-	nodes.push(
-		varDecl(
-			names.globalRef,
-			ternary(
-				bin("!==", un("typeof", id("globalThis")), lit("undefined")),
-				id("globalThis"),
+	// -- Tier 0: foundational declarations (shuffleable) --------------------
+	const tier0Components: JsNode[][] = [
+		// 0: imul alias
+		[varDecl(names.imul, member(id("Math"), "imul"))],
+		// 1: spread marker symbol
+		[varDecl(names.spreadSym, call(id("Symbol"), []))],
+		// 2: hop alias
+		[
+			varDecl(
+				names.hop,
+				member(member(id("Object"), "prototype"), "hasOwnProperty")
+			),
+		],
+		// 3: globalRef
+		[
+			varDecl(
+				names.globalRef,
 				ternary(
-					bin("!==", un("typeof", id("window")), lit("undefined")),
-					id("window"),
+					bin(
+						"!==",
+						un("typeof", id("globalThis")),
+						lit("undefined")
+					),
+					id("globalThis"),
 					ternary(
 						bin(
 							"!==",
-							un("typeof", id("global")),
+							un("typeof", id("window")),
 							lit("undefined")
 						),
-						id("global"),
+						id("window"),
 						ternary(
 							bin(
 								"!==",
-								un("typeof", id("self")),
+								un("typeof", id("global")),
 								lit("undefined")
 							),
-							id("self"),
-							obj()
+							id("global"),
+							ternary(
+								bin(
+									"!==",
+									un("typeof", id("self")),
+									lit("undefined")
+								),
+								id("self"),
+								obj()
+							)
 						)
 					)
 				)
-			)
-		)
-	);
+			),
+		],
+		// 4: TDZ sentinel
+		[
+			varDecl(
+				names.tdzSentinel,
+				call(member(id("Object"), "create"), [lit(null)])
+			),
+		],
+	];
 
-	// TDZ sentinel — unique prototype-less object for temporal dead zone checks.
-	// Declared at IIFE scope so all interpreter invocations share the
-	// same sentinel identity (checked via `===`).
-	nodes.push(
-		varDecl(
-			names.tdzSentinel,
-			call(member(id("Object"), "create"), [lit(null)])
-		)
-	);
-
-	// Custom binary decoder — always emitted (all units use binary encoding)
-	nodes.push(...buildBinaryDecoderSource(names, alphabet));
-
-	// Optional encryption support (RC4 + fingerprint)
+	// -- Tier 1: crypto/encoding primitives (shuffleable) ------------------
+	const tier1Components: JsNode[][] = [];
+	// Binary decoder (always emitted)
+	tier1Components.push(buildBinaryDecoderSource(names, alphabet));
+	// Optional encryption support
 	if (encrypt) {
-		nodes.push(...buildFingerprintSource(names, split));
-		nodes.push(...buildRc4Source(names, split));
+		tier1Components.push(buildFingerprintSource(names, split));
+		tier1Components.push(buildRc4Source(names, split));
 	}
-
 	// Optional debug protection
 	if (dbgProt) {
-		nodes.push(...buildDebugProtection(names, temps));
+		tier1Components.push(buildDebugProtection(names, temps));
 	}
-
 	// Optional debug logging
 	if (debugLogging) {
-		nodes.push(...buildDebugLogging(reverseMap, names, temps));
+		tier1Components.push(buildDebugLogging(reverseMap, names, temps));
 	}
 
+	// -- Tier 2: interpreter machinery (NOT shuffleable — dependency chain) -
 	// Build interpreter core — also produces handler table init.
-	// When hasAsyncUnits is false, only the sync interpreter is emitted
-	// (the async exec is aliased to sync for dead-code-path safety).
 	const interpResult = buildInterpreterFunctions(
 		names,
 		temps,
@@ -219,14 +224,12 @@ export function generateVmRuntime(options: {
 		hasAsyncUnits
 	);
 
-	// Handler table + key anchor init (must come before rolling cipher
-	// so rcDeriveKey can reference the key anchor closure variable)
-	nodes.push(...interpResult.handlerTableInit);
-
+	const tier2Nodes: JsNode[] = [];
+	// Handler table + key anchor init (must come before rolling cipher)
+	tier2Nodes.push(...interpResult.handlerTableInit);
 	// If integrity binding, fold integrity hash into the key anchor
 	if (rollingCipher && integrityBinding && integrityHash !== undefined) {
-		// _ka = (_ka ^ integrityHash) >>> 0;
-		nodes.push(
+		tier2Nodes.push(
 			exprStmt(
 				assign(
 					id(names.keyAnchor),
@@ -239,10 +242,9 @@ export function generateVmRuntime(options: {
 			)
 		);
 	}
-
 	// Rolling cipher helpers (must come after handler table + key anchor)
 	if (rollingCipher) {
-		nodes.push(
+		tier2Nodes.push(
 			...buildRollingCipherSource(
 				names,
 				true, // hasKeyAnchor — rcDeriveKey references names.keyAnchor
@@ -251,34 +253,76 @@ export function generateVmRuntime(options: {
 			)
 		);
 	}
-
 	// Interpreter function bodies
-	nodes.push(...interpResult.interpreters);
+	tier2Nodes.push(...interpResult.interpreters);
 
-	// Runner dispatch functions
-	nodes.push(...buildRunners(debugLogging, names, temps));
+	// -- Tier 3: dispatch layer (shuffleable) --------------------------------
+	const tier3Components: JsNode[][] = [
+		// 0: Runner dispatch functions
+		buildRunners(debugLogging, names, temps),
+		// 1: String constant decoder + Loader
+		[
+			...(stringKey !== undefined
+				? buildStringDecoderSource(
+						names,
+						stringKey,
+						rollingCipher,
+						split
+				  )
+				: []),
+			...buildLoader(
+				encrypt,
+				names,
+				stringKey !== undefined,
+				rollingCipher
+			),
+		],
+		// 2: Deserializer
+		buildDeserializer(names, temps),
+	];
 
-	// String constant decoder (XOR key stream)
-	if (stringKey !== undefined) {
-		nodes.push(
-			...buildStringDecoderSource(names, stringKey, rollingCipher, split)
-		);
+	// -- Tier 4: wiring (shuffleable) ----------------------------------------
+	const tier4Components: JsNode[][] = [
+		// 0: Global exposure
+		buildGlobalExposure(names.vm),
+	];
+
+	// -- Assemble with shuffled ordering ------------------------------------
+	const nodes: JsNode[] = [];
+
+	// "use strict" always first
+	nodes.push(exprStmt(lit("use strict")));
+
+	// Apply shuffled tier ordering
+	const order = structuralChoices?.statementOrder;
+	function pushShuffled(components: JsNode[][], tierOrder?: number[]) {
+		if (!tierOrder || !structuralChoices) {
+			for (const c of components) nodes.push(...c);
+			return;
+		}
+		for (const idx of tierOrder) {
+			if (idx < components.length) nodes.push(...components[idx]!);
+		}
+		// Push any components not covered by the order array
+		for (let i = 0; i < components.length; i++) {
+			if (!tierOrder.includes(i)) nodes.push(...components[i]!);
+		}
 	}
 
-	// Loader, cache, depth tracking
-	nodes.push(
-		...buildLoader(encrypt, names, stringKey !== undefined, rollingCipher)
-	);
+	pushShuffled(tier0Components, order?.tier0);
+	pushShuffled(tier1Components, order?.tier1);
+	nodes.push(...tier2Nodes); // tier 2 is never shuffled
+	pushShuffled(tier3Components, order?.tier3);
+	pushShuffled(tier4Components, order?.tier4);
 
-	// Binary deserializer
-	nodes.push(...buildDeserializer(names, temps));
-
-	// Global exposure
-	nodes.push(...buildGlobalExposure(names.vm));
+	// Apply structural AST transforms (control flow, declarations, expressions)
+	const finalNodes = structuralChoices
+		? applyStructuralTransforms(nodes, structuralChoices)
+		: nodes;
 
 	// Wrap in IIFE and emit
 	return {
-		source: emitIIFE(nodes),
+		source: emitIIFE(finalNodes),
 		keyAnchorValue: interpResult.keyAnchorValue,
 	};
 }
