@@ -137,43 +137,11 @@ export function generateVmRuntime(options: {
 				member(member(id("Object"), "prototype"), "hasOwnProperty")
 			),
 		],
-		// 3: globalRef
+		// 3: globalRef (detection order shuffled per build)
 		[
 			varDecl(
 				names.globalRef,
-				ternary(
-					bin(
-						"!==",
-						un("typeof", id("globalThis")),
-						lit("undefined")
-					),
-					id("globalThis"),
-					ternary(
-						bin(
-							"!==",
-							un("typeof", id("window")),
-							lit("undefined")
-						),
-						id("window"),
-						ternary(
-							bin(
-								"!==",
-								un("typeof", id("global")),
-								lit("undefined")
-							),
-							id("global"),
-							ternary(
-								bin(
-									"!==",
-									un("typeof", id("self")),
-									lit("undefined")
-								),
-								id("self"),
-								obj()
-							)
-						)
-					)
-				)
+				buildGlobalRefDetection(structuralChoices)
 			),
 		],
 		// 4: TDZ sentinel
@@ -426,34 +394,7 @@ export function generateShieldedVmRuntime(options: {
 		)
 	);
 	nodes.push(
-		varDecl(
-			sharedNames.globalRef,
-			ternary(
-				bin("!==", un("typeof", id("globalThis")), lit("undefined")),
-				id("globalThis"),
-				ternary(
-					bin("!==", un("typeof", id("window")), lit("undefined")),
-					id("window"),
-					ternary(
-						bin(
-							"!==",
-							un("typeof", id("global")),
-							lit("undefined")
-						),
-						id("global"),
-						ternary(
-							bin(
-								"!==",
-								un("typeof", id("self")),
-								lit("undefined")
-							),
-							id("self"),
-							obj()
-						)
-					)
-				)
-			)
-		)
+		varDecl(sharedNames.globalRef, buildGlobalRefDetection())
 	);
 
 	// TDZ sentinel — shared across all groups
@@ -603,6 +544,35 @@ export function generateShieldedVmRuntime(options: {
 }
 
 // --- Helpers ---
+
+/**
+ * Build the globalThis detection chain with shuffled check order.
+ * The standard order (globalThis → window → global → self) is
+ * recognizable across builds. Shuffling it breaks that pattern.
+ */
+function buildGlobalRefDetection(choices?: StructuralChoices): JsNode {
+	const globals = ["globalThis", "window", "global", "self"];
+
+	// Shuffle the detection order using the structural choices PRNG
+	if (choices) {
+		for (let i = globals.length - 1; i > 0; i--) {
+			const j = Math.floor(choices.prng() * (i + 1));
+			[globals[i], globals[j]] = [globals[j]!, globals[i]!];
+		}
+	}
+
+	// Build nested ternary chain: check each global, fallback to {}
+	let result: JsNode = obj();
+	for (let i = globals.length - 1; i >= 0; i--) {
+		const name = globals[i]!;
+		result = ternary(
+			bin("!==", un("typeof", id(name)), lit("undefined")),
+			id(name),
+			result
+		);
+	}
+	return result;
+}
 
 /**
  * Wrap an array of JsNode[] in a self-executing IIFE and emit to string.
