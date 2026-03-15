@@ -426,11 +426,44 @@ function createNameGenerator(seed: number, externalUsed?: Set<string>) {
 
 	let poolIdx = 0;
 
+	// Per-build name variation: a separate LCG stream decides whether
+	// each name gets a prefix (`_` or `$`), turning 2-char names into
+	// 3-char names. This breaks the "all IIFE names are 2 chars"
+	// fingerprint without changing the pool sequence or perturbing
+	// the main LCG state.
+	//
+	// Prefixed names (`_et`, `$et`) can never collide with the pool
+	// (which is lowercase-only) or handler locals (alpha+alnum only),
+	// making this approach collision-safe by construction.
+	let variantState = (seed ^ 0x4a3b2c1d) >>> 0;
+	function variantLcg(): number {
+		variantState =
+			(Math.imul(variantState, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+		return variantState;
+	}
+	// Per-build prefix probability: 20-50% of names get prefixed
+	const prefixBias =
+		0.2 + ((variantLcg() >>> 0) / 0x100000000) * 0.3;
+	const PREFIXES = ["_"];
+
+	function maybePrefix(name: string): string {
+		if ((variantLcg() >>> 0) / 0x100000000 >= prefixBias) {
+			return name;
+		}
+		const prefix = PREFIXES[variantLcg() % PREFIXES.length]!;
+		const prefixed = prefix + name;
+		if (!used.has(prefixed) && !RESERVED.has(prefixed)) {
+			return prefixed;
+		}
+		return name;
+	}
+
 	function genName(): string {
 		// Draw from the shuffled pool — most builds use only a fraction
 		while (poolIdx < pool.length) {
-			const name = pool[poolIdx++]!;
-			if (!used.has(name)) {
+			const baseName = pool[poolIdx++]!;
+			if (!used.has(baseName)) {
+				const name = maybePrefix(baseName);
 				used.add(name);
 				return name;
 			}

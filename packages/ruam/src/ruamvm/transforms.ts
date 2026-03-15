@@ -277,14 +277,43 @@ export function obfuscateLocals(
 	const alnum = "abcdefghijklmnopqrstuvwxyz0123456789";
 	const used = new Set<string>(reserved);
 
+	// Per-seed name length preference: some builds get 2-char handler
+	// locals, others get 2-3 char mix, breaking the "all handler
+	// locals are exactly N chars" fingerprint.
+	const threeCharBias = ((lcg() >>> 0) / 0x100000000) * 0.6; // 0-60%
+
 	function genShort(): string {
-		for (;;) {
-			const c1 = alpha[lcg() % alpha.length]!;
-			const c2 = alnum[lcg() % alnum.length]!;
-			const name = c1 + c2;
+		for (let attempt = 0; ; attempt++) {
+			const useThree =
+				(lcg() >>> 0) / 0x100000000 < threeCharBias;
+			let name: string;
+			if (useThree) {
+				const c1 = alpha[lcg() % alpha.length]!;
+				const c2 = alnum[lcg() % alnum.length]!;
+				const c3 = alnum[lcg() % alnum.length]!;
+				name = c1 + c2 + c3;
+			} else {
+				const c1 = alpha[lcg() % alpha.length]!;
+				const c2 = alnum[lcg() % alnum.length]!;
+				name = c1 + c2;
+			}
 			if (!used.has(name) && !KEEP.has(name) && !RESERVED.has(name)) {
 				used.add(name);
 				return name;
+			}
+			// Safety: after many attempts, just use 2-char
+			if (attempt > 500) {
+				const c1 = alpha[lcg() % alpha.length]!;
+				const c2 = alnum[lcg() % alnum.length]!;
+				const fallback = c1 + c2;
+				if (
+					!used.has(fallback) &&
+					!KEEP.has(fallback) &&
+					!RESERVED.has(fallback)
+				) {
+					used.add(fallback);
+					return fallback;
+				}
 			}
 		}
 	}
