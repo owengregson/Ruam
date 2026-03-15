@@ -124,15 +124,38 @@ function mbaSingle(node: BinOp, lcg: () => number): JsNode {
 		return variant(left, right);
 	}
 
-	// Arithmetic ops — need int32 guard for user values
+	// Arithmetic ops — need int32 guard for user values.
+	// Skip when either operand is a string literal — MBA on string
+	// concatenation produces enormous useless int32-guard blocks
+	// (the guard always fails, falling through to the clean path).
 	const arithVariants = ARITH_MBA[op];
 	if (arithVariants) {
+		if (containsStringLiteral(left) || containsStringLiteral(right)) {
+			return node;
+		}
 		const variant = arithVariants[lcg() % arithVariants.length]!;
 		const mbaExpr = variant(left, right);
 		return int32Guard(left, right, op, mbaExpr);
 	}
 
 	return node;
+}
+
+/**
+ * Check if a node tree contains a string literal anywhere.
+ * Used to skip MBA on string concatenation (e.g. error messages).
+ */
+function containsStringLiteral(node: JsNode): boolean {
+	if (node.type === "Literal" && typeof node.value === "string") {
+		return true;
+	}
+	if (node.type === "BinOp") {
+		return (
+			containsStringLiteral(node.left) ||
+			containsStringLiteral(node.right)
+		);
+	}
+	return false;
 }
 
 /** Operators eligible for MBA transformation. */
