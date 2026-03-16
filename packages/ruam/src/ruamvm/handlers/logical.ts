@@ -1,18 +1,7 @@
 /** @module ruamvm/handlers/logical */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	update,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	breakStmt,
-} from "../nodes.js";
+import { id, lit, bin, un, assign, update, varDecl, exprStmt, ifStmt, breakStmt, BOp, UOp } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -22,7 +11,7 @@ import { registry } from "./registry.js";
  * `S[P]=!S[P];break;`
  */
 registry.set(Op.NOT, (ctx: HandlerCtx) => [
-	exprStmt(assign(ctx.peek(), un("!", ctx.peek()))),
+	exprStmt(assign(ctx.peek(), un(UOp.Not, ctx.peek()))),
 	breakStmt(),
 ]);
 
@@ -36,8 +25,8 @@ registry.set(Op.NOT, (ctx: HandlerCtx) => [
 registry.set(Op.LOGICAL_AND, (ctx: HandlerCtx) => [
 	varDecl("v", ctx.peek()),
 	ifStmt(
-		un("!", id("v")),
-		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
+		un(UOp.Not, id("v")),
+		[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id(ctx.O), lit(2))))],
 		[exprStmt(ctx.pop())]
 	),
 	breakStmt(),
@@ -54,7 +43,7 @@ registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
 	varDecl("v", ctx.peek()),
 	ifStmt(
 		id("v"),
-		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
+		[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id(ctx.O), lit(2))))],
 		[exprStmt(ctx.pop())]
 	),
 	breakStmt(),
@@ -70,12 +59,11 @@ registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
 registry.set(Op.NULLISH_COALESCE, (ctx: HandlerCtx) => [
 	varDecl("v", ctx.peek()),
 	ifStmt(
-		bin(
-			"&&",
-			bin("!==", id("v"), lit(null)),
-			bin("!==", id("v"), un("void", lit(0)))
+		bin(BOp.And,
+			bin(BOp.Sneq, id("v"), lit(null)),
+			bin(BOp.Sneq, id("v"), un(UOp.Void, lit(0)))
 		),
-		[exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))))],
+		[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id(ctx.O), lit(2))))],
 		[exprStmt(ctx.pop())]
 	),
 	breakStmt(),

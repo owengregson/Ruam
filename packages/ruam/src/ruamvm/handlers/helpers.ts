@@ -8,22 +8,7 @@
  */
 
 import type { JsNode } from "../nodes.js";
-import {
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	returnStmt,
-	fnExpr,
-	ternary,
-} from "../nodes.js";
+import { id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, returnStmt, fnExpr, ternary, BOp, UOp } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 
 // --- This-boxing ---
@@ -41,17 +26,16 @@ export function buildThisBoxing(ctx?: HandlerCtx): JsNode[] {
 	const ttName = ctx ? ctx.t("_tt") : "_tt";
 	return [
 		varDecl(tvName, id("this")),
-		ifStmt(un("!", member(id("u"), "st")), [
+		ifStmt(un(UOp.Not, member(id("u"), "st")), [
 			ifStmt(
-				bin("==", id(tvName), lit(null)),
+				bin(BOp.Eq, id(tvName), lit(null)),
 				[exprStmt(assign(id(tvName), id("globalThis")))],
 				[
-					varDecl(ttName, un("typeof", id(tvName))),
+					varDecl(ttName, un(UOp.Typeof, id(tvName))),
 					ifStmt(
-						bin(
-							"&&",
-							bin("!==", id(ttName), lit("object")),
-							bin("!==", id(ttName), lit("function"))
+						bin(BOp.And,
+							bin(BOp.Sneq, id(ttName), lit("object")),
+							bin(BOp.Sneq, id(ttName), lit("function"))
 						),
 						[
 							exprStmt(
@@ -121,7 +105,7 @@ export function superProto(ctx: HandlerCtx): JsNode {
  */
 export function superKey(ctx: HandlerCtx): JsNode {
 	return ternary(
-		bin(">=", id(ctx.O), lit(0)),
+		bin(BOp.Gte, id(ctx.O), lit(0)),
 		index(id(ctx.C), id(ctx.O)),
 		ctx.pop()
 	);
@@ -200,7 +184,7 @@ export function buildRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 				id(ctx.t("_a")),
 				id("cs"),
 				id(ctx.t("_tv")),
-				un("void", lit(0)),
+				un(UOp.Void, lit(0)),
 				member(id("fn"), ctx.t("_ho")),
 			])
 		),

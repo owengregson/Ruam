@@ -14,25 +14,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	fnExpr,
-	returnStmt,
-	tryCatch,
-	breakStmt,
-	obj,
-} from "../nodes.js";
+import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, fnExpr, returnStmt, tryCatch, breakStmt, obj, BOp, UOp } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 import {
@@ -58,12 +40,11 @@ function buildDebugArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 		exprStmt(
 			call(id(ctx.dbg), [
 				lit("CALL_CLOSURE"),
-				bin(
-					"+",
+				bin(BOp.Add,
 					lit(isAsync ? "async arrow uid=" : "arrow uid="),
 					id("uid")
 				),
-				bin("+", lit("args="), member(id(ctx.t("_a")), "length")),
+				bin(BOp.Add, lit("args="), member(id(ctx.t("_a")), "length")),
 			])
 		),
 		returnStmt(
@@ -115,8 +96,8 @@ function buildDebugRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 		exprStmt(
 			call(id(ctx.dbg), [
 				lit("CALL_CLOSURE"),
-				bin("+", lit(isAsync ? "async uid=" : "uid="), id("uid")),
-				bin("+", lit("args="), member(id(ctx.t("_a")), "length")),
+				bin(BOp.Add, lit(isAsync ? "async uid=" : "uid="), id("uid")),
+				bin(BOp.Add, lit("args="), member(id(ctx.t("_a")), "length")),
 			])
 		),
 		...buildThisBoxing(ctx),
@@ -126,7 +107,7 @@ function buildDebugRegularClosureIIFE(ctx: HandlerCtx): JsNode {
 				id(ctx.t("_a")),
 				id("cs"),
 				id(ctx.t("_tv")),
-				un("void", lit(0)),
+				un(UOp.Void, lit(0)),
 				member(id("fn"), ctx.t("_ho")),
 			])
 		),
@@ -175,8 +156,8 @@ function buildDebugFunctionClosureIIFE(ctx: HandlerCtx): JsNode {
 		exprStmt(
 			call(id(ctx.dbg), [
 				lit("CALL_FUNCTION"),
-				bin("+", lit(isAsync ? "async uid=" : "uid="), id("uid")),
-				bin("+", lit("args="), member(id(ctx.t("_a")), "length")),
+				bin(BOp.Add, lit(isAsync ? "async uid=" : "uid="), id("uid")),
+				bin(BOp.Add, lit("args="), member(id(ctx.t("_a")), "length")),
 			])
 		),
 		...buildThisBoxing(ctx),
@@ -186,7 +167,7 @@ function buildDebugFunctionClosureIIFE(ctx: HandlerCtx): JsNode {
 				id(ctx.t("_a")),
 				id("cs"),
 				id(ctx.t("_tv")),
-				un("void", lit(0)),
+				un(UOp.Void, lit(0)),
 				member(id("fn"), ctx.t("_ho")),
 			])
 		),
@@ -244,17 +225,15 @@ function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 			exprStmt(
 				call(id(ctx.dbg), [
 					lit("NEW_CLOSURE"),
-					bin("+", lit("uid="), id(ctx.t("_cuid"))),
-					bin(
-						"+",
+					bin(BOp.Add, lit("uid="), id(ctx.t("_cuid"))),
+					bin(BOp.Add,
 						lit("async="),
-						un("!", un("!", member(id(ctx.t("_cu")), "s")))
+						un(UOp.Not, un(UOp.Not, member(id(ctx.t("_cu")), "s")))
 					),
-					bin("+", lit("params="), member(id(ctx.t("_cu")), "p")),
-					bin(
-						"+",
+					bin(BOp.Add, lit("params="), member(id(ctx.t("_cu")), "p")),
+					bin(BOp.Add,
 						lit("arrow="),
-						un("!", un("!", member(id(ctx.t("_cu")), "a")))
+						un(UOp.Not, un(UOp.Not, member(id(ctx.t("_cu")), "a")))
 					),
 				])
 			),
@@ -300,13 +279,12 @@ function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
 			exprStmt(
 				call(id(ctx.dbg), [
 					lit("NEW_FUNCTION"),
-					bin("+", lit("uid="), id(ctx.t("_fuid"))),
-					bin(
-						"+",
+					bin(BOp.Add, lit("uid="), id(ctx.t("_fuid"))),
+					bin(BOp.Add,
 						lit("async="),
-						un("!", un("!", member(id(ctx.t("_fu")), "s")))
+						un(UOp.Not, un(UOp.Not, member(id(ctx.t("_fu")), "s")))
 					),
-					bin("+", lit("params="), member(id(ctx.t("_fu")), "p")),
+					bin(BOp.Add, lit("params="), member(id(ctx.t("_fu")), "p")),
 				])
 			),
 			exprStmt(ctx.push(buildDebugFunctionClosureIIFE(ctx))),

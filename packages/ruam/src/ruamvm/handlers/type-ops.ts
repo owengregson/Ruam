@@ -15,28 +15,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	lit,
-	un,
-	bin,
-	assign,
-	call,
-	member,
-	index,
-	ternary,
-	newExpr,
-	spread,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	forStmt,
-	throwStmt,
-	breakStmt,
-	update,
-	importExpr,
-} from "../nodes.js";
+import { type JsNode, id, lit, un, bin, assign, call, member, index, ternary, newExpr, spread, varDecl, exprStmt, ifStmt, forStmt, throwStmt, breakStmt, update, importExpr, BOp, UOp, UpOp, AOp } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple type coercions (AST nodes) ---
@@ -44,14 +23,14 @@ import { registry, type HandlerCtx } from "./registry.js";
 /** `S[P]=typeof S[P];break;` */
 function TYPEOF(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), un("typeof", ctx.peek()))),
+		exprStmt(assign(ctx.peek(), un(UOp.Typeof, ctx.peek()))),
 		breakStmt(),
 	];
 }
 
 /** `S[P]=void 0;break;` */
 function VOID(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(assign(ctx.peek(), un("void", lit(0)))), breakStmt()];
+	return [exprStmt(assign(ctx.peek(), un(UOp.Void, lit(0)))), breakStmt()];
 }
 
 /** `S[P]=Number(S[P]);break;` */
@@ -98,7 +77,7 @@ function TO_PROPERTY_KEY(ctx: HandlerCtx): JsNode[] {
 			assign(
 				ctx.peek(),
 				ternary(
-					bin("===", un("typeof", id("v")), lit("symbol")),
+					bin(BOp.Seq, un(UOp.Typeof, id("v")), lit("symbol")),
 					id("v"),
 					call(id("String"), [id("v")])
 				)
@@ -118,7 +97,7 @@ function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
 			assign(
 				ctx.peek(),
 				ternary(
-					bin("===", un("typeof", id("v")), lit("bigint")),
+					bin(BOp.Seq, un(UOp.Typeof, id("v")), lit("bigint")),
 					id("v"),
 					call(id("Number"), [id("v")])
 				)
@@ -145,33 +124,30 @@ function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
 		varDecl("exprCount", id(ctx.O)),
 		varDecl("parts", { type: "ArrayExpr", elements: [] }),
 		forStmt(
-			varDecl("ti", bin("*", id("exprCount"), lit(2))),
-			bin(">=", id("ti"), lit(0)),
-			update("--", false, id("ti")),
+			varDecl("ti", bin(BOp.Mul, id("exprCount"), lit(2))),
+			bin(BOp.Gte, id("ti"), lit(0)),
+			update(UpOp.Dec, false, id("ti")),
 			[exprStmt(call(member(id("parts"), "unshift"), [ctx.pop()]))]
 		),
 		varDecl("result", lit("")),
 		forStmt(
 			varDecl("ti", lit(0)),
-			bin("<", id("ti"), member(id("parts"), "length")),
-			update("++", false, id("ti")),
+			bin(BOp.Lt, id("ti"), member(id("parts"), "length")),
+			update(UpOp.Inc, false, id("ti")),
 			[
 				exprStmt(
 					assign(
 						id("result"),
 						call(id("String"), [
 							ternary(
-								bin(
-									"!=",
+								bin(BOp.Neq,
 									index(id("parts"), id("ti")),
 									lit(null)
 								),
 								index(id("parts"), id("ti")),
 								lit("")
 							),
-						]),
-						"+"
-					)
+						]), AOp.Add)
 				),
 			]
 		),
@@ -195,8 +171,8 @@ function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 		varDecl("callArgs", { type: "ArrayExpr", elements: [] }),
 		forStmt(
 			varDecl("ai", lit(0)),
-			bin("<", id("ai"), id("argc")),
-			update("++", false, id("ai")),
+			bin(BOp.Lt, id("ai"), id("argc")),
+			update(UpOp.Inc, false, id("ai")),
 			[exprStmt(call(member(id("callArgs"), "unshift"), [ctx.pop()]))]
 		),
 		varDecl("fn", ctx.pop()),
@@ -220,8 +196,8 @@ function CREATE_RAW_STRINGS(ctx: HandlerCtx): JsNode[] {
 		varDecl("raw", { type: "ArrayExpr", elements: [] }),
 		forStmt(
 			varDecl("ri", lit(0)),
-			bin("<", id("ri"), id("count")),
-			update("++", false, id("ri")),
+			bin(BOp.Lt, id("ri"), id("count")),
+			update(UpOp.Inc, false, id("ri")),
 			[exprStmt(call(member(id("raw"), "unshift"), [ctx.pop()]))]
 		),
 		exprStmt(call(member(id("Object"), "freeze"), [id("raw")])),
@@ -276,7 +252,7 @@ function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
 function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
-		ifStmt(bin("===", id("v"), un("void", lit(0))), [
+		ifStmt(bin(BOp.Seq, id("v"), un(UOp.Void, lit(0))), [
 			throwStmt(
 				newExpr(id("TypeError"), [
 					lit("Cannot read properties of undefined"),
@@ -293,10 +269,10 @@ function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
 function ASSERT_FUNCTION(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
-		ifStmt(bin("!==", un("typeof", id("v")), lit("function")), [
+		ifStmt(bin(BOp.Sneq, un(UOp.Typeof, id("v")), lit("function")), [
 			throwStmt(
 				newExpr(id("TypeError"), [
-					bin("+", id("v"), lit(" is not a function")),
+					bin(BOp.Add, id("v"), lit(" is not a function")),
 				])
 			),
 		]),

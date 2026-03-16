@@ -9,22 +9,13 @@
  */
 
 import type { JsNode } from "../nodes.js";
-import {
-	ifStmt,
-	exprStmt,
-	assign,
-	member,
-	id,
-	bin,
-	un,
-	lit,
-} from "../nodes.js";
+import { ifStmt, exprStmt, assign, member, id, bin, un, lit, BOp, UOp } from "../nodes.js";
 
 // --- Helpers ---
 
 /** Build `typeof <name> !== 'undefined'` */
 function typeofCheck(name: string): JsNode {
-	return bin("!==", un("typeof", id(name)), lit("undefined"));
+	return bin(BOp.Sneq, un(UOp.Typeof, id(name)), lit("undefined"));
 }
 
 /** Build `<globalName>.<vmName> = <vmName>;` as an ExprStmt */

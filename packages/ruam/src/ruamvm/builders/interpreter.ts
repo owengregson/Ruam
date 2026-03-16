@@ -15,37 +15,7 @@ import type { CaseClause } from "../nodes.js";
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
 import type { SplitFn } from "../constant-splitting.js";
-import {
-	caseClause,
-	lit,
-	switchStmt,
-	id,
-	breakStmt,
-	continueStmt,
-	fn,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	forStmt,
-	whileStmt,
-	tryCatch,
-	returnStmt,
-	throwStmt,
-	newExpr,
-	bin,
-	un,
-	assign,
-	update,
-	call,
-	member,
-	index,
-	obj,
-	arr,
-	ternary,
-	fnExpr,
-	seq,
-	mapChildren,
-} from "../nodes.js";
+import { caseClause, lit, switchStmt, id, breakStmt, continueStmt, fn, varDecl, exprStmt, ifStmt, forStmt, whileStmt, tryCatch, returnStmt, throwStmt, newExpr, bin, un, assign, update, call, member, index, obj, arr, ternary, fnExpr, seq, mapChildren, BOp, UOp, UpOp, AOp } from "../nodes.js";
 import { registry, makeHandlerCtx } from "../handlers/index.js";
 import {
 	VM_MAX_RECURSION_DEPTH,
@@ -179,7 +149,7 @@ export function buildInterpreterFunctions(
 		T("_g"),
 	];
 	for (const name of slotNames) {
-		iifeDecls.push(varDecl(name, un("void", lit(0))));
+		iifeDecls.push(varDecl(name, un(UOp.Void, lit(0))));
 	}
 
 	// When no async units exist, skip the full async interpreter.
@@ -408,8 +378,8 @@ function buildHandlerTableMeta(
 	initNodes.push(
 		forStmt(
 			varDecl(htiName, lit(0)),
-			bin("<", id(htiName), member(id(htdName), "length")),
-			assign(id(htiName), lit(2), "+"),
+			bin(BOp.Lt, id(htiName), member(id(htdName), "length")),
+			assign(id(htiName), lit(2), AOp.Add),
 			(() => {
 				const htvName = temps["_htv"];
 				const htwName = temps["_htw"];
@@ -419,21 +389,18 @@ function buildHandlerTableMeta(
 					// var htv = _htd[_hti] ^ (_htk & 0xFFFF);
 					varDecl(
 						htvName,
-						bin(
-							"^",
+						bin(BOp.BitXor,
 							index(id(htdName), id(htiName)),
-							bin("&", id(htkName), lit(0xffff))
+							bin(BOp.BitAnd, id(htkName), lit(0xffff))
 						)
 					),
 					// var htw = _htd[_hti+1] ^ ((_htk >>> 16) & 0xFFFF);
 					varDecl(
 						htwName,
-						bin(
-							"^",
-							index(id(htdName), bin("+", id(htiName), lit(1))),
-							bin(
-								"&",
-								bin(">>>", id(htkName), lit(16)),
+						bin(BOp.BitXor,
+							index(id(htdName), bin(BOp.Add, id(htiName), lit(1))),
+							bin(BOp.BitAnd,
+								bin(BOp.Ushr, id(htkName), lit(16)),
 								lit(0xffff)
 							)
 						)
@@ -446,12 +413,10 @@ function buildHandlerTableMeta(
 					exprStmt(
 						assign(
 							id(htkName),
-							bin(
-								">>>",
-								bin(
-									"^",
+							bin(BOp.Ushr,
+								bin(BOp.BitXor,
 									call(id(names.imul), [
-										bin("^", id(htkName), id(htvName)),
+										bin(BOp.BitXor, id(htkName), id(htvName)),
 										L(0x45d9f3b),
 									]),
 									id(htwName)
@@ -474,17 +439,15 @@ function buildHandlerTableMeta(
 	initNodes.push(
 		forStmt(
 			assign(id(htiName), lit(0)),
-			bin("<", id(htiName), member(id(htdName), "length")),
-			update("++", false, id(htiName)),
+			bin(BOp.Lt, id(htiName), member(id(htdName), "length")),
+			update(UpOp.Inc, false, id(htiName)),
 			[
 				exprStmt(
 					assign(
 						id(names.keyAnchor),
-						bin(
-							">>>",
+						bin(BOp.Ushr,
 							call(id(names.imul), [
-								bin(
-									"^",
+								bin(BOp.BitXor,
 									id(names.keyAnchor),
 									index(id(htdName), id(htiName))
 								),
@@ -842,7 +805,7 @@ function buildScaffoldAST(
 	const outerBody: JsNode[] = [];
 
 	// depth++
-	outerBody.push(exprStmt(update("++", false, id(n.depth))));
+	outerBody.push(exprStmt(update(UpOp.Inc, false, id(n.depth))));
 
 	// When hoisting, save current IIFE-scope slot values and copy params
 	if (hoistHandlers) {
@@ -862,7 +825,7 @@ function buildScaffoldAST(
 	if (debug) {
 		// var _uid_=(U._dbgId||'?')
 		outerBody.push(
-			varDecl(T("_uid_"), bin("||", member(id(U), T("_dbgId")), lit("?")))
+			varDecl(T("_uid_"), bin(BOp.Or, member(id(U), T("_dbgId")), lit("?")))
 		);
 		// callStack.push(_uid_)
 		outerBody.push(
@@ -871,7 +834,7 @@ function buildScaffoldAST(
 	}
 
 	// Recursion guard: if(depth>500){depth--;throw new RangeError(...)}
-	const guardBody: JsNode[] = [exprStmt(update("--", false, id(n.depth)))];
+	const guardBody: JsNode[] = [exprStmt(update(UpOp.Dec, false, id(n.depth)))];
 	if (debug) {
 		guardBody.push(exprStmt(call(member(id(n.callStack), "pop"), [])));
 	}
@@ -886,16 +849,15 @@ function buildScaffoldAST(
 	guardBody.push(
 		throwStmt(
 			newExpr(id("RangeError"), [
-				bin(
-					"+",
-					bin("+", lit("Maximum call "), lit("s")),
+				bin(BOp.Add,
+					bin(BOp.Add, lit("Maximum call "), lit("s")),
 					lit("tack size exceeded")
 				),
 			])
 		)
 	);
 	outerBody.push(
-		ifStmt(bin(">", id(n.depth), lit(VM_MAX_RECURSION_DEPTH)), guardBody)
+		ifStmt(bin(BOp.Gt, id(n.depth), lit(VM_MAX_RECURSION_DEPTH)), guardBody)
 	);
 
 	// --- Try body (main interpreter logic) ---
@@ -916,9 +878,9 @@ function buildScaffoldAST(
 	tryBody.push(
 		forStmt(
 			varDecl("_rl", member(id(U), "r")),
-			bin(">", id("_rl"), lit(0)),
-			update("--", false, id("_rl")),
-			[exprStmt(call(member(id(R), "push"), [un("void", lit(0))]))]
+			bin(BOp.Gt, id("_rl"), lit(0)),
+			update(UpOp.Dec, false, id("_rl")),
+			[exprStmt(call(member(id(R), "push"), [un(UOp.Void, lit(0))]))]
 		)
 	);
 	tryBody.push(declOrAssign(IP, lit(0)));
@@ -928,7 +890,7 @@ function buildScaffoldAST(
 	tryBody.push(declOrAssign(PE, lit(null)));
 	tryBody.push(declOrAssign(HPE, lit(false)));
 	tryBody.push(declOrAssign(CT, lit(0)));
-	tryBody.push(declOrAssign(CV, un("void", lit(0))));
+	tryBody.push(declOrAssign(CV, un(UOp.Void, lit(0))));
 	tryBody.push(
 		declOrAssign(
 			SC,
@@ -945,23 +907,22 @@ function buildScaffoldAST(
 	// Optional: debug entry logging
 	if (debug) {
 		tryBody.push(
-			varDecl(T("_uid"), bin("||", member(id(U), T("_dbgId")), lit("?")))
+			varDecl(T("_uid"), bin(BOp.Or, member(id(U), T("_dbgId")), lit("?")))
 		);
 		tryBody.push(
 			exprStmt(
 				call(id(n.dbg), [
 					lit("ENTER"),
 					lit(fnLabel),
-					bin("+", lit("unit="), id(T("_uid"))),
-					bin("+", lit("params="), member(id(U), "p")),
-					bin("+", lit("args="), member(id(A), "length")),
-					bin(
-						"+",
+					bin(BOp.Add, lit("unit="), id(T("_uid"))),
+					bin(BOp.Add, lit("params="), member(id(U), "p")),
+					bin(BOp.Add, lit("args="), member(id(A), "length")),
+					bin(BOp.Add,
 						lit("async="),
-						un("!", un("!", member(id(U), "s")))
+						un(UOp.Not, un(UOp.Not, member(id(U), "s")))
 					),
-					bin("+", lit("regs="), member(id(U), "r")),
-					bin("+", lit("depth="), id(n.depth)),
+					bin(BOp.Add, lit("regs="), member(id(U), "r")),
+					bin(BOp.Add, lit("depth="), id(n.depth)),
 				])
 			)
 		);
@@ -987,14 +948,14 @@ function buildScaffoldAST(
 
 	// var PH=I[IP]; O=I[IP+1]; IP+=2;
 	whileBody.push(varDecl(PH, index(id(I), id(IP))));
-	whileBody.push(declOrAssign(O, index(id(I), bin("+", id(IP), lit(1)))));
-	whileBody.push(exprStmt(assign(id(IP), lit(2), "+")));
+	whileBody.push(declOrAssign(O, index(id(I), bin(BOp.Add, id(IP), lit(1)))));
+	whileBody.push(exprStmt(assign(id(IP), lit(2), AOp.Add)));
 
 	// Optional: rolling cipher decrypt (inlined rcMix for performance)
 	if (rollingCipher) {
 		// var _ri=(IP-2)>>>1
 		whileBody.push(
-			varDecl(T("_ri"), bin(">>>", bin("-", id(IP), lit(2)), lit(1)))
+			varDecl(T("_ri"), bin(BOp.Ushr, bin(BOp.Sub, id(IP), lit(2)), lit(1)))
 		);
 		// Inline rcMix(rcState, _ri, _ri ^ 0x9E3779B9):
 		// var _ks = rcState;
@@ -1004,10 +965,9 @@ function buildScaffoldAST(
 			exprStmt(
 				assign(
 					id(T("_ks")),
-					bin(
-						">>>",
+					bin(BOp.Ushr,
 						call(id(n.imul), [
-							bin("^", id(T("_ks")), id(T("_ri"))),
+							bin(BOp.BitXor, id(T("_ks")), id(T("_ri"))),
 							L(0x85ebca6b),
 						]),
 						lit(0)
@@ -1020,13 +980,11 @@ function buildScaffoldAST(
 			exprStmt(
 				assign(
 					id(T("_ks")),
-					bin(
-						">>>",
+					bin(BOp.Ushr,
 						call(id(n.imul), [
-							bin(
-								"^",
+							bin(BOp.BitXor,
 								id(T("_ks")),
-								bin("^", id(T("_ri")), L(0x9e3779b9))
+								bin(BOp.BitXor, id(T("_ri")), L(0x9e3779b9))
 							),
 							L(0xc2b2ae35),
 						]),
@@ -1040,22 +998,21 @@ function buildScaffoldAST(
 			exprStmt(
 				assign(
 					id(T("_ks")),
-					bin("^", id(T("_ks")), bin(">>>", id(T("_ks")), lit(16)))
+					bin(BOp.BitXor, id(T("_ks")), bin(BOp.Ushr, id(T("_ks")), lit(16)))
 				)
 			)
 		);
 		// _ks = _ks >>> 0;
 		whileBody.push(
-			exprStmt(assign(id(T("_ks")), bin(">>>", id(T("_ks")), lit(0))))
+			exprStmt(assign(id(T("_ks")), bin(BOp.Ushr, id(T("_ks")), lit(0))))
 		);
 		// PH=(PH^(_ks&0xFFFF))&0xFFFF
 		whileBody.push(
 			exprStmt(
 				assign(
 					id(PH),
-					bin(
-						"&",
-						bin("^", id(PH), bin("&", id(T("_ks")), lit(0xffff))),
+					bin(BOp.BitAnd,
+						bin(BOp.BitXor, id(PH), bin(BOp.BitAnd, id(T("_ks")), lit(0xffff))),
 						lit(0xffff)
 					)
 				)
@@ -1064,7 +1021,7 @@ function buildScaffoldAST(
 		// O=(O^_ks)|0
 		whileBody.push(
 			exprStmt(
-				assign(id(O), bin("|", bin("^", id(O), id(T("_ks"))), lit(0)))
+				assign(id(O), bin(BOp.BitOr, bin(BOp.BitXor, id(O), id(T("_ks"))), lit(0)))
 			)
 		);
 	}
@@ -1081,8 +1038,8 @@ function buildScaffoldAST(
 
 	// Inner try body: while(IP<_il){...}; return void 0;
 	const innerTryBody: JsNode[] = [
-		whileStmt(bin("<", id(IP), id(T("_il"))), whileBody),
-		returnStmt(un("void", lit(0))),
+		whileStmt(bin(BOp.Lt, id(IP), id(T("_il"))), whileBody),
+		returnStmt(un(UOp.Void, lit(0))),
 	];
 
 	// --- Inner catch handler ---
@@ -1096,12 +1053,11 @@ function buildScaffoldAST(
 					lit("EXCEPTION"),
 					lit("error="),
 					ternary(
-						bin("&&", id("e"), member(id("e"), "message")),
+						bin(BOp.And, id("e"), member(id("e"), "message")),
 						member(id("e"), "message"),
 						id("e")
 					),
-					bin(
-						"+",
+					bin(BOp.Add,
 						lit(EX + "="),
 						ternary(id(EX), member(id(EX), "length"), lit(0))
 					),
@@ -1114,7 +1070,7 @@ function buildScaffoldAST(
 	catchBody.push(exprStmt(assign(id(HPE), lit(false))));
 	catchBody.push(exprStmt(assign(id(PE), lit(null))));
 	catchBody.push(exprStmt(assign(id(CT), lit(0))));
-	catchBody.push(exprStmt(assign(id(CV), un("void", lit(0)))));
+	catchBody.push(exprStmt(assign(id(CV), un(UOp.Void, lit(0)))));
 
 	// if(EX&&EX.length>0){...}
 	const exHandlerBody: JsNode[] = [];
@@ -1129,8 +1085,8 @@ function buildScaffoldAST(
 			exprStmt(
 				call(id(n.dbg), [
 					lit("CATCH"),
-					bin("+", lit("ip="), member(id(T("_h")), T("_ci"))),
-					bin("+", lit("sp="), member(id(T("_h")), T("_sp"))),
+					bin(BOp.Add, lit("ip="), member(id(T("_h")), T("_ci"))),
+					bin(BOp.Add, lit("sp="), member(id(T("_h")), T("_sp"))),
 				])
 			)
 		);
@@ -1144,14 +1100,14 @@ function buildScaffoldAST(
 	// IP=_h._ci*2
 	catchRouteBody.push(
 		exprStmt(
-			assign(id(IP), bin("*", member(id(T("_h")), T("_ci")), lit(2)))
+			assign(id(IP), bin(BOp.Mul, member(id(T("_h")), T("_ci")), lit(2)))
 		)
 	);
 	// continue
 	catchRouteBody.push(continueStmt());
 
 	exHandlerBody.push(
-		ifStmt(bin(">=", member(id(T("_h")), T("_ci")), lit(0)), catchRouteBody)
+		ifStmt(bin(BOp.Gte, member(id(T("_h")), T("_ci")), lit(0)), catchRouteBody)
 	);
 
 	// if(_h._fi>=0){ ... finally routing ... }
@@ -1161,8 +1117,8 @@ function buildScaffoldAST(
 			exprStmt(
 				call(id(n.dbg), [
 					lit("FINALLY"),
-					bin("+", lit("ip="), member(id(T("_h")), T("_fi"))),
-					bin("+", lit("sp="), member(id(T("_h")), T("_sp"))),
+					bin(BOp.Add, lit("ip="), member(id(T("_h")), T("_fi"))),
+					bin(BOp.Add, lit("sp="), member(id(T("_h")), T("_sp"))),
 				])
 			)
 		);
@@ -1177,7 +1133,7 @@ function buildScaffoldAST(
 	// IP=_h._fi*2
 	finallyRouteBody.push(
 		exprStmt(
-			assign(id(IP), bin("*", member(id(T("_h")), T("_fi")), lit(2)))
+			assign(id(IP), bin(BOp.Mul, member(id(T("_h")), T("_fi")), lit(2)))
 		)
 	);
 	// continue
@@ -1185,14 +1141,14 @@ function buildScaffoldAST(
 
 	exHandlerBody.push(
 		ifStmt(
-			bin(">=", member(id(T("_h")), T("_fi")), lit(0)),
+			bin(BOp.Gte, member(id(T("_h")), T("_fi")), lit(0)),
 			finallyRouteBody
 		)
 	);
 
 	catchBody.push(
 		ifStmt(
-			bin("&&", id(EX), bin(">", member(id(EX), "length"), lit(0))),
+			bin(BOp.And, id(EX), bin(BOp.Gt, member(id(EX), "length"), lit(0))),
 			exHandlerBody
 		)
 	);
@@ -1205,7 +1161,7 @@ function buildScaffoldAST(
 					lit("UNCAUGHT"),
 					lit("error="),
 					ternary(
-						bin("&&", id("e"), member(id("e"), "message")),
+						bin(BOp.And, id("e"), member(id("e"), "message")),
 						member(id("e"), "message"),
 						id("e")
 					),
@@ -1229,7 +1185,7 @@ function buildScaffoldAST(
 	tryBody.push(foreverLoop);
 
 	// --- Outer finally ---
-	const finallyBody: JsNode[] = [exprStmt(update("--", false, id(n.depth)))];
+	const finallyBody: JsNode[] = [exprStmt(update(UpOp.Dec, false, id(n.depth)))];
 	if (debug) {
 		finallyBody.push(exprStmt(call(member(id(n.callStack), "pop"), [])));
 	}
@@ -1275,27 +1231,27 @@ function generateDecoyHandlers(
 		SC = n.scope;
 
 	/** S[S.length-1] — peek at top of stack */
-	const tos = () => index(id(S), bin("-", member(id(S), "length"), lit(1)));
+	const tos = () => index(id(S), bin(BOp.Sub, member(id(S), "length"), lit(1)));
 
 	// AST decoy body factories — look like real array push/pop/length ops
 	const decoyBodyFactories: (() => JsNode[])[] = [
 		// var b=S.pop(); S[S.length-1]=S[S.length-1]+b
 		() => [
 			varDecl("b", call(member(id(S), "pop"), [])),
-			exprStmt(assign(tos(), bin("+", tos(), id("b")))),
+			exprStmt(assign(tos(), bin(BOp.Add, tos(), id("b")))),
 		],
 		// var b=S.pop(); S[S.length-1]=S[S.length-1]-b
 		() => [
 			varDecl("b", call(member(id(S), "pop"), [])),
-			exprStmt(assign(tos(), bin("-", tos(), id("b")))),
+			exprStmt(assign(tos(), bin(BOp.Sub, tos(), id("b")))),
 		],
 		// var b=S.pop(); S[S.length-1]=S[S.length-1]*b
 		() => [
 			varDecl("b", call(member(id(S), "pop"), [])),
-			exprStmt(assign(tos(), bin("*", tos(), id("b")))),
+			exprStmt(assign(tos(), bin(BOp.Mul, tos(), id("b")))),
 		],
 		// S[S.length-1]=~S[S.length-1]
-		() => [exprStmt(assign(tos(), un("~", tos())))],
+		() => [exprStmt(assign(tos(), un(UOp.BitNot, tos())))],
 		// S.push(C[O])
 		() => [exprStmt(call(member(id(S), "push"), [index(id(C), id(O))]))],
 		// R[O]=S.pop()
@@ -1310,7 +1266,7 @@ function generateDecoyHandlers(
 		() => [
 			varDecl("s", id(SC)),
 			ifStmt(
-				bin("&&", id("s"), bin("in", index(id(C), id(O)), id("s"))),
+				bin(BOp.And, id("s"), bin(BOp.In, index(id(C), id(O)), id("s"))),
 				[
 					exprStmt(
 						assign(
@@ -1322,23 +1278,23 @@ function generateDecoyHandlers(
 			),
 		],
 		// S[S.length-1]=!S[S.length-1]
-		() => [exprStmt(assign(tos(), un("!", tos())))],
+		() => [exprStmt(assign(tos(), un(UOp.Not, tos())))],
 		// var b=S.pop(); S[S.length-1]=S[S.length-1]&b
 		() => [
 			varDecl("b", call(member(id(S), "pop"), [])),
-			exprStmt(assign(tos(), bin("&", tos(), id("b")))),
+			exprStmt(assign(tos(), bin(BOp.BitAnd, tos(), id("b")))),
 		],
 		// var b=S.pop(); S[S.length-1]=S[S.length-1]|b
 		() => [
 			varDecl("b", call(member(id(S), "pop"), [])),
-			exprStmt(assign(tos(), bin("|", tos(), id("b")))),
+			exprStmt(assign(tos(), bin(BOp.BitOr, tos(), id("b")))),
 		],
 		// S[S.length-1]=-S[S.length-1]
-		() => [exprStmt(assign(tos(), un("-", tos())))],
+		() => [exprStmt(assign(tos(), un(UOp.Neg, tos())))],
 		// S[S.length-1]=+S[S.length-1]+1
-		() => [exprStmt(assign(tos(), bin("+", un("+", tos()), lit(1))))],
+		() => [exprStmt(assign(tos(), bin(BOp.Add, un(UOp.Pos, tos()), lit(1))))],
 		// S[S.length-1]=typeof S[S.length-1]
-		() => [exprStmt(assign(tos(), un("typeof", tos())))],
+		() => [exprStmt(assign(tos(), un(UOp.Typeof, tos())))],
 		// S.pop()
 		() => [exprStmt(call(member(id(S), "pop"), []))],
 		// S.push(S[S.length-1])
@@ -1417,7 +1373,7 @@ function transformBodyForFT(
 			if (n.type === "ReturnStmt") {
 				const value =
 					(n as { type: "ReturnStmt"; value?: JsNode }).value ??
-					un("void", lit(0));
+					un(UOp.Void, lit(0));
 				return returnStmt(seq(assign(id(frvName), value), id(frsName)));
 			}
 			return null;
@@ -1525,9 +1481,9 @@ function buildFunctionTableDispatch(
 	// For async: FRV stays exec-local (interleaving can clobber shared state).
 	const preLoopDecls: JsNode[] = [];
 	if (isAsync) {
-		preLoopDecls.push(varDecl(FRV, un("void", lit(0))));
+		preLoopDecls.push(varDecl(FRV, un(UOp.Void, lit(0))));
 	} else {
-		iifeDecls.push(varDecl(FRV, un("void", lit(0))));
+		iifeDecls.push(varDecl(FRV, un(UOp.Void, lit(0))));
 	}
 
 	const activeGroupNames: string[] = [];
@@ -1560,10 +1516,10 @@ function buildFunctionTableDispatch(
 
 	const buildCallCheck = (groupName: string, offset: number): JsNode[] => {
 		const indexExpr =
-			offset === 0 ? id(FDI) : bin("-", id(FDI), lit(offset));
+			offset === 0 ? id(FDI) : bin(BOp.Sub, id(FDI), lit(offset));
 		const callExpr = call(index(id(groupName), indexExpr), []);
 		const result = isAsync ? awaitNode(callExpr) : callExpr;
-		return [ifStmt(bin("===", result, id(FRS)), [returnStmt(id(FRV))])];
+		return [ifStmt(bin(BOp.Seq, result, id(FRS)), [returnStmt(id(FRV))])];
 	};
 
 	if (numGroups === 1) {
@@ -1579,7 +1535,7 @@ function buildFunctionTableDispatch(
 			const threshold = (i + 1) * groupSize;
 			const body = buildCallCheck(activeGroupNames[i]!, i * groupSize);
 			current = [
-				ifStmt(bin("<", id(FDI), lit(threshold)), body, current),
+				ifStmt(bin(BOp.Lt, id(FDI), lit(threshold)), body, current),
 			];
 		}
 
@@ -1606,7 +1562,7 @@ function transformBodyForTagged(
 			if (n.type === "ReturnStmt") {
 				const value =
 					(n as { type: "ReturnStmt"; value?: JsNode }).value ??
-					un("void", lit(0));
+					un(UOp.Void, lit(0));
 				return returnStmt(
 					obj([lit("t"), lit(tag)], [lit("v"), value])
 				);
@@ -1633,7 +1589,7 @@ function transformBodyForFlag(
 			if (n.type === "ReturnStmt") {
 				const value =
 					(n as { type: "ReturnStmt"; value?: JsNode }).value ??
-					un("void", lit(0));
+					un(UOp.Void, lit(0));
 				// Use a sequence expression: (_done = true, _rv = value, void 0)
 				// then return. This keeps it as a single return statement.
 				return returnStmt(
@@ -1714,9 +1670,9 @@ function buildDirectArrayDispatch(
 	}
 
 	if (isAsync) {
-		preLoopDecls.push(varDecl(FRV, un("void", lit(0))));
+		preLoopDecls.push(varDecl(FRV, un(UOp.Void, lit(0))));
 	} else {
-		iifeDecls.push(varDecl(FRV, un("void", lit(0))));
+		iifeDecls.push(varDecl(FRV, un(UOp.Void, lit(0))));
 	}
 
 	// Single flat array — no grouping
@@ -1739,10 +1695,9 @@ function buildDirectArrayDispatch(
 		dispatchNodes.push(exprStmt(assign(id(FRV), result)));
 		dispatchNodes.push(
 			ifStmt(
-				bin(
-					"&&",
+				bin(BOp.And,
 					id(FRV),
-					bin("===", member(id(FRV), "t"), lit(returnTag))
+					bin(BOp.Seq, member(id(FRV), "t"), lit(returnTag))
 				),
 				[returnStmt(member(id(FRV), "v"))]
 			)
@@ -1758,7 +1713,7 @@ function buildDirectArrayDispatch(
 		);
 	} else {
 		// Sentinel: if (fn() === _frs) return _frv;
-		dispatchNodes.push(ifStmt(bin("===", result, id(FRS)), [returnStmt(id(FRV))]));
+		dispatchNodes.push(ifStmt(bin(BOp.Seq, result, id(FRS)), [returnStmt(id(FRV))]));
 	}
 
 	return { preLoopDecls, iifeDecls, dispatchNodes };
@@ -1834,9 +1789,9 @@ function buildObjectLookupDispatch(
 	}
 
 	if (isAsync) {
-		preLoopDecls.push(varDecl(FRV, un("void", lit(0))));
+		preLoopDecls.push(varDecl(FRV, un(UOp.Void, lit(0))));
 	} else {
-		iifeDecls.push(varDecl(FRV, un("void", lit(0))));
+		iifeDecls.push(varDecl(FRV, un(UOp.Void, lit(0))));
 	}
 
 	const handlerTarget = isAsync ? preLoopDecls : iifeDecls;
@@ -1857,10 +1812,9 @@ function buildObjectLookupDispatch(
 		dispatchNodes.push(exprStmt(assign(id(FRV), result)));
 		dispatchNodes.push(
 			ifStmt(
-				bin(
-					"&&",
+				bin(BOp.And,
 					id(FRV),
-					bin("===", member(id(FRV), "t"), lit(returnTag))
+					bin(BOp.Seq, member(id(FRV), "t"), lit(returnTag))
 				),
 				[returnStmt(member(id(FRV), "v"))]
 			)
@@ -1874,7 +1828,7 @@ function buildObjectLookupDispatch(
 			])
 		);
 	} else {
-		dispatchNodes.push(ifStmt(bin("===", result, id(FRS)), [returnStmt(id(FRV))]));
+		dispatchNodes.push(ifStmt(bin(BOp.Seq, result, id(FRS)), [returnStmt(id(FRV))]));
 	}
 
 	return { preLoopDecls, iifeDecls, dispatchNodes };
@@ -1907,12 +1861,9 @@ function buildStackEncodingProxyAST(
 	// var _sek=(U.i.length^U.r^0x5A3C96E1)>>>0
 	const sekInit = varDecl(
 		SEK,
-		bin(
-			">>>",
-			bin(
-				"^",
-				bin(
-					"^",
+		bin(BOp.Ushr,
+			bin(BOp.BitXor,
+				bin(BOp.BitXor,
 					member(member(id(U), "i"), "length"),
 					member(id(U), "r")
 				),
@@ -1927,37 +1878,36 @@ function buildStackEncodingProxyAST(
 
 	// Helper: (_sek^(i*0x9E3779B9))>>>0
 	const xorKey = (iVar: JsNode) =>
-		bin(">>>", bin("^", id(SEK), bin("*", iVar, L(0x9e3779b9))), lit(0));
+		bin(BOp.Ushr, bin(BOp.BitXor, id(SEK), bin(BOp.Mul, iVar, L(0x9e3779b9))), lit(0));
 
 	// set handler function body
 	const setBody: JsNode[] = [
 		// var i=+k
-		varDecl("i", un("+", id("k"))),
+		varDecl("i", un(UOp.Pos, id("k"))),
 		// if(i===i&&i>=0){...}else{_seRaw[k]=v;}
 		ifStmt(
-			bin("&&", bin("===", id("i"), id("i")), bin(">=", id("i"), lit(0))),
+			bin(BOp.And, bin(BOp.Seq, id("i"), id("i")), bin(BOp.Gte, id("i"), lit(0))),
 			[
 				// var t=typeof v
-				varDecl("t", un("typeof", id("v"))),
+				varDecl("t", un(UOp.Typeof, id("v"))),
 				// if(t==='number'&&(v|0)===v){_seRaw[i]=[0,v^((_sek^(i*0x9E3779B9))>>>0)];}
 				ifStmt(
-					bin(
-						"&&",
-						bin("===", id("t"), lit("number")),
-						bin("===", bin("|", id("v"), lit(0)), id("v"))
+					bin(BOp.And,
+						bin(BOp.Seq, id("t"), lit("number")),
+						bin(BOp.Seq, bin(BOp.BitOr, id("v"), lit(0)), id("v"))
 					),
 					[
 						exprStmt(
 							assign(
 								index(id(SERAW), id("i")),
-								arr(lit(0), bin("^", id("v"), xorKey(id("i"))))
+								arr(lit(0), bin(BOp.BitXor, id("v"), xorKey(id("i"))))
 							)
 						),
 					],
 					[
 						// else if(t==='boolean'){_seRaw[i]=[1,v?1:0];}
 						ifStmt(
-							bin("===", id("t"), lit("boolean")),
+							bin(BOp.Seq, id("t"), lit("boolean")),
 							[
 								exprStmt(
 									assign(
@@ -1972,7 +1922,7 @@ function buildStackEncodingProxyAST(
 							[
 								// else if(t==='string'){_seRaw[i]=[2,v];}
 								ifStmt(
-									bin("===", id("t"), lit("string")),
+									bin(BOp.Seq, id("t"), lit("string")),
 									[
 										exprStmt(
 											assign(
@@ -2008,31 +1958,31 @@ function buildStackEncodingProxyAST(
 	// get handler function body
 	const getBody: JsNode[] = [
 		// var i=+k
-		varDecl("i", un("+", id("k"))),
+		varDecl("i", un(UOp.Pos, id("k"))),
 		// if(i===i&&i>=0){...}
 		ifStmt(
-			bin("&&", bin("===", id("i"), id("i")), bin(">=", id("i"), lit(0))),
+			bin(BOp.And, bin(BOp.Seq, id("i"), id("i")), bin(BOp.Gte, id("i"), lit(0))),
 			[
 				// var e=_seRaw[i]
 				varDecl("e", index(id(SERAW), id("i"))),
 				// if(!e)return void 0
-				ifStmt(un("!", id("e")), [returnStmt(un("void", lit(0)))]),
+				ifStmt(un(UOp.Not, id("e")), [returnStmt(un(UOp.Void, lit(0)))]),
 				// if(e[0]===0)return e[1]^((_sek^(i*0x9E3779B9))>>>0)
-				ifStmt(bin("===", index(id("e"), lit(0)), lit(0)), [
+				ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(0)), [
 					returnStmt(
-						bin("^", index(id("e"), lit(1)), xorKey(id("i")))
+						bin(BOp.BitXor, index(id("e"), lit(1)), xorKey(id("i")))
 					),
 				]),
 				// if(e[0]===1)return !!e[1]
-				ifStmt(bin("===", index(id("e"), lit(0)), lit(1)), [
-					returnStmt(un("!", un("!", index(id("e"), lit(1))))),
+				ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(1)), [
+					returnStmt(un(UOp.Not, un(UOp.Not, index(id("e"), lit(1))))),
 				]),
 				// return e[1]
 				returnStmt(index(id("e"), lit(1))),
 			]
 		),
 		// if(k==='length')return _seRaw.length
-		ifStmt(bin("===", id("k"), lit("length")), [
+		ifStmt(bin(BOp.Seq, id("k"), lit("length")), [
 			returnStmt(member(id(SERAW), "length")),
 		]),
 		// return _seRaw[k]

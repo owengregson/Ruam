@@ -24,6 +24,7 @@ import type {
 	IfStmt,
 	ForStmt,
 } from "./nodes.js";
+import { BOp, UOp } from "./nodes.js";
 import type { StructuralChoices } from "../structural-choices.js";
 
 // --- Public API ---
@@ -267,23 +268,23 @@ function transformBinOp(node: BinOp, ch: StructuralChoices): JsNode {
 	const right = walkNode(node.right, ch);
 
 	if (
-		node.op === "===" &&
+		node.op === BOp.Seq &&
 		ch.prng() < ch.expressionNoise.doubleNegationBias
 	) {
 		return {
 			type: "UnaryOp",
-			op: "!",
-			expr: { type: "BinOp", op: "!==", left, right },
+			op: UOp.Not,
+			expr: { type: "BinOp", op: BOp.Sneq, left, right },
 		};
 	}
 	if (
-		node.op === "!==" &&
+		node.op === BOp.Sneq &&
 		ch.prng() < ch.expressionNoise.doubleNegationBias
 	) {
 		return {
 			type: "UnaryOp",
-			op: "!",
-			expr: { type: "BinOp", op: "===", left, right },
+			op: UOp.Not,
+			expr: { type: "BinOp", op: BOp.Seq, left, right },
 		};
 	}
 
@@ -313,7 +314,7 @@ function transformLiteral(node: Literal, ch: StructuralChoices): JsNode {
 		// outputs numbers as-is, we shift to a BinOp: (v|0)
 		return {
 			type: "BinOp",
-			op: "|",
+			op: BOp.BitOr,
 			left: { type: "Literal", value: v },
 			right: { type: "Literal", value: 0 },
 		};
@@ -322,10 +323,10 @@ function transformLiteral(node: Literal, ch: StructuralChoices): JsNode {
 	const offset = Math.floor(ch.prng() * 7) + 1;
 	return {
 		type: "BinOp",
-		op: "-",
+		op: BOp.Sub,
 		left: {
 			type: "BinOp",
-			op: "+",
+			op: BOp.Add,
 			left: { type: "Literal", value: v },
 			right: { type: "Literal", value: offset },
 		},

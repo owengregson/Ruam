@@ -10,20 +10,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	exprStmt,
-	breakStmt,
-	varDecl,
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	index,
-	member,
-	call,
-} from "../nodes.js";
+import { type JsNode, exprStmt, breakStmt, varDecl, id, lit, bin, un, assign, index, member, call, BOp, UOp, AOp } from "../nodes.js";
 import { type HandlerCtx, registry } from "./registry.js";
 
 // --- Push handlers ---
@@ -33,7 +20,7 @@ function PUSH_CONST(ctx: HandlerCtx): JsNode[] {
 }
 
 function PUSH_UNDEFINED(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(ctx.push(un("void", lit(0)))), breakStmt()];
+	return [exprStmt(ctx.push(un(UOp.Void, lit(0)))), breakStmt()];
 }
 
 function PUSH_NULL(ctx: HandlerCtx): JsNode[] {
@@ -57,7 +44,7 @@ function PUSH_ONE(ctx: HandlerCtx): JsNode[] {
 }
 
 function PUSH_NEG_ONE(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(ctx.push(un("-", lit(1)))), breakStmt()];
+	return [exprStmt(ctx.push(un(UOp.Neg, lit(1)))), breakStmt()];
 }
 
 function PUSH_EMPTY_STRING(ctx: HandlerCtx): JsNode[] {
@@ -73,7 +60,7 @@ function PUSH_INFINITY(ctx: HandlerCtx): JsNode[] {
 }
 
 function PUSH_NEG_INFINITY(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(ctx.push(un("-", id("Infinity")))), breakStmt()];
+	return [exprStmt(ctx.push(un(UOp.Neg, id("Infinity")))), breakStmt()];
 }
 
 // --- Pop / stack pointer handlers ---
@@ -87,7 +74,7 @@ function POP(ctx: HandlerCtx): JsNode[] {
 function POP_N(ctx: HandlerCtx): JsNode[] {
 	// S.length -= O
 	return [
-		exprStmt(assign(member(id(ctx.S), "length"), id(ctx.O), "-")),
+		exprStmt(assign(member(id(ctx.S), "length"), id(ctx.O), AOp.Sub)),
 		breakStmt(),
 	];
 }
@@ -106,7 +93,7 @@ function DUP2(ctx: HandlerCtx): JsNode[] {
 		// var _a=S[S.length-2], _b=S[S.length-1]
 		varDecl(
 			ctx.t("_a"),
-			index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2)))
+			index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(2)))
 		),
 		varDecl(ctx.t("_b"), ctx.peek()),
 		// S.push(_a); S.push(_b)
@@ -122,19 +109,19 @@ function DUP2(ctx: HandlerCtx): JsNode[] {
 function SWAP(ctx: HandlerCtx): JsNode[] {
 	// Direct index swap: var _t=S[S.length-1]; S[S.length-1]=S[S.length-2]; S[S.length-2]=_t;
 	const sLen = member(id(ctx.S), "length");
-	const top = index(id(ctx.S), bin("-", sLen, lit(1)));
-	const second = index(id(ctx.S), bin("-", sLen, lit(2)));
+	const top = index(id(ctx.S), bin(BOp.Sub, sLen, lit(1)));
+	const second = index(id(ctx.S), bin(BOp.Sub, sLen, lit(2)));
 	return [
 		varDecl("_t", top),
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))),
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2)))
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(1))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(2)))
 			)
 		),
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))),
 				id("_t")
 			)
 		),
@@ -146,26 +133,26 @@ function SWAP(ctx: HandlerCtx): JsNode[] {
 function ROT3(ctx: HandlerCtx): JsNode[] {
 	// abc -> cab: S[top-2]=c, S[top-1]=a, S[top]=b
 	const sLen = member(id(ctx.S), "length");
-	const s = (offset: number) => index(id(ctx.S), bin("-", sLen, lit(offset)));
+	const s = (offset: number) => index(id(ctx.S), bin(BOp.Sub, sLen, lit(offset)));
 	return [
 		varDecl("_c", s(1)), // _c = S[S.length-1] (top)
 		varDecl("_b", s(2)), // _b = S[S.length-2]
 		varDecl("_a", s(3)), // _a = S[S.length-3]
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(3))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(3))),
 				id("_c")
 			)
 		),
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))),
 				id("_a")
 			)
 		),
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(1))),
 				id("_b")
 			)
 		),
@@ -178,31 +165,31 @@ function ROT4(ctx: HandlerCtx): JsNode[] {
 	// abcd -> dabc
 	const sLen = member(id(ctx.S), "length");
 	return [
-		varDecl("_d", index(id(ctx.S), bin("-", sLen, lit(1)))),
-		varDecl("_c", index(id(ctx.S), bin("-", sLen, lit(2)))),
-		varDecl("_b", index(id(ctx.S), bin("-", sLen, lit(3)))),
-		varDecl("_a", index(id(ctx.S), bin("-", sLen, lit(4)))),
+		varDecl("_d", index(id(ctx.S), bin(BOp.Sub, sLen, lit(1)))),
+		varDecl("_c", index(id(ctx.S), bin(BOp.Sub, sLen, lit(2)))),
+		varDecl("_b", index(id(ctx.S), bin(BOp.Sub, sLen, lit(3)))),
+		varDecl("_a", index(id(ctx.S), bin(BOp.Sub, sLen, lit(4)))),
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(4))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(4))),
 				id("_d")
 			)
 		),
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(3))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(3))),
 				id("_a")
 			)
 		),
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(2))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))),
 				id("_b")
 			)
 		),
 		exprStmt(
 			assign(
-				index(id(ctx.S), bin("-", member(id(ctx.S), "length"), lit(1))),
+				index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(1))),
 				id("_c")
 			)
 		),
@@ -220,9 +207,8 @@ function PICK(ctx: HandlerCtx): JsNode[] {
 			ctx.push(
 				index(
 					id(ctx.S),
-					bin(
-						"-",
-						bin("-", member(id(ctx.S), "length"), lit(1)),
+					bin(BOp.Sub,
+						bin(BOp.Sub, member(id(ctx.S), "length"), lit(1)),
 						id(ctx.O)
 					)
 				)

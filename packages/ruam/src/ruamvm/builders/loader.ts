@@ -11,25 +11,7 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
-import {
-	arr,
-	assign,
-	bin,
-	call,
-	exprStmt,
-	fn,
-	forStmt,
-	id,
-	ifStmt,
-	index,
-	lit,
-	member,
-	newExpr,
-	obj,
-	returnStmt,
-	update,
-	varDecl,
-} from "../nodes.js";
+import { arr, assign, bin, call, exprStmt, fn, forStmt, id, ifStmt, index, lit, member, newExpr, obj, returnStmt, update, varDecl, BOp, UpOp } from "../nodes.js";
 
 // --- Builder ---
 
@@ -121,8 +103,8 @@ function buildStringDecodeLoop(
 
 	return forStmt(
 		varDecl("j", lit(0)),
-		bin("<", id("j"), member(cArr, "length")),
-		update("++", false, id("j")),
+		bin(BOp.Lt, id("j"), member(cArr, "length")),
+		update(UpOp.Inc, false, id("j")),
 		[
 			// var cv = target.c[j];
 			varDecl("cv", cJ),

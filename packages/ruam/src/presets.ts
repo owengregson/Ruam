@@ -35,6 +35,11 @@ export const PRESETS: Record<
 		vmShielding: false,
 		mixedBooleanArithmetic: false,
 		handlerFragmentation: false,
+		stringAtomization: false,
+		polymorphicDecoder: false,
+		scatteredKeys: false,
+		blockPermutation: false,
+		opcodeMutation: false,
 	},
 	medium: {
 		targetMode: "root",
@@ -51,6 +56,11 @@ export const PRESETS: Record<
 		vmShielding: false,
 		mixedBooleanArithmetic: false,
 		handlerFragmentation: false,
+		stringAtomization: true,
+		polymorphicDecoder: true,
+		scatteredKeys: true,
+		blockPermutation: false,
+		opcodeMutation: false,
 	},
 	max: {
 		targetMode: "root",
@@ -67,6 +77,11 @@ export const PRESETS: Record<
 		vmShielding: true,
 		mixedBooleanArithmetic: true,
 		handlerFragmentation: true,
+		stringAtomization: true,
+		polymorphicDecoder: true,
+		scatteredKeys: true,
+		blockPermutation: true,
+		opcodeMutation: true,
 	},
 };
 
@@ -132,6 +147,16 @@ export function resolveOptions(
 
 	// vmShielding requires rollingCipher (implicit per-unit key derivation)
 	if (resolved.vmShielding && !resolved.rollingCipher) {
+		resolved.rollingCipher = true;
+	}
+
+	// stringAtomization requires polymorphicDecoder
+	if (resolved.stringAtomization && !resolved.polymorphicDecoder) {
+		resolved.polymorphicDecoder = true;
+	}
+
+	// opcodeMutation requires rollingCipher (entangled key derivation)
+	if (resolved.opcodeMutation && !resolved.rollingCipher) {
 		resolved.rollingCipher = true;
 	}
 

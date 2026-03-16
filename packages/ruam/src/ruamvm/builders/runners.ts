@@ -9,24 +9,7 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
-import {
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	fn,
-	fnExpr,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	returnStmt,
-	obj,
-	arr,
-} from "../nodes.js";
+import { id, lit, bin, un, assign, call, member, index, fn, fnExpr, varDecl, exprStmt, ifStmt, returnStmt, obj, arr, BOp, UOp } from "../nodes.js";
 
 // --- VM dispatch functions ---
 
@@ -56,8 +39,8 @@ export function buildRunners(
 	/** Common args: (unit, args||[], outer||null, thisVal, newTarget, homeObject) */
 	const execArgs: JsNode[] = [
 		id(U),
-		bin("||", id(A), arr()),
-		bin("||", id(OS), lit(null)),
+		bin(BOp.Or, id(A), arr()),
+		bin(BOp.Or, id(OS), lit(null)),
 		id(TV),
 		id(NT),
 		id(HO),
@@ -72,13 +55,12 @@ export function buildRunners(
 				exprStmt(
 					call(id(names.dbg), [
 						lit("VM_DISPATCH"),
-						bin("+", lit("id="), id("id")),
-						bin(
-							"+",
+						bin(BOp.Add, lit("id="), id("id")),
+						bin(BOp.Add,
 							lit("async="),
-							un("!", un("!", member(id(U), "s")))
+							un(UOp.Not, un(UOp.Not, member(id(U), "s")))
 						),
-						bin("+", lit("params="), member(id(U), "p")),
+						bin(BOp.Add, lit("params="), member(id(U), "p")),
 					])
 				),
 				exprStmt(assign(member(id(U), temps["_dbgId"]!), id("id"))),
@@ -91,22 +73,20 @@ export function buildRunners(
 	// This allows function stubs to call vm(id, args, scope, this) directly
 	// without needing the separate vm.call pattern.
 	const mainThisBoxing: JsNode = ifStmt(
-		bin(
-			"&&",
-			bin("!==", id(TV), un("void", lit(0))),
-			un("!", bin("||", member(id(U), "a"), member(id(U), "st")))
+		bin(BOp.And,
+			bin(BOp.Sneq, id(TV), un(UOp.Void, lit(0))),
+			un(UOp.Not, bin(BOp.Or, member(id(U), "a"), member(id(U), "st")))
 		),
 		[
 			ifStmt(
-				bin("==", id(TV), lit(null)),
+				bin(BOp.Eq, id(TV), lit(null)),
 				[exprStmt(assign(id(TV), id("globalThis")))],
 				[
-					varDecl(temps["_t"]!, un("typeof", id(TV))),
+					varDecl(temps["_t"]!, un(UOp.Typeof, id(TV))),
 					ifStmt(
-						bin(
-							"&&",
-							bin("!==", id(temps["_t"]!), lit("object")),
-							bin("!==", id(temps["_t"]!), lit("function"))
+						bin(BOp.And,
+							bin(BOp.Sneq, id(temps["_t"]!), lit("object")),
+							bin(BOp.Sneq, id(temps["_t"]!), lit("function"))
 						),
 						[exprStmt(assign(id(TV), call(id("Object"), [id(TV)])))]
 					),
@@ -136,20 +116,19 @@ export function buildRunners(
 	//   if (TV == null) TV = globalThis;
 	//   else { var _t = typeof TV; if (_t !== "object" && _t !== "function") TV = Object(TV); }
 	const thisBoxing: JsNode = ifStmt(
-		un("!", bin("||", member(id(U), "a"), member(id(U), "st"))),
+		un(UOp.Not, bin(BOp.Or, member(id(U), "a"), member(id(U), "st"))),
 		[
 			ifStmt(
-				bin("==", id(TV), lit(null)),
+				bin(BOp.Eq, id(TV), lit(null)),
 				// then: TV = globalThis
 				[exprStmt(assign(id(TV), id("globalThis")))],
 				// else: type check + box
 				[
-					varDecl(temps["_t"]!, un("typeof", id(TV))),
+					varDecl(temps["_t"]!, un(UOp.Typeof, id(TV))),
 					ifStmt(
-						bin(
-							"&&",
-							bin("!==", id(temps["_t"]!), lit("object")),
-							bin("!==", id(temps["_t"]!), lit("function"))
+						bin(BOp.And,
+							bin(BOp.Sneq, id(temps["_t"]!), lit("object")),
+							bin(BOp.Sneq, id(temps["_t"]!), lit("function"))
 						),
 						[exprStmt(assign(id(TV), call(id("Object"), [id(TV)])))]
 					),
@@ -161,10 +140,10 @@ export function buildRunners(
 	/** exec args for .call — newTarget is void 0 */
 	const callExecArgs: JsNode[] = [
 		id(U),
-		bin("||", id(A), arr()),
-		bin("||", id(OS), lit(null)),
+		bin(BOp.Or, id(A), arr()),
+		bin(BOp.Or, id(OS), lit(null)),
 		id(TV),
-		un("void", lit(0)),
+		un(UOp.Void, lit(0)),
 		id(HO),
 	];
 

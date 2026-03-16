@@ -22,32 +22,7 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
-import {
-	fn,
-	varDecl,
-	id,
-	lit,
-	bin,
-	un,
-	call,
-	member,
-	index,
-	ifStmt,
-	exprStmt,
-	returnStmt,
-	forStmt,
-	forIn,
-	whileStmt,
-	tryCatch,
-	ternary,
-	arr,
-	obj,
-	fnExpr,
-	assign,
-	newExpr,
-	getter,
-	method,
-} from "../nodes.js";
+import { fn, varDecl, id, lit, bin, un, call, member, index, ifStmt, exprStmt, returnStmt, forStmt, forIn, whileStmt, tryCatch, ternary, arr, obj, fnExpr, assign, newExpr, getter, method, BOp, UOp } from "../nodes.js";
 
 // --- Helpers ---
 
@@ -73,12 +48,12 @@ function es(expr: JsNode): JsNode {
 
 /** Bitwise AND: `left & right` */
 function band(left: JsNode, right: JsNode): JsNode {
-	return bin("&", left, right);
+	return bin(BOp.BitAnd, left, right);
 }
 
 /** Bitwise unsigned right shift: `left >>> right` */
 function ursh(left: JsNode, right: JsNode): JsNode {
-	return bin(">>>", left, right);
+	return bin(BOp.Ushr, left, right);
 }
 
 // --- Builder ---
@@ -135,18 +110,16 @@ export function buildDebugProtection(
 	body.push(
 		forStmt(
 			v(Z("_fi"), lit(0)),
-			bin("<", id(Z("_fi")), m(id(Z("_src")), "length")),
-			assign(id(Z("_fi")), bin("+", id(Z("_fi")), lit(1))),
+			bin(BOp.Lt, id(Z("_fi")), m(id(Z("_src")), "length")),
+			assign(id(Z("_fi")), bin(BOp.Add, id(Z("_fi")), lit(1))),
 			[
 				es(
 					assign(
 						fhId,
 						ursh(
-							bin(
-								"*",
+							bin(BOp.Mul,
 								ursh(
-									bin(
-										"^",
+									bin(BOp.BitXor,
 										fhId,
 										mcall(id(Z("_src")), "charCodeAt", [
 											id(Z("_fi")),
@@ -180,12 +153,10 @@ export function buildDebugProtection(
 			Z("_it"),
 			call(id("setTimeout"), [
 				fnExpr(undefined, [], [es(call(id(Z("_run")), []))]),
-				bin(
-					"+",
+				bin(BOp.Add,
 					lit(500),
-					bin(
-						"|",
-						bin("*", mcall(id("Math"), "random", []), lit(1500)),
+					bin(BOp.BitOr,
+						bin(BOp.Mul, mcall(id("Math"), "random", []), lit(1500)),
 						lit(0)
 					)
 				),
@@ -196,9 +167,8 @@ export function buildDebugProtection(
 	// if(typeof _it==='object'&&_it.unref)_it.unref();
 	body.push(
 		ifStmt(
-			bin(
-				"&&",
-				bin("===", un("typeof", id(Z("_it"))), lit("object")),
+			bin(BOp.And,
+				bin(BOp.Seq, un(UOp.Typeof, id(Z("_it"))), lit("object")),
 				m(id(Z("_it")), "unref")
 			),
 			[es(mcall(id(Z("_it")), "unref", []))]
@@ -229,10 +199,10 @@ function buildActFunction(
 		[],
 		[
 			// _sev++;
-			es(assign(sevId, bin("+", sevId, lit(1)))),
+			es(assign(sevId, bin(BOp.Add, sevId, lit(1)))),
 			// if(_sev<=2){...}
 			ifStmt(
-				bin("<=", sevId, lit(2)),
+				bin(BOp.Lte, sevId, lit(2)),
 				[
 					// try{var _ks=Object.keys(BT);for(var _ki=0;_ki<_ks.length;_ki++){...}}catch(_){}
 					tryCatch(
@@ -240,14 +210,13 @@ function buildActFunction(
 							v(Z("_ks"), mcall(id("Object"), "keys", [btId])),
 							forStmt(
 								v(Z("_ki"), lit(0)),
-								bin(
-									"<",
+								bin(BOp.Lt,
 									id(Z("_ki")),
 									m(id(Z("_ks")), "length")
 								),
 								assign(
 									id(Z("_ki")),
-									bin("+", id(Z("_ki")), lit(1))
+									bin(BOp.Add, id(Z("_ki")), lit(1))
 								),
 								[
 									v(
@@ -258,16 +227,14 @@ function buildActFunction(
 										)
 									),
 									ifStmt(
-										bin(
-											"&&",
+										bin(BOp.And,
 											id(Z("_ue")),
 											m(id(Z("_ue")), "i")
 										),
 										[
 											forStmt(
 												v(Z("_ji"), lit(0)),
-												bin(
-													"<",
+												bin(BOp.Lt,
 													id(Z("_ji")),
 													m(
 														m(id(Z("_ue")), "i"),
@@ -276,8 +243,7 @@ function buildActFunction(
 												),
 												assign(
 													id(Z("_ji")),
-													bin(
-														"+",
+													bin(BOp.Add,
 														id(Z("_ji")),
 														lit(2)
 													)
@@ -295,8 +261,7 @@ function buildActFunction(
 																id(Z("_ji"))
 															),
 															band(
-																bin(
-																	"+",
+																bin(BOp.Add,
 																	index(
 																		m(
 																			id(
@@ -312,8 +277,7 @@ function buildActFunction(
 																			)
 																		)
 																	),
-																	bin(
-																		"*",
+																	bin(BOp.Mul,
 																		sevId,
 																		lit(7)
 																	)
@@ -336,15 +300,14 @@ function buildActFunction(
 				// else if(_sev<=4){...}
 				[
 					ifStmt(
-						bin("<=", sevId, lit(4)),
+						bin(BOp.Lte, sevId, lit(4)),
 						[
 							// try{for(var _k in CA)delete CA[_k];}catch(_){}
 							tryCatch(
 								[
 									forIn(Z("_k"), caId, [
 										es(
-											un(
-												"delete",
+											un(UOp.Delete,
 												index(caId, id(Z("_k")))
 											)
 										),
@@ -362,14 +325,13 @@ function buildActFunction(
 									),
 									forStmt(
 										v(Z("_ki"), lit(0)),
-										bin(
-											"<",
+										bin(BOp.Lt,
 											id(Z("_ki")),
 											m(id(Z("_ks")), "length")
 										),
 										assign(
 											id(Z("_ki")),
-											bin("+", id(Z("_ki")), lit(1))
+											bin(BOp.Add, id(Z("_ki")), lit(1))
 										),
 										[
 											v(
@@ -408,14 +370,13 @@ function buildActFunction(
 									),
 									forStmt(
 										v(Z("_ki"), lit(0)),
-										bin(
-											"<",
+										bin(BOp.Lt,
 											id(Z("_ki")),
 											m(id(Z("_ks")), "length")
 										),
 										assign(
 											id(Z("_ki")),
-											bin("+", id(Z("_ki")), lit(1))
+											bin(BOp.Add, id(Z("_ki")), lit(1))
 										),
 										[
 											v(
@@ -455,8 +416,7 @@ function buildActFunction(
 								[
 									forIn(Z("_k"), caId, [
 										es(
-											un(
-												"delete",
+											un(UOp.Delete,
 												index(caId, id(Z("_k")))
 											)
 										),
@@ -468,7 +428,7 @@ function buildActFunction(
 							// Infinite busy loop — freezes the JS thread
 							// while(true){_sev++;}
 							whileStmt(lit(true), [
-								es(assign(sevId, bin("+", sevId, lit(1)))),
+								es(assign(sevId, bin(BOp.Add, sevId, lit(1)))),
 							]),
 						]
 					),
@@ -510,8 +470,8 @@ function buildP1(Z: (key: string) => string): JsNode {
 					// for(var _i=0;_i<_fn.length;_i++){
 					forStmt(
 						v(Z("_i"), lit(0)),
-						bin("<", id(Z("_i")), m(id(Z("_fn")), "length")),
-						assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
+						bin(BOp.Lt, id(Z("_i")), m(id(Z("_fn")), "length")),
+						assign(id(Z("_i")), bin(BOp.Add, id(Z("_i")), lit(1))),
 						[
 							// var _ts=Function.prototype.toString.call(_fn[_i]);
 							v(
@@ -529,8 +489,7 @@ function buildP1(Z: (key: string) => string): JsNode {
 							),
 							// if(_ts.indexOf(_nc)===-1)return true;
 							ifStmt(
-								bin(
-									"===",
+								bin(BOp.Seq,
 									mcall(id(Z("_ts")), "indexOf", [
 										id(Z("_nc")),
 									]),
@@ -563,7 +522,7 @@ function buildP3(Z: (key: string) => string): JsNode {
 				[
 					v(
 						Z("_st"),
-						bin("||", m(newExpr(id("Error"), []), "stack"), lit(""))
+						bin(BOp.Or, m(newExpr(id("Error"), []), "stack"), lit(""))
 					),
 					ifStmt(
 						mcall(lit(/--inspect|--debug/i), "test", [
@@ -576,20 +535,19 @@ function buildP3(Z: (key: string) => string): JsNode {
 				[]
 			),
 			// if(typeof process!=='undefined'){try{if(process.execArgv){for(...)}}catch(_){}}
-			ifStmt(bin("!==", un("typeof", id("process")), lit("undefined")), [
+			ifStmt(bin(BOp.Sneq, un(UOp.Typeof, id("process")), lit("undefined")), [
 				tryCatch(
 					[
 						ifStmt(m(id("process"), "execArgv"), [
 							forStmt(
 								v(Z("_i"), lit(0)),
-								bin(
-									"<",
+								bin(BOp.Lt,
 									id(Z("_i")),
 									m(m(id("process"), "execArgv"), "length")
 								),
 								assign(
 									id(Z("_i")),
-									bin("+", id(Z("_i")), lit(1))
+									bin(BOp.Add, id(Z("_i")), lit(1))
 								),
 								[
 									ifStmt(
@@ -641,20 +599,16 @@ function buildP4(
 			// for(var _ci=0;_ci<_cs.length;_ci++){_ch=((_ch^_cs.charCodeAt(_ci))>>>0)*0x01000193>>>0;}
 			forStmt(
 				v(Z("_ci"), lit(0)),
-				bin("<", id(Z("_ci")), m(id(Z("_cs")), "length")),
-				assign(id(Z("_ci")), bin("+", id(Z("_ci")), lit(1))),
+				bin(BOp.Lt, id(Z("_ci")), m(id(Z("_cs")), "length")),
+				assign(id(Z("_ci")), bin(BOp.Add, id(Z("_ci")), lit(1))),
 				[
 					es(
 						assign(
 							id(Z("_ch")),
-							bin(
-								">>>",
-								bin(
-									"*",
-									bin(
-										">>>",
-										bin(
-											"^",
+							bin(BOp.Ushr,
+								bin(BOp.Mul,
+									bin(BOp.Ushr,
+										bin(BOp.BitXor,
 											id(Z("_ch")),
 											mcall(id(Z("_cs")), "charCodeAt", [
 												id(Z("_ci")),
@@ -671,7 +625,7 @@ function buildP4(
 				]
 			),
 			// return _ch!==_fh;
-			returnStmt(bin("!==", id(Z("_ch")), fhId)),
+			returnStmt(bin(BOp.Sneq, id(Z("_ch")), fhId)),
 		]
 	);
 }
@@ -691,12 +645,10 @@ function buildRun(
 			// var _n=2+((Math.random()*2)|0);
 			v(
 				Z("_n"),
-				bin(
-					"+",
+				bin(BOp.Add,
 					lit(2),
-					bin(
-						"|",
-						bin("*", mcall(id("Math"), "random", []), lit(2)),
+					bin(BOp.BitOr,
+						bin(BOp.Mul, mcall(id("Math"), "random", []), lit(2)),
 						lit(0)
 					)
 				)
@@ -706,15 +658,13 @@ function buildRun(
 			// for(var _i=0;_i<_n;_i++){var _idx=(Math.random()*_pb.length)|0;try{if(_pb[_idx]()){_det=true;break;}}catch(_){}}
 			forStmt(
 				v(Z("_i"), lit(0)),
-				bin("<", id(Z("_i")), id(Z("_n"))),
-				assign(id(Z("_i")), bin("+", id(Z("_i")), lit(1))),
+				bin(BOp.Lt, id(Z("_i")), id(Z("_n"))),
+				assign(id(Z("_i")), bin(BOp.Add, id(Z("_i")), lit(1))),
 				[
 					v(
 						Z("_idx"),
-						bin(
-							"|",
-							bin(
-								"*",
+						bin(BOp.BitOr,
+							bin(BOp.Mul,
 								mcall(id("Math"), "random", []),
 								m(pbId, "length")
 							),
@@ -739,8 +689,8 @@ function buildRun(
 			ifStmt(
 				id(Z("_det")),
 				[
-					es(assign(id(Z("_d")), bin("+", id(Z("_d")), lit(1)))),
-					ifStmt(bin(">=", id(Z("_d")), lit(3)), [
+					es(assign(id(Z("_d")), bin(BOp.Add, id(Z("_d")), lit(1)))),
+					ifStmt(bin(BOp.Gte, id(Z("_d")), lit(3)), [
 						es(call(id(Z("_act")), [])),
 					]),
 				],
@@ -748,16 +698,13 @@ function buildRun(
 				[es(assign(id(Z("_d")), lit(0)))]
 			),
 			// if(_sev<5){var _nx=2000+((Math.random()*5000)|0);var _tid=setTimeout(_run,_nx);if(typeof _tid==='object'&&_tid.unref)_tid.unref();}
-			ifStmt(bin("<", sevId, lit(5)), [
+			ifStmt(bin(BOp.Lt, sevId, lit(5)), [
 				v(
 					Z("_nx"),
-					bin(
-						"+",
+					bin(BOp.Add,
 						lit(2000),
-						bin(
-							"|",
-							bin(
-								"*",
+						bin(BOp.BitOr,
+							bin(BOp.Mul,
 								mcall(id("Math"), "random", []),
 								lit(5000)
 							),
@@ -770,9 +717,8 @@ function buildRun(
 					call(id("setTimeout"), [id(Z("_run")), id(Z("_nx"))])
 				),
 				ifStmt(
-					bin(
-						"&&",
-						bin("===", un("typeof", id(Z("_tid"))), lit("object")),
+					bin(BOp.And,
+						bin(BOp.Seq, un(UOp.Typeof, id(Z("_tid"))), lit("object")),
 						m(id(Z("_tid")), "unref")
 					),
 					[es(mcall(id(Z("_tid")), "unref", []))]
