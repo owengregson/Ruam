@@ -26,12 +26,7 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // Import opcode sets for identifying jumps. We import the names and check
 // against the canonical opcode enum (before shuffle map is applied).
-import {
-	Op,
-	JUMP_OPS,
-	ALL_JUMP_OPS,
-	PACKED_JUMP_OPS,
-} from "./opcodes.js";
+import { Op, JUMP_OPS, ALL_JUMP_OPS, PACKED_JUMP_OPS } from "./opcodes.js";
 
 // --- Terminal opcodes ---
 // Opcodes that never fall through to the next instruction.
@@ -119,7 +114,9 @@ function identifyBasicBlocks(unit: BytecodeUnit): BasicBlock[] {
 	}
 
 	// Sort block starts and create blocks
-	const sorted = [...blockStarts].filter((ip) => ip < instrs.length).sort((a, b) => a - b);
+	const sorted = [...blockStarts]
+		.filter((ip) => ip < instrs.length)
+		.sort((a, b) => a - b);
 	const blocks: BasicBlock[] = [];
 	for (let i = 0; i < sorted.length; i++) {
 		const start = sorted[i]!;
@@ -180,7 +177,7 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 	// Deep-copy instructions to avoid sharing objects with unit.instructions.
 	// Phase 1 modifies operands in-place; shared objects would corrupt the
 	// original unit state visible to recursive child-unit processing.
-	const oldInstrs = unit.instructions.map(i => ({ ...i }));
+	const oldInstrs = unit.instructions.map((i) => ({ ...i }));
 
 	// Build a map from original block start → original block index
 	const blockIndexByStart = new Map<number, number>();
@@ -215,7 +212,10 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 			operand: successorStartIp, // Will be patched by IP mapping below
 		});
 		totalExpansion++;
-		expansionByBlock.set(block.startIp, (expansionByBlock.get(block.startIp) ?? 0) + 1);
+		expansionByBlock.set(
+			block.startIp,
+			(expansionByBlock.get(block.startIp) ?? 0) + 1
+		);
 	}
 
 	// Rebuild block boundaries accounting for inserted JMPs
@@ -310,7 +310,7 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 			const newTarget = origToPermuted.get(target);
 			if (newTarget != null) {
 				instr.operand = (newTarget << 16) | lower;
-			} else if (target >= oldInstrs.length && target !== 0xFFFF) {
+			} else if (target >= oldInstrs.length && target !== 0xffff) {
 				instr.operand = (newInstrs.length << 16) | lower;
 			}
 		}
@@ -338,7 +338,8 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 		startIp: mapIp(entry.startIp),
 		endIp: mapIp(entry.endIp),
 		catchIp: entry.catchIp >= 0 ? mapIp(entry.catchIp) : entry.catchIp,
-		finallyIp: entry.finallyIp >= 0 ? mapIp(entry.finallyIp) : entry.finallyIp,
+		finallyIp:
+			entry.finallyIp >= 0 ? mapIp(entry.finallyIp) : entry.finallyIp,
 	}));
 
 	// Apply changes

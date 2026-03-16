@@ -1,7 +1,23 @@
 /** @module ruamvm/handlers/registers */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, index, bin, un, member, ternary, varDecl, exprStmt, breakStmt, assign, BOp, UOp, type BOpKind } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	index,
+	bin,
+	un,
+	member,
+	ternary,
+	varDecl,
+	exprStmt,
+	breakStmt,
+	assign,
+	BOp,
+	UOp,
+	type BOpKind,
+} from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -75,9 +91,11 @@ function LOAD_ARG_OR_DEFAULT(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			ctx.push(
 				ternary(
-					bin(BOp.And,
+					bin(
+						BOp.And,
 						bin(BOp.Lt, id(ctx.O), member(id(ctx.A), "length")),
-						bin(BOp.Sneq,
+						bin(
+							BOp.Sneq,
 							index(id(ctx.A), id(ctx.O)),
 							un(UOp.Void, lit(0))
 						)
@@ -101,7 +119,9 @@ function GET_ARG_COUNT(ctx: HandlerCtx): JsNode[] {
 /** INC_REG: `R[O]=+R[O]+1;break;` */
 function INC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(rSlot(ctx), bin(BOp.Add, un(UOp.Pos, rSlot(ctx)), lit(1)))),
+		exprStmt(
+			assign(rSlot(ctx), bin(BOp.Add, un(UOp.Pos, rSlot(ctx)), lit(1)))
+		),
 		breakStmt(),
 	];
 }
@@ -109,7 +129,9 @@ function INC_REG(ctx: HandlerCtx): JsNode[] {
 /** DEC_REG: `R[O]=+R[O]-1;break;` */
 function DEC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(rSlot(ctx), bin(BOp.Sub, un(UOp.Pos, rSlot(ctx)), lit(1)))),
+		exprStmt(
+			assign(rSlot(ctx), bin(BOp.Sub, un(UOp.Pos, rSlot(ctx)), lit(1)))
+		),
 		breakStmt(),
 	];
 }
@@ -118,7 +140,9 @@ function DEC_REG(ctx: HandlerCtx): JsNode[] {
 function POST_INC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("old", rSlot(ctx)),
-		exprStmt(assign(rSlot(ctx), bin(BOp.Add, un(UOp.Pos, id("old")), lit(1)))),
+		exprStmt(
+			assign(rSlot(ctx), bin(BOp.Add, un(UOp.Pos, id("old")), lit(1)))
+		),
 		exprStmt(ctx.push(un(UOp.Pos, id("old")))),
 		breakStmt(),
 	];
@@ -128,7 +152,9 @@ function POST_INC_REG(ctx: HandlerCtx): JsNode[] {
 function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("old", rSlot(ctx)),
-		exprStmt(assign(rSlot(ctx), bin(BOp.Sub, un(UOp.Pos, id("old")), lit(1)))),
+		exprStmt(
+			assign(rSlot(ctx), bin(BOp.Sub, un(UOp.Pos, id("old")), lit(1)))
+		),
 		exprStmt(ctx.push(un(UOp.Pos, id("old")))),
 		breakStmt(),
 	];
@@ -139,7 +165,9 @@ function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 /** FAST_ADD_CONST: `S[P]=+S[P]+O;break;` */
 function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), bin(BOp.Add, un(UOp.Pos, ctx.peek()), id(ctx.O)))),
+		exprStmt(
+			assign(ctx.peek(), bin(BOp.Add, un(UOp.Pos, ctx.peek()), id(ctx.O)))
+		),
 		breakStmt(),
 	];
 }
@@ -147,7 +175,9 @@ function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 /** FAST_SUB_CONST: `S[P]=+S[P]-O;break;` */
 function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), bin(BOp.Sub, un(UOp.Pos, ctx.peek()), id(ctx.O)))),
+		exprStmt(
+			assign(ctx.peek(), bin(BOp.Sub, un(UOp.Pos, ctx.peek()), id(ctx.O)))
+		),
 		breakStmt(),
 	];
 }
@@ -162,7 +192,10 @@ function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
  */
 function FAST_GET_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("name", index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))),
+		varDecl(
+			"name",
+			index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))
+		),
 		varDecl(
 			"varName",
 			index(

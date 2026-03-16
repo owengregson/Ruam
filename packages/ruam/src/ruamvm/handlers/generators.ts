@@ -16,7 +16,19 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, exprStmt, breakStmt, un, lit, bin, assign, awaitExpr, ternary, BOp, UOp } from "../nodes.js";
+import {
+	type JsNode,
+	exprStmt,
+	breakStmt,
+	un,
+	lit,
+	bin,
+	assign,
+	awaitExpr,
+	ternary,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 import { debugTrace } from "./helpers.js";

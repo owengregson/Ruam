@@ -15,7 +15,32 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, un, bin, assign, call, member, index, ternary, newExpr, spread, varDecl, exprStmt, ifStmt, forStmt, throwStmt, breakStmt, update, importExpr, BOp, UOp, UpOp, AOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	un,
+	bin,
+	assign,
+	call,
+	member,
+	index,
+	ternary,
+	newExpr,
+	spread,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	forStmt,
+	throwStmt,
+	breakStmt,
+	update,
+	importExpr,
+	BOp,
+	UOp,
+	UpOp,
+	AOp,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple type coercions (AST nodes) ---
@@ -140,14 +165,17 @@ function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
 						id("result"),
 						call(id("String"), [
 							ternary(
-								bin(BOp.Neq,
+								bin(
+									BOp.Neq,
 									index(id("parts"), id("ti")),
 									lit(null)
 								),
 								index(id("parts"), id("ti")),
 								lit("")
 							),
-						]), AOp.Add)
+						]),
+						AOp.Add
+					)
 				),
 			]
 		),

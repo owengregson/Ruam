@@ -55,14 +55,22 @@ export function makeConstantSplitter(seed: number): SplitFn {
 				// Use smaller offset to avoid overflow issues
 				const offset = (mask & 0x7fffffff) >>> 0;
 				const sum = (v + offset) >>> 0;
-				return bin(BOp.Ushr, bin(BOp.Sub, lit(sum), lit(offset)), lit(0));
+				return bin(
+					BOp.Ushr,
+					bin(BOp.Sub, lit(sum), lit(offset)),
+					lit(0)
+				);
 			}
 			case 2:
 			default: {
 				// Double XOR: (a ^ b ^ c) where a ^ b ^ c = value
 				const a = lcg();
 				const b = (a ^ mask ^ v) >>> 0;
-				return bin(BOp.BitXor, bin(BOp.BitXor, lit(a), lit(mask)), lit(b));
+				return bin(
+					BOp.BitXor,
+					bin(BOp.BitXor, lit(a), lit(mask)),
+					lit(b)
+				);
 			}
 		}
 	};

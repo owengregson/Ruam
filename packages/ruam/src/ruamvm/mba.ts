@@ -24,34 +24,64 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 /** MBA replacement for `x + y` (assumes int32 operands). */
 const ADD_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// (x ^ y) + 2 * (x & y)
-	(x, y) => bin(BOp.Add, bin(BOp.BitXor, x, y), bin(BOp.Mul, lit(2), bin(BOp.BitAnd, x, y))),
+	(x, y) =>
+		bin(
+			BOp.Add,
+			bin(BOp.BitXor, x, y),
+			bin(BOp.Mul, lit(2), bin(BOp.BitAnd, x, y))
+		),
 	// (x | y) + (x & y)
 	(x, y) => bin(BOp.Add, bin(BOp.BitOr, x, y), bin(BOp.BitAnd, x, y)),
 	// 2 * (x | y) - (x ^ y)
-	(x, y) => bin(BOp.Sub, bin(BOp.Mul, lit(2), bin(BOp.BitOr, x, y)), bin(BOp.BitXor, x, y)),
+	(x, y) =>
+		bin(
+			BOp.Sub,
+			bin(BOp.Mul, lit(2), bin(BOp.BitOr, x, y)),
+			bin(BOp.BitXor, x, y)
+		),
 ];
 
 /** MBA replacement for `x - y` (assumes int32 operands). */
 const SUB_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// (x ^ y) - 2 * (~x & y)
 	(x, y) =>
-		bin(BOp.Sub, bin(BOp.BitXor, x, y), bin(BOp.Mul, lit(2), bin(BOp.BitAnd, un(UOp.BitNot, x), y))),
+		bin(
+			BOp.Sub,
+			bin(BOp.BitXor, x, y),
+			bin(BOp.Mul, lit(2), bin(BOp.BitAnd, un(UOp.BitNot, x), y))
+		),
 	// (x & ~y) - (~x & y)
-	(x, y) => bin(BOp.Sub, bin(BOp.BitAnd, x, un(UOp.BitNot, y)), bin(BOp.BitAnd, un(UOp.BitNot, x), y)),
+	(x, y) =>
+		bin(
+			BOp.Sub,
+			bin(BOp.BitAnd, x, un(UOp.BitNot, y)),
+			bin(BOp.BitAnd, un(UOp.BitNot, x), y)
+		),
 ];
 
 /** MBA replacement for `x ^ y`. */
 const XOR_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// (x | y) & ~(x & y)
-	(x, y) => bin(BOp.BitAnd, bin(BOp.BitOr, x, y), un(UOp.BitNot, bin(BOp.BitAnd, x, y))),
+	(x, y) =>
+		bin(
+			BOp.BitAnd,
+			bin(BOp.BitOr, x, y),
+			un(UOp.BitNot, bin(BOp.BitAnd, x, y))
+		),
 	// (~x & y) | (x & ~y)
-	(x, y) => bin(BOp.BitOr, bin(BOp.BitAnd, un(UOp.BitNot, x), y), bin(BOp.BitAnd, x, un(UOp.BitNot, y))),
+	(x, y) =>
+		bin(
+			BOp.BitOr,
+			bin(BOp.BitAnd, un(UOp.BitNot, x), y),
+			bin(BOp.BitAnd, x, un(UOp.BitNot, y))
+		),
 ];
 
 /** MBA replacement for `x & y`. */
 const AND_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// ~(~x | ~y)   (De Morgan)
-	(x, y) => un(UOp.BitNot, bin(BOp.BitOr, un(UOp.BitNot, x), un(UOp.BitNot, y))),
+	(x, y) =>
+		un(UOp.BitNot, bin(BOp.BitOr, un(UOp.BitNot, x), un(UOp.BitNot, y))),
 	// (x | y) ^ (x ^ y)
 	(x, y) => bin(BOp.BitXor, bin(BOp.BitOr, x, y), bin(BOp.BitXor, x, y)),
 ];
@@ -59,7 +89,8 @@ const AND_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 /** MBA replacement for `x | y`. */
 const OR_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// ~(~x & ~y)   (De Morgan)
-	(x, y) => un(UOp.BitNot, bin(BOp.BitAnd, un(UOp.BitNot, x), un(UOp.BitNot, y))),
+	(x, y) =>
+		un(UOp.BitNot, bin(BOp.BitAnd, un(UOp.BitNot, x), un(UOp.BitNot, y))),
 	// (x ^ y) + (x & y)
 	(x, y) => bin(BOp.Add, bin(BOp.BitXor, x, y), bin(BOp.BitAnd, x, y)),
 ];
@@ -159,7 +190,13 @@ function containsStringLiteral(node: JsNode): boolean {
 }
 
 /** Operators eligible for MBA transformation. */
-const MBA_OPS = new Set<BOpKind>([BOp.BitXor, BOp.BitAnd, BOp.BitOr, BOp.Add, BOp.Sub]);
+const MBA_OPS = new Set<BOpKind>([
+	BOp.BitXor,
+	BOp.BitAnd,
+	BOp.BitOr,
+	BOp.Add,
+	BOp.Sub,
+]);
 
 /**
  * Apply MBA transformation to all eligible BinOp nodes in a JsNode tree.

@@ -16,7 +16,31 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, forStmt, breakStmt, newExpr, ternary, update, arr, obj, spread, BOp, UOp, UpOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	forStmt,
+	breakStmt,
+	newExpr,
+	ternary,
+	update,
+	arr,
+	obj,
+	spread,
+	BOp,
+	UOp,
+	UpOp,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { debugTrace, superProto } from "./helpers.js";
 
@@ -62,7 +86,8 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 				update(UpOp.Inc, false, id("ai")),
 				[
 					ifStmt(
-						bin(BOp.And,
+						bin(
+							BOp.And,
 							index(id("callArgs"), id("ai")),
 							index(
 								index(id("callArgs"), id("ai")),
@@ -73,7 +98,8 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 							// Spread value IS the array now — iterate directly
 							forStmt(
 								varDecl("si", lit(0)),
-								bin(BOp.Lt,
+								bin(
+									BOp.Lt,
 									id("si"),
 									member(
 										index(id("callArgs"), id("ai")),
@@ -155,14 +181,19 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 		...(ctx.debug
 			? [
 					ifStmt(
-						bin(BOp.Sneq, un(UOp.Typeof, id("fn")), lit("function")),
+						bin(
+							BOp.Sneq,
+							un(UOp.Typeof, id("fn")),
+							lit("function")
+						),
 						[
 							exprStmt(
 								call(id(ctx.dbg), [
 									lit("CALL_ERR"),
 									lit("NOT A FUNCTION:"),
 									id("fn"),
-									bin(BOp.Add,
+									bin(
+										BOp.Add,
 										lit(ctx.S + " depth="),
 										member(id(ctx.S), "length")
 									),
@@ -210,7 +241,11 @@ function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
 		...(ctx.debug
 			? [
 					ifStmt(
-						bin(BOp.Sneq, un(UOp.Typeof, id("fn")), lit("function")),
+						bin(
+							BOp.Sneq,
+							un(UOp.Typeof, id("fn")),
+							lit("function")
+						),
 						[
 							exprStmt(
 								call(id(ctx.dbg), [
@@ -267,13 +302,15 @@ function SUPER_CALL(ctx: HandlerCtx): JsNode[] {
 			lit("superProto="),
 			un(UOp.Not, un(UOp.Not, id("superProto"))),
 			lit("superCtor="),
-			bin(BOp.And,
+			bin(
+				BOp.And,
 				id("superProto"),
 				un(UOp.Typeof, member(id("superProto"), "constructor"))
 			)
 		),
 		ifStmt(
-			bin(BOp.And,
+			bin(
+				BOp.And,
 				id("superProto"),
 				member(id("superProto"), "constructor")
 			),

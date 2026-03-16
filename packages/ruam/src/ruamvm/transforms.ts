@@ -284,8 +284,7 @@ export function obfuscateLocals(
 
 	function genShort(): string {
 		for (let attempt = 0; ; attempt++) {
-			const useThree =
-				(lcg() >>> 0) / 0x100000000 < threeCharBias;
+			const useThree = (lcg() >>> 0) / 0x100000000 < threeCharBias;
 			let name: string;
 			if (useThree) {
 				const c1 = alpha[lcg() % alpha.length]!;

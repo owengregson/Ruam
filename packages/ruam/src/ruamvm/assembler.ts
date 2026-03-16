@@ -52,7 +52,10 @@ import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
 import type { StructuralChoices } from "../structural-choices.js";
 import { applyStructuralTransforms } from "./structural-transforms.js";
-import { generateDecoderChain, buildDecoderFunctionAST } from "./polymorphic-decoder.js";
+import {
+	generateDecoderChain,
+	buildDecoderFunctionAST,
+} from "./polymorphic-decoder.js";
 import { atomizeStrings } from "./string-atomization.js";
 import { scatterKeyMaterials } from "./scattered-keys.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
@@ -153,12 +156,7 @@ export function generateVmRuntime(options: {
 			),
 		],
 		// 3: globalRef (detection order shuffled per build)
-		[
-			varDecl(
-				names.globalRef,
-				buildGlobalRefDetection(structuralChoices)
-			),
-		],
+		[varDecl(names.globalRef, buildGlobalRefDetection(structuralChoices))],
 		// 4: TDZ sentinel
 		[
 			varDecl(
@@ -267,7 +265,11 @@ export function generateVmRuntime(options: {
 					id(names.keyAnchor),
 					bin(
 						BOp.Ushr,
-						bin(BOp.BitXor, id(names.keyAnchor), split(integrityHash)),
+						bin(
+							BOp.BitXor,
+							id(names.keyAnchor),
+							split(integrityHash)
+						),
 						lit(0)
 					)
 				)
@@ -490,9 +492,7 @@ export function generateShieldedVmRuntime(options: {
 			member(member(id("Object"), "prototype"), "hasOwnProperty")
 		)
 	);
-	nodes.push(
-		varDecl(sharedNames.globalRef, buildGlobalRefDetection())
-	);
+	nodes.push(varDecl(sharedNames.globalRef, buildGlobalRefDetection()));
 
 	// TDZ sentinel — shared across all groups
 	nodes.push(
@@ -506,7 +506,9 @@ export function generateShieldedVmRuntime(options: {
 	const shieldedBinDecNodes = buildBinaryDecoderSource(sharedNames, alphabet);
 	if (scatteredKeys) {
 		// Scatter the alphabet string: all fragments first, then reassembly
-		const shieldedScatterGen = createScatterNameGen(groups[0]?.seed ?? 0x12345678);
+		const shieldedScatterGen = createScatterNameGen(
+			groups[0]?.seed ?? 0x12345678
+		);
 		const shieldedScattered = scatterKeyMaterials(
 			[{ name: sharedNames.alpha, value: alphabet, type: "string" }],
 			shieldedScatterGen,

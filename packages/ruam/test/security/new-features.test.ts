@@ -7,6 +7,7 @@
  * - Runtime opcode mutation
  */
 
+import { describe, it, expect } from "vitest";
 import { assertEquivalent, evalObfuscated } from "../helpers.js";
 import { obfuscateCode } from "../../src/index.js";
 import {
@@ -72,10 +73,7 @@ describe("polymorphic decoder chains", () => {
 
 	describe("correctness with polymorphicDecoder", () => {
 		it("simple function", () => {
-			assertEquivalent(
-				`function f() { return 42; } f();`,
-				polyOpts
-			);
+			assertEquivalent(`function f() { return 42; } f();`, polyOpts);
 		});
 
 		it("string operations", () => {
@@ -117,10 +115,7 @@ describe("polymorphic decoder chains", () => {
 describe("interpreter string atomization", () => {
 	describe("correctness", () => {
 		it("simple function", () => {
-			assertEquivalent(
-				`function f() { return 42; } f();`,
-				atomizeOpts
-			);
+			assertEquivalent(`function f() { return 42; } f();`, atomizeOpts);
 		});
 
 		it("object property access", () => {
@@ -191,10 +186,7 @@ describe("interpreter string atomization", () => {
 describe("scattered key material", () => {
 	describe("correctness", () => {
 		it("simple function", () => {
-			assertEquivalent(
-				`function f() { return 42; } f();`,
-				scatterOpts
-			);
+			assertEquivalent(`function f() { return 42; } f();`, scatterOpts);
 		});
 
 		it("string operations", () => {
@@ -239,10 +231,7 @@ describe("scattered key material", () => {
 describe("bytecode block permutation", () => {
 	describe("correctness", () => {
 		it("simple function", () => {
-			assertEquivalent(
-				`function f() { return 42; } f();`,
-				blockPermOpts
-			);
+			assertEquivalent(`function f() { return 42; } f();`, blockPermOpts);
 		});
 
 		it("if/else branches", () => {
@@ -354,10 +343,7 @@ describe("bytecode block permutation", () => {
 describe("runtime opcode mutation", () => {
 	describe("correctness", () => {
 		it("simple function", () => {
-			assertEquivalent(
-				`function f() { return 42; } f();`,
-				mutationOpts
-			);
+			assertEquivalent(`function f() { return 42; } f();`, mutationOpts);
 		});
 
 		it("arithmetic", () => {

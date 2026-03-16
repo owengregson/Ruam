@@ -9,7 +9,18 @@
  */
 
 import type { JsNode } from "../nodes.js";
-import { ifStmt, exprStmt, assign, member, id, bin, un, lit, BOp, UOp } from "../nodes.js";
+import {
+	ifStmt,
+	exprStmt,
+	assign,
+	member,
+	id,
+	bin,
+	un,
+	lit,
+	BOp,
+	UOp,
+} from "../nodes.js";
 
 // --- Helpers ---
 

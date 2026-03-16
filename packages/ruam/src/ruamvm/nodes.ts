@@ -11,29 +11,63 @@
 
 /** Binary operator kinds. */
 export const BOp = {
-	Add: 0, Sub: 1, Mul: 2, Div: 3, Mod: 4, Pow: 5,
-	Shl: 6, Shr: 7, Ushr: 8,
-	BitAnd: 9, BitOr: 10, BitXor: 11,
-	Eq: 12, Neq: 13, Seq: 14, Sneq: 15,
-	Lt: 16, Lte: 17, Gt: 18, Gte: 19,
-	In: 20, Instanceof: 21,
-	And: 22, Or: 23, Nullish: 24,
+	Add: 0,
+	Sub: 1,
+	Mul: 2,
+	Div: 3,
+	Mod: 4,
+	Pow: 5,
+	Shl: 6,
+	Shr: 7,
+	Ushr: 8,
+	BitAnd: 9,
+	BitOr: 10,
+	BitXor: 11,
+	Eq: 12,
+	Neq: 13,
+	Seq: 14,
+	Sneq: 15,
+	Lt: 16,
+	Lte: 17,
+	Gt: 18,
+	Gte: 19,
+	In: 20,
+	Instanceof: 21,
+	And: 22,
+	Or: 23,
+	Nullish: 24,
 } as const;
 export type BOpKind = (typeof BOp)[keyof typeof BOp];
 
 /** Unary operator kinds. */
 export const UOp = {
-	Not: 0, BitNot: 1, Pos: 2, Neg: 3,
-	Typeof: 4, Void: 5, Delete: 6,
+	Not: 0,
+	BitNot: 1,
+	Pos: 2,
+	Neg: 3,
+	Typeof: 4,
+	Void: 5,
+	Delete: 6,
 } as const;
 export type UOpKind = (typeof UOp)[keyof typeof UOp];
 
 /** Assignment compound-operator prefix kinds. */
 export const AOp = {
-	Add: 0, Sub: 1, Mul: 2, Div: 3, Mod: 4, Pow: 5,
-	Shl: 6, Shr: 7, Ushr: 8,
-	BitAnd: 9, BitOr: 10, BitXor: 11,
-	And: 12, Or: 13, Nullish: 14,
+	Add: 0,
+	Sub: 1,
+	Mul: 2,
+	Div: 3,
+	Mod: 4,
+	Pow: 5,
+	Shl: 6,
+	Shr: 7,
+	Ushr: 8,
+	BitAnd: 9,
+	BitOr: 10,
+	BitXor: 11,
+	And: 12,
+	Or: 13,
+	Nullish: 14,
 } as const;
 export type AOpKind = (typeof AOp)[keyof typeof AOp];
 
@@ -41,10 +75,60 @@ export type AOpKind = (typeof AOp)[keyof typeof AOp];
 export const UpOp = { Inc: 0, Dec: 1 } as const;
 export type UpOpKind = (typeof UpOp)[keyof typeof UpOp];
 
-export const BOP_STR: Record<BOpKind, string> = {0:"+",1:"-",2:"*",3:"/",4:"%",5:"**",6:"<<",7:">>",8:">>>",9:"&",10:"|",11:"^",12:"==",13:"!=",14:"===",15:"!==",16:"<",17:"<=",18:">",19:">=",20:"in",21:"instanceof",22:"&&",23:"||",24:"??"};
-export const UOP_STR: Record<UOpKind, string> = {0:"!",1:"~",2:"+",3:"-",4:"typeof",5:"void",6:"delete"};
-export const AOP_STR: Record<AOpKind, string> = {0:"+",1:"-",2:"*",3:"/",4:"%",5:"**",6:"<<",7:">>",8:">>>",9:"&",10:"|",11:"^",12:"&&",13:"||",14:"??"};
-export const UPOP_STR: Record<UpOpKind, string> = {0:"++",1:"--"};
+export const BOP_STR: Record<BOpKind, string> = {
+	0: "+",
+	1: "-",
+	2: "*",
+	3: "/",
+	4: "%",
+	5: "**",
+	6: "<<",
+	7: ">>",
+	8: ">>>",
+	9: "&",
+	10: "|",
+	11: "^",
+	12: "==",
+	13: "!=",
+	14: "===",
+	15: "!==",
+	16: "<",
+	17: "<=",
+	18: ">",
+	19: ">=",
+	20: "in",
+	21: "instanceof",
+	22: "&&",
+	23: "||",
+	24: "??",
+};
+export const UOP_STR: Record<UOpKind, string> = {
+	0: "!",
+	1: "~",
+	2: "+",
+	3: "-",
+	4: "typeof",
+	5: "void",
+	6: "delete",
+};
+export const AOP_STR: Record<AOpKind, string> = {
+	0: "+",
+	1: "-",
+	2: "*",
+	3: "/",
+	4: "%",
+	5: "**",
+	6: "<<",
+	7: ">>",
+	8: ">>>",
+	9: "&",
+	10: "|",
+	11: "^",
+	12: "&&",
+	13: "||",
+	14: "??",
+};
+export const UPOP_STR: Record<UpOpKind, string> = { 0: "++", 1: "--" };
 
 // --- Node type discriminants ---
 
@@ -426,15 +510,15 @@ export function un(op: UOpKind, expr: JsNode): UnaryOp {
 	return { type: "UnaryOp", op, expr };
 }
 
-export function update(
-	op: UpOpKind,
-	prefix: boolean,
-	arg: JsNode
-): UpdateExpr {
+export function update(op: UpOpKind, prefix: boolean, arg: JsNode): UpdateExpr {
 	return { type: "UpdateExpr", op, prefix, arg };
 }
 
-export function assign(target: JsNode, value: JsNode, op?: AOpKind): AssignExpr {
+export function assign(
+	target: JsNode,
+	value: JsNode,
+	op?: AOpKind
+): AssignExpr {
 	return { type: "AssignExpr", target, value, op };
 }
 

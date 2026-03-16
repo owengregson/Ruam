@@ -17,7 +17,30 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, forStmt, breakStmt, obj, arr, newExpr, ternary, update, BOp, UOp, UpOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	forStmt,
+	breakStmt,
+	obj,
+	arr,
+	newExpr,
+	ternary,
+	update,
+	BOp,
+	UOp,
+	UpOp,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { superProto, superKey } from "./helpers.js";
 
@@ -158,7 +181,9 @@ function IN_OP(ctx: HandlerCtx): JsNode[] {
 function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("ctor", ctx.pop()),
-		exprStmt(assign(ctx.peek(), bin(BOp.Instanceof, ctx.peek(), id("ctor")))),
+		exprStmt(
+			assign(ctx.peek(), bin(BOp.Instanceof, ctx.peek(), id("ctor")))
+		),
 		breakStmt(),
 	];
 }
@@ -402,14 +427,20 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 			bin(BOp.Lt, id("ki"), member(id("keys"), "length")),
 			update(UpOp.Inc, false, id("ki")),
 			[
-				ifStmt(un(UOp.Not, index(id("_ex"), index(id("keys"), id("ki")))), [
-					exprStmt(
-						assign(
-							index(id("target"), index(id("keys"), id("ki"))),
-							index(id("src"), index(id("keys"), id("ki")))
-						)
-					),
-				]),
+				ifStmt(
+					un(UOp.Not, index(id("_ex"), index(id("keys"), id("ki")))),
+					[
+						exprStmt(
+							assign(
+								index(
+									id("target"),
+									index(id("keys"), id("ki"))
+								),
+								index(id("src"), index(id("keys"), id("ki")))
+							)
+						),
+					]
+				),
 			]
 		),
 		breakStmt(),

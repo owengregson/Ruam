@@ -8,7 +8,24 @@
  */
 
 import type { JsNode } from "../nodes.js";
-import { id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, returnStmt, fnExpr, ternary, BOp, UOp } from "../nodes.js";
+import {
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	returnStmt,
+	fnExpr,
+	ternary,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 
 // --- This-boxing ---
@@ -33,7 +50,8 @@ export function buildThisBoxing(ctx?: HandlerCtx): JsNode[] {
 				[
 					varDecl(ttName, un(UOp.Typeof, id(tvName))),
 					ifStmt(
-						bin(BOp.And,
+						bin(
+							BOp.And,
 							bin(BOp.Sneq, id(ttName), lit("object")),
 							bin(BOp.Sneq, id(ttName), lit("function"))
 						),

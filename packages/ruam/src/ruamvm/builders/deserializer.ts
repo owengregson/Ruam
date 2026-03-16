@@ -13,7 +13,33 @@
 
 import type { JsNode, ObjectEntry } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
-import { fn, varDecl, id, lit, bin, un, assign, call, member, index, newExpr, obj, method, exprStmt, returnStmt, forStmt, switchStmt, caseClause, breakStmt, block, update, BOp, UOp, UpOp, AOp } from "../nodes.js";
+import {
+	fn,
+	varDecl,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	newExpr,
+	obj,
+	method,
+	exprStmt,
+	returnStmt,
+	forStmt,
+	switchStmt,
+	caseClause,
+	breakStmt,
+	block,
+	update,
+	BOp,
+	UOp,
+	UpOp,
+	AOp,
+} from "../nodes.js";
 
 // --- Builder ---
 
@@ -238,7 +264,7 @@ export function buildDeserializer(
 					call(member(member(rdr, DV), "getInt8"), [member(rdr, DOF)])
 				)
 			),
-			exprStmt(assign(member(rdr, DOF), lit(1),AOp.Add)),
+			exprStmt(assign(member(rdr, DOF), lit(1), AOp.Add)),
 			breakStmt(),
 		])
 	);
@@ -253,7 +279,7 @@ export function buildDeserializer(
 					])
 				)
 			),
-			exprStmt(assign(member(rdr, DOF), lit(2),AOp.Add)),
+			exprStmt(assign(member(rdr, DOF), lit(2), AOp.Add)),
 			breakStmt(),
 		])
 	);

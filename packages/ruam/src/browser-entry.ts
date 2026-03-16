@@ -9,4 +9,8 @@
 
 export { obfuscateCode } from "./transform.js";
 export { PRESETS } from "./presets.js";
-export type { VmObfuscationOptions, PresetName, TargetEnvironment } from "./types.js";
+export type {
+	VmObfuscationOptions,
+	PresetName,
+	TargetEnvironment,
+} from "./types.js";

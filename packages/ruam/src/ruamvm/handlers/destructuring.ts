@@ -13,7 +13,29 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, breakStmt, varDecl, id, lit, bin, un, assign, call, member, index, exprStmt, ifStmt, whileStmt, forStmt, obj, arr, update, BOp, UOp, UpOp } from "../nodes.js";
+import {
+	type JsNode,
+	breakStmt,
+	varDecl,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	exprStmt,
+	ifStmt,
+	whileStmt,
+	forStmt,
+	obj,
+	arr,
+	update,
+	BOp,
+	UOp,
+	UpOp,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple handler ---
@@ -109,7 +131,8 @@ function DESTRUCTURE_REST_OBJECT(ctx: HandlerCtx): JsNode[] {
 			update(UpOp.Inc, false, id("ki")),
 			[
 				ifStmt(
-					bin(BOp.Lt,
+					bin(
+						BOp.Lt,
 						call(member(id("excludeKeys"), "indexOf"), [
 							index(id("keys"), id("ki")),
 						]),

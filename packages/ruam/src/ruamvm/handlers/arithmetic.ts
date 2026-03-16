@@ -9,7 +9,21 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { id, varDecl, exprStmt, assign, bin, un, lit, breakStmt, type JsNode, BOp, UOp, type BOpKind, type UOpKind } from "../nodes.js";
+import {
+	id,
+	varDecl,
+	exprStmt,
+	assign,
+	bin,
+	un,
+	lit,
+	breakStmt,
+	type JsNode,
+	BOp,
+	UOp,
+	type BOpKind,
+	type UOpKind,
+} from "../nodes.js";
 import { registry, type HandlerCtx, type HandlerFn } from "./registry.js";
 
 // --- Helpers ---

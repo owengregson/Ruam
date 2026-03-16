@@ -14,10 +14,7 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "./constants.js";
 // --- Public interfaces ---
 
 /** Dispatch architecture style for the interpreter. */
-export type DispatchStyle =
-	| "function-table"
-	| "direct-array"
-	| "object-lookup";
+export type DispatchStyle = "function-table" | "direct-array" | "object-lookup";
 
 /** Return signaling mechanism for handler → dispatch loop. */
 export type ReturnMechanism = "sentinel" | "tagged" | "flag";

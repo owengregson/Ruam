@@ -16,7 +16,19 @@
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
 import type { SplitFn } from "../constant-splitting.js";
-import { fn, varDecl, id, lit, assign, bin, member, exprStmt, returnStmt, BOp, AOp } from "../nodes.js";
+import {
+	fn,
+	varDecl,
+	id,
+	lit,
+	assign,
+	bin,
+	member,
+	exprStmt,
+	returnStmt,
+	BOp,
+	AOp,
+} from "../nodes.js";
 
 // --- Probe table ---
 
@@ -76,15 +88,21 @@ export function buildFingerprintSource(
 	// h ^= <probe>.length << <shift>;
 	for (const [chain, shift] of PROBES) {
 		body.push(
-			exprStmt(assign(h, bin(BOp.Shl, dotChain(chain), lit(shift)),AOp.BitXor))
+			exprStmt(
+				assign(h, bin(BOp.Shl, dotChain(chain), lit(shift)), AOp.BitXor)
+			)
 		);
 	}
 
 	// Murmur3-style finalizer
 	// h = (h ^ (h >>> 16)) * 0x45d9f3b;
-	body.push(exprStmt(assign(h, bin(BOp.Mul, xor(h, ushr(h, 16)), L(0x45d9f3b)))));
+	body.push(
+		exprStmt(assign(h, bin(BOp.Mul, xor(h, ushr(h, 16)), L(0x45d9f3b))))
+	);
 	// h = (h ^ (h >>> 13)) * 0x45d9f3b;
-	body.push(exprStmt(assign(h, bin(BOp.Mul, xor(h, ushr(h, 13)), L(0x45d9f3b)))));
+	body.push(
+		exprStmt(assign(h, bin(BOp.Mul, xor(h, ushr(h, 13)), L(0x45d9f3b))))
+	);
 	// h = h ^ (h >>> 16);
 	body.push(exprStmt(assign(h, xor(h, ushr(h, 16)))));
 

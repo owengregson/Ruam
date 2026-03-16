@@ -17,7 +17,22 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, index, assign, bin, lit, varDecl, exprStmt, ifStmt, breakStmt, BOp, AOp, type AOpKind, type BOpKind } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	index,
+	assign,
+	bin,
+	lit,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	breakStmt,
+	BOp,
+	AOp,
+	type AOpKind,
+	type BOpKind,
+} from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 

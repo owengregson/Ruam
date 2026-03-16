@@ -17,7 +17,11 @@
 
 import type { BytecodeUnit, Instruction } from "../types.js";
 import { Op, OPCODE_COUNT } from "./opcodes.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT, GOLDEN_RATIO_PRIME } from "../constants.js";
+import {
+	LCG_MULTIPLIER,
+	LCG_INCREMENT,
+	GOLDEN_RATIO_PRIME,
+} from "../constants.js";
 
 // --- Constants ---
 
@@ -153,7 +157,8 @@ export function insertMutationOpcodes(
 		st2 = lcgNext(st2);
 		nextMut2 =
 			MIN_MUTATION_INTERVAL +
-			((st2 >>> 16) % (MAX_MUTATION_INTERVAL - MIN_MUTATION_INTERVAL + 1));
+			((st2 >>> 16) %
+				(MAX_MUTATION_INTERVAL - MIN_MUTATION_INTERVAL + 1));
 
 		for (let oldIp = 0; oldIp < instrs.length; oldIp++) {
 			if (count >= nextMut2 && oldIp > 0) {

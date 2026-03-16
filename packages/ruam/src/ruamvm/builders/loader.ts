@@ -11,7 +11,27 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
-import { arr, assign, bin, call, exprStmt, fn, forStmt, id, ifStmt, index, lit, member, newExpr, obj, returnStmt, update, varDecl, BOp, UpOp } from "../nodes.js";
+import {
+	arr,
+	assign,
+	bin,
+	call,
+	exprStmt,
+	fn,
+	forStmt,
+	id,
+	ifStmt,
+	index,
+	lit,
+	member,
+	newExpr,
+	obj,
+	returnStmt,
+	update,
+	varDecl,
+	BOp,
+	UpOp,
+} from "../nodes.js";
 
 // --- Builder ---
 

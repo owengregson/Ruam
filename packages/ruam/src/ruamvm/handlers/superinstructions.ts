@@ -16,7 +16,22 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, index, assign, varDecl, exprStmt, ifStmt, breakStmt, BOp, UOp, type BOpKind } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	index,
+	assign,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	breakStmt,
+	BOp,
+	UOp,
+	type BOpKind,
+} from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -196,8 +211,13 @@ function REG_LT_CONST_JF(ctx: HandlerCtx): JsNode[] {
 		varDecl("ci", mid8(ctx)),
 		varDecl("tgt", hi16(ctx)),
 		ifStmt(
-			un(UOp.Not,
-				bin(BOp.Lt, index(id(ctx.R), id("r")), index(id(ctx.C), id("ci")))
+			un(
+				UOp.Not,
+				bin(
+					BOp.Lt,
+					index(id(ctx.R), id("r")),
+					index(id(ctx.C), id("ci"))
+				)
 			),
 			[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id("tgt"), lit(2))))]
 		),
@@ -222,8 +242,13 @@ function REG_LT_REG_JF(ctx: HandlerCtx): JsNode[] {
 		varDecl("rb", mid8(ctx)),
 		varDecl("tgt", hi16(ctx)),
 		ifStmt(
-			un(UOp.Not,
-				bin(BOp.Lt, index(id(ctx.R), id("ra")), index(id(ctx.R), id("rb")))
+			un(
+				UOp.Not,
+				bin(
+					BOp.Lt,
+					index(id(ctx.R), id("ra")),
+					index(id(ctx.R), id("rb"))
+				)
 			),
 			[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id("tgt"), lit(2))))]
 		),

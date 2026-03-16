@@ -9,7 +9,26 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
-import { id, lit, bin, un, assign, call, member, index, fn, fnExpr, varDecl, exprStmt, ifStmt, returnStmt, obj, arr, BOp, UOp } from "../nodes.js";
+import {
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	fn,
+	fnExpr,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	returnStmt,
+	obj,
+	arr,
+	BOp,
+	UOp,
+} from "../nodes.js";
 
 // --- VM dispatch functions ---
 
@@ -56,7 +75,8 @@ export function buildRunners(
 					call(id(names.dbg), [
 						lit("VM_DISPATCH"),
 						bin(BOp.Add, lit("id="), id("id")),
-						bin(BOp.Add,
+						bin(
+							BOp.Add,
 							lit("async="),
 							un(UOp.Not, un(UOp.Not, member(id(U), "s")))
 						),
@@ -73,7 +93,8 @@ export function buildRunners(
 	// This allows function stubs to call vm(id, args, scope, this) directly
 	// without needing the separate vm.call pattern.
 	const mainThisBoxing: JsNode = ifStmt(
-		bin(BOp.And,
+		bin(
+			BOp.And,
 			bin(BOp.Sneq, id(TV), un(UOp.Void, lit(0))),
 			un(UOp.Not, bin(BOp.Or, member(id(U), "a"), member(id(U), "st")))
 		),
@@ -84,7 +105,8 @@ export function buildRunners(
 				[
 					varDecl(temps["_t"]!, un(UOp.Typeof, id(TV))),
 					ifStmt(
-						bin(BOp.And,
+						bin(
+							BOp.And,
 							bin(BOp.Sneq, id(temps["_t"]!), lit("object")),
 							bin(BOp.Sneq, id(temps["_t"]!), lit("function"))
 						),
@@ -126,7 +148,8 @@ export function buildRunners(
 				[
 					varDecl(temps["_t"]!, un(UOp.Typeof, id(TV))),
 					ifStmt(
-						bin(BOp.And,
+						bin(
+							BOp.And,
 							bin(BOp.Sneq, id(temps["_t"]!), lit("object")),
 							bin(BOp.Sneq, id(temps["_t"]!), lit("function"))
 						),

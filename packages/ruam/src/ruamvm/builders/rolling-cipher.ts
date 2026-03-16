@@ -11,7 +11,20 @@
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
 import type { SplitFn } from "../constant-splitting.js";
-import { assign, bin, call, exprStmt, fn, id, lit, member, returnStmt, varDecl, BOp, AOp } from "../nodes.js";
+import {
+	assign,
+	bin,
+	call,
+	exprStmt,
+	fn,
+	id,
+	lit,
+	member,
+	returnStmt,
+	varDecl,
+	BOp,
+	AOp,
+} from "../nodes.js";
 
 // --- Local helpers for dense bit manipulation ---
 

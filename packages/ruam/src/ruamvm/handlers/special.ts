@@ -12,7 +12,20 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, bin, member, call, arr, spread, varDecl, exprStmt, breakStmt, index, BOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	bin,
+	member,
+	call,
+	arr,
+	spread,
+	varDecl,
+	exprStmt,
+	breakStmt,
+	index,
+	BOp,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple push handlers ---
@@ -79,7 +92,8 @@ function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
 		),
 		exprStmt(
 			ctx.push(
-				bin(BOp.Or,
+				bin(
+					BOp.Or,
 					index(id("syms"), id(ctx.O)),
 					member(id("Symbol"), "iterator")
 				)

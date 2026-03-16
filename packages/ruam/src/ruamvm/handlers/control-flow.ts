@@ -14,7 +14,25 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, exprStmt, assign, ifStmt, varDecl, breakStmt, returnStmt, throwStmt, call, member, index, BOp, UOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	exprStmt,
+	assign,
+	ifStmt,
+	varDecl,
+	breakStmt,
+	returnStmt,
+	throwStmt,
+	call,
+	member,
+	index,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { debugTrace } from "./helpers.js";
 
@@ -47,7 +65,8 @@ function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.pop()),
 		ifStmt(
-			bin(BOp.Or,
+			bin(
+				BOp.Or,
 				bin(BOp.Seq, id("v"), lit(null)),
 				bin(BOp.Seq, id("v"), un(UOp.Void, lit(0)))
 			),
@@ -81,7 +100,8 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
 		ifStmt(
-			bin(BOp.Or,
+			bin(
+				BOp.Or,
 				bin(BOp.Seq, id("v"), lit(null)),
 				bin(BOp.Seq, id("v"), un(UOp.Void, lit(0)))
 			),
@@ -108,7 +128,8 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.t("_rv"), ctx.pop()),
 		...debugTrace(ctx, "RETURN", lit("value="), id(ctx.t("_rv"))),
 		ifStmt(
-			bin(BOp.And,
+			bin(
+				BOp.And,
 				id(ctx.EX),
 				bin(BOp.Gt, member(id(ctx.EX), "length"), lit(0))
 			),
@@ -135,7 +156,8 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
 						exprStmt(
 							assign(
 								id(ctx.IP),
-								bin(BOp.Mul,
+								bin(
+									BOp.Mul,
 									member(id(ctx.t("_h")), ctx.t("_fi")),
 									lit(2)
 								)
@@ -163,7 +185,8 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 	return [
 		...debugTrace(ctx, "RETURN_VOID"),
 		ifStmt(
-			bin(BOp.And,
+			bin(
+				BOp.And,
 				id(ctx.EX),
 				bin(BOp.Gt, member(id(ctx.EX), "length"), lit(0))
 			),
@@ -190,7 +213,8 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 						exprStmt(
 							assign(
 								id(ctx.IP),
-								bin(BOp.Mul,
+								bin(
+									BOp.Mul,
 									member(id(ctx.t("_h")), ctx.t("_fi")),
 									lit(2)
 								)

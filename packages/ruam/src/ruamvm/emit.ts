@@ -28,17 +28,35 @@ import {
 // --- Operator precedence table (higher = tighter binding) ---
 
 const BIN_PREC: Record<BOpKind, number> = {
-	[BOp.Or]:4,[BOp.Nullish]:4,[BOp.And]:5,
-	[BOp.BitOr]:6,[BOp.BitXor]:7,[BOp.BitAnd]:8,
-	[BOp.Eq]:9,[BOp.Neq]:9,[BOp.Seq]:9,[BOp.Sneq]:9,
-	[BOp.Lt]:10,[BOp.Gt]:10,[BOp.Lte]:10,[BOp.Gte]:10,
-	[BOp.In]:10,[BOp.Instanceof]:10,
-	[BOp.Shl]:11,[BOp.Shr]:11,[BOp.Ushr]:11,
-	[BOp.Add]:12,[BOp.Sub]:12,
-	[BOp.Mul]:13,[BOp.Div]:13,[BOp.Mod]:13,
-	[BOp.Pow]:14,
+	[BOp.Or]: 4,
+	[BOp.Nullish]: 4,
+	[BOp.And]: 5,
+	[BOp.BitOr]: 6,
+	[BOp.BitXor]: 7,
+	[BOp.BitAnd]: 8,
+	[BOp.Eq]: 9,
+	[BOp.Neq]: 9,
+	[BOp.Seq]: 9,
+	[BOp.Sneq]: 9,
+	[BOp.Lt]: 10,
+	[BOp.Gt]: 10,
+	[BOp.Lte]: 10,
+	[BOp.Gte]: 10,
+	[BOp.In]: 10,
+	[BOp.Instanceof]: 10,
+	[BOp.Shl]: 11,
+	[BOp.Shr]: 11,
+	[BOp.Ushr]: 11,
+	[BOp.Add]: 12,
+	[BOp.Sub]: 12,
+	[BOp.Mul]: 13,
+	[BOp.Div]: 13,
+	[BOp.Mod]: 13,
+	[BOp.Pow]: 14,
 };
-const PREC_COMMA=1;const PREC_ASSIGN=2;const PREC_TERNARY=3;
+const PREC_COMMA = 1;
+const PREC_ASSIGN = 2;
+const PREC_TERNARY = 3;
 
 /** Keyword binary operators that need spaces around them. */
 const KEYWORD_BINOP = new Set<BOpKind>([BOp.In, BOp.Instanceof]);
@@ -92,11 +110,7 @@ export function emit(node: JsNode): string {
 				return (
 					"var " +
 					chain
-						.map(
-							(d) =>
-								d.name +
-								(d.init ? "=" + emit(d.init) : "")
-						)
+						.map((d) => d.name + (d.init ? "=" + emit(d.init) : ""))
 						.join(",")
 				);
 			}
@@ -172,8 +186,7 @@ export function emit(node: JsNode): string {
 			const right = needsParens(node.right, node.op, true)
 				? `(${emit(node.right)})`
 				: emit(node.right);
-			if (KEYWORD_BINOP.has(node.op))
-				return `${left} ${opStr} ${right}`;
+			if (KEYWORD_BINOP.has(node.op)) return `${left} ${opStr} ${right}`;
 			return `${left}${opStr}${right}`;
 		}
 		case "UnaryOp": {
@@ -200,7 +213,9 @@ export function emit(node: JsNode): string {
 				? `${UPOP_STR[node.op]}${emit(node.arg)}`
 				: `${emit(node.arg)}${UPOP_STR[node.op]}`;
 		case "AssignExpr":
-			return `${emit(node.target)}${node.op != null ? AOP_STR[node.op] : ""}=${emit(node.value)}`;
+			return `${emit(node.target)}${
+				node.op != null ? AOP_STR[node.op] : ""
+			}=${emit(node.value)}`;
 		case "CallExpr": {
 			let callee = emit(node.callee);
 			// Wrap function/arrow expressions in parens when used as callee (IIFE)
