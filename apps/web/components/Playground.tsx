@@ -101,7 +101,7 @@ const PRESET_DEFAULTS: Record<
 		polymorphicDecoder: true,
 		scatteredKeys: true,
 		blockPermutation: true,
-		opcodeMutation: false,
+		opcodeMutation: true,
 	},
 };
 
