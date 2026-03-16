@@ -56,11 +56,11 @@ function DESTRUCTURE_BIND(_ctx: HandlerCtx): JsNode[] {
  */
 function DESTRUCTURE_DEFAULT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.peek()),
-		ifStmt(bin(BOp.Seq, id("v"), un(UOp.Void, lit(0))), [
+		varDecl(ctx.local("value"), ctx.peek()),
+		ifStmt(bin(BOp.Seq, id(ctx.local("value")), un(UOp.Void, lit(0))), [
 			exprStmt(ctx.pop()),
-			varDecl("def", index(id(ctx.C), id(ctx.O))),
-			exprStmt(ctx.push(id("def"))),
+			varDecl(ctx.local("defaultVal"), index(id(ctx.C), id(ctx.O))),
+			exprStmt(ctx.push(id(ctx.local("defaultVal")))),
 		]),
 		breakStmt(),
 	];
@@ -78,32 +78,44 @@ function DESTRUCTURE_DEFAULT(ctx: HandlerCtx): JsNode[] {
  */
 function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.pop()),
-		varDecl("rest", arr()),
-		whileStmt(un(UOp.Not, member(id("iterObj"), ctx.t("_done"))), [
-			exprStmt(
-				call(member(id("rest"), "push"), [
-					member(id("iterObj"), ctx.t("_value")),
-				])
-			),
-			varDecl(
-				"nxt",
-				call(member(member(id("iterObj"), ctx.t("_iter")), "next"), [])
-			),
-			exprStmt(
-				assign(
-					member(id("iterObj"), ctx.t("_done")),
-					un(UOp.Not, un(UOp.Not, member(id("nxt"), "done")))
-				)
-			),
-			exprStmt(
-				assign(
-					member(id("iterObj"), ctx.t("_value")),
-					member(id("nxt"), "value")
-				)
-			),
-		]),
-		exprStmt(ctx.push(id("rest"))),
+		varDecl(ctx.local("iterObj"), ctx.pop()),
+		varDecl(ctx.local("restVal"), arr()),
+		whileStmt(
+			un(UOp.Not, member(id(ctx.local("iterObj")), ctx.t("_done"))),
+			[
+				exprStmt(
+					call(member(id(ctx.local("restVal")), "push"), [
+						member(id(ctx.local("iterObj")), ctx.t("_value")),
+					])
+				),
+				varDecl(
+					ctx.local("next"),
+					call(
+						member(
+							member(id(ctx.local("iterObj")), ctx.t("_iter")),
+							"next"
+						),
+						[]
+					)
+				),
+				exprStmt(
+					assign(
+						member(id(ctx.local("iterObj")), ctx.t("_done")),
+						un(
+							UOp.Not,
+							un(UOp.Not, member(id(ctx.local("next")), "done"))
+						)
+					)
+				),
+				exprStmt(
+					assign(
+						member(id(ctx.local("iterObj")), ctx.t("_value")),
+						member(id(ctx.local("next")), "value")
+					)
+				),
+			]
+		),
+		exprStmt(ctx.push(id(ctx.local("restVal")))),
 		breakStmt(),
 	];
 }
@@ -121,35 +133,54 @@ function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
  */
 function DESTRUCTURE_REST_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("excludeKeys", ctx.pop()),
-		varDecl("src", ctx.pop()),
-		varDecl("rest", obj()),
-		varDecl("keys", call(member(id("Object"), "keys"), [id("src")])),
+		varDecl(ctx.local("excludeKeys"), ctx.pop()),
+		varDecl(ctx.local("src"), ctx.pop()),
+		varDecl(ctx.local("restVal"), obj()),
+		varDecl(
+			ctx.local("keys"),
+			call(member(id("Object"), "keys"), [id(ctx.local("src"))])
+		),
 		forStmt(
-			varDecl("ki", lit(0)),
-			bin(BOp.Lt, id("ki"), member(id("keys"), "length")),
-			update(UpOp.Inc, false, id("ki")),
+			varDecl(ctx.local("ki"), lit(0)),
+			bin(
+				BOp.Lt,
+				id(ctx.local("ki")),
+				member(id(ctx.local("keys")), "length")
+			),
+			update(UpOp.Inc, false, id(ctx.local("ki"))),
 			[
 				ifStmt(
 					bin(
 						BOp.Lt,
-						call(member(id("excludeKeys"), "indexOf"), [
-							index(id("keys"), id("ki")),
+						call(member(id(ctx.local("excludeKeys")), "indexOf"), [
+							index(id(ctx.local("keys")), id(ctx.local("ki"))),
 						]),
 						lit(0)
 					),
 					[
 						exprStmt(
 							assign(
-								index(id("rest"), index(id("keys"), id("ki"))),
-								index(id("src"), index(id("keys"), id("ki")))
+								index(
+									id(ctx.local("restVal")),
+									index(
+										id(ctx.local("keys")),
+										id(ctx.local("ki"))
+									)
+								),
+								index(
+									id(ctx.local("src")),
+									index(
+										id(ctx.local("keys")),
+										id(ctx.local("ki"))
+									)
+								)
 							)
 						),
 					]
 				),
 			]
 		),
-		exprStmt(ctx.push(id("rest"))),
+		exprStmt(ctx.push(id(ctx.local("restVal")))),
 		breakStmt(),
 	];
 }
@@ -165,21 +196,30 @@ function DESTRUCTURE_REST_OBJECT(ctx: HandlerCtx): JsNode[] {
  */
 function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("arr", ctx.pop()),
+		varDecl(ctx.local("array"), ctx.pop()),
 		varDecl(
-			"iter",
-			call(index(id("arr"), member(id("Symbol"), "iterator")), [])
+			ctx.local("iter"),
+			call(
+				index(id(ctx.local("array")), member(id("Symbol"), "iterator")),
+				[]
+			)
 		),
-		varDecl("first", call(member(id("iter"), "next"), [])),
+		varDecl(
+			ctx.local("first"),
+			call(member(id(ctx.local("iter")), "next"), [])
+		),
 		exprStmt(
 			ctx.push(
 				obj(
-					[ctx.t("_iter"), id("iter")],
+					[ctx.t("_iter"), id(ctx.local("iter"))],
 					[
 						ctx.t("_done"),
-						un(UOp.Not, un(UOp.Not, member(id("first"), "done"))),
+						un(
+							UOp.Not,
+							un(UOp.Not, member(id(ctx.local("first")), "done"))
+						),
 					],
-					[ctx.t("_value"), member(id("first"), "value")]
+					[ctx.t("_value"), member(id(ctx.local("first")), "value")]
 				)
 			)
 		),
@@ -196,8 +236,10 @@ function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
  */
 function OBJECT_PATTERN_GET(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("obj", ctx.peek()),
-		exprStmt(ctx.push(index(id("obj"), index(id(ctx.C), id(ctx.O))))),
+		varDecl(ctx.local("obj"), ctx.peek()),
+		exprStmt(
+			ctx.push(index(id(ctx.local("obj")), index(id(ctx.C), id(ctx.O))))
+		),
 		breakStmt(),
 	];
 }

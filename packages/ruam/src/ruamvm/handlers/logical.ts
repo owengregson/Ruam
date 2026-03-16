@@ -36,9 +36,9 @@ registry.set(Op.NOT, (ctx: HandlerCtx) => [
  * Short-circuit: if falsy, jump to operand target; otherwise pop TOS and continue.
  */
 registry.set(Op.LOGICAL_AND, (ctx: HandlerCtx) => [
-	varDecl("v", ctx.peek()),
+	varDecl(ctx.local("value"), ctx.peek()),
 	ifStmt(
-		un(UOp.Not, id("v")),
+		un(UOp.Not, id(ctx.local("value"))),
 		[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id(ctx.O), lit(2))))],
 		[exprStmt(ctx.pop())]
 	),
@@ -53,9 +53,9 @@ registry.set(Op.LOGICAL_AND, (ctx: HandlerCtx) => [
  * Short-circuit: if truthy, jump to operand target; otherwise pop TOS and continue.
  */
 registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
-	varDecl("v", ctx.peek()),
+	varDecl(ctx.local("value"), ctx.peek()),
 	ifStmt(
-		id("v"),
+		id(ctx.local("value")),
 		[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id(ctx.O), lit(2))))],
 		[exprStmt(ctx.pop())]
 	),
@@ -70,12 +70,12 @@ registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
  * Short-circuit: if non-nullish (not null and not undefined), jump; otherwise pop and continue.
  */
 registry.set(Op.NULLISH_COALESCE, (ctx: HandlerCtx) => [
-	varDecl("v", ctx.peek()),
+	varDecl(ctx.local("value"), ctx.peek()),
 	ifStmt(
 		bin(
 			BOp.And,
-			bin(BOp.Sneq, id("v"), lit(null)),
-			bin(BOp.Sneq, id("v"), un(UOp.Void, lit(0)))
+			bin(BOp.Sneq, id(ctx.local("value")), lit(null)),
+			bin(BOp.Sneq, id(ctx.local("value")), un(UOp.Void, lit(0)))
 		),
 		[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id(ctx.O), lit(2))))],
 		[exprStmt(ctx.pop())]

@@ -94,22 +94,36 @@ function TRY_POP(ctx: HandlerCtx): JsNode[] {
  */
 function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("err", ctx.pop()),
+		varDecl(ctx.local("error"), ctx.pop()),
 		ifStmt(
 			bin(BOp.Gte, id(ctx.O), lit(0)),
 			[
-				varDecl("cname", index(id(ctx.C), id(ctx.O))),
+				varDecl(ctx.local("catchName"), index(id(ctx.C), id(ctx.O))),
 				ifStmt(
-					bin(BOp.Seq, un(UOp.Typeof, id("cname")), lit("string")),
+					bin(
+						BOp.Seq,
+						un(UOp.Typeof, id(ctx.local("catchName"))),
+						lit("string")
+					),
 					[
 						exprStmt(
-							assign(index(id(ctx.SC), id("cname")), id("err"))
+							assign(
+								index(id(ctx.SC), id(ctx.local("catchName"))),
+								id(ctx.local("error"))
+							)
 						),
 					],
-					[exprStmt(assign(index(id(ctx.R), id(ctx.O)), id("err")))]
+					[
+						exprStmt(
+							assign(
+								index(id(ctx.R), id(ctx.O)),
+								id(ctx.local("error"))
+							)
+						),
+					]
 				),
 			],
-			[exprStmt(ctx.push(id("err")))]
+			[exprStmt(ctx.push(id(ctx.local("error"))))]
 		),
 		breakStmt(),
 	];
@@ -123,8 +137,8 @@ function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
  */
 function CATCH_BIND_PATTERN(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("err", ctx.pop()),
-		exprStmt(ctx.push(id("err"))),
+		varDecl(ctx.local("error"), ctx.pop()),
+		exprStmt(ctx.push(id(ctx.local("error")))),
 		breakStmt(),
 	];
 }
@@ -150,10 +164,10 @@ function FINALLY_MARK(_ctx: HandlerCtx): JsNode[] {
 function END_FINALLY(ctx: HandlerCtx): JsNode[] {
 	return [
 		ifStmt(id(ctx.HPE), [
-			varDecl("ex", id(ctx.PE)),
+			varDecl(ctx.local("error"), id(ctx.PE)),
 			exprStmt(assign(id(ctx.PE), lit(null))),
 			exprStmt(assign(id(ctx.HPE), lit(false))),
-			throwStmt(id("ex")),
+			throwStmt(id(ctx.local("error"))),
 		]),
 		ifStmt(bin(BOp.Seq, id(ctx.CT), lit(1)), [
 			varDecl(ctx.t("_rv2"), id(ctx.CV)),
@@ -174,12 +188,16 @@ function END_FINALLY(ctx: HandlerCtx): JsNode[] {
  */
 function THROW_IF_NOT_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.peek()),
+		varDecl(ctx.local("value"), ctx.peek()),
 		ifStmt(
 			bin(
 				BOp.Or,
-				bin(BOp.Sneq, un(UOp.Typeof, id("v")), lit("object")),
-				bin(BOp.Seq, id("v"), lit(null))
+				bin(
+					BOp.Sneq,
+					un(UOp.Typeof, id(ctx.local("value"))),
+					lit("object")
+				),
+				bin(BOp.Seq, id(ctx.local("value")), lit(null))
 			),
 			[
 				throwStmt(

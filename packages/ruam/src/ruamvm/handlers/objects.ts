@@ -76,10 +76,15 @@ function GET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
  */
 function SET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("val", ctx.pop()),
-		varDecl("obj", ctx.peek()),
-		varDecl("k", index(id(ctx.C), id(ctx.O))),
-		exprStmt(assign(index(id("obj"), id("k")), id("val"))),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("object"), ctx.peek()),
+		varDecl(ctx.local("propKey"), index(id(ctx.C), id(ctx.O))),
+		exprStmt(
+			assign(
+				index(id(ctx.local("object")), id(ctx.local("propKey"))),
+				id(ctx.local("value"))
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -87,8 +92,10 @@ function SET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 /** `{var key=S[P--];S[P]=S[P][key];break;}` */
 function GET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("key", ctx.pop()),
-		exprStmt(assign(ctx.peek(), index(ctx.peek(), id("key")))),
+		varDecl(ctx.local("propKey"), ctx.pop()),
+		exprStmt(
+			assign(ctx.peek(), index(ctx.peek(), id(ctx.local("propKey"))))
+		),
 		breakStmt(),
 	];
 }
@@ -96,10 +103,15 @@ function GET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 /** `{var val=S[P--];var key=S[P--];var obj=S[P];obj[key]=val;break;}` */
 function SET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("val", ctx.pop()),
-		varDecl("key", ctx.pop()),
-		varDecl("obj", ctx.peek()),
-		exprStmt(assign(index(id("obj"), id("key")), id("val"))),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("propKey"), ctx.pop()),
+		varDecl(ctx.local("object"), ctx.peek()),
+		exprStmt(
+			assign(
+				index(id(ctx.local("object")), id(ctx.local("propKey"))),
+				id(ctx.local("value"))
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -120,9 +132,12 @@ function DELETE_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 /** `{var key=S[P--];S[P]=delete S[P][key];break;}` */
 function DELETE_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("key", ctx.pop()),
+		varDecl(ctx.local("propKey"), ctx.pop()),
 		exprStmt(
-			assign(ctx.peek(), un(UOp.Delete, index(ctx.peek(), id("key"))))
+			assign(
+				ctx.peek(),
+				un(UOp.Delete, index(ctx.peek(), id(ctx.local("propKey"))))
+			)
 		),
 		breakStmt(),
 	];
@@ -131,15 +146,15 @@ function DELETE_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 /** `{var key=C[O];var obj=S[P];S[P]=obj==null?void 0:obj[key];break;}` */
 function OPT_CHAIN_GET(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("key", index(id(ctx.C), id(ctx.O))),
-		varDecl("obj", ctx.peek()),
+		varDecl(ctx.local("propKey"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("object"), ctx.peek()),
 		exprStmt(
 			assign(
 				ctx.peek(),
 				ternary(
-					bin(BOp.Eq, id("obj"), lit(null)),
+					bin(BOp.Eq, id(ctx.local("object")), lit(null)),
 					un(UOp.Void, lit(0)),
-					index(id("obj"), id("key"))
+					index(id(ctx.local("object")), id(ctx.local("propKey")))
 				)
 			)
 		),
@@ -150,15 +165,15 @@ function OPT_CHAIN_GET(ctx: HandlerCtx): JsNode[] {
 /** `{var key=S[P--];var obj=S[P];S[P]=obj==null?void 0:obj[key];break;}` */
 function OPT_CHAIN_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("key", ctx.pop()),
-		varDecl("obj", ctx.peek()),
+		varDecl(ctx.local("propKey"), ctx.pop()),
+		varDecl(ctx.local("object"), ctx.peek()),
 		exprStmt(
 			assign(
 				ctx.peek(),
 				ternary(
-					bin(BOp.Eq, id("obj"), lit(null)),
+					bin(BOp.Eq, id(ctx.local("object")), lit(null)),
 					un(UOp.Void, lit(0)),
-					index(id("obj"), id("key"))
+					index(id(ctx.local("object")), id(ctx.local("propKey")))
 				)
 			)
 		),
@@ -171,8 +186,10 @@ function OPT_CHAIN_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 /** `{var obj=S[P--];S[P]=S[P] in obj;break;}` */
 function IN_OP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("obj", ctx.pop()),
-		exprStmt(assign(ctx.peek(), bin(BOp.In, ctx.peek(), id("obj")))),
+		varDecl(ctx.local("object"), ctx.pop()),
+		exprStmt(
+			assign(ctx.peek(), bin(BOp.In, ctx.peek(), id(ctx.local("object"))))
+		),
 		breakStmt(),
 	];
 }
@@ -180,9 +197,12 @@ function IN_OP(ctx: HandlerCtx): JsNode[] {
 /** `{var ctor=S[P--];S[P]=S[P] instanceof ctor;break;}` */
 function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("ctor", ctx.pop()),
+		varDecl(ctx.local("ctor"), ctx.pop()),
 		exprStmt(
-			assign(ctx.peek(), bin(BOp.Instanceof, ctx.peek(), id("ctor")))
+			assign(
+				ctx.peek(),
+				bin(BOp.Instanceof, ctx.peek(), id(ctx.local("ctor")))
+			)
 		),
 		breakStmt(),
 	];
@@ -201,13 +221,16 @@ function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
  */
 function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("sp2", superProto(ctx)),
-		varDecl("key", superKey(ctx)),
+		varDecl(ctx.local("superProto"), superProto(ctx)),
+		varDecl(ctx.local("propKey"), superKey(ctx)),
 		exprStmt(
 			ctx.push(
 				ternary(
-					id("sp2"),
-					index(id("sp2"), id("key")),
+					id(ctx.local("superProto")),
+					index(
+						id(ctx.local("superProto")),
+						id(ctx.local("propKey"))
+					),
 					un(UOp.Void, lit(0))
 				)
 			)
@@ -228,13 +251,21 @@ function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
  */
 function SET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("val", ctx.pop()),
-		varDecl("sp2", superProto(ctx)),
-		varDecl("key", superKey(ctx)),
-		ifStmt(id("sp2"), [
-			exprStmt(assign(index(id("sp2"), id("key")), id("val"))),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("superProto"), superProto(ctx)),
+		varDecl(ctx.local("propKey"), superKey(ctx)),
+		ifStmt(id(ctx.local("superProto")), [
+			exprStmt(
+				assign(
+					index(
+						id(ctx.local("superProto")),
+						id(ctx.local("propKey"))
+					),
+					id(ctx.local("value"))
+				)
+			),
 		]),
-		exprStmt(ctx.push(id("val"))),
+		exprStmt(ctx.push(id(ctx.local("value")))),
 		breakStmt(),
 	];
 }
@@ -244,9 +275,11 @@ function SET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 /** `{var obj=X();var name=C[O];W(obj[name]);break;}` */
 function GET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("obj", ctx.pop()),
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		exprStmt(ctx.push(index(id("obj"), id("name")))),
+		varDecl(ctx.local("object"), ctx.pop()),
+		varDecl(ctx.local("fieldName"), index(id(ctx.C), id(ctx.O))),
+		exprStmt(
+			ctx.push(index(id(ctx.local("object")), id(ctx.local("fieldName"))))
+		),
 		breakStmt(),
 	];
 }
@@ -254,11 +287,16 @@ function GET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 /** `{var val=X();var obj=X();var name=C[O];obj[name]=val;W(val);break;}` */
 function SET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("val", ctx.pop()),
-		varDecl("obj", ctx.pop()),
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		exprStmt(assign(index(id("obj"), id("name")), id("val"))),
-		exprStmt(ctx.push(id("val"))),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("object"), ctx.pop()),
+		varDecl(ctx.local("fieldName"), index(id(ctx.C), id(ctx.O))),
+		exprStmt(
+			assign(
+				index(id(ctx.local("object")), id(ctx.local("fieldName"))),
+				id(ctx.local("value"))
+			)
+		),
+		exprStmt(ctx.push(id(ctx.local("value")))),
 		breakStmt(),
 	];
 }
@@ -266,9 +304,13 @@ function SET_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 /** `{var obj=X();var name=C[O];W(name in obj);break;}` */
 function HAS_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("obj", ctx.pop()),
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		exprStmt(ctx.push(bin(BOp.In, id("name"), id("obj")))),
+		varDecl(ctx.local("object"), ctx.pop()),
+		varDecl(ctx.local("fieldName"), index(id(ctx.C), id(ctx.O))),
+		exprStmt(
+			ctx.push(
+				bin(BOp.In, id(ctx.local("fieldName")), id(ctx.local("object")))
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -278,17 +320,17 @@ function HAS_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 /** `{var desc=X();var key=X();var obj=X();Object.defineProperty(obj,key,desc);W(obj);break;}` */
 function DEFINE_OWN_PROPERTY(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("desc", ctx.pop()),
-		varDecl("key", ctx.pop()),
-		varDecl("obj", ctx.pop()),
+		varDecl(ctx.local("descriptor"), ctx.pop()),
+		varDecl(ctx.local("propKey"), ctx.pop()),
+		varDecl(ctx.local("object"), ctx.pop()),
 		exprStmt(
 			call(member(id("Object"), "defineProperty"), [
-				id("obj"),
-				id("key"),
-				id("desc"),
+				id(ctx.local("object")),
+				id(ctx.local("propKey")),
+				id(ctx.local("descriptor")),
 			])
 		),
-		exprStmt(ctx.push(id("obj"))),
+		exprStmt(ctx.push(id(ctx.local("object")))),
 		breakStmt(),
 	];
 }
@@ -311,9 +353,13 @@ function NEW_ARRAY_WITH_SIZE(ctx: HandlerCtx): JsNode[] {
 /** `{var val=X();var arr=Y();arr.push(val);break;}` */
 function ARRAY_PUSH(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("val", ctx.pop()),
-		varDecl("arr", ctx.peek()),
-		exprStmt(call(member(id("arr"), "push"), [id("val")])),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("array"), ctx.peek()),
+		exprStmt(
+			call(member(id(ctx.local("array")), "push"), [
+				id(ctx.local("value")),
+			])
+		),
 		breakStmt(),
 	];
 }
@@ -321,8 +367,10 @@ function ARRAY_PUSH(ctx: HandlerCtx): JsNode[] {
 /** `{var arr=Y();arr.length++;break;}` */
 function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("arr", ctx.peek()),
-		exprStmt(update(UpOp.Inc, false, member(id("arr"), "length"))),
+		varDecl(ctx.local("array"), ctx.peek()),
+		exprStmt(
+			update(UpOp.Inc, false, member(id(ctx.local("array")), "length"))
+		),
 		breakStmt(),
 	];
 }
@@ -339,23 +387,30 @@ function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
  */
 function SPREAD_ARRAY(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("src", ctx.pop()),
-		varDecl("target", ctx.peek()),
+		varDecl(ctx.local("source"), ctx.pop()),
+		varDecl(ctx.local("target"), ctx.peek()),
 		ifStmt(
-			call(member(id("Array"), "isArray"), [id("target")]),
+			call(member(id("Array"), "isArray"), [id(ctx.local("target"))]),
 			[
 				varDecl(
-					"items",
-					call(member(id("Array"), "from"), [id("src")])
+					ctx.local("items"),
+					call(member(id("Array"), "from"), [id(ctx.local("source"))])
 				),
 				forStmt(
-					varDecl("si", lit(0)),
-					bin(BOp.Lt, id("si"), member(id("items"), "length")),
-					update(UpOp.Inc, false, id("si")),
+					varDecl(ctx.local("spreadIdx"), lit(0)),
+					bin(
+						BOp.Lt,
+						id(ctx.local("spreadIdx")),
+						member(id(ctx.local("items")), "length")
+					),
+					update(UpOp.Inc, false, id(ctx.local("spreadIdx"))),
 					[
 						exprStmt(
-							call(member(id("target"), "push"), [
-								index(id("items"), id("si")),
+							call(member(id(ctx.local("target")), "push"), [
+								index(
+									id(ctx.local("items")),
+									id(ctx.local("spreadIdx"))
+								),
 							])
 						),
 					]
@@ -364,8 +419,8 @@ function SPREAD_ARRAY(ctx: HandlerCtx): JsNode[] {
 			[
 				exprStmt(
 					call(member(id("Object"), "assign"), [
-						id("target"),
-						id("src"),
+						id(ctx.local("target")),
+						id(ctx.local("source")),
 					])
 				),
 			]
@@ -377,10 +432,13 @@ function SPREAD_ARRAY(ctx: HandlerCtx): JsNode[] {
 /** `{var src=X();var target=Y();Object.assign(target,src);break;}` */
 function SPREAD_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("src", ctx.pop()),
-		varDecl("target", ctx.peek()),
+		varDecl(ctx.local("source"), ctx.pop()),
+		varDecl(ctx.local("target"), ctx.peek()),
 		exprStmt(
-			call(member(id("Object"), "assign"), [id("target"), id("src")])
+			call(member(id("Object"), "assign"), [
+				id(ctx.local("target")),
+				id(ctx.local("source")),
+			])
 		),
 		breakStmt(),
 	];
@@ -398,22 +456,29 @@ function SPREAD_OBJECT(ctx: HandlerCtx): JsNode[] {
  */
 function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("excludeKeys", ctx.pop()),
-		varDecl("src", ctx.pop()),
-		varDecl("target", ctx.peek()),
+		varDecl(ctx.local("excludeKeys"), ctx.pop()),
+		varDecl(ctx.local("source"), ctx.pop()),
+		varDecl(ctx.local("target"), ctx.peek()),
 		// Build exclude set as plain object for O(1) lookup
-		varDecl("_ex", obj()),
-		ifStmt(id("excludeKeys"), [
+		varDecl(ctx.local("excludeSet"), obj()),
+		ifStmt(id(ctx.local("excludeKeys")), [
 			forStmt(
-				varDecl("_ei", lit(0)),
-				bin(BOp.Lt, id("_ei"), member(id("excludeKeys"), "length")),
-				update(UpOp.Inc, false, id("_ei")),
+				varDecl(ctx.local("exIdx"), lit(0)),
+				bin(
+					BOp.Lt,
+					id(ctx.local("exIdx")),
+					member(id(ctx.local("excludeKeys")), "length")
+				),
+				update(UpOp.Inc, false, id(ctx.local("exIdx"))),
 				[
 					exprStmt(
 						assign(
 							index(
-								id("_ex"),
-								index(id("excludeKeys"), id("_ei"))
+								id(ctx.local("excludeSet")),
+								index(
+									id(ctx.local("excludeKeys")),
+									id(ctx.local("exIdx"))
+								)
 							),
 							lit(1)
 						)
@@ -421,22 +486,47 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 				]
 			),
 		]),
-		varDecl("keys", call(member(id("Object"), "keys"), [id("src")])),
+		varDecl(
+			ctx.local("keys"),
+			call(member(id("Object"), "keys"), [id(ctx.local("source"))])
+		),
 		forStmt(
-			varDecl("ki", lit(0)),
-			bin(BOp.Lt, id("ki"), member(id("keys"), "length")),
-			update(UpOp.Inc, false, id("ki")),
+			varDecl(ctx.local("keyIdx"), lit(0)),
+			bin(
+				BOp.Lt,
+				id(ctx.local("keyIdx")),
+				member(id(ctx.local("keys")), "length")
+			),
+			update(UpOp.Inc, false, id(ctx.local("keyIdx"))),
 			[
 				ifStmt(
-					un(UOp.Not, index(id("_ex"), index(id("keys"), id("ki")))),
+					un(
+						UOp.Not,
+						index(
+							id(ctx.local("excludeSet")),
+							index(
+								id(ctx.local("keys")),
+								id(ctx.local("keyIdx"))
+							)
+						)
+					),
 					[
 						exprStmt(
 							assign(
 								index(
-									id("target"),
-									index(id("keys"), id("ki"))
+									id(ctx.local("target")),
+									index(
+										id(ctx.local("keys")),
+										id(ctx.local("keyIdx"))
+									)
 								),
-								index(id("src"), index(id("keys"), id("ki")))
+								index(
+									id(ctx.local("source")),
+									index(
+										id(ctx.local("keys")),
+										id(ctx.local("keyIdx"))
+									)
+								)
 							)
 						),
 					]
@@ -450,15 +540,15 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 /** `{var proto=X();var obj=X();Object.setPrototypeOf(obj,proto);W(obj);break;}` */
 function SET_PROTO(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("proto", ctx.pop()),
-		varDecl("obj", ctx.pop()),
+		varDecl(ctx.local("proto"), ctx.pop()),
+		varDecl(ctx.local("object"), ctx.pop()),
 		exprStmt(
 			call(member(id("Object"), "setPrototypeOf"), [
-				id("obj"),
-				id("proto"),
+				id(ctx.local("object")),
+				id(ctx.local("proto")),
 			])
 		),
-		exprStmt(ctx.push(id("obj"))),
+		exprStmt(ctx.push(id(ctx.local("object")))),
 		breakStmt(),
 	];
 }
@@ -482,14 +572,14 @@ function SEAL_OBJECT(ctx: HandlerCtx): JsNode[] {
 /** `{var desc=X();var key=X();var obj=Y();Object.defineProperty(obj,key,desc);break;}` */
 function DEFINE_PROPERTY_DESC(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("desc", ctx.pop()),
-		varDecl("key", ctx.pop()),
-		varDecl("obj", ctx.peek()),
+		varDecl(ctx.local("descriptor"), ctx.pop()),
+		varDecl(ctx.local("propKey"), ctx.pop()),
+		varDecl(ctx.local("object"), ctx.peek()),
 		exprStmt(
 			call(member(id("Object"), "defineProperty"), [
-				id("obj"),
-				id("key"),
-				id("desc"),
+				id(ctx.local("object")),
+				id(ctx.local("propKey")),
+				id(ctx.local("descriptor")),
 			])
 		),
 		breakStmt(),
@@ -507,20 +597,24 @@ function DEFINE_PROPERTY_DESC(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_TEMPLATE_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("raw", ctx.pop()),
-		varDecl("cooked", ctx.pop()),
+		varDecl(ctx.local("rawArr"), ctx.pop()),
+		varDecl(ctx.local("cookedArr"), ctx.pop()),
 		exprStmt(
 			call(member(id("Object"), "defineProperty"), [
-				id("cooked"),
+				id(ctx.local("cookedArr")),
 				lit("raw"),
 				obj([
 					"value",
-					call(member(id("Object"), "freeze"), [id("raw")]),
+					call(member(id("Object"), "freeze"), [
+						id(ctx.local("rawArr")),
+					]),
 				]),
 			])
 		),
-		exprStmt(call(member(id("Object"), "freeze"), [id("cooked")])),
-		exprStmt(ctx.push(id("cooked"))),
+		exprStmt(
+			call(member(id("Object"), "freeze"), [id(ctx.local("cookedArr"))])
+		),
+		exprStmt(ctx.push(id(ctx.local("cookedArr")))),
 		breakStmt(),
 	];
 }

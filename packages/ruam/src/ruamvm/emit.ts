@@ -24,11 +24,19 @@ import {
 	AOP_STR,
 	UPOP_STR,
 } from "./nodes.js";
-import { NameToken, RestParam, resolveName, isName, type Name } from "../naming/index.js";
+import {
+	NameToken,
+	RestParam,
+	resolveName,
+	isName,
+	type Name,
+} from "../naming/index.js";
 
 /** Emit a parameter list (Name | RestParam) to a comma-separated string. */
 function emitParams(params: (Name | RestParam)[]): string {
-	return params.map(p => p instanceof RestParam ? p.toString() : resolveName(p)).join(",");
+	return params
+		.map((p) => (p instanceof RestParam ? p.toString() : resolveName(p)))
+		.join(",");
 }
 
 // --- Operator precedence table (higher = tighter binding) ---
@@ -116,20 +124,26 @@ export function emit(node: JsNode): string {
 				return (
 					"var " +
 					chain
-						.map((d) => resolveName(d.name) + (d.init ? "=" + emit(d.init) : ""))
+						.map(
+							(d) =>
+								resolveName(d.name) +
+								(d.init ? "=" + emit(d.init) : "")
+						)
 						.join(",")
 				);
 			}
-			return `var ${resolveName(node.name)}${node.init ? "=" + emit(node.init) : ""}`;
+			return `var ${resolveName(node.name)}${
+				node.init ? "=" + emit(node.init) : ""
+			}`;
 		}
 		case "ConstDecl":
 			return `const ${resolveName(node.name)}${
 				node.init ? "=" + emit(node.init) : ""
 			}`;
 		case "FnDecl":
-			return `${node.async ? "async " : ""}function ${
-				resolveName(node.name)
-			}(${emitParams(node.params)}){${emitBody(node.body)}}`;
+			return `${node.async ? "async " : ""}function ${resolveName(
+				node.name
+			)}(${emitParams(node.params)}){${emitBody(node.body)}}`;
 
 		// --- Statements ---
 		case "ExprStmt":
@@ -147,9 +161,9 @@ export function emit(node: JsNode): string {
 				node.test ? emit(node.test) : ""
 			};${node.update ? emit(node.update) : ""}){${emitBody(node.body)}}`;
 		case "ForInStmt":
-			return `for(var ${resolveName(node.decl)} in ${emit(node.obj)}){${emitBody(
-				node.body
-			)}}`;
+			return `for(var ${resolveName(node.decl)} in ${emit(
+				node.obj
+			)}){${emitBody(node.body)}}`;
 		case "SwitchStmt":
 			return `switch(${emit(node.disc)}){${node.cases
 				.map((c) => emit(c))
@@ -170,7 +184,9 @@ export function emit(node: JsNode): string {
 			let s = `try{${emitBody(node.body)}}`;
 			if (node.handler) {
 				s += node.param
-					? `catch(${resolveName(node.param)}){${emitBody(node.handler)}}`
+					? `catch(${resolveName(node.param)}){${emitBody(
+							node.handler
+					  )}}`
 					: `catch{${emitBody(node.handler)}}`;
 			}
 			if (node.finalizer) s += `finally{${emitBody(node.finalizer)}}`;
@@ -244,11 +260,13 @@ export function emit(node: JsNode): string {
 				node.name ? " " + resolveName(node.name) : ""
 			}(${emitParams(node.params)}){${emitBody(node.body)}}`;
 		case "ArrowFn": {
+			const p0 = node.params[0];
+			const isRest =
+				p0 instanceof RestParam ||
+				(typeof p0 === "string" && p0.startsWith("..."));
 			const params =
-				node.params.length === 1 &&
-				!(node.params[0] instanceof RestParam) &&
-				!node.async
-					? resolveName(node.params[0] as Name)
+				node.params.length === 1 && !isRest && !node.async
+					? resolveName(p0 as Name)
 					: `(${emitParams(node.params)})`;
 			let body: string;
 			if (
@@ -379,12 +397,13 @@ function emitObjectEntry(entry: ObjectEntry): string {
 		case "get":
 			return `get ${resolveName(entry.name)}(){${emitBody(entry.body)}}`;
 		case "set":
-			return `set ${resolveName(entry.name)}(${resolveName(entry.param)}){${emitBody(entry.body)}}`;
+			return `set ${resolveName(entry.name)}(${resolveName(
+				entry.param
+			)}){${emitBody(entry.body)}}`;
 		case "method": {
-			const key =
-				isName(entry.name)
-					? resolveName(entry.name)
-					: `[${emit(entry.name)}]`;
+			const key = isName(entry.name)
+				? resolveName(entry.name)
+				: `[${emit(entry.name)}]`;
 			return `${entry.async ? "async " : ""}${key}(${emitParams(
 				entry.params
 			)}){${emitBody(entry.body)}}`;

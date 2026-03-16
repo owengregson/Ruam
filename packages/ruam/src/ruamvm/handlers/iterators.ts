@@ -61,21 +61,39 @@ function maybeAwait(ctx: HandlerCtx, expr: JsNode): JsNode {
  */
 function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterable", ctx.pop()),
+		varDecl(ctx.local("iterable"), ctx.pop()),
 		varDecl(
-			"iter",
-			call(index(id("iterable"), member(id("Symbol"), "iterator")), [])
+			ctx.local("iterator"),
+			call(
+				index(
+					id(ctx.local("iterable")),
+					member(id("Symbol"), "iterator")
+				),
+				[]
+			)
 		),
-		varDecl("first", call(member(id("iter"), "next"), [])),
+		varDecl(
+			ctx.local("firstIter"),
+			call(member(id(ctx.local("iterator")), "next"), [])
+		),
 		exprStmt(
 			ctx.push(
 				obj(
-					[ctx.t("_iter"), id("iter")],
+					[ctx.t("_iter"), id(ctx.local("iterator"))],
 					[
 						ctx.t("_done"),
-						un(UOp.Not, un(UOp.Not, member(id("first"), "done"))),
+						un(
+							UOp.Not,
+							un(
+								UOp.Not,
+								member(id(ctx.local("firstIter")), "done")
+							)
+						),
 					],
-					[ctx.t("_value"), member(id("first"), "value")]
+					[
+						ctx.t("_value"),
+						member(id(ctx.local("firstIter")), "value"),
+					]
 				)
 			)
 		),
@@ -93,22 +111,28 @@ function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
  */
 function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.pop()),
-		exprStmt(ctx.push(member(id("iterObj"), ctx.t("_value")))),
+		varDecl(ctx.local("iterObj"), ctx.pop()),
+		exprStmt(ctx.push(member(id(ctx.local("iterObj")), ctx.t("_value")))),
 		varDecl(
-			"nxt",
-			call(member(member(id("iterObj"), ctx.t("_iter")), "next"), [])
-		),
-		exprStmt(
-			assign(
-				member(id("iterObj"), ctx.t("_done")),
-				un(UOp.Not, un(UOp.Not, member(id("nxt"), "done")))
+			ctx.local("next"),
+			call(
+				member(
+					member(id(ctx.local("iterObj")), ctx.t("_iter")),
+					"next"
+				),
+				[]
 			)
 		),
 		exprStmt(
 			assign(
-				member(id("iterObj"), ctx.t("_value")),
-				member(id("nxt"), "value")
+				member(id(ctx.local("iterObj")), ctx.t("_done")),
+				un(UOp.Not, un(UOp.Not, member(id(ctx.local("next")), "done")))
+			)
+		),
+		exprStmt(
+			assign(
+				member(id(ctx.local("iterObj")), ctx.t("_value")),
+				member(id(ctx.local("next")), "value")
 			)
 		),
 		breakStmt(),
@@ -120,10 +144,16 @@ function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
  */
 function ITER_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.peek()),
+		varDecl(ctx.local("iterObj"), ctx.peek()),
 		exprStmt(
 			ctx.push(
-				un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done"))))
+				un(
+					UOp.Not,
+					un(
+						UOp.Not,
+						member(id(ctx.local("iterObj")), ctx.t("_done"))
+					)
+				)
 			)
 		),
 		breakStmt(),
@@ -135,8 +165,8 @@ function ITER_DONE(ctx: HandlerCtx): JsNode[] {
  */
 function ITER_VALUE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.peek()),
-		exprStmt(ctx.push(member(id("iterObj"), ctx.t("_value")))),
+		varDecl(ctx.local("iterObj"), ctx.peek()),
+		exprStmt(ctx.push(member(id(ctx.local("iterObj")), ctx.t("_value")))),
 		breakStmt(),
 	];
 }
@@ -146,15 +176,21 @@ function ITER_VALUE(ctx: HandlerCtx): JsNode[] {
  */
 function ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.pop()),
-		ifStmt(member(member(id("iterObj"), ctx.t("_iter")), "return"), [
-			exprStmt(
-				call(
-					member(member(id("iterObj"), ctx.t("_iter")), "return"),
-					[]
-				)
-			),
-		]),
+		varDecl(ctx.local("iterObj"), ctx.pop()),
+		ifStmt(
+			member(member(id(ctx.local("iterObj")), ctx.t("_iter")), "return"),
+			[
+				exprStmt(
+					call(
+						member(
+							member(id(ctx.local("iterObj")), ctx.t("_iter")),
+							"return"
+						),
+						[]
+					)
+				),
+			]
+		),
 		breakStmt(),
 	];
 }
@@ -164,11 +200,17 @@ function ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
  */
 function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.peek()),
-		exprStmt(ctx.push(member(id("iterObj"), ctx.t("_value")))),
+		varDecl(ctx.local("iterObj"), ctx.peek()),
+		exprStmt(ctx.push(member(id(ctx.local("iterObj")), ctx.t("_value")))),
 		exprStmt(
 			ctx.push(
-				un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done"))))
+				un(
+					UOp.Not,
+					un(
+						UOp.Not,
+						member(id(ctx.local("iterObj")), ctx.t("_done"))
+					)
+				)
 			)
 		),
 		breakStmt(),
@@ -187,13 +229,22 @@ function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
  */
 function FORIN_INIT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("obj", ctx.pop()),
-		varDecl("keys", arr()),
-		forIn("k", id("obj"), [
-			exprStmt(call(member(id("keys"), "push"), [id("k")])),
+		varDecl(ctx.local("object"), ctx.pop()),
+		varDecl(ctx.local("keys"), arr()),
+		forIn(ctx.local("key"), id(ctx.local("object")), [
+			exprStmt(
+				call(member(id(ctx.local("keys")), "push"), [
+					id(ctx.local("key")),
+				])
+			),
 		]),
 		exprStmt(
-			ctx.push(obj([ctx.t("_keys"), id("keys")], [ctx.t("_idx"), lit(0)]))
+			ctx.push(
+				obj(
+					[ctx.t("_keys"), id(ctx.local("keys"))],
+					[ctx.t("_idx"), lit(0)]
+				)
+			)
 		),
 		breakStmt(),
 	];
@@ -204,12 +255,16 @@ function FORIN_INIT(ctx: HandlerCtx): JsNode[] {
  */
 function FORIN_NEXT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("fi", ctx.pop()),
+		varDecl(ctx.local("forInState"), ctx.pop()),
 		exprStmt(
 			ctx.push(
 				index(
-					member(id("fi"), ctx.t("_keys")),
-					update(UpOp.Inc, false, member(id("fi"), ctx.t("_idx")))
+					member(id(ctx.local("forInState")), ctx.t("_keys")),
+					update(
+						UpOp.Inc,
+						false,
+						member(id(ctx.local("forInState")), ctx.t("_idx"))
+					)
 				)
 			)
 		),
@@ -222,13 +277,16 @@ function FORIN_NEXT(ctx: HandlerCtx): JsNode[] {
  */
 function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("fi", ctx.peek()),
+		varDecl(ctx.local("forInState"), ctx.peek()),
 		exprStmt(
 			ctx.push(
 				bin(
 					BOp.Gte,
-					member(id("fi"), ctx.t("_idx")),
-					member(member(id("fi"), ctx.t("_keys")), "length")
+					member(id(ctx.local("forInState")), ctx.t("_idx")),
+					member(
+						member(id(ctx.local("forInState")), ctx.t("_keys")),
+						"length"
+					)
 				)
 			)
 		),
@@ -245,20 +303,31 @@ function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
  */
 function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterable", ctx.pop()),
+		varDecl(ctx.local("iterable"), ctx.pop()),
 		varDecl(
-			"method",
+			ctx.local("method"),
 			bin(
 				BOp.Or,
-				index(id("iterable"), member(id("Symbol"), "asyncIterator")),
-				index(id("iterable"), member(id("Symbol"), "iterator"))
+				index(
+					id(ctx.local("iterable")),
+					member(id("Symbol"), "asyncIterator")
+				),
+				index(
+					id(ctx.local("iterable")),
+					member(id("Symbol"), "iterator")
+				)
 			)
 		),
-		varDecl("iter", call(member(id("method"), "call"), [id("iterable")])),
+		varDecl(
+			ctx.local("iterator"),
+			call(member(id(ctx.local("method")), "call"), [
+				id(ctx.local("iterable")),
+			])
+		),
 		exprStmt(
 			ctx.push(
 				obj(
-					[ctx.t("_iter"), id("iter")],
+					[ctx.t("_iter"), id(ctx.local("iterator"))],
 					[ctx.t("_done"), lit(false)],
 					[ctx.t("_value"), un(UOp.Void, lit(0))],
 					[ctx.t("_async"), lit(true)]
@@ -276,24 +345,33 @@ function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
  */
 function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.peek()),
+		varDecl(ctx.local("iterObj"), ctx.peek()),
 		varDecl(
-			"result",
+			ctx.local("result"),
 			maybeAwait(
 				ctx,
-				call(member(member(id("iterObj"), ctx.t("_iter")), "next"), [])
+				call(
+					member(
+						member(id(ctx.local("iterObj")), ctx.t("_iter")),
+						"next"
+					),
+					[]
+				)
 			)
 		),
 		exprStmt(
 			assign(
-				member(id("iterObj"), ctx.t("_done")),
-				un(UOp.Not, un(UOp.Not, member(id("result"), "done")))
+				member(id(ctx.local("iterObj")), ctx.t("_done")),
+				un(
+					UOp.Not,
+					un(UOp.Not, member(id(ctx.local("result")), "done"))
+				)
 			)
 		),
 		exprStmt(
 			assign(
-				member(id("iterObj"), ctx.t("_value")),
-				member(id("result"), "value")
+				member(id(ctx.local("iterObj")), ctx.t("_value")),
+				member(id(ctx.local("result")), "value")
 			)
 		),
 		breakStmt(),
@@ -305,10 +383,16 @@ function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
  */
 function ASYNC_ITER_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.peek()),
+		varDecl(ctx.local("iterObj"), ctx.peek()),
 		exprStmt(
 			ctx.push(
-				un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done"))))
+				un(
+					UOp.Not,
+					un(
+						UOp.Not,
+						member(id(ctx.local("iterObj")), ctx.t("_done"))
+					)
+				)
 			)
 		),
 		breakStmt(),
@@ -320,8 +404,8 @@ function ASYNC_ITER_DONE(ctx: HandlerCtx): JsNode[] {
  */
 function ASYNC_ITER_VALUE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.peek()),
-		exprStmt(ctx.push(member(id("iterObj"), ctx.t("_value")))),
+		varDecl(ctx.local("iterObj"), ctx.peek()),
+		exprStmt(ctx.push(member(id(ctx.local("iterObj")), ctx.t("_value")))),
 		breakStmt(),
 	];
 }
@@ -333,18 +417,27 @@ function ASYNC_ITER_VALUE(ctx: HandlerCtx): JsNode[] {
  */
 function ASYNC_ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.pop()),
-		ifStmt(member(member(id("iterObj"), ctx.t("_iter")), "return"), [
-			exprStmt(
-				maybeAwait(
-					ctx,
-					call(
-						member(member(id("iterObj"), ctx.t("_iter")), "return"),
-						[]
+		varDecl(ctx.local("iterObj"), ctx.pop()),
+		ifStmt(
+			member(member(id(ctx.local("iterObj")), ctx.t("_iter")), "return"),
+			[
+				exprStmt(
+					maybeAwait(
+						ctx,
+						call(
+							member(
+								member(
+									id(ctx.local("iterObj")),
+									ctx.t("_iter")
+								),
+								"return"
+							),
+							[]
+						)
 					)
-				)
-			),
-		]),
+				),
+			]
+		),
 		breakStmt(),
 	];
 }
@@ -356,27 +449,36 @@ function ASYNC_ITER_CLOSE(ctx: HandlerCtx): JsNode[] {
  */
 function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("iterObj", ctx.peek()),
+		varDecl(ctx.local("iterObj"), ctx.peek()),
 		varDecl(
-			"result",
+			ctx.local("result"),
 			maybeAwait(
 				ctx,
-				call(member(member(id("iterObj"), ctx.t("_iter")), "next"), [])
+				call(
+					member(
+						member(id(ctx.local("iterObj")), ctx.t("_iter")),
+						"next"
+					),
+					[]
+				)
 			)
 		),
 		exprStmt(
 			assign(
-				member(id("iterObj"), ctx.t("_done")),
-				un(UOp.Not, un(UOp.Not, member(id("result"), "done")))
+				member(id(ctx.local("iterObj")), ctx.t("_done")),
+				un(
+					UOp.Not,
+					un(UOp.Not, member(id(ctx.local("result")), "done"))
+				)
 			)
 		),
 		exprStmt(
 			assign(
-				member(id("iterObj"), ctx.t("_value")),
-				member(id("result"), "value")
+				member(id(ctx.local("iterObj")), ctx.t("_value")),
+				member(id(ctx.local("result")), "value")
 			)
 		),
-		exprStmt(ctx.push(member(id("result"), "value"))),
+		exprStmt(ctx.push(member(id(ctx.local("result")), "value"))),
 		breakStmt(),
 	];
 }
@@ -388,11 +490,11 @@ function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_ASYNC_FROM_SYNC_ITER(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("it", ctx.pop()),
+		varDecl(ctx.local("syncIter"), ctx.pop()),
 		exprStmt(
 			ctx.push(
 				obj(
-					[ctx.t("_iter"), id("it")],
+					[ctx.t("_iter"), id(ctx.local("syncIter"))],
 					[ctx.t("_done"), lit(false)],
 					[ctx.t("_value"), un(UOp.Void, lit(0))]
 				)

@@ -63,12 +63,12 @@ function JMP_FALSE(ctx: HandlerCtx): JsNode[] {
 /** `{var v=S.pop();if(v===null||v===void 0)IP=O*2;break;}` */
 function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.pop()),
+		varDecl(ctx.local("value"), ctx.pop()),
 		ifStmt(
 			bin(
 				BOp.Or,
-				bin(BOp.Seq, id("v"), lit(null)),
-				bin(BOp.Seq, id("v"), un(UOp.Void, lit(0)))
+				bin(BOp.Seq, id(ctx.local("value")), lit(null)),
+				bin(BOp.Seq, id(ctx.local("value")), un(UOp.Void, lit(0)))
 			),
 			[ipAssign(ctx)]
 		),
@@ -79,8 +79,10 @@ function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 /** `{var v=S.pop();if(v===void 0)IP=O*2;break;}` */
 function JMP_UNDEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.pop()),
-		ifStmt(bin(BOp.Seq, id("v"), un(UOp.Void, lit(0))), [ipAssign(ctx)]),
+		varDecl(ctx.local("value"), ctx.pop()),
+		ifStmt(bin(BOp.Seq, id(ctx.local("value")), un(UOp.Void, lit(0))), [
+			ipAssign(ctx),
+		]),
 		breakStmt(),
 	];
 }
@@ -98,12 +100,12 @@ function JMP_FALSE_KEEP(ctx: HandlerCtx): JsNode[] {
 /** `{var v=S[S.length-1];if(v===null||v===void 0)IP=O*2;break;}` — keeps value on stack */
 function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.peek()),
+		varDecl(ctx.local("value"), ctx.peek()),
 		ifStmt(
 			bin(
 				BOp.Or,
-				bin(BOp.Seq, id("v"), lit(null)),
-				bin(BOp.Seq, id("v"), un(UOp.Void, lit(0)))
+				bin(BOp.Seq, id(ctx.local("value")), lit(null)),
+				bin(BOp.Seq, id(ctx.local("value")), un(UOp.Void, lit(0)))
 			),
 			[ipAssign(ctx)]
 		),
@@ -256,10 +258,10 @@ function THROW(ctx: HandlerCtx): JsNode[] {
 function RETHROW(ctx: HandlerCtx): JsNode[] {
 	return [
 		ifStmt(id(ctx.HPE), [
-			varDecl("ex", id(ctx.PE)),
+			varDecl(ctx.local("exception"), id(ctx.PE)),
 			exprStmt(assign(id(ctx.PE), lit(null))),
 			exprStmt(assign(id(ctx.HPE), lit(false))),
-			throwStmt(id("ex")),
+			throwStmt(id(ctx.local("exception"))),
 		]),
 		breakStmt(),
 	];

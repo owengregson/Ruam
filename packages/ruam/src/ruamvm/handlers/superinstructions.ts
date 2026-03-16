@@ -90,11 +90,15 @@ function mid8(ctx: HandlerCtx): JsNode {
  */
 function regBinOp(op: BOpKind): HandlerFn {
 	return (ctx) => [
-		varDecl("ra", lo16(ctx)),
-		varDecl("rb", hi16(ctx)),
+		varDecl(ctx.local("regA"), lo16(ctx)),
+		varDecl(ctx.local("regB"), hi16(ctx)),
 		exprStmt(
 			ctx.push(
-				bin(op, index(id(ctx.R), id("ra")), index(id(ctx.R), id("rb")))
+				bin(
+					op,
+					index(id(ctx.R), id(ctx.local("regA"))),
+					index(id(ctx.R), id(ctx.local("regB")))
+				)
 			)
 		),
 		breakStmt(),
@@ -114,12 +118,16 @@ function regBinOp(op: BOpKind): HandlerFn {
  */
 function regConstOp(op: BOpKind): HandlerFn {
 	return (ctx) => [
-		varDecl("r", lo16(ctx)),
-		varDecl("ci", hi16(ctx)),
+		varDecl(ctx.local("reg"), lo16(ctx)),
+		varDecl(ctx.local("constIdx"), hi16(ctx)),
 		exprStmt(
 			assign(
-				index(id(ctx.R), id("r")),
-				bin(op, index(id(ctx.R), id("r")), index(id(ctx.C), id("ci")))
+				index(id(ctx.R), id(ctx.local("reg"))),
+				bin(
+					op,
+					index(id(ctx.R), id(ctx.local("reg"))),
+					index(id(ctx.C), id(ctx.local("constIdx")))
+				)
 			)
 		),
 		breakStmt(),
@@ -139,11 +147,15 @@ function regConstOp(op: BOpKind): HandlerFn {
  */
 function regConstPush(op: BOpKind): HandlerFn {
 	return (ctx) => [
-		varDecl("r", lo16(ctx)),
-		varDecl("ci", hi16(ctx)),
+		varDecl(ctx.local("reg"), lo16(ctx)),
+		varDecl(ctx.local("constIdx"), hi16(ctx)),
 		exprStmt(
 			ctx.push(
-				bin(op, index(id(ctx.R), id("r")), index(id(ctx.C), id("ci")))
+				bin(
+					op,
+					index(id(ctx.R), id(ctx.local("reg"))),
+					index(id(ctx.C), id(ctx.local("constIdx")))
+				)
 			)
 		),
 		breakStmt(),
@@ -181,11 +193,14 @@ registry.set(Op.REG_CONST_MOD, regConstPush(BOp.Mod));
  */
 function REG_GET_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("r", lo16(ctx)),
-		varDecl("ni", hi16(ctx)),
+		varDecl(ctx.local("reg"), lo16(ctx)),
+		varDecl(ctx.local("nameIdx"), hi16(ctx)),
 		exprStmt(
 			ctx.push(
-				index(index(id(ctx.R), id("r")), index(id(ctx.C), id("ni")))
+				index(
+					index(id(ctx.R), id(ctx.local("reg"))),
+					index(id(ctx.C), id(ctx.local("nameIdx")))
+				)
 			)
 		),
 		breakStmt(),
@@ -207,19 +222,26 @@ registry.set(Op.REG_GET_PROP, REG_GET_PROP);
  */
 function REG_LT_CONST_JF(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("r", lo8(ctx)),
-		varDecl("ci", mid8(ctx)),
-		varDecl("tgt", hi16(ctx)),
+		varDecl(ctx.local("reg"), lo8(ctx)),
+		varDecl(ctx.local("constIdx"), mid8(ctx)),
+		varDecl(ctx.local("target"), hi16(ctx)),
 		ifStmt(
 			un(
 				UOp.Not,
 				bin(
 					BOp.Lt,
-					index(id(ctx.R), id("r")),
-					index(id(ctx.C), id("ci"))
+					index(id(ctx.R), id(ctx.local("reg"))),
+					index(id(ctx.C), id(ctx.local("constIdx")))
 				)
 			),
-			[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id("tgt"), lit(2))))]
+			[
+				exprStmt(
+					assign(
+						id(ctx.IP),
+						bin(BOp.Mul, id(ctx.local("target")), lit(2))
+					)
+				),
+			]
 		),
 		breakStmt(),
 	];
@@ -238,19 +260,26 @@ registry.set(Op.REG_LT_CONST_JF, REG_LT_CONST_JF);
  */
 function REG_LT_REG_JF(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("ra", lo8(ctx)),
-		varDecl("rb", mid8(ctx)),
-		varDecl("tgt", hi16(ctx)),
+		varDecl(ctx.local("regA"), lo8(ctx)),
+		varDecl(ctx.local("regB"), mid8(ctx)),
+		varDecl(ctx.local("target"), hi16(ctx)),
 		ifStmt(
 			un(
 				UOp.Not,
 				bin(
 					BOp.Lt,
-					index(id(ctx.R), id("ra")),
-					index(id(ctx.R), id("rb"))
+					index(id(ctx.R), id(ctx.local("regA"))),
+					index(id(ctx.R), id(ctx.local("regB")))
 				)
 			),
-			[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id("tgt"), lit(2))))]
+			[
+				exprStmt(
+					assign(
+						id(ctx.IP),
+						bin(BOp.Mul, id(ctx.local("target")), lit(2))
+					)
+				),
+			]
 		),
 		breakStmt(),
 	];

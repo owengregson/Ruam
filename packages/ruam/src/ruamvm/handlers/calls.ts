@@ -62,74 +62,140 @@ import { debugTrace, superProto } from "./helpers.js";
 function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 	return [
 		// var argc=O;var hasSpread=argc<0;
-		varDecl("argc", id(ctx.O)),
-		varDecl("hasSpread", bin(BOp.Lt, id("argc"), lit(0))),
+		varDecl(ctx.local("argc"), id(ctx.O)),
+		varDecl(
+			ctx.local("hasSpread"),
+			bin(BOp.Lt, id(ctx.local("argc")), lit(0))
+		),
 		// if(hasSpread)argc=-argc;
-		ifStmt(id("hasSpread"), [
-			exprStmt(assign(id("argc"), un(UOp.Neg, id("argc")))),
+		ifStmt(id(ctx.local("hasSpread")), [
+			exprStmt(
+				assign(
+					id(ctx.local("argc")),
+					un(UOp.Neg, id(ctx.local("argc")))
+				)
+			),
 		]),
 		// var callArgs=new Array(argc);
-		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
+		varDecl(
+			ctx.local("callArgs"),
+			newExpr(id("Array"), [id(ctx.local("argc"))])
+		),
 		// for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=S[P--];
 		forStmt(
-			varDecl("ai", bin(BOp.Sub, id("argc"), lit(1))),
-			bin(BOp.Gte, id("ai"), lit(0)),
-			update(UpOp.Dec, false, id("ai")),
-			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
+			varDecl(
+				ctx.local("argIndex"),
+				bin(BOp.Sub, id(ctx.local("argc")), lit(1))
+			),
+			bin(BOp.Gte, id(ctx.local("argIndex")), lit(0)),
+			update(UpOp.Dec, false, id(ctx.local("argIndex"))),
+			[
+				exprStmt(
+					assign(
+						index(
+							id(ctx.local("callArgs")),
+							id(ctx.local("argIndex"))
+						),
+						ctx.pop()
+					)
+				),
+			]
 		),
 		// if(hasSpread){...flatten spread markers...}
-		ifStmt(id("hasSpread"), [
-			varDecl("flat", arr()),
+		ifStmt(id(ctx.local("hasSpread")), [
+			varDecl(ctx.local("flatArgs"), arr()),
 			forStmt(
-				varDecl("ai", lit(0)),
-				bin(BOp.Lt, id("ai"), member(id("callArgs"), "length")),
-				update(UpOp.Inc, false, id("ai")),
+				varDecl(ctx.local("argIndex"), lit(0)),
+				bin(
+					BOp.Lt,
+					id(ctx.local("argIndex")),
+					member(id(ctx.local("callArgs")), "length")
+				),
+				update(UpOp.Inc, false, id(ctx.local("argIndex"))),
 				[
 					ifStmt(
 						bin(
 							BOp.And,
-							index(id("callArgs"), id("ai")),
 							index(
-								index(id("callArgs"), id("ai")),
+								id(ctx.local("callArgs")),
+								id(ctx.local("argIndex"))
+							),
+							index(
+								index(
+									id(ctx.local("callArgs")),
+									id(ctx.local("argIndex"))
+								),
 								id(ctx.spreadSym)
 							)
 						),
 						[
 							// Spread value IS the array now — iterate directly
 							forStmt(
-								varDecl("si", lit(0)),
+								varDecl(ctx.local("spreadIdx"), lit(0)),
 								bin(
 									BOp.Lt,
-									id("si"),
+									id(ctx.local("spreadIdx")),
 									member(
-										index(id("callArgs"), id("ai")),
+										index(
+											id(ctx.local("callArgs")),
+											id(ctx.local("argIndex"))
+										),
 										"length"
 									)
 								),
-								update(UpOp.Inc, false, id("si")),
+								update(
+									UpOp.Inc,
+									false,
+									id(ctx.local("spreadIdx"))
+								),
 								[
 									exprStmt(
-										call(member(id("flat"), "push"), [
-											index(
-												index(id("callArgs"), id("ai")),
-												id("si")
+										call(
+											member(
+												id(ctx.local("flatArgs")),
+												"push"
 											),
-										])
+											[
+												index(
+													index(
+														id(
+															ctx.local(
+																"callArgs"
+															)
+														),
+														id(
+															ctx.local(
+																"argIndex"
+															)
+														)
+													),
+													id(ctx.local("spreadIdx"))
+												),
+											]
+										)
 									),
 								]
 							),
 						],
 						[
 							exprStmt(
-								call(member(id("flat"), "push"), [
-									index(id("callArgs"), id("ai")),
-								])
+								call(
+									member(id(ctx.local("flatArgs")), "push"),
+									[
+										index(
+											id(ctx.local("callArgs")),
+											id(ctx.local("argIndex"))
+										),
+									]
+								)
 							),
 						]
 					),
 				]
 			),
-			exprStmt(assign(id("callArgs"), id("flat"))),
+			exprStmt(
+				assign(id(ctx.local("callArgs")), id(ctx.local("flatArgs")))
+			),
 		]),
 	];
 }
@@ -145,13 +211,29 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
  */
 function simplePreamble(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("argc", id(ctx.O)),
-		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
+		varDecl(ctx.local("argc"), id(ctx.O)),
+		varDecl(
+			ctx.local("callArgs"),
+			newExpr(id("Array"), [id(ctx.local("argc"))])
+		),
 		forStmt(
-			varDecl("ai", bin(BOp.Sub, id("argc"), lit(1))),
-			bin(BOp.Gte, id("ai"), lit(0)),
-			update(UpOp.Dec, false, id("ai")),
-			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
+			varDecl(
+				ctx.local("argIndex"),
+				bin(BOp.Sub, id(ctx.local("argc")), lit(1))
+			),
+			bin(BOp.Gte, id(ctx.local("argIndex")), lit(0)),
+			update(UpOp.Dec, false, id(ctx.local("argIndex"))),
+			[
+				exprStmt(
+					assign(
+						index(
+							id(ctx.local("callArgs")),
+							id(ctx.local("argIndex"))
+						),
+						ctx.pop()
+					)
+				),
+			]
 		),
 	];
 }
@@ -165,16 +247,28 @@ function simplePreamble(ctx: HandlerCtx): JsNode[] {
 function CALL(ctx: HandlerCtx): JsNode[] {
 	return [
 		...spreadPreamble(ctx),
-		varDecl("fn", ctx.pop()),
+		varDecl(ctx.local("func"), ctx.pop()),
 		...debugTrace(
 			ctx,
 			"CALL",
 			lit("fn="),
-			un(UOp.Typeof, id("fn")),
-			bin(BOp.Add, lit("argc="), member(id("callArgs"), "length")),
+			un(UOp.Typeof, id(ctx.local("func"))),
+			bin(
+				BOp.Add,
+				lit("argc="),
+				member(id(ctx.local("callArgs")), "length")
+			),
 			ternary(
-				bin(BOp.And, id("fn"), member(id("fn"), "name")),
-				bin(BOp.Add, lit("name="), member(id("fn"), "name")),
+				bin(
+					BOp.And,
+					id(ctx.local("func")),
+					member(id(ctx.local("func")), "name")
+				),
+				bin(
+					BOp.Add,
+					lit("name="),
+					member(id(ctx.local("func")), "name")
+				),
 				lit("")
 			)
 		),
@@ -183,7 +277,7 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 					ifStmt(
 						bin(
 							BOp.Sneq,
-							un(UOp.Typeof, id("fn")),
+							un(UOp.Typeof, id(ctx.local("func"))),
 							lit("function")
 						),
 						[
@@ -191,7 +285,7 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 								call(id(ctx.dbg), [
 									lit("CALL_ERR"),
 									lit("NOT A FUNCTION:"),
-									id("fn"),
+									id(ctx.local("func")),
 									bin(
 										BOp.Add,
 										lit(ctx.S + " depth="),
@@ -205,9 +299,9 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 			: []),
 		exprStmt(
 			ctx.push(
-				call(member(id("fn"), "apply"), [
+				call(member(id(ctx.local("func")), "apply"), [
 					un(UOp.Void, lit(0)),
-					id("callArgs"),
+					id(ctx.local("callArgs")),
 				])
 			)
 		),
@@ -222,19 +316,31 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
 		...spreadPreamble(ctx),
-		varDecl("recv", ctx.pop()),
-		varDecl("fn", ctx.pop()),
+		varDecl(ctx.local("receiver"), ctx.pop()),
+		varDecl(ctx.local("func"), ctx.pop()),
 		...debugTrace(
 			ctx,
 			"CALL_METHOD",
 			lit("fn="),
-			un(UOp.Typeof, id("fn")),
+			un(UOp.Typeof, id(ctx.local("func"))),
 			lit("recv="),
-			un(UOp.Typeof, id("recv")),
-			bin(BOp.Add, lit("argc="), member(id("callArgs"), "length")),
+			un(UOp.Typeof, id(ctx.local("receiver"))),
+			bin(
+				BOp.Add,
+				lit("argc="),
+				member(id(ctx.local("callArgs")), "length")
+			),
 			ternary(
-				bin(BOp.And, id("fn"), member(id("fn"), "name")),
-				bin(BOp.Add, lit("name="), member(id("fn"), "name")),
+				bin(
+					BOp.And,
+					id(ctx.local("func")),
+					member(id(ctx.local("func")), "name")
+				),
+				bin(
+					BOp.Add,
+					lit("name="),
+					member(id(ctx.local("func")), "name")
+				),
 				lit("")
 			)
 		),
@@ -243,7 +349,7 @@ function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
 					ifStmt(
 						bin(
 							BOp.Sneq,
-							un(UOp.Typeof, id("fn")),
+							un(UOp.Typeof, id(ctx.local("func"))),
 							lit("function")
 						),
 						[
@@ -251,9 +357,9 @@ function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
 								call(id(ctx.dbg), [
 									lit("CALL_METHOD_ERR"),
 									lit("NOT A FUNCTION:"),
-									id("fn"),
+									id(ctx.local("func")),
 									lit("recv="),
-									id("recv"),
+									id(ctx.local("receiver")),
 								])
 							),
 						]
@@ -262,7 +368,10 @@ function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
 			: []),
 		exprStmt(
 			ctx.push(
-				call(member(id("fn"), "apply"), [id("recv"), id("callArgs")])
+				call(member(id(ctx.local("func")), "apply"), [
+					id(ctx.local("receiver")),
+					id(ctx.local("callArgs")),
+				])
 			)
 		),
 		breakStmt(),
@@ -281,8 +390,14 @@ function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
 function CALL_NEW(ctx: HandlerCtx): JsNode[] {
 	return [
 		...simplePreamble(ctx),
-		varDecl("Ctor", ctx.pop()),
-		exprStmt(ctx.push(newExpr(id("Ctor"), [spread(id("callArgs"))]))),
+		varDecl(ctx.local("Ctor"), ctx.pop()),
+		exprStmt(
+			ctx.push(
+				newExpr(id(ctx.local("Ctor")), [
+					spread(id(ctx.local("callArgs"))),
+				])
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -294,34 +409,37 @@ function CALL_NEW(ctx: HandlerCtx): JsNode[] {
 function SUPER_CALL(ctx: HandlerCtx): JsNode[] {
 	return [
 		...simplePreamble(ctx),
-		varDecl("superProto", superProto(ctx)),
+		varDecl(ctx.local("superProto"), superProto(ctx)),
 		...debugTrace(
 			ctx,
 			"SUPER_CALL",
-			bin(BOp.Add, lit("argc="), id("argc")),
+			bin(BOp.Add, lit("argc="), id(ctx.local("argc"))),
 			lit("superProto="),
-			un(UOp.Not, un(UOp.Not, id("superProto"))),
+			un(UOp.Not, un(UOp.Not, id(ctx.local("superProto")))),
 			lit("superCtor="),
 			bin(
 				BOp.And,
-				id("superProto"),
-				un(UOp.Typeof, member(id("superProto"), "constructor"))
+				id(ctx.local("superProto")),
+				un(
+					UOp.Typeof,
+					member(id(ctx.local("superProto")), "constructor")
+				)
 			)
 		),
 		ifStmt(
 			bin(
 				BOp.And,
-				id("superProto"),
-				member(id("superProto"), "constructor")
+				id(ctx.local("superProto")),
+				member(id(ctx.local("superProto")), "constructor")
 			),
 			[
 				exprStmt(
 					call(
 						member(
-							member(id("superProto"), "constructor"),
+							member(id(ctx.local("superProto")), "constructor"),
 							"apply"
 						),
-						[id(ctx.TV), id("callArgs")]
+						[id(ctx.TV), id(ctx.local("callArgs"))]
 					)
 				),
 			]
@@ -341,9 +459,17 @@ function SUPER_CALL(ctx: HandlerCtx): JsNode[] {
 function SPREAD_ARGS(ctx: HandlerCtx): JsNode[] {
 	// Tag the array with a Symbol instead of wrapping in a marker object
 	return [
-		varDecl("_sa", call(member(id("Array"), "from"), [ctx.peek()])),
-		exprStmt(assign(index(id("_sa"), id(ctx.spreadSym)), lit(true))),
-		exprStmt(assign(ctx.peek(), id("_sa"))),
+		varDecl(
+			ctx.local("spreadArr"),
+			call(member(id("Array"), "from"), [ctx.peek()])
+		),
+		exprStmt(
+			assign(
+				index(id(ctx.local("spreadArr")), id(ctx.spreadSym)),
+				lit(true)
+			)
+		),
+		exprStmt(assign(ctx.peek(), id(ctx.local("spreadArr")))),
 		breakStmt(),
 	];
 }
@@ -361,13 +487,15 @@ function SPREAD_ARGS(ctx: HandlerCtx): JsNode[] {
 function CALL_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 	return [
 		...spreadPreamble(ctx),
-		varDecl("fn", ctx.pop()),
+		varDecl(ctx.local("func"), ctx.pop()),
 		exprStmt(
 			ctx.push(
 				ternary(
-					bin(BOp.Eq, id("fn"), lit(null)),
+					bin(BOp.Eq, id(ctx.local("func")), lit(null)),
 					un(UOp.Void, lit(0)),
-					call(id("fn"), [spread(id("callArgs"))])
+					call(id(ctx.local("func")), [
+						spread(id(ctx.local("callArgs"))),
+					])
 				)
 			)
 		),
@@ -386,16 +514,16 @@ function CALL_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 function CALL_METHOD_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 	return [
 		...spreadPreamble(ctx),
-		varDecl("recv", ctx.pop()),
-		varDecl("fn", ctx.pop()),
+		varDecl(ctx.local("receiver"), ctx.pop()),
+		varDecl(ctx.local("func"), ctx.pop()),
 		exprStmt(
 			ctx.push(
 				ternary(
-					bin(BOp.Eq, id("fn"), lit(null)),
+					bin(BOp.Eq, id(ctx.local("func")), lit(null)),
 					un(UOp.Void, lit(0)),
-					call(member(id("fn"), "call"), [
-						id("recv"),
-						spread(id("callArgs")),
+					call(member(id(ctx.local("func")), "call"), [
+						id(ctx.local("receiver")),
+						spread(id(ctx.local("callArgs"))),
 					])
 				)
 			)
@@ -409,8 +537,8 @@ function CALL_METHOD_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 /** `{var code=X();W(eval(code));break;}` */
 function DIRECT_EVAL(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("code", ctx.pop()),
-		exprStmt(ctx.push(call(id("eval"), [id("code")]))),
+		varDecl(ctx.local("code"), ctx.pop()),
+		exprStmt(ctx.push(call(id("eval"), [id(ctx.local("code"))]))),
 		breakStmt(),
 	];
 }
@@ -429,8 +557,12 @@ function DIRECT_EVAL(ctx: HandlerCtx): JsNode[] {
 function CALL_TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 	return [
 		...simplePreamble(ctx),
-		varDecl("fn", ctx.pop()),
-		exprStmt(ctx.push(call(id("fn"), [spread(id("callArgs"))]))),
+		varDecl(ctx.local("func"), ctx.pop()),
+		exprStmt(
+			ctx.push(
+				call(id(ctx.local("func")), [spread(id(ctx.local("callArgs")))])
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -450,34 +582,53 @@ function CALL_TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
  */
 function CALL_SUPER_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("argc", bin(BOp.BitAnd, id(ctx.O), lit(0xffff))),
+		varDecl(ctx.local("argc"), bin(BOp.BitAnd, id(ctx.O), lit(0xffff))),
 		varDecl(
-			"nameIdx",
+			ctx.local("nameIdx"),
 			bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(0xffff))
 		),
-		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
-		forStmt(
-			varDecl("ai", bin(BOp.Sub, id("argc"), lit(1))),
-			bin(BOp.Gte, id("ai"), lit(0)),
-			update(UpOp.Dec, false, id("ai")),
-			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
-		),
-		varDecl("sp2", superProto(ctx)),
 		varDecl(
-			"fn",
+			ctx.local("callArgs"),
+			newExpr(id("Array"), [id(ctx.local("argc"))])
+		),
+		forStmt(
+			varDecl(
+				ctx.local("argIndex"),
+				bin(BOp.Sub, id(ctx.local("argc")), lit(1))
+			),
+			bin(BOp.Gte, id(ctx.local("argIndex")), lit(0)),
+			update(UpOp.Dec, false, id(ctx.local("argIndex"))),
+			[
+				exprStmt(
+					assign(
+						index(
+							id(ctx.local("callArgs")),
+							id(ctx.local("argIndex"))
+						),
+						ctx.pop()
+					)
+				),
+			]
+		),
+		varDecl(ctx.local("superProto"), superProto(ctx)),
+		varDecl(
+			ctx.local("func"),
 			ternary(
-				id("sp2"),
-				index(id("sp2"), index(id(ctx.C), id("nameIdx"))),
+				id(ctx.local("superProto")),
+				index(
+					id(ctx.local("superProto")),
+					index(id(ctx.C), id(ctx.local("nameIdx")))
+				),
 				un(UOp.Void, lit(0))
 			)
 		),
 		exprStmt(
 			ctx.push(
 				ternary(
-					id("fn"),
-					call(member(id("fn"), "call"), [
+					id(ctx.local("func")),
+					call(member(id(ctx.local("func")), "call"), [
 						id(ctx.TV),
-						spread(id("callArgs")),
+						spread(id(ctx.local("callArgs"))),
 					]),
 					un(UOp.Void, lit(0))
 				)
@@ -492,8 +643,8 @@ function CALL_SUPER_METHOD(ctx: HandlerCtx): JsNode[] {
 /** `{var fn=X();W(fn());break;}` */
 function CALL_0(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("fn", ctx.pop()),
-		exprStmt(ctx.push(call(id("fn"), []))),
+		varDecl(ctx.local("func"), ctx.pop()),
+		exprStmt(ctx.push(call(id(ctx.local("func")), []))),
 		breakStmt(),
 	];
 }
@@ -501,9 +652,11 @@ function CALL_0(ctx: HandlerCtx): JsNode[] {
 /** `{var a1=X();var fn=X();W(fn(a1));break;}` */
 function CALL_1(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("a1", ctx.pop()),
-		varDecl("fn", ctx.pop()),
-		exprStmt(ctx.push(call(id("fn"), [id("a1")]))),
+		varDecl(ctx.local("arg1"), ctx.pop()),
+		varDecl(ctx.local("func"), ctx.pop()),
+		exprStmt(
+			ctx.push(call(id(ctx.local("func")), [id(ctx.local("arg1"))]))
+		),
 		breakStmt(),
 	];
 }
@@ -511,10 +664,17 @@ function CALL_1(ctx: HandlerCtx): JsNode[] {
 /** `{var a2=X();var a1=X();var fn=X();W(fn(a1,a2));break;}` */
 function CALL_2(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("a2", ctx.pop()),
-		varDecl("a1", ctx.pop()),
-		varDecl("fn", ctx.pop()),
-		exprStmt(ctx.push(call(id("fn"), [id("a1"), id("a2")]))),
+		varDecl(ctx.local("arg2"), ctx.pop()),
+		varDecl(ctx.local("arg1"), ctx.pop()),
+		varDecl(ctx.local("func"), ctx.pop()),
+		exprStmt(
+			ctx.push(
+				call(id(ctx.local("func")), [
+					id(ctx.local("arg1")),
+					id(ctx.local("arg2")),
+				])
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -522,11 +682,19 @@ function CALL_2(ctx: HandlerCtx): JsNode[] {
 /** `{var a3=X();var a2=X();var a1=X();var fn=X();W(fn(a1,a2,a3));break;}` */
 function CALL_3(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("a3", ctx.pop()),
-		varDecl("a2", ctx.pop()),
-		varDecl("a1", ctx.pop()),
-		varDecl("fn", ctx.pop()),
-		exprStmt(ctx.push(call(id("fn"), [id("a1"), id("a2"), id("a3")]))),
+		varDecl(ctx.local("arg3"), ctx.pop()),
+		varDecl(ctx.local("arg2"), ctx.pop()),
+		varDecl(ctx.local("arg1"), ctx.pop()),
+		varDecl(ctx.local("func"), ctx.pop()),
+		exprStmt(
+			ctx.push(
+				call(id(ctx.local("func")), [
+					id(ctx.local("arg1")),
+					id(ctx.local("arg2")),
+					id(ctx.local("arg3")),
+				])
+			)
+		),
 		breakStmt(),
 	];
 }

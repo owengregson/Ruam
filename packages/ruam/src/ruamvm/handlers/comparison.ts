@@ -26,8 +26,8 @@ import { registry } from "./registry.js";
  */
 function cmpHandler(op: BOpKind): HandlerFn {
 	return (ctx: HandlerCtx) => [
-		varDecl("b", ctx.pop()),
-		exprStmt(assign(ctx.peek(), bin(op, ctx.peek(), id("b")))),
+		varDecl(ctx.local("rhs"), ctx.pop()),
+		exprStmt(assign(ctx.peek(), bin(op, ctx.peek(), id(ctx.local("rhs"))))),
 		breakStmt(),
 	];
 }

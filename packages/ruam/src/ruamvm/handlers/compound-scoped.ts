@@ -47,11 +47,11 @@ import { registry } from "./registry.js";
  */
 function compoundScopedAssign(assignOp: AOpKind): HandlerFn {
 	return (ctx) => [
-		varDecl("val", ctx.pop()),
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
 		...ctx.scopeWalk([
-			exprStmt(assign(ctx.sv(), id("val"), assignOp)),
+			exprStmt(assign(ctx.sv(), id(ctx.local("value")), assignOp)),
 			exprStmt(ctx.push(ctx.sv())),
 		]),
 	];
@@ -67,11 +67,16 @@ function compoundScopedAssign(assignOp: AOpKind): HandlerFn {
  */
 function logicalScopedAssign(logicalOp: BOpKind): HandlerFn {
 	return (ctx) => [
-		varDecl("val", ctx.pop()),
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
 		...ctx.scopeWalk([
-			exprStmt(assign(ctx.sv(), bin(logicalOp, ctx.sv(), id("val")))),
+			exprStmt(
+				assign(
+					ctx.sv(),
+					bin(logicalOp, ctx.sv(), id(ctx.local("value")))
+				)
+			),
 			exprStmt(ctx.push(ctx.sv())),
 		]),
 	];
@@ -82,8 +87,8 @@ function logicalScopedAssign(logicalOp: BOpKind): HandlerFn {
 /** INC_SCOPED: pre-increment a scoped variable, push new value. */
 function INC_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
 		...ctx.scopeWalk([
 			exprStmt(assign(ctx.sv(), bin(BOp.Add, ctx.sv(), lit(1)))),
 			exprStmt(ctx.push(ctx.sv())),
@@ -94,8 +99,8 @@ function INC_SCOPED(ctx: HandlerCtx): JsNode[] {
 /** DEC_SCOPED: pre-decrement a scoped variable, push new value. */
 function DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
 		...ctx.scopeWalk([
 			exprStmt(assign(ctx.sv(), bin(BOp.Sub, ctx.sv(), lit(1)))),
 			exprStmt(ctx.push(ctx.sv())),
@@ -106,12 +111,14 @@ function DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
 /** POST_INC_SCOPED: post-increment a scoped variable, push old value. */
 function POST_INC_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
 		...ctx.scopeWalk([
-			varDecl("old", ctx.sv()),
-			exprStmt(assign(ctx.sv(), bin(BOp.Add, id("old"), lit(1)))),
-			exprStmt(ctx.push(id("old"))),
+			varDecl(ctx.local("oldVal"), ctx.sv()),
+			exprStmt(
+				assign(ctx.sv(), bin(BOp.Add, id(ctx.local("oldVal")), lit(1)))
+			),
+			exprStmt(ctx.push(id(ctx.local("oldVal")))),
 		]),
 	];
 }
@@ -119,12 +126,14 @@ function POST_INC_SCOPED(ctx: HandlerCtx): JsNode[] {
 /** POST_DEC_SCOPED: post-decrement a scoped variable, push old value. */
 function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
 		...ctx.scopeWalk([
-			varDecl("old", ctx.sv()),
-			exprStmt(assign(ctx.sv(), bin(BOp.Sub, id("old"), lit(1)))),
-			exprStmt(ctx.push(id("old"))),
+			varDecl(ctx.local("oldVal"), ctx.sv()),
+			exprStmt(
+				assign(ctx.sv(), bin(BOp.Sub, id(ctx.local("oldVal")), lit(1)))
+			),
+			exprStmt(ctx.push(id(ctx.local("oldVal")))),
 		]),
 	];
 }
@@ -134,12 +143,12 @@ function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
 /** NULLISH_ASSIGN_SCOPED: `??=` — only assign if current value is null/undefined. */
 function NULLISH_ASSIGN_SCOPED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("val", ctx.pop()),
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
 		...ctx.scopeWalk([
 			ifStmt(bin(BOp.Eq, ctx.sv(), lit(null)), [
-				exprStmt(assign(ctx.sv(), id("val"))),
+				exprStmt(assign(ctx.sv(), id(ctx.local("value")))),
 			]),
 			exprStmt(ctx.push(ctx.sv())),
 		]),

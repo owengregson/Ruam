@@ -54,8 +54,8 @@ function PUSH_NEW_TARGET(ctx: HandlerCtx): JsNode[] {
  */
 function PUSH_GLOBAL_THIS(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("g", id(ctx.t("_g"))),
-		exprStmt(ctx.push(id("g"))),
+		varDecl(ctx.local("global"), id(ctx.t("_g"))),
+		exprStmt(ctx.push(id(ctx.local("global")))),
 		breakStmt(),
 	];
 }
@@ -74,7 +74,7 @@ function PUSH_GLOBAL_THIS(ctx: HandlerCtx): JsNode[] {
 function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(
-			"syms",
+			ctx.local("symbols"),
 			arr(
 				member(id("Symbol"), "iterator"),
 				member(id("Symbol"), "asyncIterator"),
@@ -94,7 +94,7 @@ function PUSH_WELL_KNOWN_SYMBOL(ctx: HandlerCtx): JsNode[] {
 			ctx.push(
 				bin(
 					BOp.Or,
-					index(id("syms"), id(ctx.O)),
+					index(id(ctx.local("symbols")), id(ctx.O)),
 					member(id("Symbol"), "iterator")
 				)
 			)

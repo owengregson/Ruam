@@ -36,8 +36,8 @@ import { registry, type HandlerCtx, type HandlerFn } from "./registry.js";
  */
 function binaryHandler(op: BOpKind): HandlerFn {
 	return (ctx) => [
-		varDecl("b", ctx.pop()),
-		exprStmt(assign(ctx.peek(), bin(op, ctx.peek(), id("b")))),
+		varDecl(ctx.local("rhs"), ctx.pop()),
+		exprStmt(assign(ctx.peek(), bin(op, ctx.peek(), id(ctx.local("rhs"))))),
 		breakStmt(),
 	];
 }
