@@ -97,14 +97,18 @@ function TO_OBJECT(ctx: HandlerCtx): JsNode[] {
  */
 function TO_PROPERTY_KEY(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.peek()),
+		varDecl(ctx.local("value"), ctx.peek()),
 		exprStmt(
 			assign(
 				ctx.peek(),
 				ternary(
-					bin(BOp.Seq, un(UOp.Typeof, id("v")), lit("symbol")),
-					id("v"),
-					call(id("String"), [id("v")])
+					bin(
+						BOp.Seq,
+						un(UOp.Typeof, id(ctx.local("value"))),
+						lit("symbol")
+					),
+					id(ctx.local("value")),
+					call(id("String"), [id(ctx.local("value"))])
 				)
 			)
 		),
@@ -117,14 +121,18 @@ function TO_PROPERTY_KEY(ctx: HandlerCtx): JsNode[] {
  */
 function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.peek()),
+		varDecl(ctx.local("value"), ctx.peek()),
 		exprStmt(
 			assign(
 				ctx.peek(),
 				ternary(
-					bin(BOp.Seq, un(UOp.Typeof, id("v")), lit("bigint")),
-					id("v"),
-					call(id("Number"), [id("v")])
+					bin(
+						BOp.Seq,
+						un(UOp.Typeof, id(ctx.local("value"))),
+						lit("bigint")
+					),
+					id(ctx.local("value")),
+					call(id("Number"), [id(ctx.local("value"))])
 				)
 			)
 		),
@@ -146,31 +154,48 @@ function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
  */
 function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("exprCount", id(ctx.O)),
-		varDecl("parts", { type: "ArrayExpr", elements: [] }),
+		varDecl(ctx.local("exprCount"), id(ctx.O)),
+		varDecl(ctx.local("parts"), { type: "ArrayExpr", elements: [] }),
 		forStmt(
-			varDecl("ti", bin(BOp.Mul, id("exprCount"), lit(2))),
-			bin(BOp.Gte, id("ti"), lit(0)),
-			update(UpOp.Dec, false, id("ti")),
-			[exprStmt(call(member(id("parts"), "unshift"), [ctx.pop()]))]
+			varDecl(
+				ctx.local("idx"),
+				bin(BOp.Mul, id(ctx.local("exprCount")), lit(2))
+			),
+			bin(BOp.Gte, id(ctx.local("idx")), lit(0)),
+			update(UpOp.Dec, false, id(ctx.local("idx"))),
+			[
+				exprStmt(
+					call(member(id(ctx.local("parts")), "unshift"), [ctx.pop()])
+				),
+			]
 		),
-		varDecl("result", lit("")),
+		varDecl(ctx.local("result"), lit("")),
 		forStmt(
-			varDecl("ti", lit(0)),
-			bin(BOp.Lt, id("ti"), member(id("parts"), "length")),
-			update(UpOp.Inc, false, id("ti")),
+			varDecl(ctx.local("idx"), lit(0)),
+			bin(
+				BOp.Lt,
+				id(ctx.local("idx")),
+				member(id(ctx.local("parts")), "length")
+			),
+			update(UpOp.Inc, false, id(ctx.local("idx"))),
 			[
 				exprStmt(
 					assign(
-						id("result"),
+						id(ctx.local("result")),
 						call(id("String"), [
 							ternary(
 								bin(
 									BOp.Neq,
-									index(id("parts"), id("ti")),
+									index(
+										id(ctx.local("parts")),
+										id(ctx.local("idx"))
+									),
 									lit(null)
 								),
-								index(id("parts"), id("ti")),
+								index(
+									id(ctx.local("parts")),
+									id(ctx.local("idx"))
+								),
 								lit("")
 							),
 						]),
@@ -179,7 +204,7 @@ function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
 				),
 			]
 		),
-		exprStmt(ctx.push(id("result"))),
+		exprStmt(ctx.push(id(ctx.local("result")))),
 		breakStmt(),
 	];
 }
@@ -195,16 +220,28 @@ function TEMPLATE_LITERAL(ctx: HandlerCtx): JsNode[] {
  */
 function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("argc", id(ctx.O)),
-		varDecl("callArgs", { type: "ArrayExpr", elements: [] }),
+		varDecl(ctx.local("argc"), id(ctx.O)),
+		varDecl(ctx.local("callArgs"), { type: "ArrayExpr", elements: [] }),
 		forStmt(
-			varDecl("ai", lit(0)),
-			bin(BOp.Lt, id("ai"), id("argc")),
-			update(UpOp.Inc, false, id("ai")),
-			[exprStmt(call(member(id("callArgs"), "unshift"), [ctx.pop()]))]
+			varDecl(ctx.local("idx"), lit(0)),
+			bin(BOp.Lt, id(ctx.local("idx")), id(ctx.local("argc"))),
+			update(UpOp.Inc, false, id(ctx.local("idx"))),
+			[
+				exprStmt(
+					call(member(id(ctx.local("callArgs")), "unshift"), [
+						ctx.pop(),
+					])
+				),
+			]
 		),
-		varDecl("fn", ctx.pop()),
-		exprStmt(ctx.push(call(id("fn"), [spread(id("callArgs"))]))),
+		varDecl(ctx.local("tagFn"), ctx.pop()),
+		exprStmt(
+			ctx.push(
+				call(id(ctx.local("tagFn")), [
+					spread(id(ctx.local("callArgs"))),
+				])
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -220,16 +257,24 @@ function TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
  */
 function CREATE_RAW_STRINGS(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("count", id(ctx.O)),
-		varDecl("raw", { type: "ArrayExpr", elements: [] }),
+		varDecl(ctx.local("count"), id(ctx.O)),
+		varDecl(ctx.local("rawArr"), { type: "ArrayExpr", elements: [] }),
 		forStmt(
-			varDecl("ri", lit(0)),
-			bin(BOp.Lt, id("ri"), id("count")),
-			update(UpOp.Inc, false, id("ri")),
-			[exprStmt(call(member(id("raw"), "unshift"), [ctx.pop()]))]
+			varDecl(ctx.local("idx"), lit(0)),
+			bin(BOp.Lt, id(ctx.local("idx")), id(ctx.local("count"))),
+			update(UpOp.Inc, false, id(ctx.local("idx"))),
+			[
+				exprStmt(
+					call(member(id(ctx.local("rawArr")), "unshift"), [
+						ctx.pop(),
+					])
+				),
+			]
 		),
-		exprStmt(call(member(id("Object"), "freeze"), [id("raw")])),
-		exprStmt(ctx.push(id("raw"))),
+		exprStmt(
+			call(member(id("Object"), "freeze"), [id(ctx.local("rawArr"))])
+		),
+		exprStmt(ctx.push(id(ctx.local("rawArr")))),
 		breakStmt(),
 	];
 }
@@ -266,8 +311,8 @@ function IMPORT_META(ctx: HandlerCtx): JsNode[] {
  */
 function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("spec", ctx.pop()),
-		exprStmt(ctx.push(importExpr(id("spec")))),
+		varDecl(ctx.local("specifier"), ctx.pop()),
+		exprStmt(ctx.push(importExpr(id(ctx.local("specifier"))))),
 		breakStmt(),
 	];
 }
@@ -279,8 +324,8 @@ function DYNAMIC_IMPORT(ctx: HandlerCtx): JsNode[] {
  */
 function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.peek()),
-		ifStmt(bin(BOp.Seq, id("v"), un(UOp.Void, lit(0))), [
+		varDecl(ctx.local("value"), ctx.peek()),
+		ifStmt(bin(BOp.Seq, id(ctx.local("value")), un(UOp.Void, lit(0))), [
 			throwStmt(
 				newExpr(id("TypeError"), [
 					lit("Cannot read properties of undefined"),
@@ -296,14 +341,25 @@ function ASSERT_DEFINED(ctx: HandlerCtx): JsNode[] {
  */
 function ASSERT_FUNCTION(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("v", ctx.peek()),
-		ifStmt(bin(BOp.Sneq, un(UOp.Typeof, id("v")), lit("function")), [
-			throwStmt(
-				newExpr(id("TypeError"), [
-					bin(BOp.Add, id("v"), lit(" is not a function")),
-				])
+		varDecl(ctx.local("value"), ctx.peek()),
+		ifStmt(
+			bin(
+				BOp.Sneq,
+				un(UOp.Typeof, id(ctx.local("value"))),
+				lit("function")
 			),
-		]),
+			[
+				throwStmt(
+					newExpr(id("TypeError"), [
+						bin(
+							BOp.Add,
+							id(ctx.local("value")),
+							lit(" is not a function")
+						),
+					])
+				),
+			]
+		),
 		breakStmt(),
 	];
 }

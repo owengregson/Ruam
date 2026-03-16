@@ -110,6 +110,10 @@ export function makeHandlerCtx(
 	isAsync: boolean,
 	debug: boolean
 ): HandlerCtx {
+	// Interim pass-through: returns the key as-is (string).
+	// Will be wired to NameScope in Task 6.
+	const localFn = (key: string): Name => key;
+
 	return {
 		S: names.stk,
 		IP: names.ip,
@@ -148,26 +152,34 @@ export function makeHandlerCtx(
 			}
 			return name;
 		},
-		// Interim pass-through: returns the key as-is (string).
-		// Will be wired to NameScope in Task 6.
-		local: (key: string): Name => key,
+		local: localFn,
 		push: (value: JsNode) => stackPush(names.stk, value),
 		pop: () => stackPop(names.stk),
 		peek: () => stackPeek(names.stk),
 
 		// AST-returning scope helpers — prototypal scope chain
-		sv: (key: JsNode = id("name")) => index(id("s"), key),
-		curSv: (key: JsNode = id("name")) => index(id(names.scope), key),
-		scopeWalk: (body: JsNode[], key: JsNode = id("name")): JsNode[] => [
-			whileStmt(id("s"), [
-				ifStmt(call(member(id(names.hop), "call"), [id("s"), key]), [
-					...body,
-					breakStmt(),
-				]),
+		sv: (key: JsNode = id(localFn("varName"))) =>
+			index(id(localFn("scopeWalk")), key),
+		curSv: (key: JsNode = id(localFn("varName"))) =>
+			index(id(names.scope), key),
+		scopeWalk: (
+			body: JsNode[],
+			key: JsNode = id(localFn("varName"))
+		): JsNode[] => [
+			whileStmt(id(localFn("scopeWalk")), [
+				ifStmt(
+					call(member(id(names.hop), "call"), [
+						id(localFn("scopeWalk")),
+						key,
+					]),
+					[...body, breakStmt()]
+				),
 				exprStmt(
 					assign(
-						id("s"),
-						call(member(id("Object"), "getPrototypeOf"), [id("s")])
+						id(localFn("scopeWalk")),
+						call(member(id("Object"), "getPrototypeOf"), [
+							id(localFn("scopeWalk")),
+						])
 					)
 				),
 			]),

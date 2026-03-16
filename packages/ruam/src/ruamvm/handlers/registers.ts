@@ -38,9 +38,12 @@ function rSlot(ctx: HandlerCtx): JsNode {
  */
 function regAssignHandler(op: BOpKind): HandlerFn {
 	return (ctx) => [
-		varDecl("val", ctx.pop()),
+		varDecl(ctx.local("val"), ctx.pop()),
 		exprStmt(
-			assign(rSlot(ctx), bin(op, index(id(ctx.R), id(ctx.O)), id("val")))
+			assign(
+				rSlot(ctx),
+				bin(op, index(id(ctx.R), id(ctx.O)), id(ctx.local("val")))
+			)
 		),
 		exprStmt(ctx.push(index(id(ctx.R), id(ctx.O)))),
 		breakStmt(),
@@ -139,11 +142,14 @@ function DEC_REG(ctx: HandlerCtx): JsNode[] {
 /** POST_INC_REG: `{var old=R[O];R[O]=+old+1;S[++P]=+old;break;}` */
 function POST_INC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("old", rSlot(ctx)),
+		varDecl(ctx.local("oldValue"), rSlot(ctx)),
 		exprStmt(
-			assign(rSlot(ctx), bin(BOp.Add, un(UOp.Pos, id("old")), lit(1)))
+			assign(
+				rSlot(ctx),
+				bin(BOp.Add, un(UOp.Pos, id(ctx.local("oldValue"))), lit(1))
+			)
 		),
-		exprStmt(ctx.push(un(UOp.Pos, id("old")))),
+		exprStmt(ctx.push(un(UOp.Pos, id(ctx.local("oldValue"))))),
 		breakStmt(),
 	];
 }
@@ -151,11 +157,14 @@ function POST_INC_REG(ctx: HandlerCtx): JsNode[] {
 /** POST_DEC_REG: `{var old=R[O];R[O]=+old-1;S[++P]=+old;break;}` */
 function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("old", rSlot(ctx)),
+		varDecl(ctx.local("oldValue"), rSlot(ctx)),
 		exprStmt(
-			assign(rSlot(ctx), bin(BOp.Sub, un(UOp.Pos, id("old")), lit(1)))
+			assign(
+				rSlot(ctx),
+				bin(BOp.Sub, un(UOp.Pos, id(ctx.local("oldValue"))), lit(1))
+			)
 		),
-		exprStmt(ctx.push(un(UOp.Pos, id("old")))),
+		exprStmt(ctx.push(un(UOp.Pos, id(ctx.local("oldValue"))))),
 		breakStmt(),
 	];
 }
@@ -193,20 +202,29 @@ function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
 function FAST_GET_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(
-			"name",
+			ctx.local("propName"),
 			index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))
 		),
 		varDecl(
-			"varName",
+			ctx.local("varName"),
 			index(
 				id(ctx.C),
 				bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(0xffff))
 			)
 		),
-		varDecl("s", id(ctx.SC)),
+		varDecl(ctx.local("s"), id(ctx.SC)),
 		...ctx.scopeWalk(
-			[exprStmt(ctx.push(index(ctx.sv(id("varName")), id("name"))))],
-			id("varName")
+			[
+				exprStmt(
+					ctx.push(
+						index(
+							ctx.sv(id(ctx.local("varName"))),
+							id(ctx.local("propName"))
+						)
+					)
+				),
+			],
+			id(ctx.local("varName"))
 		),
 	];
 }
@@ -216,8 +234,12 @@ function FAST_GET_PROP(ctx: HandlerCtx): JsNode[] {
 /** LOAD_GLOBAL_FAST: `{var g=_g;S[++P]=g[C[O]];break;}` */
 function LOAD_GLOBAL_FAST(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("g", id(ctx.t("_g"))),
-		exprStmt(ctx.push(index(id("g"), index(id(ctx.C), id(ctx.O))))),
+		varDecl(ctx.local("global"), id(ctx.t("_g"))),
+		exprStmt(
+			ctx.push(
+				index(id(ctx.local("global")), index(id(ctx.C), id(ctx.O)))
+			)
+		),
 		breakStmt(),
 	];
 }

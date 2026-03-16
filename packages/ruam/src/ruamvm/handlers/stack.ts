@@ -128,7 +128,7 @@ function SWAP(ctx: HandlerCtx): JsNode[] {
 	const top = index(id(ctx.S), bin(BOp.Sub, sLen, lit(1)));
 	const second = index(id(ctx.S), bin(BOp.Sub, sLen, lit(2)));
 	return [
-		varDecl("_t", top),
+		varDecl(ctx.local("swapTemp"), top),
 		exprStmt(
 			assign(
 				index(
@@ -147,7 +147,7 @@ function SWAP(ctx: HandlerCtx): JsNode[] {
 					id(ctx.S),
 					bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))
 				),
-				id("_t")
+				id(ctx.local("swapTemp"))
 			)
 		),
 		breakStmt(),
@@ -161,16 +161,16 @@ function ROT3(ctx: HandlerCtx): JsNode[] {
 	const s = (offset: number) =>
 		index(id(ctx.S), bin(BOp.Sub, sLen, lit(offset)));
 	return [
-		varDecl("_c", s(1)), // _c = S[S.length-1] (top)
-		varDecl("_b", s(2)), // _b = S[S.length-2]
-		varDecl("_a", s(3)), // _a = S[S.length-3]
+		varDecl(ctx.local("rotC"), s(1)), // _c = S[S.length-1] (top)
+		varDecl(ctx.local("rotB"), s(2)), // _b = S[S.length-2]
+		varDecl(ctx.local("rotA"), s(3)), // _a = S[S.length-3]
 		exprStmt(
 			assign(
 				index(
 					id(ctx.S),
 					bin(BOp.Sub, member(id(ctx.S), "length"), lit(3))
 				),
-				id("_c")
+				id(ctx.local("rotC"))
 			)
 		),
 		exprStmt(
@@ -179,7 +179,7 @@ function ROT3(ctx: HandlerCtx): JsNode[] {
 					id(ctx.S),
 					bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))
 				),
-				id("_a")
+				id(ctx.local("rotA"))
 			)
 		),
 		exprStmt(
@@ -188,7 +188,7 @@ function ROT3(ctx: HandlerCtx): JsNode[] {
 					id(ctx.S),
 					bin(BOp.Sub, member(id(ctx.S), "length"), lit(1))
 				),
-				id("_b")
+				id(ctx.local("rotB"))
 			)
 		),
 		breakStmt(),
@@ -200,17 +200,29 @@ function ROT4(ctx: HandlerCtx): JsNode[] {
 	// abcd -> dabc
 	const sLen = member(id(ctx.S), "length");
 	return [
-		varDecl("_d", index(id(ctx.S), bin(BOp.Sub, sLen, lit(1)))),
-		varDecl("_c", index(id(ctx.S), bin(BOp.Sub, sLen, lit(2)))),
-		varDecl("_b", index(id(ctx.S), bin(BOp.Sub, sLen, lit(3)))),
-		varDecl("_a", index(id(ctx.S), bin(BOp.Sub, sLen, lit(4)))),
+		varDecl(
+			ctx.local("rotD"),
+			index(id(ctx.S), bin(BOp.Sub, sLen, lit(1)))
+		),
+		varDecl(
+			ctx.local("rotC"),
+			index(id(ctx.S), bin(BOp.Sub, sLen, lit(2)))
+		),
+		varDecl(
+			ctx.local("rotB"),
+			index(id(ctx.S), bin(BOp.Sub, sLen, lit(3)))
+		),
+		varDecl(
+			ctx.local("rotA"),
+			index(id(ctx.S), bin(BOp.Sub, sLen, lit(4)))
+		),
 		exprStmt(
 			assign(
 				index(
 					id(ctx.S),
 					bin(BOp.Sub, member(id(ctx.S), "length"), lit(4))
 				),
-				id("_d")
+				id(ctx.local("rotD"))
 			)
 		),
 		exprStmt(
@@ -219,7 +231,7 @@ function ROT4(ctx: HandlerCtx): JsNode[] {
 					id(ctx.S),
 					bin(BOp.Sub, member(id(ctx.S), "length"), lit(3))
 				),
-				id("_a")
+				id(ctx.local("rotA"))
 			)
 		),
 		exprStmt(
@@ -228,7 +240,7 @@ function ROT4(ctx: HandlerCtx): JsNode[] {
 					id(ctx.S),
 					bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))
 				),
-				id("_b")
+				id(ctx.local("rotB"))
 			)
 		),
 		exprStmt(
@@ -237,7 +249,7 @@ function ROT4(ctx: HandlerCtx): JsNode[] {
 					id(ctx.S),
 					bin(BOp.Sub, member(id(ctx.S), "length"), lit(1))
 				),
-				id("_c")
+				id(ctx.local("rotC"))
 			)
 		),
 		breakStmt(),

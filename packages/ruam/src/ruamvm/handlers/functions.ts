@@ -444,12 +444,12 @@ function NEW_GENERATOR_HANDLER(ctx: HandlerCtx): JsNode[] {
  */
 function SET_FUNC_NAME(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("fn", ctx.peek()),
+		varDecl(ctx.local("func"), ctx.peek()),
 		tryCatch(
 			[
 				exprStmt(
 					call(member(id("Object"), "defineProperty"), [
-						id("fn"),
+						id(ctx.local("func")),
 						lit("name"),
 						obj(
 							["value", index(id(ctx.C), id(ctx.O))],
@@ -458,7 +458,7 @@ function SET_FUNC_NAME(ctx: HandlerCtx): JsNode[] {
 					])
 				),
 			],
-			"e",
+			ctx.local("catchErr"),
 			[]
 		),
 		breakStmt(),
@@ -470,18 +470,18 @@ function SET_FUNC_NAME(ctx: HandlerCtx): JsNode[] {
  */
 function SET_FUNC_LENGTH(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("fn", ctx.peek()),
+		varDecl(ctx.local("func"), ctx.peek()),
 		tryCatch(
 			[
 				exprStmt(
 					call(member(id("Object"), "defineProperty"), [
-						id("fn"),
+						id(ctx.local("func")),
 						lit("length"),
 						obj(["value", id(ctx.O)], ["configurable", lit(true)]),
 					])
 				),
 			],
-			"e",
+			ctx.local("catchErr"),
 			[]
 		),
 		breakStmt(),
@@ -504,9 +504,12 @@ function BIND_STUB(_ctx: HandlerCtx): JsNode[] {
  */
 function PUSH_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("s", id(ctx.SC)),
-		...ctx.scopeWalk([exprStmt(ctx.push(ctx.sv()))]),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
+		...ctx.scopeWalk(
+			[exprStmt(ctx.push(ctx.sv(id(ctx.local("varName")))))],
+			id(ctx.local("varName"))
+		),
 	];
 }
 
@@ -517,10 +520,20 @@ function PUSH_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
  */
 function STORE_CLOSURE_VAR(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		varDecl("val", ctx.pop()),
-		varDecl("s", id(ctx.SC)),
-		...ctx.scopeWalk([exprStmt(assign(ctx.sv(), id("val")))]),
+		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
+		varDecl(ctx.local("value"), ctx.pop()),
+		varDecl(ctx.local("scopeWalk"), id(ctx.SC)),
+		...ctx.scopeWalk(
+			[
+				exprStmt(
+					assign(
+						ctx.sv(id(ctx.local("varName"))),
+						id(ctx.local("value"))
+					)
+				),
+			],
+			id(ctx.local("varName"))
+		),
 	];
 }
 
