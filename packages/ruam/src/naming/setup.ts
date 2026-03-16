@@ -11,7 +11,7 @@
 import { NameRegistry } from "./registry.js";
 import { NameScope } from "./scope.js";
 import { NameToken } from "./token.js";
-import type { RuntimeNames, TempNames } from "../encoding/names.js";
+import type { RuntimeNames, TempNames } from "./compat-types.js";
 import {
 	RUNTIME_KEYS,
 	RUNTIME_POST_TEMP_KEYS,
