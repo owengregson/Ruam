@@ -9,7 +9,7 @@
  * @module ruamvm/handlers/registry
  */
 
-import type { JsNode, StackPush, StackPop, StackPeek } from "../nodes.js";
+import type { JsNode, StackPush, StackPop, StackPeek, Name } from "../nodes.js";
 import {
 	stackPush,
 	stackPop,
@@ -34,49 +34,52 @@ import type { Op } from "../../compiler/opcodes.js";
  */
 export interface HandlerCtx {
 	// Stack machine (uses Array.push/pop/length — no stack pointer)
-	S: string; // stack array
+	S: Name; // stack array
 
 	// Interpreter state
-	IP: string; // instruction pointer
-	C: string; // constants array
-	O: string; // operand
-	SC: string; // scope
-	R: string; // registers
-	EX: string; // exception handler stack
-	PE: string; // pending exception
-	HPE: string; // has pending exception
-	CT: string; // completion type
-	CV: string; // completion value
-	PH: string; // physical opcode variable
+	IP: Name; // instruction pointer
+	C: Name; // constants array
+	O: Name; // operand
+	SC: Name; // scope
+	R: Name; // registers
+	EX: Name; // exception handler stack
+	PE: Name; // pending exception
+	HPE: Name; // has pending exception
+	CT: Name; // completion type
+	CV: Name; // completion value
+	PH: Name; // physical opcode variable
 
 	// Function parameters
-	U: string; // unit parameter
-	A: string; // args parameter
-	OS: string; // outerScope parameter
-	TV: string; // thisVal parameter
-	NT: string; // newTarget parameter
-	HO: string; // homeObject parameter
+	U: Name; // unit parameter
+	A: Name; // args parameter
+	OS: Name; // outerScope parameter
+	TV: Name; // thisVal parameter
+	NT: Name; // newTarget parameter
+	HO: Name; // homeObject parameter
 
 	// TDZ sentinel variable (IIFE-scope unique object)
-	tdzSentinel: string;
+	tdzSentinel: Name;
 
 	// Infrastructure references
-	exec: string; // sync exec function name
-	execAsync: string; // async exec function name
-	load: string; // loader function name
-	spreadSym: string; // spread marker Symbol name
-	hop: string; // cached Object.prototype.hasOwnProperty reference
-	depth: string; // recursion depth counter
-	callStack: string; // call stack for error messages
-	dbg: string; // debug log function name
-	fSlots: string; // function slots array name
+	exec: Name; // sync exec function name
+	execAsync: Name; // async exec function name
+	load: Name; // loader function name
+	spreadSym: Name; // spread marker Symbol name
+	hop: Name; // cached Object.prototype.hasOwnProperty reference
+	depth: Name; // recursion depth counter
+	callStack: Name; // call stack for error messages
+	dbg: Name; // debug log function name
+	fSlots: Name; // function slots array name
 
 	// Flags
 	isAsync: boolean; // true when building async interpreter variant
 	debug: boolean; // true when debug logging is enabled
 
 	/** Temp name lookup — maps canonical key (e.g. `"_ci"`) to per-build randomized name. */
-	t: (key: string) => string;
+	t: (key: string) => Name;
+
+	/** Handler-local variable — returns a Name for a handler-local variable. */
+	local: (key: string) => Name;
 
 	// Stack operation factories — emit directly as S[++P]=expr, S[P--], S[P]
 	push: (value: JsNode) => StackPush;
@@ -138,13 +141,16 @@ export function makeHandlerCtx(
 		fSlots: names.fSlots,
 		isAsync,
 		debug,
-		t: (key: string): string => {
+		t: (key: string): Name => {
 			const name = temps[key];
 			if (name === undefined) {
 				throw new Error(`Unknown temp name key: ${key}`);
 			}
 			return name;
 		},
+		// Interim pass-through: returns the key as-is (string).
+		// Will be wired to NameScope in Task 6.
+		local: (key: string): Name => key,
 		push: (value: JsNode) => stackPush(names.stk, value),
 		pop: () => stackPop(names.stk),
 		peek: () => stackPeek(names.stk),
