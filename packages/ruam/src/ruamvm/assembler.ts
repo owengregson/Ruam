@@ -52,6 +52,10 @@ import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
 import type { StructuralChoices } from "../structural-choices.js";
 import { applyStructuralTransforms } from "./structural-transforms.js";
+import { generateDecoderChain, buildDecoderFunctionAST } from "./polymorphic-decoder.js";
+import { atomizeStrings } from "./string-atomization.js";
+import { scatterKeyMaterials } from "./scattered-keys.js";
+import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 /** Result from generating the VM runtime. */
 export interface VmRuntimeResult {
@@ -85,6 +89,12 @@ export function generateVmRuntime(options: {
 	cipherSalt?: number;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
+	/** Generate per-build polymorphic decoder chain for string constants. */
+	polymorphicDecoder?: boolean;
+	/** Atomize interpreter string literals into encoded table lookups. */
+	stringAtomization?: boolean;
+	/** Scatter key material fragments across the output. */
+	scatteredKeys?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** Whether any compiled units are async (controls async interpreter emit). */
@@ -111,6 +121,9 @@ export function generateVmRuntime(options: {
 		cipherSalt,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
+		polymorphicDecoder = false,
+		stringAtomization = false,
+		scatteredKeys = false,
 		alphabet,
 		hasAsyncUnits = true,
 		structuralChoices,
@@ -157,8 +170,44 @@ export function generateVmRuntime(options: {
 
 	// -- Tier 1: crypto/encoding primitives (shuffleable) ------------------
 	const tier1Components: JsNode[][] = [];
+
 	// Binary decoder (always emitted)
-	tier1Components.push(buildBinaryDecoderSource(names, alphabet));
+	const binaryDecoderNodes = buildBinaryDecoderSource(names, alphabet);
+	// Deferred nodes: scattered key reassembly + binary decoder rest
+	// (inserted between tier 1 and tier 2 so the alphabet is available
+	// before the loader/deserializer in tier 3 reference it)
+	let scatteredReassemblyNodes: JsNode[] = [];
+
+	if (scatteredKeys) {
+		// --- Scattered keys: fragment the alphabet literal ---
+		// All fragments go to tiers 0 and 1 (before the reassembly).
+		// The reassembly + binary decoder rest go after tier 1 but before
+		// tier 2 so the decode function is available for the loader.
+		const scatterNameGen = createScatterNameGen(seed);
+		const scattered = scatterKeyMaterials(
+			[{ name: names.alpha, value: alphabet, type: "string" }],
+			scatterNameGen,
+			seed
+		);
+		// All fragments go to tier 0 and tier 1 (before reassembly point)
+		const allFragments = [
+			...scattered.tier0Fragments,
+			...scattered.tier1Fragments,
+			...scattered.tier3Fragments,
+			...scattered.tier4Fragments,
+		];
+		// Split fragments between tier 0 and tier 1
+		const half = Math.ceil(allFragments.length / 2);
+		tier0Components.push(allFragments.slice(0, half));
+		tier1Components.push(allFragments.slice(half));
+		// Reassembly + binary decoder rest deferred to between tier 1 and tier 2
+		scatteredReassemblyNodes = [
+			...scattered.reassemblyNodes,
+			...binaryDecoderNodes.slice(1),
+		];
+	} else {
+		tier1Components.push(binaryDecoderNodes);
+	}
 	// Optional encryption support
 	if (encrypt) {
 		tier1Components.push(buildFingerprintSource(names, split));
@@ -171,6 +220,18 @@ export function generateVmRuntime(options: {
 	// Optional debug logging
 	if (debugLogging) {
 		tier1Components.push(buildDebugLogging(reverseMap, names, temps));
+	}
+	// Optional polymorphic decoder chain (string constant encoding).
+	// When stringAtomization is also on, the decoder is emitted as part of
+	// atomization infrastructure (after all tiers) to avoid duplicates.
+	if (polymorphicDecoder && !stringAtomization) {
+		const chain = generateDecoderChain(seed);
+		const decoderNodes = buildDecoderFunctionAST(
+			chain,
+			names.polyDec,
+			names.polyPosSeed
+		);
+		tier1Components.push(decoderNodes);
 	}
 
 	// -- Tier 2: interpreter machinery (NOT shuffleable — dependency chain) -
@@ -251,7 +312,6 @@ export function generateVmRuntime(options: {
 		// 2: Deserializer
 		buildDeserializer(names, temps),
 	];
-
 	// -- Tier 4: wiring (shuffleable) ----------------------------------------
 	const tier4Components: JsNode[][] = [
 		// 0: Global exposure
@@ -259,7 +319,7 @@ export function generateVmRuntime(options: {
 	];
 
 	// -- Assemble with shuffled ordering ------------------------------------
-	const nodes: JsNode[] = [];
+	let nodes: JsNode[] = [];
 
 	// "use strict" always first
 	nodes.push(exprStmt(lit("use strict")));
@@ -282,9 +342,35 @@ export function generateVmRuntime(options: {
 
 	pushShuffled(tier0Components, order?.tier0);
 	pushShuffled(tier1Components, order?.tier1);
+	// Scattered key reassembly: all fragment vars in tier 0 and tier 1 are
+	// now declared. Reassemble the alphabet + build reverse table + decode
+	// function before tier 2 (which may depend on them indirectly).
+	if (scatteredReassemblyNodes.length > 0) {
+		nodes.push(...scatteredReassemblyNodes);
+	}
 	nodes.push(...tier2Nodes); // tier 2 is never shuffled
 	pushShuffled(tier3Components, order?.tier3);
 	pushShuffled(tier4Components, order?.tier4);
+
+	// --- String atomization: replace string literals with table lookups ---
+	if (stringAtomization) {
+		const atomChain = generateDecoderChain(seed ^ 0x5a5a5a5a);
+		const atomResult = atomizeStrings(nodes, atomChain, {
+			decoder: names.polyDec,
+			posSeed: names.polyPosSeed,
+			table: names.strTbl,
+			cache: names.strCache,
+			accessor: names.strAcc,
+		});
+		// Prepend infrastructure (decoder fn + table + cache + accessor)
+		// after "use strict" but before everything else
+		const useStrict = atomResult.transformedNodes[0]; // "use strict"
+		nodes = [
+			useStrict!,
+			...atomResult.infrastructure,
+			...atomResult.transformedNodes.slice(1),
+		];
+	}
 
 	// Apply structural AST transforms (control flow, declarations, expressions)
 	const finalNodes = structuralChoices
@@ -354,6 +440,12 @@ export function generateShieldedVmRuntime(options: {
 	integrityBinding?: boolean;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
+	/** Generate per-build polymorphic decoder chain for string constants. */
+	polymorphicDecoder?: boolean;
+	/** Atomize interpreter string literals into encoded table lookups. */
+	stringAtomization?: boolean;
+	/** Scatter key material fragments across the output. */
+	scatteredKeys?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 }): ShieldedVmRuntimeResult {
@@ -369,6 +461,9 @@ export function generateShieldedVmRuntime(options: {
 		integrityBinding = false,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
+		polymorphicDecoder = false,
+		stringAtomization = false,
+		scatteredKeys = false,
 		alphabet,
 	} = options;
 
@@ -408,7 +503,27 @@ export function generateShieldedVmRuntime(options: {
 	);
 
 	// Shared: custom binary decoder (always emitted)
-	nodes.push(...buildBinaryDecoderSource(sharedNames, alphabet));
+	const shieldedBinDecNodes = buildBinaryDecoderSource(sharedNames, alphabet);
+	if (scatteredKeys) {
+		// Scatter the alphabet string: all fragments first, then reassembly
+		const shieldedScatterGen = createScatterNameGen(groups[0]?.seed ?? 0x12345678);
+		const shieldedScattered = scatterKeyMaterials(
+			[{ name: sharedNames.alpha, value: alphabet, type: "string" }],
+			shieldedScatterGen,
+			groups[0]?.seed ?? 0x12345678
+		);
+		// All fragments emitted first so the reassembly can reference them
+		nodes.push(
+			...shieldedScattered.tier0Fragments,
+			...shieldedScattered.tier1Fragments,
+			...shieldedScattered.tier3Fragments,
+			...shieldedScattered.tier4Fragments,
+			...shieldedScattered.reassemblyNodes,
+			...shieldedBinDecNodes.slice(1)
+		);
+	} else {
+		nodes.push(...shieldedBinDecNodes);
+	}
 
 	// Shared: encryption support (RC4 + fingerprint)
 	if (encrypt) {
@@ -435,6 +550,18 @@ export function generateShieldedVmRuntime(options: {
 
 		// Per-group constant splitter — each group gets unique split patterns
 		const groupSplit: SplitFn = makeConstantSplitter(group.seed);
+
+		// Polymorphic decoder (per-group) — only if stringAtomization is off
+		// (when on, the decoder is emitted via atomization infrastructure)
+		if (polymorphicDecoder && !stringAtomization) {
+			const groupChain = generateDecoderChain(group.seed);
+			const groupDecoderNodes = buildDecoderFunctionAST(
+				groupChain,
+				gn.polyDec,
+				gn.polyPosSeed
+			);
+			nodes.push(...groupDecoderNodes);
+		}
 
 		// Debug logging (per-group)
 		if (debugLogging) {
@@ -538,14 +665,68 @@ export function generateShieldedVmRuntime(options: {
 	// Global exposure: expose the router
 	nodes.push(...buildGlobalExposure(sharedNames.router));
 
+	// --- String atomization (shielded): replace string literals with table lookups ---
+	let finalShieldedNodes = nodes;
+	if (stringAtomization) {
+		const atomChain = generateDecoderChain(
+			(groups[0]?.seed ?? 0x12345678) ^ 0x5a5a5a5a
+		);
+		const atomResult = atomizeStrings(finalShieldedNodes, atomChain, {
+			decoder: sharedNames.polyDec,
+			posSeed: sharedNames.polyPosSeed,
+			table: sharedNames.strTbl,
+			cache: sharedNames.strCache,
+			accessor: sharedNames.strAcc,
+		});
+		// Prepend infrastructure after "use strict"
+		const useStrict = atomResult.transformedNodes[0];
+		finalShieldedNodes = [
+			useStrict!,
+			...atomResult.infrastructure,
+			...atomResult.transformedNodes.slice(1),
+		];
+	}
+
 	// Wrap in IIFE and emit
 	return {
-		source: emitIIFE(nodes),
+		source: emitIIFE(finalShieldedNodes),
 		groupKeyAnchors,
 	};
 }
 
 // --- Helpers ---
+
+/** Letters used for scatter name generation. */
+const SCATTER_LETTERS = "etnoiasuclfdphmgvbwykxjqz";
+
+/**
+ * Create a simple LCG-based name generator for scattered key fragment
+ * variable names. Returns underscore-prefixed 4-char names, guaranteed
+ * unique via an internal used set.
+ *
+ * @param seed - Per-build seed
+ * @returns A name generator function
+ */
+function createScatterNameGen(seed: number): () => string {
+	const used = new Set<string>();
+	let s = (seed ^ 0xfeed4321) >>> 0;
+	return () => {
+		for (let attempt = 0; attempt < 1000; attempt++) {
+			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const c1 = SCATTER_LETTERS[s % 25]!;
+			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const c2 = SCATTER_LETTERS[s % 25]!;
+			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const c3 = SCATTER_LETTERS[s % 25]!;
+			const name = "_" + c1 + c2 + c3;
+			if (!used.has(name)) {
+				used.add(name);
+				return name;
+			}
+		}
+		throw new Error("Scatter name generator exhausted");
+	};
+}
 
 /**
  * Build the globalThis detection chain with shuffled check order.

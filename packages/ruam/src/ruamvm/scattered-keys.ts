@@ -77,9 +77,9 @@ export function fragmentString(
 ): { fragments: JsNode[]; reassembly: JsNode } {
 	let state = (seed ^ 0xbeef1234) >>> 0;
 
-	// Determine number of fragments (3-5)
-	state = lcgNext(state);
-	const numFrags = 3 + ((state >>> 16) % 3); // 3, 4, or 5
+	// Use the number of provided fragment names (caller determines count)
+	state = lcgNext(state); // advance LCG for strategy selection below
+	const numFrags = fragNames.length;
 
 	// Split string into roughly equal parts
 	const partLen = Math.ceil(value.length / numFrags);
@@ -156,9 +156,9 @@ export function fragmentArray(
 ): { fragments: JsNode[]; reassembly: JsNode } {
 	let state = (seed ^ 0xdead5678) >>> 0;
 
-	// Determine number of fragments (2-4)
-	state = lcgNext(state);
-	const numFrags = 2 + ((state >>> 16) % 3); // 2, 3, or 4
+	// Use the number of provided fragment names (caller determines count)
+	state = lcgNext(state); // advance LCG for strategy selection below
+	const numFrags = fragNames.length;
 
 	// Split array into roughly equal chunks
 	const chunkLen = Math.ceil(values.length / numFrags);
