@@ -27,10 +27,25 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 // Import opcode sets for identifying jumps. We import the names and check
 // against the canonical opcode enum (before shuffle map is applied).
 import {
+	Op,
 	JUMP_OPS,
 	ALL_JUMP_OPS,
 	PACKED_JUMP_OPS,
 } from "./opcodes.js";
+
+// --- Terminal opcodes ---
+// Opcodes that never fall through to the next instruction.
+const TERMINAL_OPS = new Set<Op>([
+	Op.JMP,
+	Op.RETURN,
+	Op.RETURN_VOID,
+	Op.THROW,
+	Op.RETHROW,
+	Op.GENERATOR_RETURN,
+	Op.GENERATOR_THROW,
+	Op.ASYNC_GENERATOR_RETURN,
+	Op.ASYNC_GENERATOR_THROW,
+]);
 
 // --- LCG PRNG ---
 
@@ -157,10 +172,106 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 	}
 	if (!changed) return;
 
-	// Build old IP → new IP mapping
+	// --- Phase 1: Insert explicit JMPs for fall-through blocks ---
+	// Before reordering, identify blocks that don't end with a terminal
+	// instruction. These rely on sequential fall-through to the next block,
+	// which will break after reordering. Insert an explicit JMP at the end
+	// of such blocks pointing to their original successor.
+	const oldInstrs = [...unit.instructions];
+
+	// Build a map from original block start → original block index
+	const blockIndexByStart = new Map<number, number>();
+	for (let bi = 0; bi < blocks.length; bi++) {
+		blockIndexByStart.set(blocks[bi]!.startIp, bi);
+	}
+
+	// Determine which blocks need a fall-through JMP and insert them.
+	// Track IP expansion so we can adjust block boundaries.
+	const expandedInstrs: Instruction[] = [...oldInstrs];
+	let totalExpansion = 0;
+	const expansionByBlock = new Map<number, number>(); // block startIp -> expansion count
+
+	for (let bi = 0; bi < blocks.length; bi++) {
+		const block = blocks[bi]!;
+		const lastIp = block.endIp - 1;
+		const lastInstr = oldInstrs[lastIp];
+
+		if (!lastInstr) continue;
+
+		// If the block already ends with a terminal or unconditional jump, no fix needed
+		if (TERMINAL_OPS.has(lastInstr.opcode)) continue;
+
+		// If this is the last block, it has no successor to fall through to
+		if (bi + 1 >= blocks.length) continue;
+
+		// Insert a JMP to the original successor block's start IP
+		const successorStartIp = blocks[bi + 1]!.startIp;
+		const insertPos = block.endIp + totalExpansion;
+		expandedInstrs.splice(insertPos, 0, {
+			opcode: Op.JMP,
+			operand: successorStartIp, // Will be patched by IP mapping below
+		});
+		totalExpansion++;
+		expansionByBlock.set(block.startIp, (expansionByBlock.get(block.startIp) ?? 0) + 1);
+	}
+
+	// Rebuild block boundaries accounting for inserted JMPs
+	const expandedBlocks: BasicBlock[] = [];
+	let ipOffset = 0;
+	for (let bi = 0; bi < blocks.length; bi++) {
+		const origBlock = blocks[bi]!;
+		const blockLen = origBlock.endIp - origBlock.startIp;
+		const expansion = expansionByBlock.get(origBlock.startIp) ?? 0;
+		expandedBlocks.push({
+			startIp: origBlock.startIp + ipOffset,
+			endIp: origBlock.startIp + ipOffset + blockLen + expansion,
+		});
+		ipOffset += expansion;
+	}
+
+	// Rebuild the permuted order using expanded blocks
+	// The permuted array references original blocks by startIp — map to expanded
+	const expandedPermuted: BasicBlock[] = [];
+	const origToExpanded = new Map<number, BasicBlock>();
+	for (let bi = 0; bi < blocks.length; bi++) {
+		origToExpanded.set(blocks[bi]!.startIp, expandedBlocks[bi]!);
+	}
+	for (const origBlock of permuted) {
+		expandedPermuted.push(origToExpanded.get(origBlock.startIp)!);
+	}
+
+	// Patch the JMP operands: they point to original successor IPs which
+	// need to be adjusted for the expansion.
+	const origIpToExpanded = new Map<number, number>();
+	ipOffset = 0;
+	for (let bi = 0; bi < blocks.length; bi++) {
+		const origBlock = blocks[bi]!;
+		for (let ip = origBlock.startIp; ip < origBlock.endIp; ip++) {
+			origIpToExpanded.set(ip, ip + ipOffset);
+		}
+		ipOffset += expansionByBlock.get(origBlock.startIp) ?? 0;
+	}
+
+	// Patch all JMP operands in expanded instructions to use expanded IPs
+	for (const instr of expandedInstrs) {
+		if (ALL_JUMP_OPS.has(instr.opcode)) {
+			const expanded = origIpToExpanded.get(instr.operand);
+			if (expanded != null) instr.operand = expanded;
+		}
+		if (PACKED_JUMP_OPS.has(instr.opcode)) {
+			const target = instr.operand >>> 16;
+			const lower = instr.operand & 0xffff;
+			const expanded = origIpToExpanded.get(target);
+			if (expanded != null) {
+				instr.operand = (expanded << 16) | lower;
+			}
+		}
+	}
+
+	// --- Phase 2: Build IP mapping for the permutation ---
 	const ipMap = new Map<number, number>();
 	let newIp = 0;
-	for (const block of permuted) {
+	for (const block of expandedPermuted) {
 		const blockLen = block.endIp - block.startIp;
 		for (let offset = 0; offset < blockLen; offset++) {
 			ipMap.set(block.startIp + offset, newIp + offset);
@@ -168,12 +279,11 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 		newIp += blockLen;
 	}
 
-	// Rewrite instructions in new order
-	const oldInstrs = [...unit.instructions];
+	// Rewrite instructions in permuted order
 	const newInstrs: Instruction[] = [];
-	for (const block of permuted) {
+	for (const block of expandedPermuted) {
 		for (let ip = block.startIp; ip < block.endIp; ip++) {
-			newInstrs.push({ ...oldInstrs[ip]! });
+			newInstrs.push({ ...expandedInstrs[ip]! });
 		}
 	}
 
@@ -199,19 +309,30 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 		}
 	}
 
-	// Patch jump table
+	// Patch jump table: map original IPs to expanded then permuted IPs
 	const newJumpTable: Record<number, number> = {};
 	for (const [label, ip] of Object.entries(unit.jumpTable)) {
-		const newTarget = ipMap.get(ip);
-		newJumpTable[Number(label)] = newTarget ?? ip;
+		const expandedIp = origIpToExpanded.get(ip) ?? ip;
+		const newTarget = ipMap.get(expandedIp);
+		newJumpTable[Number(label)] = newTarget ?? expandedIp;
 	}
 
-	// Patch exception table
+	// Patch exception table: map original IPs through expansion + permutation.
+	// endIp can equal expandedInstrs.length (one past last instruction) —
+	// handle by mapping to newInstrs.length when not found.
+	const mapIp = (origIp: number): number => {
+		const expandedIp = origIpToExpanded.get(origIp) ?? origIp;
+		const mapped = ipMap.get(expandedIp);
+		if (mapped != null) return mapped;
+		// If expandedIp === expandedInstrs.length, map to newInstrs.length
+		if (expandedIp >= expandedInstrs.length) return newInstrs.length;
+		return expandedIp;
+	};
 	const newExceptionTable = unit.exceptionTable.map((entry) => ({
-		startIp: ipMap.get(entry.startIp) ?? entry.startIp,
-		endIp: ipMap.get(entry.endIp) ?? entry.endIp,
-		catchIp: entry.catchIp >= 0 ? (ipMap.get(entry.catchIp) ?? entry.catchIp) : entry.catchIp,
-		finallyIp: entry.finallyIp >= 0 ? (ipMap.get(entry.finallyIp) ?? entry.finallyIp) : entry.finallyIp,
+		startIp: mapIp(entry.startIp),
+		endIp: mapIp(entry.endIp),
+		catchIp: entry.catchIp >= 0 ? mapIp(entry.catchIp) : entry.catchIp,
+		finallyIp: entry.finallyIp >= 0 ? mapIp(entry.finallyIp) : entry.finallyIp,
 	}));
 
 	// Apply changes

@@ -52,6 +52,11 @@ import { emit } from "./ruamvm/emit.js";
 import { generateAlphabet } from "./encoding/decoder.js";
 import { generateStructuralChoices } from "./structural-choices.js";
 import type { StructuralChoices } from "./structural-choices.js";
+import { permuteBlocks } from "./compiler/block-permutation.js";
+import {
+	insertMutationOpcodes,
+	adjustEncodingForMutations,
+} from "./compiler/opcode-mutation.js";
 
 import { randomBytes } from "node:crypto";
 
@@ -98,6 +103,11 @@ export function obfuscateCode(
 		vmShielding = false,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
+		blockPermutation = false,
+		opcodeMutation = false,
+		polymorphicDecoder = false,
+		stringAtomization = false,
+		scatteredKeys = false,
 		wrapOutput = false,
 	} = resolved;
 
@@ -144,6 +154,11 @@ export function obfuscateCode(
 			integrityBinding,
 			mixedBooleanArithmetic,
 			handlerFragmentation,
+			blockPermutation,
+			opcodeMutation,
+			polymorphicDecoder,
+			stringAtomization,
+			scatteredKeys,
 			wrapOutput,
 		});
 	}
@@ -157,7 +172,9 @@ export function obfuscateCode(
 		names,
 		deadCodeInjection,
 		shuffleSeed,
-		temps["_ps"]
+		temps["_ps"],
+		blockPermutation,
+		opcodeMutation
 	);
 
 	if (compiledUnits.size === 0) return code;
@@ -232,6 +249,9 @@ export function obfuscateCode(
 		cipherSalt,
 		mixedBooleanArithmetic,
 		handlerFragmentation,
+		polymorphicDecoder,
+		stringAtomization,
+		scatteredKeys,
 		alphabet,
 		hasAsyncUnits,
 		structuralChoices,
@@ -248,7 +268,8 @@ export function obfuscateCode(
 		integrityHash,
 		cipherSalt,
 		keyAnchor,
-		alphabet
+		alphabet,
+		opcodeMutation
 	);
 
 	// -- Assemble output -----------------------------------------------------
@@ -356,7 +377,9 @@ function compileTargetsOnly(
 	names: RuntimeNames,
 	deadCodeInjection: boolean = false,
 	seed: number,
-	scopeVarName?: string
+	scopeVarName?: string,
+	blockPermutationOpt: boolean = false,
+	opcodeMutationOpt: boolean = false
 ): Map<string, { unit: BytecodeUnit }> {
 	const compiledUnits: Map<string, { unit: BytecodeUnit }> = new Map();
 
@@ -364,11 +387,22 @@ function compileTargetsOnly(
 		try {
 			const unit = compileFunction(fnPath);
 
+			// --- Dead code injection (before block permutation) ---
 			if (deadCodeInjection) {
 				injectDeadCode(unit, seed);
 				for (const child of unit.childUnits) {
 					injectDeadCode(child, seed);
 				}
+			}
+
+			// --- Block permutation: shuffle basic block order ---
+			if (blockPermutationOpt) {
+				permuteBlocks(unit, seed);
+			}
+
+			// --- Opcode mutation: insert MUTATE instructions ---
+			if (opcodeMutationOpt) {
+				insertMutationOpcodes(unit, seed);
 			}
 
 			compiledUnits.set(unit.id, { unit });
@@ -394,6 +428,10 @@ function compileTargetsOnly(
 
 /**
  * Encode all compiled units with the given key anchor and cipher parameters.
+ *
+ * When {@link opcodeMutationOpt} is true, each unit's opcodes are pre-encoded
+ * via {@link adjustEncodingForMutations} (which tracks cumulative MUTATE
+ * instructions) and an identity shuffle map is used for serialization.
  */
 function encodeAllUnits(
 	compiledUnits: Map<string, { unit: BytecodeUnit }>,
@@ -404,13 +442,28 @@ function encodeAllUnits(
 	integrityHash?: number,
 	cipherSalt?: number,
 	keyAnchor?: number,
-	alphabet?: string
+	alphabet?: string,
+	opcodeMutationOpt: boolean = false
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
 	const result = new Map<string, { unit: BytecodeUnit; encoded: string }>();
-	for (const [id, { unit }] of compiledUnits) {
+
+	// Build identity map for mutation-encoded units (opcodes already physical)
+	let identityMap: number[] | undefined;
+	if (opcodeMutationOpt) {
+		identityMap = new Array(OPCODE_COUNT);
+		for (let i = 0; i < OPCODE_COUNT; i++) identityMap[i] = i;
+	}
+
+	for (const [unitId, { unit }] of compiledUnits) {
+		// For mutation units, pre-encode opcodes and use identity shuffle map
+		const effectiveMap = opcodeMutationOpt
+			? (adjustEncodingForMutations(unit, shuffleMap, OPCODE_COUNT),
+			   identityMap!)
+			: shuffleMap;
+
 		const encoded = encodeUnit(
 			unit,
-			shuffleMap,
+			effectiveMap,
 			encrypt,
 			stringKey,
 			rollingCipher,
@@ -419,7 +472,7 @@ function encodeAllUnits(
 			keyAnchor,
 			alphabet!
 		);
-		result.set(id, { unit, encoded });
+		result.set(unitId, { unit, encoded });
 	}
 	return result;
 }
@@ -716,6 +769,11 @@ function assembleShielded(
 		integrityBinding: boolean;
 		mixedBooleanArithmetic: boolean;
 		handlerFragmentation: boolean;
+		blockPermutation: boolean;
+		opcodeMutation: boolean;
+		polymorphicDecoder: boolean;
+		stringAtomization: boolean;
+		scatteredKeys: boolean;
 		wrapOutput: boolean;
 	}
 ): string {
@@ -777,6 +835,16 @@ function assembleShielded(
 			for (const child of unit.childUnits) {
 				injectDeadCode(child, groupSeed);
 			}
+		}
+
+		// Block permutation: shuffle basic block order
+		if (opts.blockPermutation) {
+			permuteBlocks(unit, groupSeed);
+		}
+
+		// Opcode mutation: insert MUTATE instructions
+		if (opts.opcodeMutation) {
+			insertMutationOpcodes(unit, groupSeed);
 		}
 
 		// Collect unit IDs
@@ -889,6 +957,9 @@ function assembleShielded(
 		integrityBinding: opts.integrityBinding,
 		mixedBooleanArithmetic: opts.mixedBooleanArithmetic,
 		handlerFragmentation: opts.handlerFragmentation,
+		polymorphicDecoder: opts.polymorphicDecoder,
+		stringAtomization: opts.stringAtomization,
+		scatteredKeys: opts.scatteredKeys,
 		alphabet: shieldedAlphabet,
 	});
 
@@ -898,15 +969,26 @@ function assembleShielded(
 		{ unit: BytecodeUnit; encoded: string }
 	>();
 
+	// Build identity map for mutation-encoded units if needed
+	let shieldedIdentityMap: number[] | undefined;
+	if (opts.opcodeMutation) {
+		shieldedIdentityMap = new Array(OPCODE_COUNT);
+		for (let i = 0; i < OPCODE_COUNT; i++) shieldedIdentityMap[i] = i;
+	}
+
 	for (let gi = 0; gi < groupMeta.length; gi++) {
 		const gm = groupMeta[gi]!;
 		const group = groups[gi]!;
 		const groupKeyAnchor = runtimeResult.groupKeyAnchors[gi];
 
-		const encodeGroupUnit = (u: BytecodeUnit) =>
-			encodeUnit(
+		const encodeGroupUnit = (u: BytecodeUnit) => {
+			// When opcode mutation is active, pre-encode opcodes and use identity map
+			if (opts.opcodeMutation) {
+				adjustEncodingForMutations(u, gm.shuffleMap, OPCODE_COUNT);
+			}
+			return encodeUnit(
 				u,
-				gm.shuffleMap,
+				opts.opcodeMutation ? shieldedIdentityMap! : gm.shuffleMap,
 				opts.encryptBytecode,
 				gm.seed,
 				true, // rolling cipher always on in shielding mode
@@ -915,6 +997,7 @@ function assembleShielded(
 				groupKeyAnchor,
 				shieldedAlphabet
 			);
+		};
 
 		const rootEncoded = encodeGroupUnit(gm.unit);
 		allEncodedUnits.set(gm.unit.id, {

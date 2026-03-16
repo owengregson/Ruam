@@ -153,6 +153,18 @@ export interface RuntimeNames {
 	hop: string;
 	/** Cached globalThis reference (avoids per-call typeof chain). */
 	globalRef: string;
+
+	// Polymorphic decoder + string atomization
+	/** Polymorphic decoder function (runtime string decode). */
+	polyDec: string;
+	/** Polymorphic decoder position seed variable. */
+	polyPosSeed: string;
+	/** Encoded string table variable. */
+	strTbl: string;
+	/** String table cache variable. */
+	strCache: string;
+	/** String table accessor function. */
+	strAcc: string;
 }
 
 // --- TempNames ---
@@ -311,6 +323,13 @@ const TEMP_NAME_CATALOG: readonly string[] = [
 	"_fg1", // function table handler group 1
 	"_fg2", // function table handler group 2
 	"_fg3", // function table handler group 3
+
+	// --- Runtime opcode mutation ---
+	"_ms", // mutation seed state
+	"_mk", // mutation loop counter
+	"_mi", // mutation swap index i
+	"_mj", // mutation swap index j
+	"_mt", // mutation swap temp
 ] as const;
 
 // --- Name pool ---
@@ -564,6 +583,12 @@ export function generateRuntimeNames(
 		spreadSym: genName(),
 		hop: genName(),
 		globalRef: genName(),
+		// Placeholder — filled below AFTER TempNames to preserve LCG sequence
+		polyDec: "",
+		polyPosSeed: "",
+		strTbl: "",
+		strCache: "",
+		strAcc: "",
 	};
 
 	// Generate temp names from the same LCG + used set
@@ -571,6 +596,14 @@ export function generateRuntimeNames(
 	for (const key of TEMP_NAME_CATALOG) {
 		temps[key] = genName();
 	}
+
+	// Generate new feature names AFTER temps — preserves the existing LCG
+	// sequence so temp names are unchanged across builds.
+	runtime.polyDec = genName();
+	runtime.polyPosSeed = genName();
+	runtime.strTbl = genName();
+	runtime.strCache = genName();
+	runtime.strAcc = genName();
 
 	return { runtime, temps: temps as TempNames, used };
 }
