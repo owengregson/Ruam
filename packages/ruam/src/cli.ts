@@ -721,6 +721,8 @@ async function runInteractive(version: string): Promise<void> {
 				{ name: "Dead Code Injection", value: "deadCodeInjection" },
 				{ name: "Stack Encoding", value: "stackEncoding" },
 				{ name: "VM Shielding", value: "vmShielding" },
+				{ name: "Mixed Boolean Arithmetic", value: "mixedBooleanArithmetic" },
+				{ name: "Handler Fragmentation", value: "handlerFragmentation" },
 			{ name: "String Atomization", value: "stringAtomization" },
 			{ name: "Polymorphic Decoder", value: "polymorphicDecoder" },
 			{ name: "Scattered Keys", value: "scatteredKeys" },
