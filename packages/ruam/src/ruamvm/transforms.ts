@@ -265,6 +265,18 @@ export function obfuscateLocals(
 	// Collect names to rename
 	const toRename = new Set<string>();
 	collectNames(nodes, toRename);
+
+	// Never rename names that are in the reserved set — these are
+	// runtime/temp identifiers shared with other AST trees (e.g. the
+	// exec function references handler group arrays declared in
+	// iifeDecls).  Renaming them here without also renaming the
+	// free-variable references in the other tree breaks the binding.
+	if (reserved) {
+		for (const name of reserved) {
+			toRename.delete(name);
+		}
+	}
+
 	if (toRename.size === 0) return nodes;
 
 	// Generate short replacement names via LCG

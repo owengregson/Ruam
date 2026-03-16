@@ -81,4 +81,29 @@ describe("RuamTesterLite smoke test", () => {
 		}
 		expect(result).not.toContain("FAIL");
 	});
+
+	it("runs RuamTesterLite.js with vmShielding (many groups stress-test)", () => {
+		const obfuscated = obfuscateCode(testerSource, {
+			targetMode: "root",
+			vmShielding: true,
+		});
+
+		const ctx = makeContext();
+		const result = vm.runInContext(obfuscated, ctx) as string;
+		console.log("Shielded:", result);
+		expect(result).toContain("passed");
+		expect(result).not.toContain("FAIL");
+	});
+
+	it("runs RuamTesterLite.js with max preset", () => {
+		const obfuscated = obfuscateCode(testerSource, {
+			preset: "max",
+		});
+
+		const ctx = makeContext();
+		const result = vm.runInContext(obfuscated, ctx) as string;
+		console.log("Max preset:", result);
+		expect(result).toContain("passed");
+		expect(result).not.toContain("FAIL");
+	});
 });
