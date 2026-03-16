@@ -67,6 +67,11 @@ const OPTION_LABELS: Record<string, string> = {
 	vmShielding: "VM Shielding",
 	mixedBooleanArithmetic: "Mixed Boolean Arithmetic",
 	handlerFragmentation: "Handler Fragmentation",
+	stringAtomization: "String Atomization",
+	polymorphicDecoder: "Polymorphic Decoder",
+	scatteredKeys: "Scattered Keys",
+	blockPermutation: "Block Permutation",
+	opcodeMutation: "Opcode Mutation",
 };
 
 // --- CLI Argument Types ---
@@ -324,6 +329,21 @@ function parseArgs(argv: string[]): CliArgs {
 			case "--handler-fragmentation":
 				result.options.handlerFragmentation = true;
 				break;
+			case "--string-atomization":
+				result.options.stringAtomization = true;
+				break;
+			case "--polymorphic-decoder":
+				result.options.polymorphicDecoder = true;
+				break;
+			case "--scattered-keys":
+				result.options.scatteredKeys = true;
+				break;
+			case "--block-permutation":
+				result.options.blockPermutation = true;
+				break;
+			case "--opcode-mutation":
+				result.options.opcodeMutation = true;
+				break;
 			case "--target":
 				result.options.target = nextArg(arg) as TargetEnvironment;
 				break;
@@ -468,6 +488,31 @@ function printHelp(version: string): void {
 		`    ${f(
 			"--handler-fragmentation"
 		)}   Split handlers into interleaved fragments`
+	);
+	console.log(
+		`    ${f(
+			"--string-atomization"
+		)}    Encode interpreter strings as table lookups`
+	);
+	console.log(
+		`    ${f(
+			"--polymorphic-decoder"
+		)}   Per-build randomized string decoder`
+	);
+	console.log(
+		`    ${f(
+			"--scattered-keys"
+		)}        Scatter key material across closure scopes`
+	);
+	console.log(
+		`    ${f(
+			"--block-permutation"
+		)}     Shuffle bytecode basic block order`
+	);
+	console.log(
+		`    ${f(
+			"--opcode-mutation"
+		)}       Runtime handler table mutations`
 	);
 	console.log();
 
@@ -676,6 +721,11 @@ async function runInteractive(version: string): Promise<void> {
 				{ name: "Dead Code Injection", value: "deadCodeInjection" },
 				{ name: "Stack Encoding", value: "stackEncoding" },
 				{ name: "VM Shielding", value: "vmShielding" },
+			{ name: "String Atomization", value: "stringAtomization" },
+			{ name: "Polymorphic Decoder", value: "polymorphicDecoder" },
+			{ name: "Scattered Keys", value: "scatteredKeys" },
+			{ name: "Block Permutation", value: "blockPermutation" },
+			{ name: "Opcode Mutation", value: "opcodeMutation" },
 			],
 		});
 		for (const opt of selected) {

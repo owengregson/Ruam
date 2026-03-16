@@ -80,6 +80,10 @@ No deobfuscator exists for RuamVM bytecode.</p>
       <td>The VM's decryption logic is entangled with its own source. Modifying the interpreter to add logging or breakpoints corrupts all decryption &mdash; the bytecode becomes unrecoverable.</td>
     </tr>
     <tr>
+      <td><strong>Runtime metamorphism</strong></td>
+      <td>The instruction set mutates during execution. The same opcode byte maps to different operations at different points in the program. Static disassembly produces incorrect results.</td>
+    </tr>
+    <tr>
       <td><strong>Optimizing compiler</strong></td>
       <td>Multi-tier optimization pipeline minimizes the performance cost of virtualization. Fused instructions, register promotion, and inline operations keep overhead competitive for a JS-in-JS interpreter.</td>
     </tr>
@@ -196,10 +200,22 @@ function publicHelper() {
       <td><strong>Arithmetic obfuscation</strong></td>
       <td>Arithmetic and bitwise operations within the interpreter are replaced with mathematically equivalent but opaque compound expressions, making the interpreter logic harder to follow.</td>
     </tr>
+    <tr>
+      <td><strong>String atomization</strong></td>
+      <td>All string literals in the interpreter &mdash; property names, method names, internal labels &mdash; are replaced with encoded table lookups. Zero hardcoded strings survive in the output.</td>
+    </tr>
+    <tr>
+      <td><strong>Block permutation</strong></td>
+      <td>Bytecode basic blocks are randomly reordered within each compiled function. Control flow is preserved through explicit jumps. The bytecode stream no longer reflects the original program structure.</td>
+    </tr>
+    <tr>
+      <td><strong>Key scattering</strong></td>
+      <td>Cryptographic key materials are split into fragments distributed across multiple closure scopes in the output. Recovering any single key requires tracing the entire scope chain.</td>
+    </tr>
   </tbody>
 </table>
 
-<p><i>Additional hardening options include dead bytecode injection, stack value encryption, decoy opcode handlers, and handler fragmentation &mdash; all configurable independently or via presets.</i></p>
+<p><i>Additional hardening options include dead bytecode injection, stack value encryption, decoy opcode handlers, handler fragmentation, runtime opcode mutation, and polymorphic string decoding &mdash; all configurable independently or via presets.</i></p>
 
 <hr>
 
@@ -223,12 +239,12 @@ function publicHelper() {
     </tr>
     <tr>
       <td><strong><code>medium</code></strong></td>
-      <td>+ identifier renaming, bytecode encryption, instruction encryption, decoy &amp; dynamic opcodes</td>
+      <td>+ identifier renaming, bytecode encryption, instruction encryption, decoy &amp; dynamic opcodes, string atomization, key scattering</td>
       <td>Production &mdash; balanced protection and size</td>
     </tr>
     <tr>
       <td><strong><code>max</code></strong></td>
-      <td>Everything &mdash; all encryption layers, VM shielding, debug protection, integrity binding, arithmetic obfuscation, dead code, stack encoding, handler fragmentation</td>
+      <td>Everything &mdash; all encryption layers, VM shielding, debug protection, integrity binding, arithmetic obfuscation, dead code, stack encoding, block permutation, string atomization, key scattering</td>
       <td>High-value targets &mdash; maximum protection</td>
     </tr>
   </tbody>
@@ -282,6 +298,11 @@ Hardening:
   --stack-encoding          Encrypt values on the VM stack
   --mba                     Arithmetic obfuscation (mixed boolean arithmetic)
   --handler-fragmentation   Split handler logic into interleaved fragments
+  --string-atomization      Replace interpreter strings with encoded lookups
+  --polymorphic-decoder     Per-build randomized string decoding chain
+  --scattered-keys          Fragment key materials across closure scopes
+  --block-permutation       Shuffle bytecode basic block order
+  --opcode-mutation         Insert runtime handler table mutations
 
 Environment:
   --target &lt;env&gt;            Target environment: node, browser (default), browser-extension
@@ -438,6 +459,36 @@ await runVmObfuscation("dist/", {
       <td><code>boolean</code></td>
       <td><code>false</code></td>
       <td>Split opcode handlers into interleaved fragments</td>
+    </tr>
+    <tr>
+      <td><code>stringAtomization</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Replace all interpreter string literals with encoded table lookups (auto-enables <code>polymorphicDecoder</code>)</td>
+    </tr>
+    <tr>
+      <td><code>polymorphicDecoder</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Per-build randomized byte-operation chain for string decoding</td>
+    </tr>
+    <tr>
+      <td><code>scatteredKeys</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Fragment and scatter key materials across closure scopes</td>
+    </tr>
+    <tr>
+      <td><code>blockPermutation</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Shuffle bytecode basic block order within compiled functions</td>
+    </tr>
+    <tr>
+      <td><code>opcodeMutation</code></td>
+      <td><code>boolean</code></td>
+      <td><code>false</code></td>
+      <td>Insert runtime handler table mutations (auto-enables <code>rollingCipher</code>)</td>
     </tr>
     <tr>
       <td><code>debugLogging</code></td>
