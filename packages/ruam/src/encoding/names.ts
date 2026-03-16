@@ -363,7 +363,8 @@ const EXCLUDED_NAMES: ReadonlySet<string> = /*@__PURE__*/ (() => {
 	for (const ch of LETTERS) s.add(ch);
 
 	// Two-char handler locals / KEEP entries — these are hardcoded in
-	// handler case bodies and must not collide with RuntimeNames
+	// handler case bodies and builder functions and must not collide
+	// with RuntimeNames (which live at the same IIFE scope)
 	for (const n of [
 		"a1",
 		"a2",
@@ -388,6 +389,7 @@ const EXCLUDED_NAMES: ReadonlySet<string> = /*@__PURE__*/ (() => {
 		"ct",
 		"fn",
 		"ex",
+		"pk", // polymorphic decoder position key local
 	])
 		s.add(n);
 
@@ -629,6 +631,12 @@ const SHARED_NAME_KEYS = [
 	"spreadSym",
 	"hop",
 	"globalRef",
+	// String atomization names — the accessor, table, and cache live at
+	// shared IIFE scope.  Per-group interpreters must reserve these so
+	// obfuscateLocals never generates a parameter/local that shadows them.
+	"strTbl",
+	"strCache",
+	"strAcc",
 ] as const;
 
 /**
