@@ -46,6 +46,7 @@ import {
 	BOp,
 	UOp,
 } from "../nodes.js";
+import type { Name } from "../../naming/index.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -59,7 +60,7 @@ import { registry } from "./registry.js";
  * reference (Object.prototype.hasOwnProperty) at IIFE scope avoids
  * a 4-level property chain on every call.
  */
-function hasOwn(hopName: string, obj: JsNode, key: JsNode): JsNode {
+function hasOwn(hopName: Name, obj: JsNode, key: JsNode): JsNode {
 	return call(member(id(hopName), "call"), [obj, key]);
 }
 
@@ -78,22 +79,36 @@ function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.local("storedVal"), ctx.curSv()),
 		// If the value is not undefined and not TDZ sentinel, push directly
 		// (avoids the `in` prototype chain traversal entirely)
-		ifStmt(bin(BOp.Sneq, id(ctx.local("storedVal")), un(UOp.Void, lit(0))), [
-			// TDZ check: if storedVal === tdzSentinel, throw
-			ifStmt(bin(BOp.Seq, id(ctx.local("storedVal")), id(ctx.tdzSentinel)), [
-				throwStmt(
-					newExpr(id("ReferenceError"), [
-						bin(
-							BOp.Add,
-							bin(BOp.Add, lit("Cannot access '"), id(ctx.local("varName"))),
-							lit("' before initialization")
+		ifStmt(
+			bin(BOp.Sneq, id(ctx.local("storedVal")), un(UOp.Void, lit(0))),
+			[
+				// TDZ check: if storedVal === tdzSentinel, throw
+				ifStmt(
+					bin(
+						BOp.Seq,
+						id(ctx.local("storedVal")),
+						id(ctx.tdzSentinel)
+					),
+					[
+						throwStmt(
+							newExpr(id("ReferenceError"), [
+								bin(
+									BOp.Add,
+									bin(
+										BOp.Add,
+										lit("Cannot access '"),
+										id(ctx.local("varName"))
+									),
+									lit("' before initialization")
+								),
+							])
 						),
-					])
+					]
 				),
-			]),
-			exprStmt(ctx.push(id(ctx.local("storedVal")))),
-			breakStmt(),
-		]),
+				exprStmt(ctx.push(id(ctx.local("storedVal")))),
+				breakStmt(),
+			]
+		),
 		// Slow path: value was undefined — need `in` to distinguish
 		// "property exists with value undefined" from "property not found"
 		ifStmt(bin(BOp.In, id(ctx.local("varName")), id(ctx.SC)), [
@@ -129,21 +144,35 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
 		),
 		varDecl(ctx.local("found"), lit(false)),
 		whileStmt(id(ctx.local("scopeWalk")), [
-			ifStmt(hasOwn(ctx.hop, id(ctx.local("scopeWalk")), id(ctx.local("varName"))), [
-				exprStmt(assign(ctx.sv(), id(ctx.local("value")))),
-				exprStmt(assign(id(ctx.local("found")), lit(true))),
-				breakStmt(),
-			]),
+			ifStmt(
+				hasOwn(
+					ctx.hop,
+					id(ctx.local("scopeWalk")),
+					id(ctx.local("varName"))
+				),
+				[
+					exprStmt(assign(ctx.sv(), id(ctx.local("value")))),
+					exprStmt(assign(id(ctx.local("found")), lit(true))),
+					breakStmt(),
+				]
+			),
 			exprStmt(
 				assign(
 					id(ctx.local("scopeWalk")),
-					call(member(id("Object"), "getPrototypeOf"), [id(ctx.local("scopeWalk"))])
+					call(member(id("Object"), "getPrototypeOf"), [
+						id(ctx.local("scopeWalk")),
+					])
 				)
 			),
 		]),
 		// Global fallback
 		ifStmt(un(UOp.Not, id(ctx.local("found"))), [
-			exprStmt(assign(index(id(ctx.t("_g")), id(ctx.local("varName"))), id(ctx.local("value")))),
+			exprStmt(
+				assign(
+					index(id(ctx.t("_g")), id(ctx.local("varName"))),
+					id(ctx.local("value"))
+				)
+			),
 		]),
 		breakStmt(),
 	];
@@ -159,9 +188,10 @@ function STORE_SCOPED(ctx: HandlerCtx): JsNode[] {
 function declareVarHandler(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("varName"), index(id(ctx.C), id(ctx.O))),
-		ifStmt(un(UOp.Not, hasOwn(ctx.hop, id(ctx.SC), id(ctx.local("varName")))), [
-			exprStmt(assign(ctx.curSv(), un(UOp.Void, lit(0)))),
-		]),
+		ifStmt(
+			un(UOp.Not, hasOwn(ctx.hop, id(ctx.SC), id(ctx.local("varName")))),
+			[exprStmt(assign(ctx.curSv(), un(UOp.Void, lit(0))))]
+		),
 		breakStmt(),
 	];
 }
@@ -234,7 +264,11 @@ function TDZ_CHECK(ctx: HandlerCtx): JsNode[] {
 				newExpr(id("ReferenceError"), [
 					bin(
 						BOp.Add,
-						bin(BOp.Add, lit("Cannot access '"), id(ctx.local("varName"))),
+						bin(
+							BOp.Add,
+							lit("Cannot access '"),
+							id(ctx.local("varName"))
+						),
 						lit("' before initialization")
 					),
 				])
@@ -304,7 +338,11 @@ function DELETE_SCOPED(ctx: HandlerCtx): JsNode[] {
 function LOAD_GLOBAL(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("global"), id(ctx.t("_g"))),
-		exprStmt(ctx.push(index(id(ctx.local("global")), index(id(ctx.C), id(ctx.O))))),
+		exprStmt(
+			ctx.push(
+				index(id(ctx.local("global")), index(id(ctx.C), id(ctx.O)))
+			)
+		),
 		breakStmt(),
 	];
 }
@@ -314,7 +352,10 @@ function STORE_GLOBAL(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("global"), id(ctx.t("_g"))),
 		exprStmt(
-			assign(index(id(ctx.local("global")), index(id(ctx.C), id(ctx.O))), ctx.pop())
+			assign(
+				index(id(ctx.local("global")), index(id(ctx.C), id(ctx.O))),
+				ctx.pop()
+			)
 		),
 		breakStmt(),
 	];
@@ -333,7 +374,11 @@ function TYPEOF_GLOBAL(ctx: HandlerCtx): JsNode[] {
 			exprStmt(ctx.push(un(UOp.Typeof, ctx.curSv()))),
 			breakStmt(),
 		]),
-		exprStmt(ctx.push(un(UOp.Typeof, index(id(ctx.t("_g")), id(ctx.local("varName")))))),
+		exprStmt(
+			ctx.push(
+				un(UOp.Typeof, index(id(ctx.t("_g")), id(ctx.local("varName"))))
+			)
+		),
 		breakStmt(),
 	];
 }

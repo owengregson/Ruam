@@ -685,7 +685,7 @@ function buildExecFunction(
 			cases,
 			temps,
 			htName,
-			ctx.PH,
+			ctx.PH as string,
 			opts.isAsync,
 			returnMech,
 			returnTag
@@ -695,7 +695,7 @@ function buildExecFunction(
 			cases,
 			temps,
 			htName,
-			ctx.PH,
+			ctx.PH as string,
 			opts.isAsync,
 			returnMech,
 			returnTag
@@ -706,7 +706,7 @@ function buildExecFunction(
 			cases,
 			temps,
 			htName,
-			ctx.PH,
+			ctx.PH as string,
 			opts.isAsync,
 			opts.asyncGroupOffset
 		);
