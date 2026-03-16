@@ -81,7 +81,7 @@ export const PRESETS: Record<
 		polymorphicDecoder: true,
 		scatteredKeys: true,
 		blockPermutation: true,
-		opcodeMutation: false,
+		opcodeMutation: true,
 	},
 };
 

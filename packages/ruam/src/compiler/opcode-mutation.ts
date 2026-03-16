@@ -16,7 +16,7 @@
  */
 
 import type { BytecodeUnit, Instruction } from "../types.js";
-import { Op, OPCODE_COUNT } from "./opcodes.js";
+import { Op, OPCODE_COUNT, ALL_JUMP_OPS, PACKED_JUMP_OPS } from "./opcodes.js";
 import {
 	LCG_MULTIPLIER,
 	LCG_INCREMENT,
@@ -90,12 +90,57 @@ export class MutationState {
 	}
 }
 
+// --- Loop detection ---
+
+/**
+ * Build a set of IPs that are inside loop bodies (backward jump targets).
+ *
+ * A backward jump is any jump instruction whose target IP <= its own IP.
+ * The range [target, jumpIP] is a loop body. Any IP inside this range
+ * must not receive a MUTATE because MUTATEs inside loops execute multiple
+ * times, but adjustEncodingForMutations assumes single execution.
+ */
+function findLoopBodyIPs(
+	instrs: readonly Instruction[],
+	jumpTable: Record<number, number>
+): Set<number> {
+	const inLoop = new Set<number>();
+
+	for (let ip = 0; ip < instrs.length; ip++) {
+		const instr = instrs[ip]!;
+		let targetIP: number | undefined;
+
+		if (ALL_JUMP_OPS.has(instr.opcode)) {
+			// Operand is a direct IP target (or jump table label if table is used)
+			targetIP = jumpTable[instr.operand] ?? instr.operand;
+		} else if (PACKED_JUMP_OPS.has(instr.opcode)) {
+			// Target packed in upper bits (e.g. TRY_PUSH, REG_LT_CONST_JF)
+			const packedTarget = (instr.operand >>> 16) & 0xffff;
+			targetIP = jumpTable[packedTarget] ?? packedTarget;
+		}
+
+		if (targetIP !== undefined && targetIP <= ip) {
+			// Backward jump: mark entire range [targetIP, ip] as in-loop
+			for (let j = targetIP; j <= ip; j++) {
+				inLoop.add(j);
+			}
+		}
+	}
+
+	return inLoop;
+}
+
 /**
  * Insert MUTATE instructions into a compiled bytecode unit.
  *
  * Inserts at pseudo-random intervals (20-50 instructions) to break up
  * the instruction stream. Each MUTATE carries a seed operand that
  * determines the specific permutation.
+ *
+ * MUTATE instructions are only inserted at IPs that execute exactly once
+ * (outside loop bodies). This is critical because adjustEncodingForMutations
+ * assumes each MUTATE executes once; a MUTATE inside a loop would permute
+ * the handler table on every iteration, diverging from compile-time state.
  *
  * @param unit - The bytecode unit to modify (mutated in-place)
  * @param seed - Per-build seed for deterministic placement
@@ -107,6 +152,15 @@ export function insertMutationOpcodes(
 ): number[] {
 	const instrs = unit.instructions;
 	if (instrs.length < MIN_MUTATION_INTERVAL * 2) return [];
+
+	// Skip units that have child units (closures, inner functions).
+	// Children share the parent's handler table `_ht` at runtime.
+	// MUTATEs in the parent permute `_ht`, but children are encoded
+	// against the initial shuffleMap — their dispatch would be wrong.
+	if (unit.childUnits.length > 0) return [];
+
+	// Identify IPs inside loop bodies — MUTATE must not go there
+	const loopIPs = findLoopBodyIPs(instrs, unit.jumpTable);
 
 	let state = (seed ^ GOLDEN_RATIO_PRIME) >>> 0;
 	const mutationSeeds: number[] = [];
@@ -122,7 +176,8 @@ export function insertMutationOpcodes(
 	let instrCount = 0;
 	for (let ip = 0; ip < instrs.length; ip++) {
 		// Insert mutation before this instruction if interval reached
-		if (instrCount >= nextMutation && ip > 0) {
+		// AND we're not inside a loop body
+		if (instrCount >= nextMutation && ip > 0 && !loopIPs.has(ip)) {
 			// Generate mutation seed
 			state = lcgNext(state);
 			const mutSeed = state >>> 0;
@@ -161,7 +216,8 @@ export function insertMutationOpcodes(
 				(MAX_MUTATION_INTERVAL - MIN_MUTATION_INTERVAL + 1));
 
 		for (let oldIp = 0; oldIp < instrs.length; oldIp++) {
-			if (count >= nextMut2 && oldIp > 0) {
+			// Must mirror the exact insertion condition from above
+			if (count >= nextMut2 && oldIp > 0 && !loopIPs.has(oldIp)) {
 				newIp++; // Skip the MUTATE instruction
 				count = 0;
 				st2 = lcgNext(st2); // mutSeed
@@ -176,8 +232,23 @@ export function insertMutationOpcodes(
 			count++;
 		}
 
-		// Patch jump targets in new instructions
-		// We need to import JUMP_OPS etc. — defer to the caller for patching
+		// Patch jump instruction operands (direct IP targets) in new instructions
+		for (const instr of newInstrs) {
+			if (instr.opcode === Op.MUTATE) continue;
+			if (ALL_JUMP_OPS.has(instr.opcode)) {
+				const newTarget = ipMap.get(instr.operand);
+				if (newTarget !== undefined) {
+					instr.operand = newTarget;
+				}
+			} else if (PACKED_JUMP_OPS.has(instr.opcode)) {
+				const lo = instr.operand & 0xffff;
+				const hi = (instr.operand >>> 16) & 0xffff;
+				const newHi = ipMap.get(hi);
+				if (newHi !== undefined) {
+					instr.operand = (newHi << 16) | lo;
+				}
+			}
+		}
 		unit.instructions = newInstrs;
 
 		// Patch jump table

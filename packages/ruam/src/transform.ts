@@ -212,6 +212,7 @@ export function obfuscateCode(
 				usedOpcodes,
 				mixedBooleanArithmetic,
 				handlerFragmentation,
+				opcodeMutation,
 			},
 			undefined,
 			hasAsyncUnits,
@@ -246,6 +247,7 @@ export function obfuscateCode(
 		polymorphicDecoder,
 		stringAtomization,
 		scatteredKeys,
+		opcodeMutation,
 		alphabet,
 		hasAsyncUnits,
 		structuralChoices,
@@ -912,6 +914,7 @@ function assembleShielded(
 					usedOpcodes: gm.usedOpcodes,
 					mixedBooleanArithmetic: opts.mixedBooleanArithmetic,
 					handlerFragmentation: opts.handlerFragmentation,
+					opcodeMutation: opts.opcodeMutation,
 				},
 				undefined,
 				gm.hasAsyncUnits
@@ -952,6 +955,7 @@ function assembleShielded(
 		polymorphicDecoder: opts.polymorphicDecoder,
 		stringAtomization: opts.stringAtomization,
 		scatteredKeys: opts.scatteredKeys,
+		opcodeMutation: opts.opcodeMutation,
 		alphabet: shieldedAlphabet,
 	});
 

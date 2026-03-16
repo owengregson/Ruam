@@ -77,7 +77,7 @@ registry.set(Op.MUTATE, (ctx: HandlerCtx): JsNode[] => {
 
 		// for (var _mk = 0; _mk < SWAPS; _mk++)
 		forStmt(
-			assign(id(mk), lit(0)),
+			varDecl(mk, lit(0)),
 			bin(BOp.Lt, id(mk), lit(SWAPS_PER_MUTATION)),
 			update(UpOp.Inc, true, id(mk)),
 			[

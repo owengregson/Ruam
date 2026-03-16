@@ -70,6 +70,7 @@ export interface InterpreterBuildOptions {
 	usedOpcodes?: Set<number>;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
+	opcodeMutation?: boolean;
 }
 
 /** Result from building interpreter functions. */
@@ -325,6 +326,22 @@ function buildHandlerTableMeta(
 			physicalOp: allPhysicalOps[i]!,
 			handlerIdx: handlerIndices[i]!,
 		});
+	}
+
+	// When opcode mutation is active, the MUTATE handler swaps _ht entries
+	// at runtime.  Sparse holes (positions with no handler) become undefined,
+	// and swapping undefined into a valid position corrupts dispatch — the
+	// exec loop's try/catch catches the resulting TypeError but continues
+	// the for(;;) loop, hanging forever.  Fix: pad _ht with dummy entries
+	// for every physical opcode not already included, mapping them to
+	// handler index 0.  The decode loop then produces a fully dense array.
+	if (interpOpts.opcodeMutation) {
+		const includedSet = new Set(allPhysicalOps);
+		for (let p = 0; p < shuffleMap.length; p++) {
+			if (!includedSet.has(p)) {
+				entries.push({ physicalOp: p, handlerIdx: 0 });
+			}
+		}
 	}
 
 	// If handler fragmentation will be applied, we need to compute the

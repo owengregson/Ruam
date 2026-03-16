@@ -98,6 +98,8 @@ export function generateVmRuntime(options: {
 	stringAtomization?: boolean;
 	/** Scatter key material fragments across the output. */
 	scatteredKeys?: boolean;
+	/** Enable runtime opcode mutation (dense handler table required). */
+	opcodeMutation?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** Whether any compiled units are async (controls async interpreter emit). */
@@ -127,6 +129,7 @@ export function generateVmRuntime(options: {
 		polymorphicDecoder = false,
 		stringAtomization = false,
 		scatteredKeys = false,
+		opcodeMutation = false,
 		alphabet,
 		hasAsyncUnits = true,
 		structuralChoices,
@@ -248,6 +251,7 @@ export function generateVmRuntime(options: {
 			usedOpcodes,
 			mixedBooleanArithmetic,
 			handlerFragmentation,
+			opcodeMutation,
 		},
 		split,
 		hasAsyncUnits,
@@ -448,6 +452,8 @@ export function generateShieldedVmRuntime(options: {
 	stringAtomization?: boolean;
 	/** Scatter key material fragments across the output. */
 	scatteredKeys?: boolean;
+	/** Enable runtime opcode mutation (dense handler table required). */
+	opcodeMutation?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 }): ShieldedVmRuntimeResult {
@@ -466,6 +472,7 @@ export function generateShieldedVmRuntime(options: {
 		polymorphicDecoder = false,
 		stringAtomization = false,
 		scatteredKeys = false,
+		opcodeMutation = false,
 		alphabet,
 	} = options;
 
@@ -591,6 +598,7 @@ export function generateShieldedVmRuntime(options: {
 				usedOpcodes: group.usedOpcodes,
 				mixedBooleanArithmetic,
 				handlerFragmentation,
+				opcodeMutation,
 			},
 			groupSplit,
 			group.hasAsyncUnits ?? true
