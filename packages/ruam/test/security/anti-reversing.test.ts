@@ -112,14 +112,19 @@ describe("anti-reversing properties", () => {
 			const out1 = obfuscateCode(sampleCode);
 			const out2 = obfuscateCode(sampleCode);
 
-			// Extract function names (short identifiers like et, qz, l)
-			const fnPattern = /function ([a-z][a-z0-9]*)\(/g;
-			const fns1 = [...out1.matchAll(fnPattern)].map((m) => m[1]);
-			const fns2 = [...out2.matchAll(fnPattern)].map((m) => m[1]);
+			// Extract all short identifiers (var declarations and function names)
+			// Use var pattern because structural choices may convert FnDecl→var=FnExpr,
+			// changing the function keyword count between builds.
+			const varPattern = /var ([_a-z][_a-z0-9]*)/g;
+			const vars1 = [...out1.matchAll(varPattern)].map((m) => m[1]);
+			const vars2 = [...out2.matchAll(varPattern)].map((m) => m[1]);
 
-			// Should have the same count but different names
-			expect(fns1.length).toBe(fns2.length);
-			expect(fns1).not.toEqual(fns2);
+			// Both should have many variable declarations
+			expect(vars1.length).toBeGreaterThan(10);
+			expect(vars2.length).toBeGreaterThan(10);
+
+			// The variable names should differ (different CSPRNG seeds → different LCG names)
+			expect(vars1).not.toEqual(vars2);
 		});
 
 		it("two builds produce different bytecode encodings", () => {
