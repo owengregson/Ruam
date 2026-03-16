@@ -13,26 +13,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	breakStmt,
-	varDecl,
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	exprStmt,
-	ifStmt,
-	whileStmt,
-	forStmt,
-	obj,
-	arr,
-	update,
-} from "../nodes.js";
+import { type JsNode, breakStmt, varDecl, id, lit, bin, un, assign, call, member, index, exprStmt, ifStmt, whileStmt, forStmt, obj, arr, update, BOp, UOp, UpOp } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 
 // --- Simple handler ---
@@ -54,7 +35,7 @@ function DESTRUCTURE_BIND(_ctx: HandlerCtx): JsNode[] {
 function DESTRUCTURE_DEFAULT(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
-		ifStmt(bin("===", id("v"), un("void", lit(0))), [
+		ifStmt(bin(BOp.Seq, id("v"), un(UOp.Void, lit(0))), [
 			exprStmt(ctx.pop()),
 			varDecl("def", index(id(ctx.C), id(ctx.O))),
 			exprStmt(ctx.push(id("def"))),
@@ -77,7 +58,7 @@ function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.pop()),
 		varDecl("rest", arr()),
-		whileStmt(un("!", member(id("iterObj"), ctx.t("_done"))), [
+		whileStmt(un(UOp.Not, member(id("iterObj"), ctx.t("_done"))), [
 			exprStmt(
 				call(member(id("rest"), "push"), [
 					member(id("iterObj"), ctx.t("_value")),
@@ -90,7 +71,7 @@ function DESTRUCTURE_REST_ARRAY(ctx: HandlerCtx): JsNode[] {
 			exprStmt(
 				assign(
 					member(id("iterObj"), ctx.t("_done")),
-					un("!", un("!", member(id("nxt"), "done")))
+					un(UOp.Not, un(UOp.Not, member(id("nxt"), "done")))
 				)
 			),
 			exprStmt(
@@ -124,12 +105,11 @@ function DESTRUCTURE_REST_OBJECT(ctx: HandlerCtx): JsNode[] {
 		varDecl("keys", call(member(id("Object"), "keys"), [id("src")])),
 		forStmt(
 			varDecl("ki", lit(0)),
-			bin("<", id("ki"), member(id("keys"), "length")),
-			update("++", false, id("ki")),
+			bin(BOp.Lt, id("ki"), member(id("keys"), "length")),
+			update(UpOp.Inc, false, id("ki")),
 			[
 				ifStmt(
-					bin(
-						"<",
+					bin(BOp.Lt,
 						call(member(id("excludeKeys"), "indexOf"), [
 							index(id("keys"), id("ki")),
 						]),
@@ -174,7 +154,7 @@ function ARRAY_PATTERN_INIT(ctx: HandlerCtx): JsNode[] {
 					[ctx.t("_iter"), id("iter")],
 					[
 						ctx.t("_done"),
-						un("!", un("!", member(id("first"), "done"))),
+						un(UOp.Not, un(UOp.Not, member(id("first"), "done"))),
 					],
 					[ctx.t("_value"), member(id("first"), "value")]
 				)

@@ -16,26 +16,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	breakStmt,
-	forIn,
-	obj,
-	arr,
-	awaitExpr,
-	update,
-} from "../nodes.js";
+import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, breakStmt, forIn, obj, arr, awaitExpr, update, UOp, UpOp, BOp } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -70,7 +51,7 @@ function GET_ITERATOR(ctx: HandlerCtx): JsNode[] {
 					[ctx.t("_iter"), id("iter")],
 					[
 						ctx.t("_done"),
-						un("!", un("!", member(id("first"), "done"))),
+						un(UOp.Not, un(UOp.Not, member(id("first"), "done"))),
 					],
 					[ctx.t("_value"), member(id("first"), "value")]
 				)
@@ -99,7 +80,7 @@ function ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			assign(
 				member(id("iterObj"), ctx.t("_done")),
-				un("!", un("!", member(id("nxt"), "done")))
+				un(UOp.Not, un(UOp.Not, member(id("nxt"), "done")))
 			)
 		),
 		exprStmt(
@@ -119,7 +100,7 @@ function ITER_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.peek()),
 		exprStmt(
-			ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))
+			ctx.push(un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done")))))
 		),
 		breakStmt(),
 	];
@@ -162,7 +143,7 @@ function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
 		varDecl("iterObj", ctx.peek()),
 		exprStmt(ctx.push(member(id("iterObj"), ctx.t("_value")))),
 		exprStmt(
-			ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))
+			ctx.push(un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done")))))
 		),
 		breakStmt(),
 	];
@@ -202,7 +183,7 @@ function FORIN_NEXT(ctx: HandlerCtx): JsNode[] {
 			ctx.push(
 				index(
 					member(id("fi"), ctx.t("_keys")),
-					update("++", false, member(id("fi"), ctx.t("_idx")))
+					update(UpOp.Inc, false, member(id("fi"), ctx.t("_idx")))
 				)
 			)
 		),
@@ -218,8 +199,7 @@ function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
 		varDecl("fi", ctx.peek()),
 		exprStmt(
 			ctx.push(
-				bin(
-					">=",
+				bin(BOp.Gte,
 					member(id("fi"), ctx.t("_idx")),
 					member(member(id("fi"), ctx.t("_keys")), "length")
 				)
@@ -241,8 +221,7 @@ function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
 		varDecl("iterable", ctx.pop()),
 		varDecl(
 			"method",
-			bin(
-				"||",
+			bin(BOp.Or,
 				index(id("iterable"), member(id("Symbol"), "asyncIterator")),
 				index(id("iterable"), member(id("Symbol"), "iterator"))
 			)
@@ -253,7 +232,7 @@ function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
 				obj(
 					[ctx.t("_iter"), id("iter")],
 					[ctx.t("_done"), lit(false)],
-					[ctx.t("_value"), un("void", lit(0))],
+					[ctx.t("_value"), un(UOp.Void, lit(0))],
 					[ctx.t("_async"), lit(true)]
 				)
 			)
@@ -280,7 +259,7 @@ function ASYNC_ITER_NEXT(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			assign(
 				member(id("iterObj"), ctx.t("_done")),
-				un("!", un("!", member(id("result"), "done")))
+				un(UOp.Not, un(UOp.Not, member(id("result"), "done")))
 			)
 		),
 		exprStmt(
@@ -300,7 +279,7 @@ function ASYNC_ITER_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.peek()),
 		exprStmt(
-			ctx.push(un("!", un("!", member(id("iterObj"), ctx.t("_done")))))
+			ctx.push(un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done")))))
 		),
 		breakStmt(),
 	];
@@ -358,7 +337,7 @@ function FOR_AWAIT_NEXT(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			assign(
 				member(id("iterObj"), ctx.t("_done")),
-				un("!", un("!", member(id("result"), "done")))
+				un(UOp.Not, un(UOp.Not, member(id("result"), "done")))
 			)
 		),
 		exprStmt(
@@ -385,7 +364,7 @@ function CREATE_ASYNC_FROM_SYNC_ITER(ctx: HandlerCtx): JsNode[] {
 				obj(
 					[ctx.t("_iter"), id("it")],
 					[ctx.t("_done"), lit(false)],
-					[ctx.t("_value"), un("void", lit(0))]
+					[ctx.t("_value"), un(UOp.Void, lit(0))]
 				)
 			)
 		),

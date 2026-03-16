@@ -14,23 +14,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	lit,
-	bin,
-	un,
-	exprStmt,
-	assign,
-	ifStmt,
-	varDecl,
-	breakStmt,
-	returnStmt,
-	throwStmt,
-	call,
-	member,
-	index,
-} from "../nodes.js";
+import { type JsNode, id, lit, bin, un, exprStmt, assign, ifStmt, varDecl, breakStmt, returnStmt, throwStmt, call, member, index, BOp, UOp } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { debugTrace } from "./helpers.js";
 
@@ -38,7 +22,7 @@ import { debugTrace } from "./helpers.js";
 
 /** `IP=O*2;` — standard jump target assignment */
 function ipAssign(ctx: HandlerCtx): JsNode {
-	return exprStmt(assign(id(ctx.IP), bin("*", id(ctx.O), lit(2))));
+	return exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id(ctx.O), lit(2))));
 }
 
 // --- Jump handlers ---
@@ -55,7 +39,7 @@ function JMP_TRUE(ctx: HandlerCtx): JsNode[] {
 
 /** `if(!S.pop())IP=O*2;break;` */
 function JMP_FALSE(ctx: HandlerCtx): JsNode[] {
-	return [ifStmt(un("!", ctx.pop()), [ipAssign(ctx)]), breakStmt()];
+	return [ifStmt(un(UOp.Not, ctx.pop()), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `{var v=S.pop();if(v===null||v===void 0)IP=O*2;break;}` */
@@ -63,10 +47,9 @@ function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.pop()),
 		ifStmt(
-			bin(
-				"||",
-				bin("===", id("v"), lit(null)),
-				bin("===", id("v"), un("void", lit(0)))
+			bin(BOp.Or,
+				bin(BOp.Seq, id("v"), lit(null)),
+				bin(BOp.Seq, id("v"), un(UOp.Void, lit(0)))
 			),
 			[ipAssign(ctx)]
 		),
@@ -78,7 +61,7 @@ function JMP_NULLISH(ctx: HandlerCtx): JsNode[] {
 function JMP_UNDEFINED(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.pop()),
-		ifStmt(bin("===", id("v"), un("void", lit(0))), [ipAssign(ctx)]),
+		ifStmt(bin(BOp.Seq, id("v"), un(UOp.Void, lit(0))), [ipAssign(ctx)]),
 		breakStmt(),
 	];
 }
@@ -90,7 +73,7 @@ function JMP_TRUE_KEEP(ctx: HandlerCtx): JsNode[] {
 
 /** `if(!S[S.length-1])IP=O*2;break;` — keeps value on stack */
 function JMP_FALSE_KEEP(ctx: HandlerCtx): JsNode[] {
-	return [ifStmt(un("!", ctx.peek()), [ipAssign(ctx)]), breakStmt()];
+	return [ifStmt(un(UOp.Not, ctx.peek()), [ipAssign(ctx)]), breakStmt()];
 }
 
 /** `{var v=S[S.length-1];if(v===null||v===void 0)IP=O*2;break;}` — keeps value on stack */
@@ -98,10 +81,9 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
 		ifStmt(
-			bin(
-				"||",
-				bin("===", id("v"), lit(null)),
-				bin("===", id("v"), un("void", lit(0)))
+			bin(BOp.Or,
+				bin(BOp.Seq, id("v"), lit(null)),
+				bin(BOp.Seq, id("v"), un(UOp.Void, lit(0)))
 			),
 			[ipAssign(ctx)]
 		),
@@ -126,21 +108,20 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.t("_rv"), ctx.pop()),
 		...debugTrace(ctx, "RETURN", lit("value="), id(ctx.t("_rv"))),
 		ifStmt(
-			bin(
-				"&&",
+			bin(BOp.And,
 				id(ctx.EX),
-				bin(">", member(id(ctx.EX), "length"), lit(0))
+				bin(BOp.Gt, member(id(ctx.EX), "length"), lit(0))
 			),
 			[
 				varDecl(
 					ctx.t("_h"),
 					index(
 						id(ctx.EX),
-						bin("-", member(id(ctx.EX), "length"), lit(1))
+						bin(BOp.Sub, member(id(ctx.EX), "length"), lit(1))
 					)
 				),
 				ifStmt(
-					bin(">=", member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
+					bin(BOp.Gte, member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
 					[
 						exprStmt(assign(id(ctx.CT), lit(1))),
 						exprStmt(assign(id(ctx.CV), id(ctx.t("_rv")))),
@@ -154,8 +135,7 @@ function RETURN(ctx: HandlerCtx): JsNode[] {
 						exprStmt(
 							assign(
 								id(ctx.IP),
-								bin(
-									"*",
+								bin(BOp.Mul,
 									member(id(ctx.t("_h")), ctx.t("_fi")),
 									lit(2)
 								)
@@ -183,24 +163,23 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 	return [
 		...debugTrace(ctx, "RETURN_VOID"),
 		ifStmt(
-			bin(
-				"&&",
+			bin(BOp.And,
 				id(ctx.EX),
-				bin(">", member(id(ctx.EX), "length"), lit(0))
+				bin(BOp.Gt, member(id(ctx.EX), "length"), lit(0))
 			),
 			[
 				varDecl(
 					ctx.t("_h"),
 					index(
 						id(ctx.EX),
-						bin("-", member(id(ctx.EX), "length"), lit(1))
+						bin(BOp.Sub, member(id(ctx.EX), "length"), lit(1))
 					)
 				),
 				ifStmt(
-					bin(">=", member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
+					bin(BOp.Gte, member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
 					[
 						exprStmt(assign(id(ctx.CT), lit(1))),
-						exprStmt(assign(id(ctx.CV), un("void", lit(0)))),
+						exprStmt(assign(id(ctx.CV), un(UOp.Void, lit(0)))),
 						exprStmt(call(member(id(ctx.EX), "pop"), [])),
 						exprStmt(
 							assign(
@@ -211,8 +190,7 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 						exprStmt(
 							assign(
 								id(ctx.IP),
-								bin(
-									"*",
+								bin(BOp.Mul,
 									member(id(ctx.t("_h")), ctx.t("_fi")),
 									lit(2)
 								)
@@ -223,7 +201,7 @@ function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 				),
 			]
 		),
-		returnStmt(un("void", lit(0))),
+		returnStmt(un(UOp.Void, lit(0))),
 	];
 }
 

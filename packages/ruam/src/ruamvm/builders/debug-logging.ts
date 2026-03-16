@@ -12,25 +12,7 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
-import {
-	fn,
-	varDecl,
-	id,
-	lit,
-	bin,
-	obj,
-	arr,
-	spread,
-	member,
-	index,
-	call,
-	ifStmt,
-	exprStmt,
-	returnStmt,
-	assign,
-	ternary,
-	un,
-} from "../nodes.js";
+import { fn, varDecl, id, lit, bin, obj, arr, spread, member, index, call, ifStmt, exprStmt, returnStmt, assign, ternary, un, BOp, UOp } from "../nodes.js";
 import { Op, OPCODE_COUNT } from "../../compiler/opcodes.js";
 
 // --- Builder ---
@@ -128,17 +110,15 @@ export function buildDebugLogging(
 		[],
 		[
 			// if(!cfg.enabled)return;
-			ifStmt(un("!", cfgEnabled), [returnStmt()]),
+			ifStmt(un(UOp.Not, cfgEnabled), [returnStmt()]),
 			// if(cfg._count>=cfg.maxLogs){...return;}
-			ifStmt(bin(">=", cfgCount, cfgMaxLogs), [
+			ifStmt(bin(BOp.Gte, cfgCount, cfgMaxLogs), [
 				// if(cfg._count===cfg.maxLogs){console.warn(...);cfg._count++;}
-				ifStmt(bin("===", cfgCount, cfgMaxLogs), [
+				ifStmt(bin(BOp.Seq, cfgCount, cfgMaxLogs), [
 					exprStmt(
 						call(member(console_, "warn"), [
-							bin(
-								"+",
-								bin(
-									"+",
+							bin(BOp.Add,
+								bin(BOp.Add,
 									lit("[VM_DBG] max logs reached ("),
 									cfgMaxLogs
 								),
@@ -146,12 +126,12 @@ export function buildDebugLogging(
 							),
 						])
 					),
-					exprStmt(assign(cfgCount, bin("+", cfgCount, lit(1)))),
+					exprStmt(assign(cfgCount, bin(BOp.Add, cfgCount, lit(1)))),
 				]),
 				returnStmt(),
 			]),
 			// cfg._count++;
-			exprStmt(assign(cfgCount, bin("+", cfgCount, lit(1)))),
+			exprStmt(assign(cfgCount, bin(BOp.Add, cfgCount, lit(1)))),
 			// var args=[...arguments];
 			varDecl("args", arr(spread(id("arguments")))),
 			// console.log('[VM_DBG]',...args);
@@ -199,28 +179,27 @@ export function buildDebugLogging(
 		[
 			// if(!cfg.enabled||cfg.levels[cfg.level]>0)return;
 			ifStmt(
-				bin(
-					"||",
-					un("!", cfgEnabled),
-					bin(">", index(cfgLevels, cfgLevel), lit(0))
+				bin(BOp.Or,
+					un(UOp.Not, cfgEnabled),
+					bin(BOp.Gt, index(cfgLevels, cfgLevel), lit(0))
 				),
 				[returnStmt()]
 			),
 			// if(cfg._count>=cfg.maxLogs)return;
-			ifStmt(bin(">=", cfgCount, cfgMaxLogs), [returnStmt()]),
+			ifStmt(bin(BOp.Gte, cfgCount, cfgMaxLogs), [returnStmt()]),
 			// cfg._count++;
-			exprStmt(assign(cfgCount, bin("+", cfgCount, lit(1)))),
+			exprStmt(assign(cfgCount, bin(BOp.Add, cfgCount, lit(1)))),
 			// var name=cfg._opNames[OP]||('OP_'+OP);
 			varDecl(
 				"name",
-				bin("||", index(cfgOpNames, opId), bin("+", lit("OP_"), opId))
+				bin(BOp.Or, index(cfgOpNames, opId), bin(BOp.Add, lit("OP_"), opId))
 			),
 			// var topStr='(empty)';
 			varDecl("topStr", lit("(empty)")),
 			// if(S.length>0){...}
-			ifStmt(bin(">", sLen, lit(0)), [
+			ifStmt(bin(BOp.Gt, sLen, lit(0)), [
 				// var top=S[S.length-1];
-				varDecl("top", index(sId, bin("-", sLen, lit(1)))),
+				varDecl("top", index(sId, bin(BOp.Sub, sLen, lit(1)))),
 				// topStr = typeof top==='function' ? '[fn'+(top.name?':'+top.name:'')+']'
 				//        : typeof top==='object'&&top!==null ? '[obj:'+Object.keys(top).slice(0,3).join(',')+']'
 				//        : String(top);
@@ -228,17 +207,14 @@ export function buildDebugLogging(
 					assign(
 						topStrVar,
 						ternary(
-							bin("===", un("typeof", topVar), lit("function")),
+							bin(BOp.Seq, un(UOp.Typeof, topVar), lit("function")),
 							// '[fn'+(top.name?':'+top.name:'')+']'
-							bin(
-								"+",
-								bin(
-									"+",
+							bin(BOp.Add,
+								bin(BOp.Add,
 									lit("[fn"),
 									ternary(
 										member(topVar, "name"),
-										bin(
-											"+",
+										bin(BOp.Add,
 											lit(":"),
 											member(topVar, "name")
 										),
@@ -249,20 +225,16 @@ export function buildDebugLogging(
 							),
 							// typeof top==='object'&&top!==null ? '[obj:'+...+']' : String(top)
 							ternary(
-								bin(
-									"&&",
-									bin(
-										"===",
-										un("typeof", topVar),
+								bin(BOp.And,
+									bin(BOp.Seq,
+										un(UOp.Typeof, topVar),
 										lit("object")
 									),
-									bin("!==", topVar, lit(null))
+									bin(BOp.Sneq, topVar, lit(null))
 								),
 								// '[obj:'+Object.keys(top).slice(0,3).join(',')+']'
-								bin(
-									"+",
-									bin(
-										"+",
+								bin(BOp.Add,
+									bin(BOp.Add,
 										lit("[obj:"),
 										call(
 											member(
@@ -293,12 +265,11 @@ export function buildDebugLogging(
 					)
 				),
 				// if(topStr.length>60)topStr=topStr.slice(0,60)+'...';
-				ifStmt(bin(">", member(topStrVar, "length"), lit(60)), [
+				ifStmt(bin(BOp.Gt, member(topStrVar, "length"), lit(60)), [
 					exprStmt(
 						assign(
 							topStrVar,
-							bin(
-								"+",
+							bin(BOp.Add,
 								call(member(topStrVar, "slice"), [
 									lit(0),
 									lit(60),
@@ -313,15 +284,13 @@ export function buildDebugLogging(
 			varDecl("constStr", lit("")),
 			// if(typeof C[O]==='string')constStr=' c="'+C[O].slice(0,30)+'"';
 			ifStmt(
-				bin("===", un("typeof", cAtO), lit("string")),
+				bin(BOp.Seq, un(UOp.Typeof, cAtO), lit("string")),
 				[
 					exprStmt(
 						assign(
 							constStrVar,
-							bin(
-								"+",
-								bin(
-									"+",
+							bin(BOp.Add,
+								bin(BOp.Add,
 									lit(' c="'),
 									call(member(cAtO, "slice"), [
 										lit(0),
@@ -335,9 +304,9 @@ export function buildDebugLogging(
 				],
 				[
 					// else if(typeof C[O]==='number')constStr=' c='+C[O];
-					ifStmt(bin("===", un("typeof", cAtO), lit("number")), [
+					ifStmt(bin(BOp.Seq, un(UOp.Typeof, cAtO), lit("number")), [
 						exprStmt(
-							assign(constStrVar, bin("+", lit(" c="), cAtO))
+							assign(constStrVar, bin(BOp.Add, lit(" c="), cAtO))
 						),
 					]),
 				]
@@ -345,22 +314,14 @@ export function buildDebugLogging(
 			// console.log('[VM_TRACE] '+name+' op='+O+constStr+' len='+S.length+' top='+topStr);
 			exprStmt(
 				call(member(console_, "log"), [
-					bin(
-						"+",
-						bin(
-							"+",
-							bin(
-								"+",
-								bin(
-									"+",
-									bin(
-										"+",
-										bin(
-											"+",
-											bin(
-												"+",
-												bin(
-													"+",
+					bin(BOp.Add,
+						bin(BOp.Add,
+							bin(BOp.Add,
+								bin(BOp.Add,
+									bin(BOp.Add,
+										bin(BOp.Add,
+											bin(BOp.Add,
+												bin(BOp.Add,
 													lit("[VM_TRACE] "),
 													nameVar
 												),

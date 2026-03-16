@@ -16,17 +16,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	exprStmt,
-	breakStmt,
-	un,
-	lit,
-	bin,
-	assign,
-	awaitExpr,
-	ternary,
-} from "../nodes.js";
+import { type JsNode, exprStmt, breakStmt, un, lit, bin, assign, awaitExpr, ternary, BOp, UOp } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 import { debugTrace } from "./helpers.js";
@@ -39,7 +29,7 @@ import { debugTrace } from "./helpers.js";
  * `S[++P]=void 0;break;`
  */
 function YIELD_HANDLER(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(ctx.push(un("void", lit(0)))), breakStmt()];
+	return [exprStmt(ctx.push(un(UOp.Void, lit(0)))), breakStmt()];
 }
 
 // --- Await handler ---
@@ -58,7 +48,7 @@ function AWAIT(ctx: HandlerCtx): JsNode[] {
 				"AWAIT",
 				lit("awaiting:"),
 				ternary(
-					bin("===", un("typeof", ctx.peek()), lit("object")),
+					bin(BOp.Seq, un(UOp.Typeof, ctx.peek()), lit("object")),
 					lit("[Promise]"),
 					ctx.peek()
 				)
@@ -67,7 +57,7 @@ function AWAIT(ctx: HandlerCtx): JsNode[] {
 			breakStmt(),
 		];
 	}
-	return [exprStmt(assign(ctx.peek(), un("void", lit(0)))), breakStmt()];
+	return [exprStmt(assign(ctx.peek(), un(UOp.Void, lit(0)))), breakStmt()];
 }
 
 // --- Stub handlers (no-op, just break) ---

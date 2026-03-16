@@ -13,29 +13,7 @@
 
 import type { JsNode, ObjectEntry } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
-import {
-	fn,
-	varDecl,
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	newExpr,
-	obj,
-	method,
-	exprStmt,
-	returnStmt,
-	forStmt,
-	switchStmt,
-	caseClause,
-	breakStmt,
-	block,
-	update,
-} from "../nodes.js";
+import { fn, varDecl, id, lit, bin, un, assign, call, member, index, newExpr, obj, method, exprStmt, returnStmt, forStmt, switchStmt, caseClause, breakStmt, block, update, BOp, UOp, UpOp, AOp } from "../nodes.js";
 
 // --- Builder ---
 
@@ -128,7 +106,7 @@ export function buildDeserializer(
 			[
 				returnStmt(
 					call(member(tprop(DV), "getUint8"), [
-						update("++", false, tprop(DOF)),
+						update(UpOp.Inc, false, tprop(DOF)),
 					])
 				),
 			]
@@ -143,7 +121,7 @@ export function buildDeserializer(
 					"x",
 					call(member(tprop(DV), "getUint16"), [tprop(DOF), TRUE])
 				),
-				exprStmt(assign(tprop(DOF), lit(2), "+")),
+				exprStmt(assign(tprop(DOF), lit(2), AOp.Add)),
 				returnStmt(id("x")),
 			]
 		),
@@ -157,7 +135,7 @@ export function buildDeserializer(
 					"x",
 					call(member(tprop(DV), "getUint32"), [tprop(DOF), TRUE])
 				),
-				exprStmt(assign(tprop(DOF), lit(4), "+")),
+				exprStmt(assign(tprop(DOF), lit(4), AOp.Add)),
 				returnStmt(id("x")),
 			]
 		),
@@ -171,7 +149,7 @@ export function buildDeserializer(
 					"x",
 					call(member(tprop(DV), "getInt32"), [tprop(DOF), TRUE])
 				),
-				exprStmt(assign(tprop(DOF), lit(4), "+")),
+				exprStmt(assign(tprop(DOF), lit(4), AOp.Add)),
 				returnStmt(id("x")),
 			]
 		),
@@ -185,7 +163,7 @@ export function buildDeserializer(
 					"x",
 					call(member(tprop(DV), "getFloat64"), [tprop(DOF), TRUE])
 				),
-				exprStmt(assign(tprop(DOF), lit(8), "+")),
+				exprStmt(assign(tprop(DOF), lit(8), AOp.Add)),
 				returnStmt(id("x")),
 			]
 		),
@@ -199,8 +177,8 @@ export function buildDeserializer(
 				varDecl("a", { type: "ArrayExpr", elements: [] }),
 				forStmt(
 					varDecl("i", lit(0)),
-					bin("<", id("i"), id("n")),
-					update("++", false, id("i")),
+					bin(BOp.Lt, id("i"), id("n")),
+					update(UpOp.Inc, false, id("i")),
 					[exprStmt(call(member(id("a"), "push"), [tcall(DU8)]))]
 				),
 				returnStmt(
@@ -246,7 +224,7 @@ export function buildDeserializer(
 	cases.push(caseClause(lit(0), [exprStmt(push(lit(null))), breakStmt()]));
 	// case 1: cs.push(void 0); break;
 	cases.push(
-		caseClause(lit(1), [exprStmt(push(un("void", lit(0)))), breakStmt()])
+		caseClause(lit(1), [exprStmt(push(un(UOp.Void, lit(0)))), breakStmt()])
 	);
 	// case 2: cs.push(false); break;
 	cases.push(caseClause(lit(2), [exprStmt(push(lit(false))), breakStmt()]));
@@ -260,7 +238,7 @@ export function buildDeserializer(
 					call(member(member(rdr, DV), "getInt8"), [member(rdr, DOF)])
 				)
 			),
-			exprStmt(assign(member(rdr, DOF), lit(1), "+")),
+			exprStmt(assign(member(rdr, DOF), lit(1),AOp.Add)),
 			breakStmt(),
 		])
 	);
@@ -275,7 +253,7 @@ export function buildDeserializer(
 					])
 				)
 			),
-			exprStmt(assign(member(rdr, DOF), lit(2), "+")),
+			exprStmt(assign(member(rdr, DOF), lit(2),AOp.Add)),
 			breakStmt(),
 		])
 	);
@@ -309,8 +287,8 @@ export function buildDeserializer(
 				varDecl(DEA, { type: "ArrayExpr", elements: [] }),
 				forStmt(
 					varDecl(DEI, lit(0)),
-					bin("<", id(DEI), id(DEL)),
-					update("++", false, id(DEI)),
+					bin(BOp.Lt, id(DEI), id(DEL)),
+					update(UpOp.Inc, false, id(DEI)),
 					[exprStmt(call(member(id(DEA), "push"), [rcall(DU16)]))]
 				),
 				exprStmt(push(id(DEA))),
@@ -325,8 +303,8 @@ export function buildDeserializer(
 	body.push(
 		forStmt(
 			varDecl("i", lit(0)),
-			bin("<", id("i"), id(CC)),
-			update("++", false, id("i")),
+			bin(BOp.Lt, id("i"), id(CC)),
+			update(UpOp.Inc, false, id("i")),
 			[
 				varDecl(DTAG, rcall(DU8)),
 				switchStmt(id(DTAG), cases as ReturnType<typeof caseClause>[]),
@@ -341,17 +319,17 @@ export function buildDeserializer(
 
 	// var ins=new Int32Array(ic*2);
 	body.push(
-		varDecl(IN, newExpr(id("Int32Array"), [bin("*", id(IC), lit(2))]))
+		varDecl(IN, newExpr(id("Int32Array"), [bin(BOp.Mul, id(IC), lit(2))]))
 	);
 
 	// for(var i=0;i<ic;i++){ins[i*2]=r.u16();ins[i*2+1]=r.i32();}
-	const iMul2 = bin("*", id("i"), lit(2));
-	const iMul2Plus1 = bin("+", bin("*", id("i"), lit(2)), lit(1));
+	const iMul2 = bin(BOp.Mul, id("i"), lit(2));
+	const iMul2Plus1 = bin(BOp.Add, bin(BOp.Mul, id("i"), lit(2)), lit(1));
 	body.push(
 		forStmt(
 			varDecl("i", lit(0)),
-			bin("<", id("i"), id(IC)),
-			update("++", false, id("i")),
+			bin(BOp.Lt, id("i"), id(IC)),
+			update(UpOp.Inc, false, id("i")),
 			[
 				exprStmt(assign(index(id(IN), iMul2), rcall(DU16))),
 				exprStmt(assign(index(id(IN), iMul2Plus1), rcall(DI32))),
@@ -363,7 +341,7 @@ export function buildDeserializer(
 
 	// return {c:cs,i:ins,r:rc,sl:0,p:pc,g:!!(fl&1),s:!!(fl&2),st:!!(fl&4),a:!!(fl&8)};
 	const band = (v: JsNode, mask: number): JsNode =>
-		un("!", un("!", bin("&", v, lit(mask))));
+		un(UOp.Not, un(UOp.Not, bin(BOp.BitAnd, v, lit(mask))));
 	body.push(
 		returnStmt(
 			obj(

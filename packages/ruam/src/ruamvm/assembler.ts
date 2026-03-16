@@ -30,6 +30,8 @@ import {
 	member,
 	id,
 	ternary,
+	BOp,
+	UOp,
 } from "./nodes.js";
 import { emit } from "./emit.js";
 import { buildFingerprintSource } from "./builders/fingerprint.js";
@@ -203,8 +205,8 @@ export function generateVmRuntime(options: {
 				assign(
 					id(names.keyAnchor),
 					bin(
-						">>>",
-						bin("^", id(names.keyAnchor), split(integrityHash)),
+						BOp.Ushr,
+						bin(BOp.BitXor, id(names.keyAnchor), split(integrityHash)),
 						lit(0)
 					)
 				)
@@ -477,9 +479,9 @@ export function generateShieldedVmRuntime(options: {
 					assign(
 						id(gn.keyAnchor),
 						bin(
-							">>>",
+							BOp.Ushr,
 							bin(
-								"^",
+								BOp.BitXor,
 								id(gn.keyAnchor),
 								groupSplit(group.integrityHash)
 							),
@@ -566,7 +568,7 @@ function buildGlobalRefDetection(choices?: StructuralChoices): JsNode {
 	for (let i = globals.length - 1; i >= 0; i--) {
 		const name = globals[i]!;
 		result = ternary(
-			bin("!==", un("typeof", id(name)), lit("undefined")),
+			bin(BOp.Sneq, un(UOp.Typeof, id(name)), lit("undefined")),
 			id(name),
 			result
 		);

@@ -147,6 +147,21 @@ export interface VmObfuscationOptions {
 	 */
 	handlerFragmentation?: boolean;
 
+	/** Atomize interpreter string literals into encoded table lookups. Auto-enables polymorphicDecoder. */
+	stringAtomization?: boolean;
+
+	/** Per-build random chain of reversible byte operations for string decoding. */
+	polymorphicDecoder?: boolean;
+
+	/** Scatter key material fragments across the output. */
+	scatteredKeys?: boolean;
+
+	/** Shuffle bytecode basic block order. */
+	blockPermutation?: boolean;
+
+	/** Insert runtime handler table mutations. Requires rollingCipher (auto-enabled). */
+	opcodeMutation?: boolean;
+
 	/**
 	 * Target execution environment.
 	 *

@@ -11,26 +11,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	breakStmt,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	obj,
-	arr,
-	throwStmt,
-	newExpr,
-	returnStmt,
-} from "../nodes.js";
+import { type JsNode, breakStmt, varDecl, exprStmt, ifStmt, id, lit, bin, un, assign, call, member, index, obj, arr, throwStmt, newExpr, returnStmt, BOp, UOp } from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -52,16 +33,16 @@ function TRY_PUSH(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(
 			ctx.t("_ci"),
-			bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))
+			bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(0xffff))
 		),
-		varDecl(ctx.t("_fi"), bin("&", id(ctx.O), lit(0xffff))),
-		ifStmt(bin("===", id(ctx.t("_ci")), lit(0xffff)), [
-			exprStmt(assign(id(ctx.t("_ci")), un("-", lit(1)))),
+		varDecl(ctx.t("_fi"), bin(BOp.BitAnd, id(ctx.O), lit(0xffff))),
+		ifStmt(bin(BOp.Seq, id(ctx.t("_ci")), lit(0xffff)), [
+			exprStmt(assign(id(ctx.t("_ci")), un(UOp.Neg, lit(1)))),
 		]),
-		ifStmt(bin("===", id(ctx.t("_fi")), lit(0xffff)), [
-			exprStmt(assign(id(ctx.t("_fi")), un("-", lit(1)))),
+		ifStmt(bin(BOp.Seq, id(ctx.t("_fi")), lit(0xffff)), [
+			exprStmt(assign(id(ctx.t("_fi")), un(UOp.Neg, lit(1)))),
 		]),
-		ifStmt(un("!", id(ctx.EX)), [exprStmt(assign(id(ctx.EX), arr()))]),
+		ifStmt(un(UOp.Not, id(ctx.EX)), [exprStmt(assign(id(ctx.EX), arr()))]),
 		exprStmt(
 			call(member(id(ctx.EX), "push"), [
 				obj(
@@ -94,11 +75,11 @@ function CATCH_BIND(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("err", ctx.pop()),
 		ifStmt(
-			bin(">=", id(ctx.O), lit(0)),
+			bin(BOp.Gte, id(ctx.O), lit(0)),
 			[
 				varDecl("cname", index(id(ctx.C), id(ctx.O))),
 				ifStmt(
-					bin("===", un("typeof", id("cname")), lit("string")),
+					bin(BOp.Seq, un(UOp.Typeof, id("cname")), lit("string")),
 					[
 						exprStmt(
 							assign(index(id(ctx.SC), id("cname")), id("err"))
@@ -153,10 +134,10 @@ function END_FINALLY(ctx: HandlerCtx): JsNode[] {
 			exprStmt(assign(id(ctx.HPE), lit(false))),
 			throwStmt(id("ex")),
 		]),
-		ifStmt(bin("===", id(ctx.CT), lit(1)), [
+		ifStmt(bin(BOp.Seq, id(ctx.CT), lit(1)), [
 			varDecl(ctx.t("_rv2"), id(ctx.CV)),
 			exprStmt(assign(id(ctx.CT), lit(0))),
-			exprStmt(assign(id(ctx.CV), un("void", lit(0)))),
+			exprStmt(assign(id(ctx.CV), un(UOp.Void, lit(0)))),
 			returnStmt(id(ctx.t("_rv2"))),
 		]),
 		breakStmt(),
@@ -174,10 +155,9 @@ function THROW_IF_NOT_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
 		ifStmt(
-			bin(
-				"||",
-				bin("!==", un("typeof", id("v")), lit("object")),
-				bin("===", id("v"), lit(null))
+			bin(BOp.Or,
+				bin(BOp.Sneq, un(UOp.Typeof, id("v")), lit("object")),
+				bin(BOp.Seq, id("v"), lit(null))
 			),
 			[
 				throwStmt(
@@ -198,7 +178,7 @@ function THROW_REF_ERROR(ctx: HandlerCtx): JsNode[] {
 	return [
 		throwStmt(
 			newExpr(id("ReferenceError"), [
-				bin("||", index(id(ctx.C), id(ctx.O)), lit("not defined")),
+				bin(BOp.Or, index(id(ctx.C), id(ctx.O)), lit("not defined")),
 			])
 		),
 	];
@@ -211,7 +191,7 @@ function THROW_TYPE_ERROR(ctx: HandlerCtx): JsNode[] {
 	return [
 		throwStmt(
 			newExpr(id("TypeError"), [
-				bin("||", index(id(ctx.C), id(ctx.O)), lit("type error")),
+				bin(BOp.Or, index(id(ctx.C), id(ctx.O)), lit("type error")),
 			])
 		),
 	];
@@ -224,7 +204,7 @@ function THROW_SYNTAX_ERROR(ctx: HandlerCtx): JsNode[] {
 	return [
 		throwStmt(
 			newExpr(id("SyntaxError"), [
-				bin("||", index(id(ctx.C), id(ctx.O)), lit("syntax error")),
+				bin(BOp.Or, index(id(ctx.C), id(ctx.O)), lit("syntax error")),
 			])
 		),
 	];

@@ -15,8 +15,8 @@
  * @module ruamvm/mba
  */
 
-import type { JsNode, BinOp } from "./nodes.js";
-import { bin, un, ternary, lit, mapChildren } from "./nodes.js";
+import type { JsNode, BinOp, BOpKind } from "./nodes.js";
+import { bin, un, ternary, lit, mapChildren, BOp, UOp } from "./nodes.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // --- MBA identity tables ---
@@ -24,58 +24,58 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 /** MBA replacement for `x + y` (assumes int32 operands). */
 const ADD_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// (x ^ y) + 2 * (x & y)
-	(x, y) => bin("+", bin("^", x, y), bin("*", lit(2), bin("&", x, y))),
+	(x, y) => bin(BOp.Add, bin(BOp.BitXor, x, y), bin(BOp.Mul, lit(2), bin(BOp.BitAnd, x, y))),
 	// (x | y) + (x & y)
-	(x, y) => bin("+", bin("|", x, y), bin("&", x, y)),
+	(x, y) => bin(BOp.Add, bin(BOp.BitOr, x, y), bin(BOp.BitAnd, x, y)),
 	// 2 * (x | y) - (x ^ y)
-	(x, y) => bin("-", bin("*", lit(2), bin("|", x, y)), bin("^", x, y)),
+	(x, y) => bin(BOp.Sub, bin(BOp.Mul, lit(2), bin(BOp.BitOr, x, y)), bin(BOp.BitXor, x, y)),
 ];
 
 /** MBA replacement for `x - y` (assumes int32 operands). */
 const SUB_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// (x ^ y) - 2 * (~x & y)
 	(x, y) =>
-		bin("-", bin("^", x, y), bin("*", lit(2), bin("&", un("~", x), y))),
+		bin(BOp.Sub, bin(BOp.BitXor, x, y), bin(BOp.Mul, lit(2), bin(BOp.BitAnd, un(UOp.BitNot, x), y))),
 	// (x & ~y) - (~x & y)
-	(x, y) => bin("-", bin("&", x, un("~", y)), bin("&", un("~", x), y)),
+	(x, y) => bin(BOp.Sub, bin(BOp.BitAnd, x, un(UOp.BitNot, y)), bin(BOp.BitAnd, un(UOp.BitNot, x), y)),
 ];
 
 /** MBA replacement for `x ^ y`. */
 const XOR_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// (x | y) & ~(x & y)
-	(x, y) => bin("&", bin("|", x, y), un("~", bin("&", x, y))),
+	(x, y) => bin(BOp.BitAnd, bin(BOp.BitOr, x, y), un(UOp.BitNot, bin(BOp.BitAnd, x, y))),
 	// (~x & y) | (x & ~y)
-	(x, y) => bin("|", bin("&", un("~", x), y), bin("&", x, un("~", y))),
+	(x, y) => bin(BOp.BitOr, bin(BOp.BitAnd, un(UOp.BitNot, x), y), bin(BOp.BitAnd, x, un(UOp.BitNot, y))),
 ];
 
 /** MBA replacement for `x & y`. */
 const AND_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// ~(~x | ~y)   (De Morgan)
-	(x, y) => un("~", bin("|", un("~", x), un("~", y))),
+	(x, y) => un(UOp.BitNot, bin(BOp.BitOr, un(UOp.BitNot, x), un(UOp.BitNot, y))),
 	// (x | y) ^ (x ^ y)
-	(x, y) => bin("^", bin("|", x, y), bin("^", x, y)),
+	(x, y) => bin(BOp.BitXor, bin(BOp.BitOr, x, y), bin(BOp.BitXor, x, y)),
 ];
 
 /** MBA replacement for `x | y`. */
 const OR_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	// ~(~x & ~y)   (De Morgan)
-	(x, y) => un("~", bin("&", un("~", x), un("~", y))),
+	(x, y) => un(UOp.BitNot, bin(BOp.BitAnd, un(UOp.BitNot, x), un(UOp.BitNot, y))),
 	// (x ^ y) + (x & y)
-	(x, y) => bin("+", bin("^", x, y), bin("&", x, y)),
+	(x, y) => bin(BOp.Add, bin(BOp.BitXor, x, y), bin(BOp.BitAnd, x, y)),
 ];
 
 /** Map from operator to variant table (bitwise — always safe). */
-const BITWISE_MBA: Record<string, ((x: JsNode, y: JsNode) => JsNode)[]> = {
-	"^": XOR_VARIANTS,
-	"&": AND_VARIANTS,
-	"|": OR_VARIANTS,
-};
+const BITWISE_MBA = new Map<BOpKind, ((x: JsNode, y: JsNode) => JsNode)[]>([
+	[BOp.BitXor, XOR_VARIANTS],
+	[BOp.BitAnd, AND_VARIANTS],
+	[BOp.BitOr, OR_VARIANTS],
+]);
 
 /** Map from operator to variant table (arithmetic — needs int32 guard). */
-const ARITH_MBA: Record<string, ((x: JsNode, y: JsNode) => JsNode)[]> = {
-	"+": ADD_VARIANTS,
-	"-": SUB_VARIANTS,
-};
+const ARITH_MBA = new Map<BOpKind, ((x: JsNode, y: JsNode) => JsNode)[]>([
+	[BOp.Add, ADD_VARIANTS],
+	[BOp.Sub, SUB_VARIANTS],
+]);
 
 // --- LCG PRNG ---
 
@@ -96,12 +96,12 @@ function makeLcg(seed: number): () => number {
 function int32Guard(
 	left: JsNode,
 	right: JsNode,
-	op: string,
+	op: BOpKind,
 	mbaExpr: JsNode
 ): JsNode {
-	const leftCheck = bin("===", bin("|", left, lit(0)), left);
-	const rightCheck = bin("===", bin("|", right, lit(0)), right);
-	const guard = bin("&&", leftCheck, rightCheck);
+	const leftCheck = bin(BOp.Seq, bin(BOp.BitOr, left, lit(0)), left);
+	const rightCheck = bin(BOp.Seq, bin(BOp.BitOr, right, lit(0)), right);
+	const guard = bin(BOp.And, leftCheck, rightCheck);
 	return ternary(guard, mbaExpr, bin(op, left, right));
 }
 
@@ -118,7 +118,7 @@ function mbaSingle(node: BinOp, lcg: () => number): JsNode {
 	const { op, left, right } = node;
 
 	// Bitwise ops — always safe (coerce to int32)
-	const bitwiseVariants = BITWISE_MBA[op];
+	const bitwiseVariants = BITWISE_MBA.get(op);
 	if (bitwiseVariants) {
 		const variant = bitwiseVariants[lcg() % bitwiseVariants.length]!;
 		return variant(left, right);
@@ -128,7 +128,7 @@ function mbaSingle(node: BinOp, lcg: () => number): JsNode {
 	// Skip when either operand is a string literal — MBA on string
 	// concatenation produces enormous useless int32-guard blocks
 	// (the guard always fails, falling through to the clean path).
-	const arithVariants = ARITH_MBA[op];
+	const arithVariants = ARITH_MBA.get(op);
 	if (arithVariants) {
 		if (containsStringLiteral(left) || containsStringLiteral(right)) {
 			return node;
@@ -159,7 +159,7 @@ function containsStringLiteral(node: JsNode): boolean {
 }
 
 /** Operators eligible for MBA transformation. */
-const MBA_OPS = new Set(["^", "&", "|", "+", "-"]);
+const MBA_OPS = new Set<BOpKind>([BOp.BitXor, BOp.BitAnd, BOp.BitOr, BOp.Add, BOp.Sub]);
 
 /**
  * Apply MBA transformation to all eligible BinOp nodes in a JsNode tree.

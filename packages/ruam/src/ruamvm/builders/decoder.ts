@@ -11,37 +11,18 @@
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
 import type { SplitFn } from "../constant-splitting.js";
-import {
-	arr,
-	assign,
-	bin,
-	call,
-	exprStmt,
-	fn,
-	forStmt,
-	id,
-	ifStmt,
-	index,
-	lit,
-	member,
-	newExpr,
-	obj,
-	returnStmt,
-	un,
-	update,
-	varDecl,
-} from "../nodes.js";
+import { arr, assign, bin, call, exprStmt, fn, forStmt, id, ifStmt, index, lit, member, newExpr, obj, returnStmt, un, update, varDecl, BOp, UpOp, AOp } from "../nodes.js";
 
 // --- Local helpers for dense bit manipulation ---
 
 /** `a ^ b` */
-const xor = (a: JsNode, b: JsNode): JsNode => bin("^", a, b);
+const xor = (a: JsNode, b: JsNode): JsNode => bin(BOp.BitXor, a, b);
 
 /** `a & b` */
-const band = (a: JsNode, b: JsNode): JsNode => bin("&", a, b);
+const band = (a: JsNode, b: JsNode): JsNode => bin(BOp.BitAnd, a, b);
 
 /** `(expr) >>> 0` — unsigned coercion */
-const u32 = (expr: JsNode): JsNode => bin(">>>", expr, lit(0));
+const u32 = (expr: JsNode): JsNode => bin(BOp.Ushr, expr, lit(0));
 
 // --- Custom binary decoder ---
 
@@ -73,8 +54,8 @@ export function buildBinaryDecoderSource(
 		varDecl(alphaRevName, obj()),
 		forStmt(
 			varDecl("k", lit(0)),
-			bin("<", id("k"), member(id(names.alpha), "length")),
-			update("++", false, id("k")),
+			bin(BOp.Lt, id("k"), member(id(names.alpha), "length")),
+			update(UpOp.Inc, false, id("k")),
 			[
 				exprStmt(
 					assign(
@@ -151,11 +132,11 @@ function buildCustomDecodeFunction(
 
 	// Helper: T[str.charCodeAt(idx)] | 0
 	const lookup = (idx: JsNode): JsNode =>
-		bin("|", index(T, call(member(str, "charCodeAt"), [idx])), lit(0));
+		bin(BOp.BitOr, index(T, call(member(str, "charCodeAt"), [idx])), lit(0));
 
 	// Helper: out[j++] = expr
 	const writeOut = (expr: JsNode): JsNode =>
-		exprStmt(assign(index(out, update("++", false, j)), expr));
+		exprStmt(assign(index(out, update(UpOp.Inc, false, j)), expr));
 
 	const body: JsNode[] = [
 		// var T = _ALR;  (reference the pre-built reverse table)
@@ -167,43 +148,42 @@ function buildCustomDecodeFunction(
 		varDecl(
 			"out",
 			newExpr(id("Uint8Array"), [
-				bin("+", bin(">>", bin("*", n, lit(3)), lit(2)), lit(3)),
+				bin(BOp.Add, bin(BOp.Shr, bin(BOp.Mul, n, lit(3)), lit(2)), lit(3)),
 			])
 		),
 		// var j = 0;
 		varDecl("j", lit(0)),
 
 		// Decode loop: for (var i = 0; i < n; i += 4) { ... }
-		forStmt(varDecl("i", lit(0)), bin("<", i, n), assign(i, lit(4), "+"), [
+		forStmt(varDecl("i", lit(0)), bin(BOp.Lt, i, n), assign(i, lit(4), AOp.Add), [
 			// var a = T[str.charCodeAt(i)] | 0;
 			varDecl("a", lookup(i)),
 			// var b = T[str.charCodeAt(i + 1)] | 0;
-			varDecl("b", lookup(bin("+", i, lit(1)))),
+			varDecl("b", lookup(bin(BOp.Add, i, lit(1)))),
 			// var c = T[str.charCodeAt(i + 2)] | 0;
-			varDecl("c", lookup(bin("+", i, lit(2)))),
+			varDecl("c", lookup(bin(BOp.Add, i, lit(2)))),
 			// var d = T[str.charCodeAt(i + 3)] | 0;
-			varDecl("d", lookup(bin("+", i, lit(3)))),
+			varDecl("d", lookup(bin(BOp.Add, i, lit(3)))),
 
 			// out[j++] = (a << 2) | (b >> 4);
 			writeOut(
-				bin("|", bin("<<", id("a"), lit(2)), bin(">>", id("b"), lit(4)))
+				bin(BOp.BitOr, bin(BOp.Shl, id("a"), lit(2)), bin(BOp.Shr, id("b"), lit(4)))
 			),
 
 			// if (i + 2 < n) out[j++] = ((b & 15) << 4) | (c >> 2);
-			ifStmt(bin("<", bin("+", i, lit(2)), n), [
+			ifStmt(bin(BOp.Lt, bin(BOp.Add, i, lit(2)), n), [
 				writeOut(
-					bin(
-						"|",
-						bin("<<", band(id("b"), lit(15)), lit(4)),
-						bin(">>", id("c"), lit(2))
+					bin(BOp.BitOr,
+						bin(BOp.Shl, band(id("b"), lit(15)), lit(4)),
+						bin(BOp.Shr, id("c"), lit(2))
 					)
 				),
 			]),
 
 			// if (i + 3 < n) out[j++] = ((c & 3) << 6) | d;
-			ifStmt(bin("<", bin("+", i, lit(3)), n), [
+			ifStmt(bin(BOp.Lt, bin(BOp.Add, i, lit(3)), n), [
 				writeOut(
-					bin("|", bin("<<", band(id("c"), lit(3)), lit(6)), id("d"))
+					bin(BOp.BitOr, bin(BOp.Shl, band(id("c"), lit(3)), lit(6)), id("d"))
 				),
 			]),
 		]),
@@ -257,8 +237,8 @@ function buildCipherFunction(names: RuntimeNames, split?: SplitFn): JsNode {
 		// }
 		forStmt(
 			varDecl("i", lit(0)),
-			bin("<", i, member(key, "length")),
-			update("++", false, i),
+			bin(BOp.Lt, i, member(key, "length")),
+			update(UpOp.Inc, false, i),
 			[
 				exprStmt(
 					assign(
@@ -284,16 +264,15 @@ function buildCipherFunction(names: RuntimeNames, split?: SplitFn): JsNode {
 		// }
 		forStmt(
 			assign(i, lit(0)),
-			bin("<", i, member(data, "length")),
-			update("++", false, i),
+			bin(BOp.Lt, i, member(data, "length")),
+			update(UpOp.Inc, false, i),
 			[
 				// h = (Math.imul(h, LCG_MULT) + LCG_INC) >>> 0;
 				exprStmt(
 					assign(
 						h,
 						u32(
-							bin(
-								"+",
+							bin(BOp.Add,
 								call(id(names.imul), [h, L(1664525)]),
 								L(1013904223)
 							)
@@ -306,7 +285,7 @@ function buildCipherFunction(names: RuntimeNames, split?: SplitFn): JsNode {
 						index(out, i),
 						xor(
 							index(data, i),
-							band(bin(">>>", h, lit(16)), lit(255))
+							band(bin(BOp.Ushr, h, lit(16)), lit(255))
 						)
 					)
 				),
@@ -394,7 +373,7 @@ function buildStrDecFunction(
 
 	const body: JsNode[] = [
 		// var k = (keySource ^ (x * 0x9E3779B9)) >>> 0;
-		varDecl("k", u32(xor(keySource, bin("*", x, L(0x9e3779b9))))),
+		varDecl("k", u32(xor(keySource, bin(BOp.Mul, x, L(0x9e3779b9))))),
 		// var _ca = [];
 		varDecl("_ca", arr()),
 
@@ -404,14 +383,14 @@ function buildStrDecFunction(
 		// }
 		forStmt(
 			varDecl("i", lit(0)),
-			bin("<", i, member(b, "length")),
-			update("++", false, i),
+			bin(BOp.Lt, i, member(b, "length")),
+			update(UpOp.Inc, false, i),
 			[
 				// k = (k * 1664525 + 1013904223) >>> 0;
 				exprStmt(
 					assign(
 						k,
-						u32(bin("+", bin("*", k, L(1664525)), L(1013904223)))
+						u32(bin(BOp.Add, bin(BOp.Mul, k, L(1664525)), L(1013904223)))
 					)
 				),
 				// _ca.push(b[i] ^ (k & 65535));

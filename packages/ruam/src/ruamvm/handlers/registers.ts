@@ -1,20 +1,7 @@
 /** @module ruamvm/handlers/registers */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	lit,
-	index,
-	bin,
-	un,
-	member,
-	ternary,
-	varDecl,
-	exprStmt,
-	breakStmt,
-	assign,
-} from "../nodes.js";
+import { type JsNode, id, lit, index, bin, un, member, ternary, varDecl, exprStmt, breakStmt, assign, BOp, UOp, type BOpKind } from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -33,7 +20,7 @@ function rSlot(ctx: HandlerCtx): JsNode {
  * @param op - JS binary operator string (e.g. `'+'`, `'-'`, `'*'`, `'/'`, `'%'`)
  * @returns Handler function producing the case body AST nodes
  */
-function regAssignHandler(op: string): HandlerFn {
+function regAssignHandler(op: BOpKind): HandlerFn {
 	return (ctx) => [
 		varDecl("val", ctx.pop()),
 		exprStmt(
@@ -64,9 +51,9 @@ function LOAD_ARG(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			ctx.push(
 				ternary(
-					bin("<", id(ctx.O), member(id(ctx.A), "length")),
+					bin(BOp.Lt, id(ctx.O), member(id(ctx.A), "length")),
 					index(id(ctx.A), id(ctx.O)),
-					un("void", lit(0))
+					un(UOp.Void, lit(0))
 				)
 			)
 		),
@@ -88,17 +75,15 @@ function LOAD_ARG_OR_DEFAULT(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			ctx.push(
 				ternary(
-					bin(
-						"&&",
-						bin("<", id(ctx.O), member(id(ctx.A), "length")),
-						bin(
-							"!==",
+					bin(BOp.And,
+						bin(BOp.Lt, id(ctx.O), member(id(ctx.A), "length")),
+						bin(BOp.Sneq,
 							index(id(ctx.A), id(ctx.O)),
-							un("void", lit(0))
+							un(UOp.Void, lit(0))
 						)
 					),
 					index(id(ctx.A), id(ctx.O)),
-					un("void", lit(0))
+					un(UOp.Void, lit(0))
 				)
 			)
 		),
@@ -116,7 +101,7 @@ function GET_ARG_COUNT(ctx: HandlerCtx): JsNode[] {
 /** INC_REG: `R[O]=+R[O]+1;break;` */
 function INC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(rSlot(ctx), bin("+", un("+", rSlot(ctx)), lit(1)))),
+		exprStmt(assign(rSlot(ctx), bin(BOp.Add, un(UOp.Pos, rSlot(ctx)), lit(1)))),
 		breakStmt(),
 	];
 }
@@ -124,7 +109,7 @@ function INC_REG(ctx: HandlerCtx): JsNode[] {
 /** DEC_REG: `R[O]=+R[O]-1;break;` */
 function DEC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(rSlot(ctx), bin("-", un("+", rSlot(ctx)), lit(1)))),
+		exprStmt(assign(rSlot(ctx), bin(BOp.Sub, un(UOp.Pos, rSlot(ctx)), lit(1)))),
 		breakStmt(),
 	];
 }
@@ -133,8 +118,8 @@ function DEC_REG(ctx: HandlerCtx): JsNode[] {
 function POST_INC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("old", rSlot(ctx)),
-		exprStmt(assign(rSlot(ctx), bin("+", un("+", id("old")), lit(1)))),
-		exprStmt(ctx.push(un("+", id("old")))),
+		exprStmt(assign(rSlot(ctx), bin(BOp.Add, un(UOp.Pos, id("old")), lit(1)))),
+		exprStmt(ctx.push(un(UOp.Pos, id("old")))),
 		breakStmt(),
 	];
 }
@@ -143,8 +128,8 @@ function POST_INC_REG(ctx: HandlerCtx): JsNode[] {
 function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("old", rSlot(ctx)),
-		exprStmt(assign(rSlot(ctx), bin("-", un("+", id("old")), lit(1)))),
-		exprStmt(ctx.push(un("+", id("old")))),
+		exprStmt(assign(rSlot(ctx), bin(BOp.Sub, un(UOp.Pos, id("old")), lit(1)))),
+		exprStmt(ctx.push(un(UOp.Pos, id("old")))),
 		breakStmt(),
 	];
 }
@@ -154,7 +139,7 @@ function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 /** FAST_ADD_CONST: `S[P]=+S[P]+O;break;` */
 function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), bin("+", un("+", ctx.peek()), id(ctx.O)))),
+		exprStmt(assign(ctx.peek(), bin(BOp.Add, un(UOp.Pos, ctx.peek()), id(ctx.O)))),
 		breakStmt(),
 	];
 }
@@ -162,7 +147,7 @@ function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 /** FAST_SUB_CONST: `S[P]=+S[P]-O;break;` */
 function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), bin("-", un("+", ctx.peek()), id(ctx.O)))),
+		exprStmt(assign(ctx.peek(), bin(BOp.Sub, un(UOp.Pos, ctx.peek()), id(ctx.O)))),
 		breakStmt(),
 	];
 }
@@ -177,12 +162,12 @@ function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
  */
 function FAST_GET_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("name", index(id(ctx.C), bin("&", id(ctx.O), lit(0xffff)))),
+		varDecl("name", index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))),
 		varDecl(
 			"varName",
 			index(
 				id(ctx.C),
-				bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))
+				bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(0xffff))
 			)
 		),
 		varDecl("s", id(ctx.SC)),
@@ -216,11 +201,11 @@ registry.set(Op.INC_REG, INC_REG);
 registry.set(Op.DEC_REG, DEC_REG);
 registry.set(Op.POST_INC_REG, POST_INC_REG);
 registry.set(Op.POST_DEC_REG, POST_DEC_REG);
-registry.set(Op.ADD_ASSIGN_REG, regAssignHandler("+"));
-registry.set(Op.SUB_ASSIGN_REG, regAssignHandler("-"));
-registry.set(Op.MUL_ASSIGN_REG, regAssignHandler("*"));
-registry.set(Op.DIV_ASSIGN_REG, regAssignHandler("/"));
-registry.set(Op.MOD_ASSIGN_REG, regAssignHandler("%"));
+registry.set(Op.ADD_ASSIGN_REG, regAssignHandler(BOp.Add));
+registry.set(Op.SUB_ASSIGN_REG, regAssignHandler(BOp.Sub));
+registry.set(Op.MUL_ASSIGN_REG, regAssignHandler(BOp.Mul));
+registry.set(Op.DIV_ASSIGN_REG, regAssignHandler(BOp.Div));
+registry.set(Op.MOD_ASSIGN_REG, regAssignHandler(BOp.Mod));
 registry.set(Op.FAST_ADD_CONST, FAST_ADD_CONST);
 registry.set(Op.FAST_SUB_CONST, FAST_SUB_CONST);
 registry.set(Op.FAST_GET_PROP, FAST_GET_PROP);

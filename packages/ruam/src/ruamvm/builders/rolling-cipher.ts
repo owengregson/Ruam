@@ -11,26 +11,15 @@
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
 import type { SplitFn } from "../constant-splitting.js";
-import {
-	assign,
-	bin,
-	call,
-	exprStmt,
-	fn,
-	id,
-	lit,
-	member,
-	returnStmt,
-	varDecl,
-} from "../nodes.js";
+import { assign, bin, call, exprStmt, fn, id, lit, member, returnStmt, varDecl, BOp, AOp } from "../nodes.js";
 
 // --- Local helpers for dense bit manipulation ---
 
 /** `a ^ b` */
-const xor = (a: JsNode, b: JsNode): JsNode => bin("^", a, b);
+const xor = (a: JsNode, b: JsNode): JsNode => bin(BOp.BitXor, a, b);
 
 /** `a >>> n` */
-const ushr = (a: JsNode, n: number): JsNode => bin(">>>", a, lit(n));
+const ushr = (a: JsNode, n: number): JsNode => bin(BOp.Ushr, a, lit(n));
 
 /** `imulAlias(a, b)` — uses the IIFE-scope alias for Math.imul */
 const makeImul =
@@ -38,9 +27,9 @@ const makeImul =
 	(a: JsNode, b: JsNode): JsNode =>
 		call(id(imulName), [a, b]);
 
-/** `h ^= expr` — shorthand for `exprStmt(assign(id("h"), expr, "^"))` */
+/** `h ^= expr` — shorthand for `exprStmt(assign(id("h"), expr, AOp.BitXor))` */
 const xorAssign = (target: string, value: JsNode): JsNode =>
-	exprStmt(assign(id(target), value, "^"));
+	exprStmt(assign(id(target), value, AOp.BitXor));
 
 /**
  * Build the runtime rolling cipher helper functions as JsNode[].

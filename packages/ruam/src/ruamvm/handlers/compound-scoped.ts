@@ -17,18 +17,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	index,
-	assign,
-	bin,
-	lit,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	breakStmt,
-} from "../nodes.js";
+import { type JsNode, id, index, assign, bin, lit, varDecl, exprStmt, ifStmt, breakStmt, BOp, AOp, type AOpKind, type BOpKind } from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -41,7 +30,7 @@ import { registry } from "./registry.js";
  * @param assignOp - The operator prefix (e.g. `'+'`, `'-'`, `'**'`)
  * @returns Handler function producing the case body
  */
-function compoundScopedAssign(assignOp: string): HandlerFn {
+function compoundScopedAssign(assignOp: AOpKind): HandlerFn {
 	return (ctx) => [
 		varDecl("val", ctx.pop()),
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
@@ -61,7 +50,7 @@ function compoundScopedAssign(assignOp: string): HandlerFn {
  * @param logicalOp - The logical operator (`'&&'` or `'||'`)
  * @returns Handler function producing the case body
  */
-function logicalScopedAssign(logicalOp: string): HandlerFn {
+function logicalScopedAssign(logicalOp: BOpKind): HandlerFn {
 	return (ctx) => [
 		varDecl("val", ctx.pop()),
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
@@ -81,7 +70,7 @@ function INC_SCOPED(ctx: HandlerCtx): JsNode[] {
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
 		varDecl("s", id(ctx.SC)),
 		...ctx.scopeWalk([
-			exprStmt(assign(ctx.sv(), bin("+", ctx.sv(), lit(1)))),
+			exprStmt(assign(ctx.sv(), bin(BOp.Add, ctx.sv(), lit(1)))),
 			exprStmt(ctx.push(ctx.sv())),
 		]),
 	];
@@ -93,7 +82,7 @@ function DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
 		varDecl("s", id(ctx.SC)),
 		...ctx.scopeWalk([
-			exprStmt(assign(ctx.sv(), bin("-", ctx.sv(), lit(1)))),
+			exprStmt(assign(ctx.sv(), bin(BOp.Sub, ctx.sv(), lit(1)))),
 			exprStmt(ctx.push(ctx.sv())),
 		]),
 	];
@@ -106,7 +95,7 @@ function POST_INC_SCOPED(ctx: HandlerCtx): JsNode[] {
 		varDecl("s", id(ctx.SC)),
 		...ctx.scopeWalk([
 			varDecl("old", ctx.sv()),
-			exprStmt(assign(ctx.sv(), bin("+", id("old"), lit(1)))),
+			exprStmt(assign(ctx.sv(), bin(BOp.Add, id("old"), lit(1)))),
 			exprStmt(ctx.push(id("old"))),
 		]),
 	];
@@ -119,7 +108,7 @@ function POST_DEC_SCOPED(ctx: HandlerCtx): JsNode[] {
 		varDecl("s", id(ctx.SC)),
 		...ctx.scopeWalk([
 			varDecl("old", ctx.sv()),
-			exprStmt(assign(ctx.sv(), bin("-", id("old"), lit(1)))),
+			exprStmt(assign(ctx.sv(), bin(BOp.Sub, id("old"), lit(1)))),
 			exprStmt(ctx.push(id("old"))),
 		]),
 	];
@@ -134,7 +123,7 @@ function NULLISH_ASSIGN_SCOPED(ctx: HandlerCtx): JsNode[] {
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
 		varDecl("s", id(ctx.SC)),
 		...ctx.scopeWalk([
-			ifStmt(bin("==", ctx.sv(), lit(null)), [
+			ifStmt(bin(BOp.Eq, ctx.sv(), lit(null)), [
 				exprStmt(assign(ctx.sv(), id("val"))),
 			]),
 			exprStmt(ctx.push(ctx.sv())),
@@ -155,19 +144,19 @@ registry.set(Op.INC_SCOPED, INC_SCOPED);
 registry.set(Op.DEC_SCOPED, DEC_SCOPED);
 registry.set(Op.POST_INC_SCOPED, POST_INC_SCOPED);
 registry.set(Op.POST_DEC_SCOPED, POST_DEC_SCOPED);
-registry.set(Op.ADD_ASSIGN_SCOPED, compoundScopedAssign("+"));
-registry.set(Op.SUB_ASSIGN_SCOPED, compoundScopedAssign("-"));
-registry.set(Op.MUL_ASSIGN_SCOPED, compoundScopedAssign("*"));
-registry.set(Op.DIV_ASSIGN_SCOPED, compoundScopedAssign("/"));
-registry.set(Op.MOD_ASSIGN_SCOPED, compoundScopedAssign("%"));
-registry.set(Op.POW_ASSIGN_SCOPED, compoundScopedAssign("**"));
-registry.set(Op.BIT_AND_ASSIGN_SCOPED, compoundScopedAssign("&"));
-registry.set(Op.BIT_OR_ASSIGN_SCOPED, compoundScopedAssign("|"));
-registry.set(Op.BIT_XOR_ASSIGN_SCOPED, compoundScopedAssign("^"));
-registry.set(Op.SHL_ASSIGN_SCOPED, compoundScopedAssign("<<"));
-registry.set(Op.SHR_ASSIGN_SCOPED, compoundScopedAssign(">>"));
-registry.set(Op.USHR_ASSIGN_SCOPED, compoundScopedAssign(">>>"));
-registry.set(Op.AND_ASSIGN_SCOPED, logicalScopedAssign("&&"));
-registry.set(Op.OR_ASSIGN_SCOPED, logicalScopedAssign("||"));
+registry.set(Op.ADD_ASSIGN_SCOPED, compoundScopedAssign(AOp.Add));
+registry.set(Op.SUB_ASSIGN_SCOPED, compoundScopedAssign(AOp.Sub));
+registry.set(Op.MUL_ASSIGN_SCOPED, compoundScopedAssign(AOp.Mul));
+registry.set(Op.DIV_ASSIGN_SCOPED, compoundScopedAssign(AOp.Div));
+registry.set(Op.MOD_ASSIGN_SCOPED, compoundScopedAssign(AOp.Mod));
+registry.set(Op.POW_ASSIGN_SCOPED, compoundScopedAssign(AOp.Pow));
+registry.set(Op.BIT_AND_ASSIGN_SCOPED, compoundScopedAssign(AOp.BitAnd));
+registry.set(Op.BIT_OR_ASSIGN_SCOPED, compoundScopedAssign(AOp.BitOr));
+registry.set(Op.BIT_XOR_ASSIGN_SCOPED, compoundScopedAssign(AOp.BitXor));
+registry.set(Op.SHL_ASSIGN_SCOPED, compoundScopedAssign(AOp.Shl));
+registry.set(Op.SHR_ASSIGN_SCOPED, compoundScopedAssign(AOp.Shr));
+registry.set(Op.USHR_ASSIGN_SCOPED, compoundScopedAssign(AOp.Ushr));
+registry.set(Op.AND_ASSIGN_SCOPED, logicalScopedAssign(BOp.And));
+registry.set(Op.OR_ASSIGN_SCOPED, logicalScopedAssign(BOp.Or));
 registry.set(Op.NULLISH_ASSIGN_SCOPED, NULLISH_ASSIGN_SCOPED);
 registry.set(Op.ASSIGN_OP, ASSIGN_OP);

@@ -17,28 +17,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	forStmt,
-	tryCatch,
-	breakStmt,
-	obj,
-	arr,
-	newExpr,
-	ternary,
-	update,
-} from "../nodes.js";
+import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, forStmt, tryCatch, breakStmt, obj, arr, newExpr, ternary, update, BOp, UOp, UpOp } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { superProto, superKey } from "./helpers.js";
 
@@ -115,7 +94,7 @@ function DELETE_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			assign(
 				ctx.peek(),
-				un("delete", index(ctx.peek(), index(id(ctx.C), id(ctx.O))))
+				un(UOp.Delete, index(ctx.peek(), index(id(ctx.C), id(ctx.O))))
 			)
 		),
 		breakStmt(),
@@ -127,7 +106,7 @@ function DELETE_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("key", ctx.pop()),
 		exprStmt(
-			assign(ctx.peek(), un("delete", index(ctx.peek(), id("key"))))
+			assign(ctx.peek(), un(UOp.Delete, index(ctx.peek(), id("key"))))
 		),
 		breakStmt(),
 	];
@@ -142,8 +121,8 @@ function OPT_CHAIN_GET(ctx: HandlerCtx): JsNode[] {
 			assign(
 				ctx.peek(),
 				ternary(
-					bin("==", id("obj"), lit(null)),
-					un("void", lit(0)),
+					bin(BOp.Eq, id("obj"), lit(null)),
+					un(UOp.Void, lit(0)),
 					index(id("obj"), id("key"))
 				)
 			)
@@ -161,8 +140,8 @@ function OPT_CHAIN_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 			assign(
 				ctx.peek(),
 				ternary(
-					bin("==", id("obj"), lit(null)),
-					un("void", lit(0)),
+					bin(BOp.Eq, id("obj"), lit(null)),
+					un(UOp.Void, lit(0)),
 					index(id("obj"), id("key"))
 				)
 			)
@@ -177,7 +156,7 @@ function OPT_CHAIN_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 function IN_OP(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("obj", ctx.pop()),
-		exprStmt(assign(ctx.peek(), bin("in", ctx.peek(), id("obj")))),
+		exprStmt(assign(ctx.peek(), bin(BOp.In, ctx.peek(), id("obj")))),
 		breakStmt(),
 	];
 }
@@ -186,7 +165,7 @@ function IN_OP(ctx: HandlerCtx): JsNode[] {
 function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("ctor", ctx.pop()),
-		exprStmt(assign(ctx.peek(), bin("instanceof", ctx.peek(), id("ctor")))),
+		exprStmt(assign(ctx.peek(), bin(BOp.Instanceof, ctx.peek(), id("ctor")))),
 		breakStmt(),
 	];
 }
@@ -211,7 +190,7 @@ function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 				ternary(
 					id("sp2"),
 					index(id("sp2"), id("key")),
-					un("void", lit(0))
+					un(UOp.Void, lit(0))
 				)
 			)
 		),
@@ -271,7 +250,7 @@ function HAS_PRIVATE_FIELD(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("obj", ctx.pop()),
 		varDecl("name", index(id(ctx.C), id(ctx.O))),
-		exprStmt(ctx.push(bin("in", id("name"), id("obj")))),
+		exprStmt(ctx.push(bin(BOp.In, id("name"), id("obj")))),
 		breakStmt(),
 	];
 }
@@ -325,7 +304,7 @@ function ARRAY_PUSH(ctx: HandlerCtx): JsNode[] {
 function ARRAY_HOLE(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("arr", ctx.peek()),
-		exprStmt(update("++", false, member(id("arr"), "length"))),
+		exprStmt(update(UpOp.Inc, false, member(id("arr"), "length"))),
 		breakStmt(),
 	];
 }
@@ -353,8 +332,8 @@ function SPREAD_ARRAY(ctx: HandlerCtx): JsNode[] {
 				),
 				forStmt(
 					varDecl("si", lit(0)),
-					bin("<", id("si"), member(id("items"), "length")),
-					update("++", false, id("si")),
+					bin(BOp.Lt, id("si"), member(id("items"), "length")),
+					update(UpOp.Inc, false, id("si")),
 					[
 						exprStmt(
 							call(member(id("target"), "push"), [
@@ -409,8 +388,8 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 		ifStmt(id("excludeKeys"), [
 			forStmt(
 				varDecl("_ei", lit(0)),
-				bin("<", id("_ei"), member(id("excludeKeys"), "length")),
-				update("++", false, id("_ei")),
+				bin(BOp.Lt, id("_ei"), member(id("excludeKeys"), "length")),
+				update(UpOp.Inc, false, id("_ei")),
 				[
 					exprStmt(
 						assign(
@@ -427,10 +406,10 @@ function COPY_DATA_PROPERTIES(ctx: HandlerCtx): JsNode[] {
 		varDecl("keys", call(member(id("Object"), "keys"), [id("src")])),
 		forStmt(
 			varDecl("ki", lit(0)),
-			bin("<", id("ki"), member(id("keys"), "length")),
-			update("++", false, id("ki")),
+			bin(BOp.Lt, id("ki"), member(id("keys"), "length")),
+			update(UpOp.Inc, false, id("ki")),
 			[
-				ifStmt(un("!", index(id("_ex"), index(id("keys"), id("ki")))), [
+				ifStmt(un(UOp.Not, index(id("_ex"), index(id("keys"), id("ki")))), [
 					exprStmt(
 						assign(
 							index(id("target"), index(id("keys"), id("ki"))),

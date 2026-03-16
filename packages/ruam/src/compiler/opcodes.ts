@@ -777,6 +777,17 @@ export enum Op {
 	/** Pop indexed scope frame. */
 	POP_INDEXED_SCOPE,
 
+	// ═════════════════════════════════════════════════════════════════════════
+	// 25. Runtime Mutation
+	// ═════════════════════════════════════════════════════════════════════════
+
+	/**
+	 * Mutate the handler table at runtime. Operand = mutation seed.
+	 * Performs deterministic swaps on `_ht`, changing which handler
+	 * each physical opcode maps to. Entangled with rolling cipher.
+	 */
+	MUTATE,
+
 	// ─────────────────────────────────────────────────────────────────────────
 
 	/** Sentinel — not a real opcode; its numeric value equals the total count. */

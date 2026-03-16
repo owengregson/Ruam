@@ -16,19 +16,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	lit,
-	bin,
-	un,
-	index,
-	assign,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	breakStmt,
-} from "../nodes.js";
+import { type JsNode, id, lit, bin, un, index, assign, varDecl, exprStmt, ifStmt, breakStmt, BOp, UOp, type BOpKind } from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -41,7 +29,7 @@ import { registry } from "./registry.js";
  * @returns AST expression for `O & 0xFFFF`
  */
 function lo16(ctx: HandlerCtx): JsNode {
-	return bin("&", id(ctx.O), lit(0xffff));
+	return bin(BOp.BitAnd, id(ctx.O), lit(0xffff));
 }
 
 /**
@@ -51,7 +39,7 @@ function lo16(ctx: HandlerCtx): JsNode {
  * @returns AST expression for `(O >>> 16) & 0xFFFF`
  */
 function hi16(ctx: HandlerCtx): JsNode {
-	return bin("&", bin(">>>", id(ctx.O), lit(16)), lit(0xffff));
+	return bin(BOp.BitAnd, bin(BOp.Ushr, id(ctx.O), lit(16)), lit(0xffff));
 }
 
 /**
@@ -61,7 +49,7 @@ function hi16(ctx: HandlerCtx): JsNode {
  * @returns AST expression for `O & 0xFF`
  */
 function lo8(ctx: HandlerCtx): JsNode {
-	return bin("&", id(ctx.O), lit(0xff));
+	return bin(BOp.BitAnd, id(ctx.O), lit(0xff));
 }
 
 /**
@@ -71,7 +59,7 @@ function lo8(ctx: HandlerCtx): JsNode {
  * @returns AST expression for `(O >>> 8) & 0xFF`
  */
 function mid8(ctx: HandlerCtx): JsNode {
-	return bin("&", bin(">>>", id(ctx.O), lit(8)), lit(0xff));
+	return bin(BOp.BitAnd, bin(BOp.Ushr, id(ctx.O), lit(8)), lit(0xff));
 }
 
 /**
@@ -85,7 +73,7 @@ function mid8(ctx: HandlerCtx): JsNode {
  * @param op - The JS binary operator string (e.g. `'+'`, `'<'`, `'==='`)
  * @returns Handler function producing the case body
  */
-function regBinOp(op: string): HandlerFn {
+function regBinOp(op: BOpKind): HandlerFn {
 	return (ctx) => [
 		varDecl("ra", lo16(ctx)),
 		varDecl("rb", hi16(ctx)),
@@ -109,7 +97,7 @@ function regBinOp(op: string): HandlerFn {
  * @param op - The JS binary operator string
  * @returns Handler function producing the case body
  */
-function regConstOp(op: string): HandlerFn {
+function regConstOp(op: BOpKind): HandlerFn {
 	return (ctx) => [
 		varDecl("r", lo16(ctx)),
 		varDecl("ci", hi16(ctx)),
@@ -134,7 +122,7 @@ function regConstOp(op: string): HandlerFn {
  * @param op - The JS binary operator string
  * @returns Handler function producing the case body
  */
-function regConstPush(op: string): HandlerFn {
+function regConstPush(op: BOpKind): HandlerFn {
 	return (ctx) => [
 		varDecl("r", lo16(ctx)),
 		varDecl("ci", hi16(ctx)),
@@ -149,24 +137,24 @@ function regConstPush(op: string): HandlerFn {
 
 // --- Dual-register binary operations ---
 
-registry.set(Op.REG_ADD, regBinOp("+"));
-registry.set(Op.REG_SUB, regBinOp("-"));
-registry.set(Op.REG_MUL, regBinOp("*"));
-registry.set(Op.REG_DIV, regBinOp("/"));
-registry.set(Op.REG_MOD, regBinOp("%"));
-registry.set(Op.REG_LT, regBinOp("<"));
-registry.set(Op.REG_LTE, regBinOp("<="));
-registry.set(Op.REG_GT, regBinOp(">"));
-registry.set(Op.REG_GTE, regBinOp(">="));
-registry.set(Op.REG_SEQ, regBinOp("==="));
-registry.set(Op.REG_SNEQ, regBinOp("!=="));
+registry.set(Op.REG_ADD, regBinOp(BOp.Add));
+registry.set(Op.REG_SUB, regBinOp(BOp.Sub));
+registry.set(Op.REG_MUL, regBinOp(BOp.Mul));
+registry.set(Op.REG_DIV, regBinOp(BOp.Div));
+registry.set(Op.REG_MOD, regBinOp(BOp.Mod));
+registry.set(Op.REG_LT, regBinOp(BOp.Lt));
+registry.set(Op.REG_LTE, regBinOp(BOp.Lte));
+registry.set(Op.REG_GT, regBinOp(BOp.Gt));
+registry.set(Op.REG_GTE, regBinOp(BOp.Gte));
+registry.set(Op.REG_SEQ, regBinOp(BOp.Seq));
+registry.set(Op.REG_SNEQ, regBinOp(BOp.Sneq));
 
 // --- Register + constant operations ---
 
-registry.set(Op.REG_ADD_CONST, regConstOp("+"));
-registry.set(Op.REG_CONST_SUB, regConstPush("-"));
-registry.set(Op.REG_CONST_MUL, regConstPush("*"));
-registry.set(Op.REG_CONST_MOD, regConstPush("%"));
+registry.set(Op.REG_ADD_CONST, regConstOp(BOp.Add));
+registry.set(Op.REG_CONST_SUB, regConstPush(BOp.Sub));
+registry.set(Op.REG_CONST_MUL, regConstPush(BOp.Mul));
+registry.set(Op.REG_CONST_MOD, regConstPush(BOp.Mod));
 
 // --- Property access ---
 
@@ -208,11 +196,10 @@ function REG_LT_CONST_JF(ctx: HandlerCtx): JsNode[] {
 		varDecl("ci", mid8(ctx)),
 		varDecl("tgt", hi16(ctx)),
 		ifStmt(
-			un(
-				"!",
-				bin("<", index(id(ctx.R), id("r")), index(id(ctx.C), id("ci")))
+			un(UOp.Not,
+				bin(BOp.Lt, index(id(ctx.R), id("r")), index(id(ctx.C), id("ci")))
 			),
-			[exprStmt(assign(id(ctx.IP), bin("*", id("tgt"), lit(2))))]
+			[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id("tgt"), lit(2))))]
 		),
 		breakStmt(),
 	];
@@ -235,11 +222,10 @@ function REG_LT_REG_JF(ctx: HandlerCtx): JsNode[] {
 		varDecl("rb", mid8(ctx)),
 		varDecl("tgt", hi16(ctx)),
 		ifStmt(
-			un(
-				"!",
-				bin("<", index(id(ctx.R), id("ra")), index(id(ctx.R), id("rb")))
+			un(UOp.Not,
+				bin(BOp.Lt, index(id(ctx.R), id("ra")), index(id(ctx.R), id("rb")))
 			),
-			[exprStmt(assign(id(ctx.IP), bin("*", id("tgt"), lit(2))))]
+			[exprStmt(assign(id(ctx.IP), bin(BOp.Mul, id("tgt"), lit(2))))]
 		),
 		breakStmt(),
 	];

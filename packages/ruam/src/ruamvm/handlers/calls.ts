@@ -16,28 +16,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import {
-	type JsNode,
-	id,
-	lit,
-	bin,
-	un,
-	assign,
-	call,
-	member,
-	index,
-	varDecl,
-	exprStmt,
-	ifStmt,
-	forStmt,
-	breakStmt,
-	newExpr,
-	ternary,
-	update,
-	arr,
-	obj,
-	spread,
-} from "../nodes.js";
+import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, forStmt, breakStmt, newExpr, ternary, update, arr, obj, spread, BOp, UOp, UpOp } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { debugTrace, superProto } from "./helpers.js";
 
@@ -60,18 +39,18 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 	return [
 		// var argc=O;var hasSpread=argc<0;
 		varDecl("argc", id(ctx.O)),
-		varDecl("hasSpread", bin("<", id("argc"), lit(0))),
+		varDecl("hasSpread", bin(BOp.Lt, id("argc"), lit(0))),
 		// if(hasSpread)argc=-argc;
 		ifStmt(id("hasSpread"), [
-			exprStmt(assign(id("argc"), un("-", id("argc")))),
+			exprStmt(assign(id("argc"), un(UOp.Neg, id("argc")))),
 		]),
 		// var callArgs=new Array(argc);
 		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
 		// for(var ai=argc-1;ai>=0;ai--)callArgs[ai]=S[P--];
 		forStmt(
-			varDecl("ai", bin("-", id("argc"), lit(1))),
-			bin(">=", id("ai"), lit(0)),
-			update("--", false, id("ai")),
+			varDecl("ai", bin(BOp.Sub, id("argc"), lit(1))),
+			bin(BOp.Gte, id("ai"), lit(0)),
+			update(UpOp.Dec, false, id("ai")),
 			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
 		),
 		// if(hasSpread){...flatten spread markers...}
@@ -79,12 +58,11 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 			varDecl("flat", arr()),
 			forStmt(
 				varDecl("ai", lit(0)),
-				bin("<", id("ai"), member(id("callArgs"), "length")),
-				update("++", false, id("ai")),
+				bin(BOp.Lt, id("ai"), member(id("callArgs"), "length")),
+				update(UpOp.Inc, false, id("ai")),
 				[
 					ifStmt(
-						bin(
-							"&&",
+						bin(BOp.And,
 							index(id("callArgs"), id("ai")),
 							index(
 								index(id("callArgs"), id("ai")),
@@ -95,15 +73,14 @@ function spreadPreamble(ctx: HandlerCtx): JsNode[] {
 							// Spread value IS the array now — iterate directly
 							forStmt(
 								varDecl("si", lit(0)),
-								bin(
-									"<",
+								bin(BOp.Lt,
 									id("si"),
 									member(
 										index(id("callArgs"), id("ai")),
 										"length"
 									)
 								),
-								update("++", false, id("si")),
+								update(UpOp.Inc, false, id("si")),
 								[
 									exprStmt(
 										call(member(id("flat"), "push"), [
@@ -145,9 +122,9 @@ function simplePreamble(ctx: HandlerCtx): JsNode[] {
 		varDecl("argc", id(ctx.O)),
 		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
 		forStmt(
-			varDecl("ai", bin("-", id("argc"), lit(1))),
-			bin(">=", id("ai"), lit(0)),
-			update("--", false, id("ai")),
+			varDecl("ai", bin(BOp.Sub, id("argc"), lit(1))),
+			bin(BOp.Gte, id("ai"), lit(0)),
+			update(UpOp.Dec, false, id("ai")),
 			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
 		),
 	];
@@ -167,26 +144,25 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 			ctx,
 			"CALL",
 			lit("fn="),
-			un("typeof", id("fn")),
-			bin("+", lit("argc="), member(id("callArgs"), "length")),
+			un(UOp.Typeof, id("fn")),
+			bin(BOp.Add, lit("argc="), member(id("callArgs"), "length")),
 			ternary(
-				bin("&&", id("fn"), member(id("fn"), "name")),
-				bin("+", lit("name="), member(id("fn"), "name")),
+				bin(BOp.And, id("fn"), member(id("fn"), "name")),
+				bin(BOp.Add, lit("name="), member(id("fn"), "name")),
 				lit("")
 			)
 		),
 		...(ctx.debug
 			? [
 					ifStmt(
-						bin("!==", un("typeof", id("fn")), lit("function")),
+						bin(BOp.Sneq, un(UOp.Typeof, id("fn")), lit("function")),
 						[
 							exprStmt(
 								call(id(ctx.dbg), [
 									lit("CALL_ERR"),
 									lit("NOT A FUNCTION:"),
 									id("fn"),
-									bin(
-										"+",
+									bin(BOp.Add,
 										lit(ctx.S + " depth="),
 										member(id(ctx.S), "length")
 									),
@@ -199,7 +175,7 @@ function CALL(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			ctx.push(
 				call(member(id("fn"), "apply"), [
-					un("void", lit(0)),
+					un(UOp.Void, lit(0)),
 					id("callArgs"),
 				])
 			)
@@ -221,20 +197,20 @@ function CALL_METHOD(ctx: HandlerCtx): JsNode[] {
 			ctx,
 			"CALL_METHOD",
 			lit("fn="),
-			un("typeof", id("fn")),
+			un(UOp.Typeof, id("fn")),
 			lit("recv="),
-			un("typeof", id("recv")),
-			bin("+", lit("argc="), member(id("callArgs"), "length")),
+			un(UOp.Typeof, id("recv")),
+			bin(BOp.Add, lit("argc="), member(id("callArgs"), "length")),
 			ternary(
-				bin("&&", id("fn"), member(id("fn"), "name")),
-				bin("+", lit("name="), member(id("fn"), "name")),
+				bin(BOp.And, id("fn"), member(id("fn"), "name")),
+				bin(BOp.Add, lit("name="), member(id("fn"), "name")),
 				lit("")
 			)
 		),
 		...(ctx.debug
 			? [
 					ifStmt(
-						bin("!==", un("typeof", id("fn")), lit("function")),
+						bin(BOp.Sneq, un(UOp.Typeof, id("fn")), lit("function")),
 						[
 							exprStmt(
 								call(id(ctx.dbg), [
@@ -287,19 +263,17 @@ function SUPER_CALL(ctx: HandlerCtx): JsNode[] {
 		...debugTrace(
 			ctx,
 			"SUPER_CALL",
-			bin("+", lit("argc="), id("argc")),
+			bin(BOp.Add, lit("argc="), id("argc")),
 			lit("superProto="),
-			un("!", un("!", id("superProto"))),
+			un(UOp.Not, un(UOp.Not, id("superProto"))),
 			lit("superCtor="),
-			bin(
-				"&&",
+			bin(BOp.And,
 				id("superProto"),
-				un("typeof", member(id("superProto"), "constructor"))
+				un(UOp.Typeof, member(id("superProto"), "constructor"))
 			)
 		),
 		ifStmt(
-			bin(
-				"&&",
+			bin(BOp.And,
 				id("superProto"),
 				member(id("superProto"), "constructor")
 			),
@@ -354,8 +328,8 @@ function CALL_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			ctx.push(
 				ternary(
-					bin("==", id("fn"), lit(null)),
-					un("void", lit(0)),
+					bin(BOp.Eq, id("fn"), lit(null)),
+					un(UOp.Void, lit(0)),
 					call(id("fn"), [spread(id("callArgs"))])
 				)
 			)
@@ -380,8 +354,8 @@ function CALL_METHOD_OPTIONAL(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			ctx.push(
 				ternary(
-					bin("==", id("fn"), lit(null)),
-					un("void", lit(0)),
+					bin(BOp.Eq, id("fn"), lit(null)),
+					un(UOp.Void, lit(0)),
 					call(member(id("fn"), "call"), [
 						id("recv"),
 						spread(id("callArgs")),
@@ -439,16 +413,16 @@ function CALL_TAGGED_TEMPLATE(ctx: HandlerCtx): JsNode[] {
  */
 function CALL_SUPER_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
-		varDecl("argc", bin("&", id(ctx.O), lit(0xffff))),
+		varDecl("argc", bin(BOp.BitAnd, id(ctx.O), lit(0xffff))),
 		varDecl(
 			"nameIdx",
-			bin("&", bin(">>", id(ctx.O), lit(16)), lit(0xffff))
+			bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(0xffff))
 		),
 		varDecl("callArgs", newExpr(id("Array"), [id("argc")])),
 		forStmt(
-			varDecl("ai", bin("-", id("argc"), lit(1))),
-			bin(">=", id("ai"), lit(0)),
-			update("--", false, id("ai")),
+			varDecl("ai", bin(BOp.Sub, id("argc"), lit(1))),
+			bin(BOp.Gte, id("ai"), lit(0)),
+			update(UpOp.Dec, false, id("ai")),
 			[exprStmt(assign(index(id("callArgs"), id("ai")), ctx.pop()))]
 		),
 		varDecl("sp2", superProto(ctx)),
@@ -457,7 +431,7 @@ function CALL_SUPER_METHOD(ctx: HandlerCtx): JsNode[] {
 			ternary(
 				id("sp2"),
 				index(id("sp2"), index(id(ctx.C), id("nameIdx"))),
-				un("void", lit(0))
+				un(UOp.Void, lit(0))
 			)
 		),
 		exprStmt(
@@ -468,7 +442,7 @@ function CALL_SUPER_METHOD(ctx: HandlerCtx): JsNode[] {
 						id(ctx.TV),
 						spread(id("callArgs")),
 					]),
-					un("void", lit(0))
+					un(UOp.Void, lit(0))
 				)
 			)
 		),

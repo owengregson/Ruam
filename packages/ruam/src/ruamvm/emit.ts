@@ -7,62 +7,44 @@
  * @module ruamvm/emit
  */
 
-import type { JsNode, VarDecl, ReturnStmt, ObjectEntry } from "./nodes.js";
-import { assertNever } from "./nodes.js";
+import type {
+	JsNode,
+	VarDecl,
+	ReturnStmt,
+	ObjectEntry,
+	BOpKind,
+	UOpKind,
+} from "./nodes.js";
+import {
+	assertNever,
+	BOp,
+	UOp,
+	BOP_STR,
+	UOP_STR,
+	AOP_STR,
+	UPOP_STR,
+} from "./nodes.js";
 
 // --- Operator precedence table (higher = tighter binding) ---
 
-const PREC: Record<string, number> = {
-	",": 1,
-	"=": 2,
-	"+=": 2,
-	"-=": 2,
-	"*=": 2,
-	"/=": 2,
-	"%=": 2,
-	"**=": 2,
-	"<<=": 2,
-	">>=": 2,
-	">>>=": 2,
-	"&=": 2,
-	"|=": 2,
-	"^=": 2,
-	"&&=": 2,
-	"||=": 2,
-	"??=": 2,
-	"?": 3,
-	"||": 4,
-	"??": 4,
-	"&&": 5,
-	"|": 6,
-	"^": 7,
-	"&": 8,
-	"==": 9,
-	"!=": 9,
-	"===": 9,
-	"!==": 9,
-	"<": 10,
-	">": 10,
-	"<=": 10,
-	">=": 10,
-	in: 10,
-	instanceof: 10,
-	"<<": 11,
-	">>": 11,
-	">>>": 11,
-	"+": 12,
-	"-": 12,
-	"*": 13,
-	"/": 13,
-	"%": 13,
-	"**": 14,
+const BIN_PREC: Record<BOpKind, number> = {
+	[BOp.Or]:4,[BOp.Nullish]:4,[BOp.And]:5,
+	[BOp.BitOr]:6,[BOp.BitXor]:7,[BOp.BitAnd]:8,
+	[BOp.Eq]:9,[BOp.Neq]:9,[BOp.Seq]:9,[BOp.Sneq]:9,
+	[BOp.Lt]:10,[BOp.Gt]:10,[BOp.Lte]:10,[BOp.Gte]:10,
+	[BOp.In]:10,[BOp.Instanceof]:10,
+	[BOp.Shl]:11,[BOp.Shr]:11,[BOp.Ushr]:11,
+	[BOp.Add]:12,[BOp.Sub]:12,
+	[BOp.Mul]:13,[BOp.Div]:13,[BOp.Mod]:13,
+	[BOp.Pow]:14,
 };
+const PREC_COMMA=1;const PREC_ASSIGN=2;const PREC_TERNARY=3;
 
 /** Keyword binary operators that need spaces around them. */
-const KEYWORD_BINOP = new Set(["in", "instanceof"]);
+const KEYWORD_BINOP = new Set<BOpKind>([BOp.In, BOp.Instanceof]);
 
 /** Keyword unary operators that need a space after them. */
-const KEYWORD_UNOP = new Set(["typeof", "void", "delete"]);
+const KEYWORD_UNOP = new Set<UOpKind>([UOp.Typeof, UOp.Void, UOp.Delete]);
 
 /**
  * Whether a unary operator's operand needs parentheses.
@@ -82,17 +64,16 @@ function needsUnaryParens(expr: JsNode): boolean {
 
 function needsParens(
 	child: JsNode,
-	parentOp: string,
+	parentOp: BOpKind,
 	isRight: boolean
 ): boolean {
 	let cp: number;
-	if (child.type === "BinOp") cp = PREC[child.op] ?? 0;
-	else if (child.type === "AssignExpr")
-		cp = PREC[child.op ? child.op + "=" : "="] ?? 2;
-	else if (child.type === "TernaryExpr") cp = PREC["?"] ?? 3;
-	else if (child.type === "SequenceExpr") cp = PREC[","] ?? 1;
+	if (child.type === "BinOp") cp = BIN_PREC[child.op] ?? 0;
+	else if (child.type === "AssignExpr") cp = PREC_ASSIGN;
+	else if (child.type === "TernaryExpr") cp = PREC_TERNARY;
+	else if (child.type === "SequenceExpr") cp = PREC_COMMA;
 	else return false;
-	const pp = PREC[parentOp] ?? 0;
+	const pp = BIN_PREC[parentOp] ?? 0;
 	if (cp < pp) return true;
 	if (cp === pp && isRight) return true;
 	return false;
@@ -184,6 +165,7 @@ export function emit(node: JsNode): string {
 		case "Literal":
 			return emitLiteral(node.value);
 		case "BinOp": {
+			const opStr = BOP_STR[node.op];
 			const left = needsParens(node.left, node.op, false)
 				? `(${emit(node.left)})`
 				: emit(node.left);
@@ -191,34 +173,34 @@ export function emit(node: JsNode): string {
 				? `(${emit(node.right)})`
 				: emit(node.right);
 			if (KEYWORD_BINOP.has(node.op))
-				return `${left} ${node.op} ${right}`;
-			return `${left}${node.op}${right}`;
+				return `${left} ${opStr} ${right}`;
+			return `${left}${opStr}${right}`;
 		}
 		case "UnaryOp": {
+			const uopStr = UOP_STR[node.op];
 			if (KEYWORD_UNOP.has(node.op)) {
 				const inner = emit(node.expr);
-				return `${node.op} ${
+				return `${uopStr} ${
 					needsUnaryParens(node.expr) ? `(${inner})` : inner
 				}`;
 			}
-			// Prevent --x from becoming ---x (double minus + negate)
 			if (
-				node.op === "-" &&
+				node.op === UOp.Neg &&
 				node.expr.type === "UnaryOp" &&
-				node.expr.op === "-"
+				node.expr.op === UOp.Neg
 			)
 				return `-(${emit(node.expr)})`;
 			const inner = emit(node.expr);
-			return `${node.op}${
+			return `${uopStr}${
 				needsUnaryParens(node.expr) ? `(${inner})` : inner
 			}`;
 		}
 		case "UpdateExpr":
 			return node.prefix
-				? `${node.op}${emit(node.arg)}`
-				: `${emit(node.arg)}${node.op}`;
+				? `${UPOP_STR[node.op]}${emit(node.arg)}`
+				: `${emit(node.arg)}${UPOP_STR[node.op]}`;
 		case "AssignExpr":
-			return `${emit(node.target)}${node.op ?? ""}=${emit(node.value)}`;
+			return `${emit(node.target)}${node.op != null ? AOP_STR[node.op] : ""}=${emit(node.value)}`;
 		case "CallExpr": {
 			let callee = emit(node.callee);
 			// Wrap function/arrow expressions in parens when used as callee (IIFE)
