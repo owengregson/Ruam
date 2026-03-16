@@ -31,11 +31,8 @@ import {
 	generateShieldedVmRuntime,
 } from "./ruamvm/assembler.js";
 import type { ShieldingGroup, VmRuntimeResult } from "./ruamvm/assembler.js";
-import {
-	generateRuntimeNames,
-	generateShieldedNames,
-} from "./encoding/names.js";
 import type { RuntimeNames, TempNames } from "./encoding/names.js";
+import { setupRegistry, setupShieldedRegistry } from "./naming/index.js";
 import { resolveOptions } from "./presets.js";
 import type { ResolvedOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
@@ -49,7 +46,7 @@ import {
 } from "./constants.js";
 import { buildInterpreterFunctions } from "./ruamvm/builders/interpreter.js";
 import { emit } from "./ruamvm/emit.js";
-import { generateAlphabet } from "./encoding/decoder.js";
+// generateAlphabet no longer needed — provided by NameRegistry
 import { generateStructuralChoices } from "./structural-choices.js";
 import type { StructuralChoices } from "./structural-choices.js";
 import { permuteBlocks } from "./compiler/block-permutation.js";
@@ -124,11 +121,8 @@ export function obfuscateCode(
 	resetUnitCounter(shuffleSeed);
 	const shuffleMap = generateShuffleMap(shuffleSeed);
 
-	// -- Generate randomized runtime identifiers -----------------------------
-	const { runtime: names, temps } = generateRuntimeNames(shuffleSeed);
-
-	// -- Generate custom encoding alphabet -----------------------------------
-	const alphabet = generateAlphabet(shuffleSeed);
+	// -- Generate randomized runtime identifiers + alphabet via NameRegistry --
+	const { runtime: names, temps, alphabet } = setupRegistry(shuffleSeed);
 
 	// -- Generate per-build structural variation choices --------------------
 	const structuralChoices = generateStructuralChoices(shuffleSeed);
@@ -781,16 +775,14 @@ function assembleShielded(
 	const groupSeeds = targetPaths.map(() => generateCryptoSeed());
 	const sharedSeed = generateCryptoSeed();
 
-	// Generate names: shared + per-group
+	// Generate names: shared + per-group via NameRegistry
 	const {
 		shared: sharedNames,
 		sharedTemps,
 		groups: groupNameSets,
 		groupTemps: groupTempSets,
-	} = generateShieldedNames(sharedSeed, groupSeeds);
-
-	// Generate shared encoding alphabet (shared across all groups)
-	const shieldedAlphabet = generateAlphabet(sharedSeed);
+		alphabet: shieldedAlphabet,
+	} = setupShieldedRegistry(sharedSeed, groupSeeds);
 
 	// --- Phase 1: Compile all targets (no encoding) ---
 	const groups: ShieldingGroup[] = [];
