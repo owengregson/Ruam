@@ -30,6 +30,9 @@ TestOutputExtRecurs
 packages/ruam/test/RuamTesterO.js
 packages/ruam/test/RuamTesterLiteO.js
 
+# Competitors
+competitors/
+
 # Environment / secrets
 .env
 .env.*

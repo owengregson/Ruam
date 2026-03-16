@@ -177,7 +177,10 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 	// instruction. These rely on sequential fall-through to the next block,
 	// which will break after reordering. Insert an explicit JMP at the end
 	// of such blocks pointing to their original successor.
-	const oldInstrs = [...unit.instructions];
+	// Deep-copy instructions to avoid sharing objects with unit.instructions.
+	// Phase 1 modifies operands in-place; shared objects would corrupt the
+	// original unit state visible to recursive child-unit processing.
+	const oldInstrs = unit.instructions.map(i => ({ ...i }));
 
 	// Build a map from original block start → original block index
 	const blockIndexByStart = new Map<number, number>();
@@ -252,23 +255,9 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 		ipOffset += expansionByBlock.get(origBlock.startIp) ?? 0;
 	}
 
-	// Patch all JMP operands in expanded instructions to use expanded IPs
-	for (const instr of expandedInstrs) {
-		if (ALL_JUMP_OPS.has(instr.opcode)) {
-			const expanded = origIpToExpanded.get(instr.operand);
-			if (expanded != null) instr.operand = expanded;
-		}
-		if (PACKED_JUMP_OPS.has(instr.opcode)) {
-			const target = instr.operand >>> 16;
-			const lower = instr.operand & 0xffff;
-			const expanded = origIpToExpanded.get(target);
-			if (expanded != null) {
-				instr.operand = (expanded << 16) | lower;
-			}
-		}
-	}
-
-	// --- Phase 2: Build IP mapping for the permutation ---
+	// --- Build combined original→permuted IP mapping ---
+	// Compose origIpToExpanded with expandedIpToPermuted in one step
+	// to avoid mutating shared instruction objects.
 	const ipMap = new Map<number, number>();
 	let newIp = 0;
 	for (const block of expandedPermuted) {
@@ -279,7 +268,17 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 		newIp += blockLen;
 	}
 
-	// Rewrite instructions in permuted order
+	// Combined mapping: original IP → permuted IP
+	const origToPermuted = new Map<number, number>();
+	for (const [origIp, expandedIp] of origIpToExpanded) {
+		const permuted = ipMap.get(expandedIp);
+		if (permuted != null) origToPermuted.set(origIp, permuted);
+	}
+	// Inserted fall-through JMPs use original successor IPs as operands.
+	// Their expanded IPs are in ipMap but not in origIpToExpanded.
+	// We'll patch them via origToPermuted (their operands are original IPs).
+
+	// Rewrite instructions in permuted order (fresh copies, no mutation)
 	const newInstrs: Instruction[] = [];
 	for (const block of expandedPermuted) {
 		for (let ip = block.startIp; ip < block.endIp; ip++) {
@@ -287,34 +286,41 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 		}
 	}
 
-	// Patch jump targets in new instruction array
+	// Patch jump targets in new instruction array.
+	// Operands are still ORIGINAL IPs (no in-place Phase 1 mutation).
+	// Use origToPermuted for direct original→permuted mapping.
 	for (let ip = 0; ip < newInstrs.length; ip++) {
 		const instr = newInstrs[ip]!;
 
-		if (JUMP_OPS.has(instr.opcode)) {
-			const newTarget = ipMap.get(instr.operand);
+		if (ALL_JUMP_OPS.has(instr.opcode)) {
+			const newTarget = origToPermuted.get(instr.operand);
 			if (newTarget != null) {
 				instr.operand = newTarget;
+			} else {
+				// Fall-off-end targets (>= origInstrCount) map to newInstrs.length
+				if (instr.operand >= oldInstrs.length) {
+					instr.operand = newInstrs.length;
+				}
 			}
 		}
 
 		if (PACKED_JUMP_OPS.has(instr.opcode)) {
-			// Packed: operand = (target << 16) | lowerBits
 			const target = instr.operand >>> 16;
 			const lower = instr.operand & 0xffff;
-			const newTarget = ipMap.get(target);
+			const newTarget = origToPermuted.get(target);
 			if (newTarget != null) {
 				instr.operand = (newTarget << 16) | lower;
+			} else if (target >= oldInstrs.length && target !== 0xFFFF) {
+				instr.operand = (newInstrs.length << 16) | lower;
 			}
 		}
 	}
 
-	// Patch jump table: map original IPs to expanded then permuted IPs
+	// Patch jump table
 	const newJumpTable: Record<number, number> = {};
 	for (const [label, ip] of Object.entries(unit.jumpTable)) {
-		const expandedIp = origIpToExpanded.get(ip) ?? ip;
-		const newTarget = ipMap.get(expandedIp);
-		newJumpTable[Number(label)] = newTarget ?? expandedIp;
+		const newTarget = origToPermuted.get(ip);
+		newJumpTable[Number(label)] = newTarget ?? ip;
 	}
 
 	// Patch exception table: map original IPs through expansion + permutation.

@@ -730,19 +730,27 @@ function createScatterNameGen(seed: number): () => string {
 
 /**
  * Build the globalThis detection chain with shuffled check order.
- * The standard order (globalThis → window → global → self) is
- * recognizable across builds. Shuffling it breaks that pattern.
+ *
+ * `globalThis` is always checked first — it is the standard way to
+ * access the global object in all environments (ES2020+) and is the
+ * only reference guaranteed to resolve correctly in Chrome extension
+ * content scripts (where `window` is the page's Window, but extension
+ * globals like `chrome` live on `globalThis`). The remaining globals
+ * (`window`, `global`, `self`) are shuffled per build for structural
+ * variation.
  */
 function buildGlobalRefDetection(choices?: StructuralChoices): JsNode {
-	const globals = ["globalThis", "window", "global", "self"];
+	// globalThis is always first — remaining order shuffled
+	const rest = ["window", "global", "self"];
 
-	// Shuffle the detection order using the structural choices PRNG
 	if (choices) {
-		for (let i = globals.length - 1; i > 0; i--) {
+		for (let i = rest.length - 1; i > 0; i--) {
 			const j = Math.floor(choices.prng() * (i + 1));
-			[globals[i], globals[j]] = [globals[j]!, globals[i]!];
+			[rest[i], rest[j]] = [rest[j]!, rest[i]!];
 		}
 	}
+
+	const globals = ["globalThis", ...rest];
 
 	// Build nested ternary chain: check each global, fallback to {}
 	let result: JsNode = obj();

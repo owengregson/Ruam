@@ -17,7 +17,7 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, forStmt, tryCatch, breakStmt, obj, arr, newExpr, ternary, update, BOp, UOp, UpOp } from "../nodes.js";
+import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, forStmt, breakStmt, obj, arr, newExpr, ternary, update, BOp, UOp, UpOp } from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { superProto, superKey } from "./helpers.js";
 
@@ -34,36 +34,29 @@ function GET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 }
 
 /**
- * SET_PROP_STATIC: pop value, set on object with try/catch fallback.
+ * SET_PROP_STATIC: pop value, set on object.
  *
  * ```
- * var val=S[P--];var obj=S[P];var k=C[O];
- * try{obj[k]=val;}catch(_){Object.defineProperty(obj,k,{value:val,writable:true,configurable:true});}
+ * var val=S.pop();var obj=S[S.length-1];var k=C[O];
+ * obj[k]=val;
  * break;
  * ```
+ *
+ * Previous implementation used a try/catch that fell back to
+ * Object.defineProperty. This masked real errors: when obj was
+ * null/undefined/primitive, the original TypeError was caught and
+ * replaced with "Object.defineProperty called on non-object".
+ * The fallback was intended for non-writable inherited properties,
+ * but that case doesn't arise in compiled bytecode (object literals
+ * are always fresh objects, and user assignments should propagate
+ * errors naturally).
  */
 function SET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("val", ctx.pop()),
 		varDecl("obj", ctx.peek()),
 		varDecl("k", index(id(ctx.C), id(ctx.O))),
-		tryCatch(
-			[exprStmt(assign(index(id("obj"), id("k")), id("val")))],
-			"_",
-			[
-				exprStmt(
-					call(member(id("Object"), "defineProperty"), [
-						id("obj"),
-						id("k"),
-						obj(
-							["value", id("val")],
-							["writable", lit(true)],
-							["configurable", lit(true)]
-						),
-					])
-				),
-			]
-		),
+		exprStmt(assign(index(id("obj"), id("k")), id("val"))),
 		breakStmt(),
 	];
 }
