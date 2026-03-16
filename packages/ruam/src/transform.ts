@@ -31,7 +31,7 @@ import {
 	generateShieldedVmRuntime,
 } from "./ruamvm/assembler.js";
 import type { ShieldingGroup, VmRuntimeResult } from "./ruamvm/assembler.js";
-import type { RuntimeNames, TempNames } from "./encoding/names.js";
+import type { RuntimeNames, TempNames } from "./naming/compat-types.js";
 import { setupRegistry, setupShieldedRegistry } from "./naming/index.js";
 import { resolveOptions } from "./presets.js";
 import type { ResolvedOptions } from "./presets.js";

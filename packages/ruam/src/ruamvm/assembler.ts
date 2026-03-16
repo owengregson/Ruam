@@ -15,7 +15,7 @@
  */
 
 import { OPCODE_COUNT } from "../compiler/opcodes.js";
-import type { RuntimeNames, TempNames } from "../encoding/names.js";
+import type { RuntimeNames, TempNames } from "../naming/compat-types.js";
 import type { JsNode } from "./nodes.js";
 import {
 	exprStmt,

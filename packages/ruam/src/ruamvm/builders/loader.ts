@@ -10,7 +10,7 @@
  */
 
 import type { JsNode } from "../nodes.js";
-import type { RuntimeNames } from "../../encoding/names.js";
+import type { RuntimeNames } from "../../naming/compat-types.js";
 import {
 	arr,
 	assign,

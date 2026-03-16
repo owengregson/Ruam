@@ -13,7 +13,7 @@
 
 import type { CaseClause } from "../nodes.js";
 import type { JsNode } from "../nodes.js";
-import type { RuntimeNames, TempNames } from "../../encoding/names.js";
+import type { RuntimeNames, TempNames } from "../../naming/compat-types.js";
 import type { SplitFn } from "../constant-splitting.js";
 import {
 	caseClause,
