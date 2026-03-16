@@ -7,3 +7,5 @@ export { NameToken, RestParam, type Name, resolveName, isName } from "./token.js
 export { NameScope, type LengthTier, deriveSeed } from "./scope.js";
 export { NameRegistry } from "./registry.js";
 export { RESERVED_WORDS, EXCLUDED_NAMES } from "./reserved.js";
+export { setupRegistry, setupShieldedRegistry, type RegistryResult, type ShieldedRegistryResult } from "./setup.js";
+export { RUNTIME_KEYS, RUNTIME_POST_TEMP_KEYS, TEMP_KEYS, SHARED_RUNTIME_KEYS } from "./claims.js";
