@@ -7,6 +7,10 @@
  * @module ruamvm/nodes
  */
 
+import { type Name, NameToken, RestParam, isName } from "../naming/index.js";
+export type { Name } from "../naming/index.js";
+export { RestParam } from "../naming/index.js";
+
 // --- Operator enums ---
 
 /** Binary operator kinds. */
@@ -177,18 +181,18 @@ export type JsNode =
 
 export interface VarDecl {
 	type: "VarDecl";
-	name: string;
+	name: Name;
 	init?: JsNode;
 }
 export interface ConstDecl {
 	type: "ConstDecl";
-	name: string;
+	name: Name;
 	init?: JsNode;
 }
 export interface FnDecl {
 	type: "FnDecl";
-	name: string;
-	params: string[];
+	name: Name;
+	params: (Name | RestParam)[];
 	body: JsNode[];
 	async: boolean;
 }
@@ -223,7 +227,7 @@ export interface ForStmt {
 }
 export interface ForInStmt {
 	type: "ForInStmt";
-	decl: string;
+	decl: Name;
 	obj: JsNode;
 	body: JsNode[];
 }
@@ -254,7 +258,7 @@ export interface ThrowStmt {
 export interface TryCatchStmt {
 	type: "TryCatchStmt";
 	body: JsNode[];
-	param?: string;
+	param?: Name;
 	handler?: JsNode[];
 	finalizer?: JsNode[];
 }
@@ -266,7 +270,7 @@ export interface DebuggerStmt {
 
 export interface Id {
 	type: "Id";
-	name: string;
+	name: Name;
 }
 export interface Literal {
 	type: "Literal";
@@ -303,7 +307,7 @@ export interface CallExpr {
 export interface MemberExpr {
 	type: "MemberExpr";
 	obj: JsNode;
-	prop: string;
+	prop: Name;
 }
 export interface IndexExpr {
 	type: "IndexExpr";
@@ -323,21 +327,21 @@ export interface ArrayExpr {
 /** A getter definition inside an object literal: `{ get name() { ... } }` */
 export interface GetterEntry {
 	kind: "get";
-	name: string;
+	name: Name;
 	body: JsNode[];
 }
 /** A setter definition inside an object literal: `{ set name(param) { ... } }` */
 export interface SetterEntry {
 	kind: "set";
-	name: string;
-	param: string;
+	name: Name;
+	param: Name;
 	body: JsNode[];
 }
 /** A shorthand method inside an object literal: `{ name(params) { ... } }` */
 export interface MethodEntry {
 	kind: "method";
-	name: string | JsNode;
-	params: string[];
+	name: Name | JsNode;
+	params: (Name | RestParam)[];
 	body: JsNode[];
 	async: boolean;
 }
@@ -347,7 +351,7 @@ export interface ObjSpreadEntry {
 	arg: JsNode;
 }
 /** A key-value property: `{ key: value }` or `{ [computed]: value }` */
-export type PropEntry = [string | JsNode, JsNode];
+export type PropEntry = [Name | JsNode, JsNode];
 /** Any entry that can appear inside an object literal. */
 export type ObjectEntry =
 	| PropEntry
@@ -362,14 +366,14 @@ export interface ObjectExpr {
 }
 export interface FnExpr {
 	type: "FnExpr";
-	name?: string;
-	params: string[];
+	name?: Name;
+	params: (Name | RestParam)[];
 	body: JsNode[];
 	async: boolean;
 }
 export interface ArrowFn {
 	type: "ArrowFn";
-	params: string[];
+	params: (Name | RestParam)[];
 	body: JsNode[];
 	async: boolean;
 }
@@ -399,33 +403,33 @@ export interface SpreadElement {
 export interface StackPush {
 	type: "StackPush";
 	value: JsNode;
-	S: string;
+	S: Name;
 }
 export interface StackPop {
 	type: "StackPop";
-	S: string;
+	S: Name;
 }
 export interface StackPeek {
 	type: "StackPeek";
-	S: string;
+	S: Name;
 }
 
 // --- Factory functions ---
 
 export function fn(
-	name: string,
-	params: string[],
+	name: Name,
+	params: (Name | RestParam)[],
 	body: JsNode[],
 	opts?: { async?: boolean }
 ): FnDecl {
 	return { type: "FnDecl", name, params, body, async: opts?.async ?? false };
 }
 
-export function varDecl(name: string, init?: JsNode): VarDecl {
+export function varDecl(name: Name, init?: JsNode): VarDecl {
 	return { type: "VarDecl", name, init };
 }
 
-export function constDecl(name: string, init?: JsNode): ConstDecl {
+export function constDecl(name: Name, init?: JsNode): ConstDecl {
 	return { type: "ConstDecl", name, init };
 }
 
@@ -454,7 +458,7 @@ export function forStmt(
 	return { type: "ForStmt", init, test, update, body };
 }
 
-export function forIn(decl: string, obj: JsNode, body: JsNode[]): ForInStmt {
+export function forIn(decl: Name, obj: JsNode, body: JsNode[]): ForInStmt {
 	return { type: "ForInStmt", decl, obj, body };
 }
 
@@ -483,7 +487,7 @@ export function throwStmt(value: JsNode): ThrowStmt {
 
 export function tryCatch(
 	body: JsNode[],
-	param?: string,
+	param?: Name,
 	handler?: JsNode[],
 	finalizer?: JsNode[]
 ): TryCatchStmt {
@@ -494,7 +498,7 @@ export function debuggerStmt(): DebuggerStmt {
 	return { type: "DebuggerStmt" };
 }
 
-export function id(name: string): Id {
+export function id(name: Name): Id {
 	return { type: "Id", name };
 }
 
@@ -526,7 +530,7 @@ export function call(callee: JsNode, args: JsNode[]): CallExpr {
 	return { type: "CallExpr", callee, args };
 }
 
-export function member(obj: JsNode, prop: string): MemberExpr {
+export function member(obj: JsNode, prop: Name): MemberExpr {
 	return { type: "MemberExpr", obj, prop };
 }
 
@@ -546,21 +550,17 @@ export function obj(...entries: ObjectEntry[]): ObjectExpr {
 	return { type: "ObjectExpr", entries };
 }
 
-export function getter(name: string, body: JsNode[]): GetterEntry {
+export function getter(name: Name, body: JsNode[]): GetterEntry {
 	return { kind: "get", name, body };
 }
 
-export function setter(
-	name: string,
-	param: string,
-	body: JsNode[]
-): SetterEntry {
+export function setter(name: Name, param: Name, body: JsNode[]): SetterEntry {
 	return { kind: "set", name, param, body };
 }
 
 export function method(
-	name: string | JsNode,
-	params: string[],
+	name: Name | JsNode,
+	params: (Name | RestParam)[],
 	body: JsNode[],
 	opts?: { async?: boolean }
 ): MethodEntry {
@@ -572,8 +572,8 @@ export function objSpread(arg: JsNode): ObjSpreadEntry {
 }
 
 export function fnExpr(
-	name: string | undefined,
-	params: string[],
+	name: Name | undefined,
+	params: (Name | RestParam)[],
 	body: JsNode[],
 	opts?: { async?: boolean }
 ): FnExpr {
@@ -581,7 +581,7 @@ export function fnExpr(
 }
 
 export function arrowFn(
-	params: string[],
+	params: (Name | RestParam)[],
 	body: JsNode[],
 	opts?: { async?: boolean }
 ): ArrowFn {
@@ -608,13 +608,13 @@ export function spread(arg: JsNode): SpreadElement {
 	return { type: "SpreadElement", arg };
 }
 
-export function stackPush(S: string, value: JsNode): StackPush {
+export function stackPush(S: Name, value: JsNode): StackPush {
 	return { type: "StackPush", value, S };
 }
-export function stackPop(S: string): StackPop {
+export function stackPop(S: Name): StackPop {
 	return { type: "StackPop", S };
 }
-export function stackPeek(S: string): StackPeek {
+export function stackPeek(S: Name): StackPeek {
 	return { type: "StackPeek", S };
 }
 
@@ -624,8 +624,8 @@ export function iife(body: Block): CallExpr {
 	return call(fnExpr(undefined, [], body.body), []);
 }
 
-export function rest(name: string): string {
-	return `...${name}`;
+export function rest(name: Name): RestParam {
+	return new RestParam(name);
 }
 
 // --- Reflective child metadata ---
@@ -711,7 +711,7 @@ export function mapChildren(
 			if (Array.isArray(entry)) {
 				// PropEntry: [string|JsNode, JsNode]
 				const [k, v] = entry;
-				const nk = typeof k === "string" ? k : fn(k);
+				const nk = isName(k) ? k : fn(k);
 				const nv = fn(v);
 				if (nk !== k || nv !== v) {
 					changed = true;
@@ -737,10 +737,7 @@ export function mapChildren(
 					return entry;
 				}
 				case "method": {
-					const nk =
-						typeof entry.name === "string"
-							? entry.name
-							: fn(entry.name);
+					const nk = isName(entry.name) ? entry.name : fn(entry.name);
 					const nb = entry.body.map(fn);
 					if (
 						nk !== entry.name ||

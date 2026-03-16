@@ -21,7 +21,9 @@ export class NameToken {
 	/** Resolved string name. Throws if not yet resolved. */
 	get name(): string {
 		if (this._resolved === null) {
-			throw new Error(`NameToken "${this.key}" (scope: ${this.scope.id}) not yet resolved`);
+			throw new Error(
+				`NameToken "${this.key}" (scope: ${this.scope.id}) not yet resolved`
+			);
 		}
 		return this._resolved;
 	}
@@ -34,7 +36,9 @@ export class NameToken {
 	/** @internal — called by NameRegistry.resolveAll() */
 	resolve(value: string): void {
 		if (this._resolved !== null) {
-			throw new Error(`NameToken "${this.key}" already resolved to "${this._resolved}"`);
+			throw new Error(
+				`NameToken "${this.key}" already resolved to "${this._resolved}"`
+			);
 		}
 		this._resolved = value;
 	}
@@ -49,10 +53,23 @@ export class RestParam {
 	}
 
 	toString(): string {
-		const resolved = this.paramName instanceof NameToken ? this.paramName.name : this.paramName;
+		const resolved =
+			this.paramName instanceof NameToken
+				? this.paramName.name
+				: this.paramName;
 		return `...${resolved}`;
 	}
 }
 
 /** A name that will become an identifier in emitted JS. */
 export type Name = NameToken | string;
+
+/** Resolve a Name to its string value. */
+export function resolveName(name: Name): string {
+	return name instanceof NameToken ? name.name : name;
+}
+
+/** Type guard: is this value a Name (string or NameToken) vs a JsNode? */
+export function isName(v: unknown): v is Name {
+	return typeof v === "string" || v instanceof NameToken;
+}
