@@ -49,7 +49,10 @@ function claimRuntimeKeys(scope: NameScope): Map<string, NameToken> {
 }
 
 /** Claim RUNTIME_POST_TEMP_KEYS in a scope and add to existing map. */
-function claimPostTempKeys(scope: NameScope, map: Map<string, NameToken>): void {
+function claimPostTempKeys(
+	scope: NameScope,
+	map: Map<string, NameToken>
+): void {
 	for (const key of RUNTIME_POST_TEMP_KEYS) {
 		map.set(key, scope.claim(key));
 	}
@@ -72,23 +75,65 @@ function buildRuntimeNames(tokens: Map<string, NameToken>): RuntimeNames {
 		return t.name;
 	};
 	return {
-		bt: get("bt"), vm: get("vm"), exec: get("exec"), execAsync: get("execAsync"),
-		load: get("load"), cache: get("cache"), depth: get("depth"), callStack: get("callStack"),
-		fp: get("fp"), rc4: get("rc4"), b64: get("b64"), deser: get("deser"),
-		dbg: get("dbg"), dbgOp: get("dbgOp"), dbgCfg: get("dbgCfg"), dbgProt: get("dbgProt"),
-		stk: get("stk"), stp: get("stp"), operand: get("operand"), scope: get("scope"),
-		regs: get("regs"), ip: get("ip"), cArr: get("cArr"), iArr: get("iArr"),
-		exStk: get("exStk"), pEx: get("pEx"), hPEx: get("hPEx"), cType: get("cType"),
-		cVal: get("cVal"), unit: get("unit"), args: get("args"), outer: get("outer"),
-		tVal: get("tVal"), nTgt: get("nTgt"), ho: get("ho"), phys: get("phys"),
-		opVar: get("opVar"), thresh: get("thresh"), tdzSentinel: get("tdzSentinel"),
-		strDec: get("strDec"), fSlots: get("fSlots"), rcState: get("rcState"),
-		rcDeriveKey: get("rcDeriveKey"), rcMix: get("rcMix"), ihash: get("ihash"),
-		ihashFn: get("ihashFn"), keyAnchor: get("keyAnchor"), router: get("router"),
-		routeMap: get("routeMap"), alpha: get("alpha"), imul: get("imul"),
-		spreadSym: get("spreadSym"), hop: get("hop"), globalRef: get("globalRef"),
-		polyDec: get("polyDec"), polyPosSeed: get("polyPosSeed"),
-		strTbl: get("strTbl"), strCache: get("strCache"), strAcc: get("strAcc"),
+		bt: get("bt"),
+		vm: get("vm"),
+		exec: get("exec"),
+		execAsync: get("execAsync"),
+		load: get("load"),
+		cache: get("cache"),
+		depth: get("depth"),
+		callStack: get("callStack"),
+		fp: get("fp"),
+		rc4: get("rc4"),
+		b64: get("b64"),
+		deser: get("deser"),
+		dbg: get("dbg"),
+		dbgOp: get("dbgOp"),
+		dbgCfg: get("dbgCfg"),
+		dbgProt: get("dbgProt"),
+		stk: get("stk"),
+		stp: get("stp"),
+		operand: get("operand"),
+		scope: get("scope"),
+		regs: get("regs"),
+		ip: get("ip"),
+		cArr: get("cArr"),
+		iArr: get("iArr"),
+		exStk: get("exStk"),
+		pEx: get("pEx"),
+		hPEx: get("hPEx"),
+		cType: get("cType"),
+		cVal: get("cVal"),
+		unit: get("unit"),
+		args: get("args"),
+		outer: get("outer"),
+		tVal: get("tVal"),
+		nTgt: get("nTgt"),
+		ho: get("ho"),
+		phys: get("phys"),
+		opVar: get("opVar"),
+		thresh: get("thresh"),
+		tdzSentinel: get("tdzSentinel"),
+		strDec: get("strDec"),
+		fSlots: get("fSlots"),
+		rcState: get("rcState"),
+		rcDeriveKey: get("rcDeriveKey"),
+		rcMix: get("rcMix"),
+		ihash: get("ihash"),
+		ihashFn: get("ihashFn"),
+		keyAnchor: get("keyAnchor"),
+		router: get("router"),
+		routeMap: get("routeMap"),
+		alpha: get("alpha"),
+		imul: get("imul"),
+		spreadSym: get("spreadSym"),
+		hop: get("hop"),
+		globalRef: get("globalRef"),
+		polyDec: get("polyDec"),
+		polyPosSeed: get("polyPosSeed"),
+		strTbl: get("strTbl"),
+		strCache: get("strCache"),
+		strAcc: get("strAcc"),
 	};
 }
 
@@ -104,9 +149,13 @@ function buildTempNames(tokens: Map<string, NameToken>): TempNames {
 }
 
 /** Override shared fields on a group's RuntimeNames with shared values. */
-function applySharedOverrides(groupNames: RuntimeNames, sharedNames: RuntimeNames): void {
+function applySharedOverrides(
+	groupNames: RuntimeNames,
+	sharedNames: RuntimeNames
+): void {
 	for (const key of SHARED_RUNTIME_KEYS) {
-		(groupNames as Record<string, string>)[key] = sharedNames[key];
+		(groupNames as unknown as Record<string, string>)[key] =
+			sharedNames[key];
 	}
 }
 
@@ -120,7 +169,9 @@ export function setupRegistry(seed: number): RegistryResult {
 	const registry = new NameRegistry(seed);
 
 	// Runtime names scope
-	const runtimeScope = registry.createScope("runtime", { lengthTier: "short" });
+	const runtimeScope = registry.createScope("runtime", {
+		lengthTier: "short",
+	});
 	const runtimeTokens = claimRuntimeKeys(runtimeScope);
 
 	// Temp names scope (claimed after runtime, before post-temp)
@@ -152,11 +203,15 @@ export function setupShieldedRegistry(
 	const registry = new NameRegistry(sharedSeed);
 
 	// Shared runtime names
-	const sharedRtScope = registry.createScope("shared_runtime", { lengthTier: "short" });
+	const sharedRtScope = registry.createScope("shared_runtime", {
+		lengthTier: "short",
+	});
 	const sharedRtTokens = claimRuntimeKeys(sharedRtScope);
 
 	// Shared temp names
-	const sharedTempScope = registry.createScope("shared_temps", { lengthTier: "short" });
+	const sharedTempScope = registry.createScope("shared_temps", {
+		lengthTier: "short",
+	});
 	const sharedTempTokens = claimTempKeys(sharedTempScope);
 
 	// Shared post-temp keys
@@ -167,10 +222,14 @@ export function setupShieldedRegistry(
 	const groupTempTokens: Map<string, NameToken>[] = [];
 
 	for (let i = 0; i < groupSeeds.length; i++) {
-		const gRtScope = registry.createScope(`group${i}_runtime`, { lengthTier: "short" });
+		const gRtScope = registry.createScope(`group${i}_runtime`, {
+			lengthTier: "short",
+		});
 		const gRtToks = claimRuntimeKeys(gRtScope);
 
-		const gTempScope = registry.createScope(`group${i}_temps`, { lengthTier: "short" });
+		const gTempScope = registry.createScope(`group${i}_temps`, {
+			lengthTier: "short",
+		});
 		const gTempToks = claimTempKeys(gTempScope);
 
 		claimPostTempKeys(gRtScope, gRtToks);

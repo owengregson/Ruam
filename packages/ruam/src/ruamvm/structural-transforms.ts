@@ -25,6 +25,7 @@ import type {
 	ForStmt,
 } from "./nodes.js";
 import { BOp, UOp } from "./nodes.js";
+import { resolveName } from "../naming/index.js";
 import type { StructuralChoices } from "../structural-choices.js";
 
 // --- Public API ---
@@ -243,19 +244,20 @@ function transformMember(node: MemberExpr, ch: StructuralChoices): JsNode {
 	const obj = walkNode(node.obj, ch);
 	// Skip transformation on global built-in objects to preserve
 	// recognizable alias patterns (Math.imul, Object.create, etc.)
-	if (obj.type === "Id" && GLOBAL_SKIP.has(obj.name)) {
+	if (obj.type === "Id" && GLOBAL_SKIP.has(resolveName(obj.name))) {
 		return { ...node, obj };
 	}
 	// Only convert if the property name is a valid identifier
+	const propStr = resolveName(node.prop);
 	if (
-		SAFE_BRACKET_RE.test(node.prop) &&
+		SAFE_BRACKET_RE.test(propStr) &&
 		ch.prng() < ch.expressionNoise.dotToBracketBias
 	) {
 		// obj.prop → obj["prop"]
 		return {
 			type: "IndexExpr",
 			obj,
-			index: { type: "Literal", value: node.prop },
+			index: { type: "Literal", value: propStr },
 		};
 	}
 	return { ...node, obj };

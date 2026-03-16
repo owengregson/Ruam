@@ -10,6 +10,7 @@
 
 import type { JsNode } from "./nodes.js";
 import { id, mapChildren } from "./nodes.js";
+import { resolveName } from "../naming/index.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // --- Generic tree walker ---
@@ -354,23 +355,32 @@ function collectNamesFromNode(node: JsNode, out: Set<string>): void {
 	// Handle the 7 node types that declare names
 	switch (node.type) {
 		case "VarDecl":
-		case "ConstDecl":
-			if (shouldRename(node.name)) out.add(node.name);
+		case "ConstDecl": {
+			const name = resolveName(node.name);
+			if (shouldRename(name)) out.add(name);
 			break;
+		}
 		case "FnDecl":
 		case "FnExpr":
 		case "ArrowFn":
 			for (const p of node.params) {
-				const clean = p.replace(/^\.\.\./, "");
+				const pStr = String(p);
+				const clean = pStr.replace(/^\.\.\./, "");
 				if (shouldRename(clean)) out.add(clean);
 			}
 			break;
-		case "ForInStmt":
-			if (shouldRename(node.decl)) out.add(node.decl);
+		case "ForInStmt": {
+			const decl = resolveName(node.decl);
+			if (shouldRename(decl)) out.add(decl);
 			break;
-		case "TryCatchStmt":
-			if (node.param && shouldRename(node.param)) out.add(node.param);
+		}
+		case "TryCatchStmt": {
+			if (node.param) {
+				const param = resolveName(node.param);
+				if (shouldRename(param)) out.add(param);
+			}
 			break;
+		}
 	}
 	// Traverse all children generically — no 36-case switch needed
 	mapChildren(node, (child) => {
@@ -384,36 +394,36 @@ function renameNode(node: JsNode, map: Map<string, string>): JsNode {
 	return walkReplace(node, (n) => {
 		switch (n.type) {
 			case "Id": {
-				const renamed = map.get(n.name);
+				const renamed = map.get(resolveName(n.name));
 				return renamed ? id(renamed) : null;
 			}
 			case "VarDecl": {
-				const renamed = map.get(n.name);
+				const renamed = map.get(resolveName(n.name));
 				return renamed ? { ...n, name: renamed } : null;
 			}
 			case "ConstDecl": {
-				const renamed = map.get(n.name);
+				const renamed = map.get(resolveName(n.name));
 				return renamed ? { ...n, name: renamed } : null;
 			}
 			case "FnDecl": {
-				const newParams = renameParams(n.params, map);
+				const newParams = renameParams(n.params as string[], map);
 				return newParams ? { ...n, params: newParams } : null;
 			}
 			case "FnExpr": {
-				const newParams = renameParams(n.params, map);
+				const newParams = renameParams(n.params as string[], map);
 				return newParams ? { ...n, params: newParams } : null;
 			}
 			case "ArrowFn": {
-				const newParams = renameParams(n.params, map);
+				const newParams = renameParams(n.params as string[], map);
 				return newParams ? { ...n, params: newParams } : null;
 			}
 			case "ForInStmt": {
-				const renamed = map.get(n.decl);
+				const renamed = map.get(resolveName(n.decl));
 				return renamed ? { ...n, decl: renamed } : null;
 			}
 			case "TryCatchStmt": {
 				if (n.param) {
-					const renamed = map.get(n.param);
+					const renamed = map.get(resolveName(n.param));
 					return renamed ? { ...n, param: renamed } : null;
 				}
 				return null;
