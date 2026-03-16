@@ -198,11 +198,12 @@ export function insertMutationOpcodes(
 		}));
 	}
 
-	// Recursively process child units
-	for (const child of unit.childUnits) {
-		state = lcgNext(state);
-		insertMutationOpcodes(child, state);
-	}
+	// NOTE: Do NOT recursively process child units. Child units (closures,
+	// inner functions) share the parent's handler table `_ht` at runtime.
+	// Mutations in the parent change the table state before the child runs,
+	// but the child's opcodes were encoded against the initial state.
+	// Only root-level units get mutations; child units run with whatever
+	// mutation state the parent has established.
 
 	return mutationSeeds;
 }
@@ -237,8 +238,6 @@ export function adjustEncodingForMutations(
 		}
 	}
 
-	// Process child units (they have their own mutation state)
-	for (const child of unit.childUnits) {
-		adjustEncodingForMutations(child, shuffleMap, tableSize);
-	}
+	// Child units use the plain shuffle map — no mutation adjustment needed
+	// (they don't contain MUTATE instructions and share the parent's _ht)
 }
