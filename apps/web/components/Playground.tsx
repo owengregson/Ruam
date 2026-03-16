@@ -33,6 +33,11 @@ interface ObfuscationOptions {
 	decoyOpcodes?: boolean;
 	dynamicOpcodes?: boolean;
 	handlerFragmentation?: boolean;
+	stringAtomization?: boolean;
+	polymorphicDecoder?: boolean;
+	scatteredKeys?: boolean;
+	blockPermutation?: boolean;
+	opcodeMutation?: boolean;
 }
 
 // --- Preset defaults (mirrors src/presets.ts) ---
@@ -54,6 +59,11 @@ const PRESET_DEFAULTS: Record<
 		decoyOpcodes: false,
 		dynamicOpcodes: false,
 		handlerFragmentation: false,
+		stringAtomization: false,
+		polymorphicDecoder: false,
+		scatteredKeys: false,
+		blockPermutation: false,
+		opcodeMutation: false,
 	},
 	medium: {
 		preprocessIdentifiers: true,
@@ -68,6 +78,11 @@ const PRESET_DEFAULTS: Record<
 		decoyOpcodes: true,
 		dynamicOpcodes: true,
 		handlerFragmentation: false,
+		stringAtomization: true,
+		polymorphicDecoder: true,
+		scatteredKeys: true,
+		blockPermutation: false,
+		opcodeMutation: false,
 	},
 	max: {
 		preprocessIdentifiers: true,
@@ -82,6 +97,11 @@ const PRESET_DEFAULTS: Record<
 		decoyOpcodes: true,
 		dynamicOpcodes: true,
 		handlerFragmentation: true,
+		stringAtomization: true,
+		polymorphicDecoder: true,
+		scatteredKeys: true,
+		blockPermutation: true,
+		opcodeMutation: false,
 	},
 };
 
@@ -124,12 +144,33 @@ const OPTIONS: OptionMeta[] = [
 		group: "obfuscation",
 	},
 	{
+		key: "stringAtomization",
+		label: "string atomization",
+		group: "obfuscation",
+	},
+	{
+		key: "blockPermutation",
+		label: "block permutation",
+		group: "obfuscation",
+	},
+	{
+		key: "opcodeMutation",
+		label: "opcode mutation",
+		group: "obfuscation",
+	},
+	{
 		key: "preprocessIdentifiers",
 		label: "rename identifiers",
 		group: "optimization",
 	},
 	{ key: "dynamicOpcodes", label: "dynamic opcodes", group: "optimization" },
 	{ key: "decoyOpcodes", label: "decoy opcodes", group: "optimization" },
+	{
+		key: "polymorphicDecoder",
+		label: "polymorphic decoder",
+		group: "optimization",
+	},
+	{ key: "scatteredKeys", label: "scattered keys", group: "optimization" },
 ];
 
 // --- Default input code ---
