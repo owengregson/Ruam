@@ -458,7 +458,7 @@ function encodeAllUnits(
 		// For mutation units, pre-encode opcodes and use identity shuffle map
 		const effectiveMap = opcodeMutationOpt
 			? (adjustEncodingForMutations(unit, shuffleMap, OPCODE_COUNT),
-			   identityMap!)
+			  identityMap!)
 			: shuffleMap;
 
 		const encoded = encodeUnit(

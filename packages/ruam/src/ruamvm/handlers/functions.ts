@@ -14,7 +14,27 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, fnExpr, returnStmt, tryCatch, breakStmt, obj, BOp, UOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	fnExpr,
+	returnStmt,
+	tryCatch,
+	breakStmt,
+	obj,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 import {
@@ -40,7 +60,8 @@ function buildDebugArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 		exprStmt(
 			call(id(ctx.dbg), [
 				lit("CALL_CLOSURE"),
-				bin(BOp.Add,
+				bin(
+					BOp.Add,
 					lit(isAsync ? "async arrow uid=" : "arrow uid="),
 					id("uid")
 				),
@@ -226,12 +247,14 @@ function NEW_CLOSURE(ctx: HandlerCtx): JsNode[] {
 				call(id(ctx.dbg), [
 					lit("NEW_CLOSURE"),
 					bin(BOp.Add, lit("uid="), id(ctx.t("_cuid"))),
-					bin(BOp.Add,
+					bin(
+						BOp.Add,
 						lit("async="),
 						un(UOp.Not, un(UOp.Not, member(id(ctx.t("_cu")), "s")))
 					),
 					bin(BOp.Add, lit("params="), member(id(ctx.t("_cu")), "p")),
-					bin(BOp.Add,
+					bin(
+						BOp.Add,
 						lit("arrow="),
 						un(UOp.Not, un(UOp.Not, member(id(ctx.t("_cu")), "a")))
 					),
@@ -280,7 +303,8 @@ function NEW_FUNCTION(ctx: HandlerCtx): JsNode[] {
 				call(id(ctx.dbg), [
 					lit("NEW_FUNCTION"),
 					bin(BOp.Add, lit("uid="), id(ctx.t("_fuid"))),
-					bin(BOp.Add,
+					bin(
+						BOp.Add,
 						lit("async="),
 						un(UOp.Not, un(UOp.Not, member(id(ctx.t("_fu")), "s")))
 					),

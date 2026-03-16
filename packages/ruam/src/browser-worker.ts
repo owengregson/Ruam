@@ -25,8 +25,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
 		const elapsed = Math.round(performance.now() - start);
 		(self as unknown as Worker).postMessage({ id, result, elapsed });
 	} catch (err: unknown) {
-		const message =
-			err instanceof Error ? err.message : String(err);
+		const message = err instanceof Error ? err.message : String(err);
 		(self as unknown as Worker).postMessage({ id, error: message });
 	}
 };

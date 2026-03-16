@@ -100,7 +100,9 @@ export function fragmentString(
 	// Select reassembly strategy
 	state = lcgNext(state);
 	const strategy = (state >>> 16) % STR_REASSEMBLY_COUNT;
-	const fragIds = parts.map((_, i) => id(fragNames[i] ?? fragNames[fragNames.length - 1]!));
+	const fragIds = parts.map((_, i) =>
+		id(fragNames[i] ?? fragNames[fragNames.length - 1]!)
+	);
 
 	let reassemblyExpr: JsNode;
 	switch (strategy as StrReassembly) {
@@ -115,18 +117,12 @@ export function fragmentString(
 		}
 		case StrReassembly.ArrayJoin: {
 			// [a, b, c].join("")
-			reassemblyExpr = call(
-				member(arr(...fragIds), "join"),
-				[lit("")]
-			);
+			reassemblyExpr = call(member(arr(...fragIds), "join"), [lit("")]);
 			break;
 		}
 		case StrReassembly.StringConcat: {
 			// "".concat(a, b, c)
-			reassemblyExpr = call(
-				member(lit(""), "concat"),
-				fragIds
-			);
+			reassemblyExpr = call(member(lit(""), "concat"), fragIds);
 			break;
 		}
 		default:
@@ -180,7 +176,9 @@ export function fragmentArray(
 	// Select reassembly strategy
 	state = lcgNext(state);
 	const strategy = (state >>> 16) % ARR_REASSEMBLY_COUNT;
-	const fragIds = chunks.map((_, i) => id(fragNames[i] ?? fragNames[fragNames.length - 1]!));
+	const fragIds = chunks.map((_, i) =>
+		id(fragNames[i] ?? fragNames[fragNames.length - 1]!)
+	);
 
 	let reassemblyExpr: JsNode;
 	switch (strategy as ArrReassembly) {
@@ -263,7 +261,10 @@ export function scatterKeyMaterials(
 
 	for (const mat of materials) {
 		// Generate fragment names
-		const numFrags = mat.type === "string" ? 3 + ((lcgNext(state) >>> 16) % 3) : 2 + ((lcgNext(state) >>> 16) % 3);
+		const numFrags =
+			mat.type === "string"
+				? 3 + ((lcgNext(state) >>> 16) % 3)
+				: 2 + ((lcgNext(state) >>> 16) % 3);
 		state = lcgNext(state);
 		const fragNames: string[] = [];
 		for (let i = 0; i < numFrags; i++) {

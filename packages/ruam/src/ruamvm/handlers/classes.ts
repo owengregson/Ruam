@@ -20,7 +20,27 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, returnStmt, fnExpr, ternary, breakStmt, obj, BOp, UOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	returnStmt,
+	fnExpr,
+	ternary,
+	breakStmt,
+	obj,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import { registry, type HandlerCtx } from "./registry.js";
 import { debugTrace } from "./helpers.js";
 
@@ -148,7 +168,11 @@ function NEW_CLASS(ctx: HandlerCtx): JsNode[] {
 		...debugTrace(
 			ctx,
 			"NEW_CLASS",
-			bin(BOp.Add, lit("hasSuper="), un(UOp.Not, un(UOp.Not, id("hasSuperClass"))))
+			bin(
+				BOp.Add,
+				lit("hasSuper="),
+				un(UOp.Not, un(UOp.Not, id("hasSuperClass")))
+			)
 		),
 		varDecl("cls", buildCtorIIFE()),
 		ifStmt(id("SuperClass"), buildPrototypeChain("cls", "SuperClass")),
@@ -210,14 +234,28 @@ function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("fn", ctx.pop()),
 		varDecl("cls", ctx.peek()),
-		varDecl("name", index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))),
-		varDecl("isStatic", bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(1))),
+		varDecl(
+			"name",
+			index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))
+		),
+		varDecl(
+			"isStatic",
+			bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(1))
+		),
 		...debugTrace(
 			ctx,
 			"DEFINE_METHOD",
 			bin(BOp.Add, lit("name="), id("name")),
-			bin(BOp.Add, lit("static="), un(UOp.Not, un(UOp.Not, id("isStatic")))),
-			bin(BOp.Add, lit("isCtor="), bin(BOp.Seq, id("name"), lit("constructor")))
+			bin(
+				BOp.Add,
+				lit("static="),
+				un(UOp.Not, un(UOp.Not, id("isStatic")))
+			),
+			bin(
+				BOp.Add,
+				lit("isCtor="),
+				bin(BOp.Seq, id("name"), lit("constructor"))
+			)
 		),
 		ifStmt(
 			bin(BOp.Seq, id("name"), lit("constructor")),
@@ -252,7 +290,11 @@ function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 					[
 						varDecl(
 							ctx.t("_tgt"),
-							bin(BOp.Or, member(id("cls"), "prototype"), id("cls"))
+							bin(
+								BOp.Or,
+								member(id("cls"), "prototype"),
+								id("cls")
+							)
 						),
 						exprStmt(
 							assign(
@@ -297,8 +339,14 @@ function DEFINE_GETTER(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("fn", ctx.pop()),
 		varDecl("cls", ctx.peek()),
-		varDecl("name", index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))),
-		varDecl("isStatic", bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(1))),
+		varDecl(
+			"name",
+			index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))
+		),
+		varDecl(
+			"isStatic",
+			bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(1))
+		),
 		varDecl(
 			"target",
 			ternary(
@@ -352,8 +400,14 @@ function DEFINE_SETTER(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("fn", ctx.pop()),
 		varDecl("cls", ctx.peek()),
-		varDecl("name", index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))),
-		varDecl("isStatic", bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(1))),
+		varDecl(
+			"name",
+			index(id(ctx.C), bin(BOp.BitAnd, id(ctx.O), lit(0xffff)))
+		),
+		varDecl(
+			"isStatic",
+			bin(BOp.BitAnd, bin(BOp.Shr, id(ctx.O), lit(16)), lit(1))
+		),
 		varDecl(
 			"target",
 			ternary(

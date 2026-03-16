@@ -289,7 +289,7 @@ function assert(label, actual, expected) {
 		})(1),
 		"ab"
 	);
-	assert("ternary", (true ? "yes" : "no"), "yes");
+	assert("ternary", true ? "yes" : "no", "yes");
 	assert(
 		"labeled break",
 		(function () {
@@ -363,7 +363,13 @@ function assert(label, actual, expected) {
 		})(),
 		10
 	);
-	assert("IIFE", (function () { return 42; })(), 42);
+	assert(
+		"IIFE",
+		(function () {
+			return 42;
+		})(),
+		42
+	);
 })();
 
 // === 10. CLOSURES ===
@@ -528,7 +534,8 @@ function assert(label, actual, expected) {
 		"binary search",
 		(function () {
 			function bsearch(arr, target) {
-				var lo = 0, hi = arr.length - 1;
+				var lo = 0,
+					hi = arr.length - 1;
 				while (lo <= hi) {
 					var mid = (lo + hi) >> 1;
 					if (arr[mid] === target) return mid;
@@ -559,8 +566,12 @@ function assert(label, actual, expected) {
 			}
 			var em = createEmitter();
 			var result = 0;
-			em.on("add", function (n) { result += n; });
-			em.on("add", function (n) { result += n * 10; });
+			em.on("add", function (n) {
+				result += n;
+			});
+			em.on("add", function (n) {
+				result += n * 10;
+			});
 			em.emit("add", 5);
 			return result;
 		})(),
@@ -578,12 +589,22 @@ function assert(label, actual, expected) {
 	assert("regex match", "abc123def".match(/\d+/)[0], "123");
 	assert("void", void 0, undefined);
 	assert("comma op", (1, 2, 3), 3);
-	assert("arguments", (function () { return arguments.length; })(1, 2, 3), 3);
+	assert(
+		"arguments",
+		(function () {
+			return arguments.length;
+		})(1, 2, 3),
+		3
+	);
 	assert(
 		"prototype",
 		(function () {
-			function Animal(name) { this.name = name; }
-			Animal.prototype.speak = function () { return this.name + " speaks"; };
+			function Animal(name) {
+				this.name = name;
+			}
+			Animal.prototype.speak = function () {
+				return this.name + " speaks";
+			};
 			return new Animal("Dog").speak();
 		})(),
 		"Dog speaks"
@@ -594,8 +615,12 @@ function assert(label, actual, expected) {
 			var obj = {};
 			var _v = 0;
 			Object.defineProperty(obj, "v", {
-				get: function () { return _v * 2; },
-				set: function (x) { _v = x; },
+				get: function () {
+					return _v * 2;
+				},
+				set: function (x) {
+					_v = x;
+				},
 			});
 			obj.v = 5;
 			return obj.v;

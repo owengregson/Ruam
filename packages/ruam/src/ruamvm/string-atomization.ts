@@ -15,7 +15,11 @@
 import type { JsNode, Literal } from "./nodes.js";
 import { id, call, lit, mapChildren } from "./nodes.js";
 import type { DecoderChain } from "./polymorphic-decoder.js";
-import { polyEncode, buildDecoderFunctionAST, buildStringTableAST } from "./polymorphic-decoder.js";
+import {
+	polyEncode,
+	buildDecoderFunctionAST,
+	buildStringTableAST,
+} from "./polymorphic-decoder.js";
 
 // --- Configuration ---
 
@@ -75,7 +79,9 @@ export function replaceStrings(
 	stringMap: Map<string, number>,
 	accessorName: string
 ): JsNode[] {
-	return nodes.map((node) => replaceStringsInNode(node, stringMap, accessorName));
+	return nodes.map((node) =>
+		replaceStringsInNode(node, stringMap, accessorName)
+	);
 }
 
 function replaceStringsInNode(

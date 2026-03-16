@@ -11,7 +11,29 @@
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames } from "../../encoding/names.js";
 import type { SplitFn } from "../constant-splitting.js";
-import { arr, assign, bin, call, exprStmt, fn, forStmt, id, ifStmt, index, lit, member, newExpr, obj, returnStmt, un, update, varDecl, BOp, UpOp, AOp } from "../nodes.js";
+import {
+	arr,
+	assign,
+	bin,
+	call,
+	exprStmt,
+	fn,
+	forStmt,
+	id,
+	ifStmt,
+	index,
+	lit,
+	member,
+	newExpr,
+	obj,
+	returnStmt,
+	un,
+	update,
+	varDecl,
+	BOp,
+	UpOp,
+	AOp,
+} from "../nodes.js";
 
 // --- Local helpers for dense bit manipulation ---
 
@@ -132,7 +154,11 @@ function buildCustomDecodeFunction(
 
 	// Helper: T[str.charCodeAt(idx)] | 0
 	const lookup = (idx: JsNode): JsNode =>
-		bin(BOp.BitOr, index(T, call(member(str, "charCodeAt"), [idx])), lit(0));
+		bin(
+			BOp.BitOr,
+			index(T, call(member(str, "charCodeAt"), [idx])),
+			lit(0)
+		);
 
 	// Helper: out[j++] = expr
 	const writeOut = (expr: JsNode): JsNode =>
@@ -148,45 +174,63 @@ function buildCustomDecodeFunction(
 		varDecl(
 			"out",
 			newExpr(id("Uint8Array"), [
-				bin(BOp.Add, bin(BOp.Shr, bin(BOp.Mul, n, lit(3)), lit(2)), lit(3)),
+				bin(
+					BOp.Add,
+					bin(BOp.Shr, bin(BOp.Mul, n, lit(3)), lit(2)),
+					lit(3)
+				),
 			])
 		),
 		// var j = 0;
 		varDecl("j", lit(0)),
 
 		// Decode loop: for (var i = 0; i < n; i += 4) { ... }
-		forStmt(varDecl("i", lit(0)), bin(BOp.Lt, i, n), assign(i, lit(4), AOp.Add), [
-			// var a = T[str.charCodeAt(i)] | 0;
-			varDecl("a", lookup(i)),
-			// var b = T[str.charCodeAt(i + 1)] | 0;
-			varDecl("b", lookup(bin(BOp.Add, i, lit(1)))),
-			// var c = T[str.charCodeAt(i + 2)] | 0;
-			varDecl("c", lookup(bin(BOp.Add, i, lit(2)))),
-			// var d = T[str.charCodeAt(i + 3)] | 0;
-			varDecl("d", lookup(bin(BOp.Add, i, lit(3)))),
+		forStmt(
+			varDecl("i", lit(0)),
+			bin(BOp.Lt, i, n),
+			assign(i, lit(4), AOp.Add),
+			[
+				// var a = T[str.charCodeAt(i)] | 0;
+				varDecl("a", lookup(i)),
+				// var b = T[str.charCodeAt(i + 1)] | 0;
+				varDecl("b", lookup(bin(BOp.Add, i, lit(1)))),
+				// var c = T[str.charCodeAt(i + 2)] | 0;
+				varDecl("c", lookup(bin(BOp.Add, i, lit(2)))),
+				// var d = T[str.charCodeAt(i + 3)] | 0;
+				varDecl("d", lookup(bin(BOp.Add, i, lit(3)))),
 
-			// out[j++] = (a << 2) | (b >> 4);
-			writeOut(
-				bin(BOp.BitOr, bin(BOp.Shl, id("a"), lit(2)), bin(BOp.Shr, id("b"), lit(4)))
-			),
-
-			// if (i + 2 < n) out[j++] = ((b & 15) << 4) | (c >> 2);
-			ifStmt(bin(BOp.Lt, bin(BOp.Add, i, lit(2)), n), [
+				// out[j++] = (a << 2) | (b >> 4);
 				writeOut(
-					bin(BOp.BitOr,
-						bin(BOp.Shl, band(id("b"), lit(15)), lit(4)),
-						bin(BOp.Shr, id("c"), lit(2))
+					bin(
+						BOp.BitOr,
+						bin(BOp.Shl, id("a"), lit(2)),
+						bin(BOp.Shr, id("b"), lit(4))
 					)
 				),
-			]),
 
-			// if (i + 3 < n) out[j++] = ((c & 3) << 6) | d;
-			ifStmt(bin(BOp.Lt, bin(BOp.Add, i, lit(3)), n), [
-				writeOut(
-					bin(BOp.BitOr, bin(BOp.Shl, band(id("c"), lit(3)), lit(6)), id("d"))
-				),
-			]),
-		]),
+				// if (i + 2 < n) out[j++] = ((b & 15) << 4) | (c >> 2);
+				ifStmt(bin(BOp.Lt, bin(BOp.Add, i, lit(2)), n), [
+					writeOut(
+						bin(
+							BOp.BitOr,
+							bin(BOp.Shl, band(id("b"), lit(15)), lit(4)),
+							bin(BOp.Shr, id("c"), lit(2))
+						)
+					),
+				]),
+
+				// if (i + 3 < n) out[j++] = ((c & 3) << 6) | d;
+				ifStmt(bin(BOp.Lt, bin(BOp.Add, i, lit(3)), n), [
+					writeOut(
+						bin(
+							BOp.BitOr,
+							bin(BOp.Shl, band(id("c"), lit(3)), lit(6)),
+							id("d")
+						)
+					),
+				]),
+			]
+		),
 
 		// return out.subarray(0, j);
 		returnStmt(call(member(out, "subarray"), [lit(0), j])),
@@ -272,7 +316,8 @@ function buildCipherFunction(names: RuntimeNames, split?: SplitFn): JsNode {
 					assign(
 						h,
 						u32(
-							bin(BOp.Add,
+							bin(
+								BOp.Add,
 								call(id(names.imul), [h, L(1664525)]),
 								L(1013904223)
 							)
@@ -390,7 +435,13 @@ function buildStrDecFunction(
 				exprStmt(
 					assign(
 						k,
-						u32(bin(BOp.Add, bin(BOp.Mul, k, L(1664525)), L(1013904223)))
+						u32(
+							bin(
+								BOp.Add,
+								bin(BOp.Mul, k, L(1664525)),
+								L(1013904223)
+							)
+						)
 					)
 				),
 				// _ca.push(b[i] ^ (k & 65535));

@@ -1,7 +1,16 @@
 /** @module ruamvm/handlers/comparison */
 
 import { Op } from "../../compiler/opcodes.js";
-import { id, bin, assign, varDecl, exprStmt, breakStmt, BOp, type BOpKind } from "../nodes.js";
+import {
+	id,
+	bin,
+	assign,
+	varDecl,
+	exprStmt,
+	breakStmt,
+	BOp,
+	type BOpKind,
+} from "../nodes.js";
 import type { HandlerCtx, HandlerFn } from "./registry.js";
 import { registry } from "./registry.js";
 

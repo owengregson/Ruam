@@ -12,7 +12,27 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
-import { fn, varDecl, id, lit, bin, obj, arr, spread, member, index, call, ifStmt, exprStmt, returnStmt, assign, ternary, un, BOp, UOp } from "../nodes.js";
+import {
+	fn,
+	varDecl,
+	id,
+	lit,
+	bin,
+	obj,
+	arr,
+	spread,
+	member,
+	index,
+	call,
+	ifStmt,
+	exprStmt,
+	returnStmt,
+	assign,
+	ternary,
+	un,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import { Op, OPCODE_COUNT } from "../../compiler/opcodes.js";
 
 // --- Builder ---
@@ -117,8 +137,10 @@ export function buildDebugLogging(
 				ifStmt(bin(BOp.Seq, cfgCount, cfgMaxLogs), [
 					exprStmt(
 						call(member(console_, "warn"), [
-							bin(BOp.Add,
-								bin(BOp.Add,
+							bin(
+								BOp.Add,
+								bin(
+									BOp.Add,
 									lit("[VM_DBG] max logs reached ("),
 									cfgMaxLogs
 								),
@@ -179,7 +201,8 @@ export function buildDebugLogging(
 		[
 			// if(!cfg.enabled||cfg.levels[cfg.level]>0)return;
 			ifStmt(
-				bin(BOp.Or,
+				bin(
+					BOp.Or,
 					un(UOp.Not, cfgEnabled),
 					bin(BOp.Gt, index(cfgLevels, cfgLevel), lit(0))
 				),
@@ -192,7 +215,11 @@ export function buildDebugLogging(
 			// var name=cfg._opNames[OP]||('OP_'+OP);
 			varDecl(
 				"name",
-				bin(BOp.Or, index(cfgOpNames, opId), bin(BOp.Add, lit("OP_"), opId))
+				bin(
+					BOp.Or,
+					index(cfgOpNames, opId),
+					bin(BOp.Add, lit("OP_"), opId)
+				)
 			),
 			// var topStr='(empty)';
 			varDecl("topStr", lit("(empty)")),
@@ -207,14 +234,21 @@ export function buildDebugLogging(
 					assign(
 						topStrVar,
 						ternary(
-							bin(BOp.Seq, un(UOp.Typeof, topVar), lit("function")),
+							bin(
+								BOp.Seq,
+								un(UOp.Typeof, topVar),
+								lit("function")
+							),
 							// '[fn'+(top.name?':'+top.name:'')+']'
-							bin(BOp.Add,
-								bin(BOp.Add,
+							bin(
+								BOp.Add,
+								bin(
+									BOp.Add,
 									lit("[fn"),
 									ternary(
 										member(topVar, "name"),
-										bin(BOp.Add,
+										bin(
+											BOp.Add,
 											lit(":"),
 											member(topVar, "name")
 										),
@@ -225,16 +259,20 @@ export function buildDebugLogging(
 							),
 							// typeof top==='object'&&top!==null ? '[obj:'+...+']' : String(top)
 							ternary(
-								bin(BOp.And,
-									bin(BOp.Seq,
+								bin(
+									BOp.And,
+									bin(
+										BOp.Seq,
 										un(UOp.Typeof, topVar),
 										lit("object")
 									),
 									bin(BOp.Sneq, topVar, lit(null))
 								),
 								// '[obj:'+Object.keys(top).slice(0,3).join(',')+']'
-								bin(BOp.Add,
-									bin(BOp.Add,
+								bin(
+									BOp.Add,
+									bin(
+										BOp.Add,
 										lit("[obj:"),
 										call(
 											member(
@@ -269,7 +307,8 @@ export function buildDebugLogging(
 					exprStmt(
 						assign(
 							topStrVar,
-							bin(BOp.Add,
+							bin(
+								BOp.Add,
 								call(member(topStrVar, "slice"), [
 									lit(0),
 									lit(60),
@@ -289,8 +328,10 @@ export function buildDebugLogging(
 					exprStmt(
 						assign(
 							constStrVar,
-							bin(BOp.Add,
-								bin(BOp.Add,
+							bin(
+								BOp.Add,
+								bin(
+									BOp.Add,
 									lit(' c="'),
 									call(member(cAtO, "slice"), [
 										lit(0),
@@ -314,14 +355,22 @@ export function buildDebugLogging(
 			// console.log('[VM_TRACE] '+name+' op='+O+constStr+' len='+S.length+' top='+topStr);
 			exprStmt(
 				call(member(console_, "log"), [
-					bin(BOp.Add,
-						bin(BOp.Add,
-							bin(BOp.Add,
-								bin(BOp.Add,
-									bin(BOp.Add,
-										bin(BOp.Add,
-											bin(BOp.Add,
-												bin(BOp.Add,
+					bin(
+						BOp.Add,
+						bin(
+							BOp.Add,
+							bin(
+								BOp.Add,
+								bin(
+									BOp.Add,
+									bin(
+										BOp.Add,
+										bin(
+											BOp.Add,
+											bin(
+												BOp.Add,
+												bin(
+													BOp.Add,
 													lit("[VM_TRACE] "),
 													nameVar
 												),

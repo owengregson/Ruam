@@ -11,7 +11,28 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, breakStmt, varDecl, exprStmt, ifStmt, id, lit, bin, un, assign, call, member, index, obj, arr, throwStmt, newExpr, returnStmt, BOp, UOp } from "../nodes.js";
+import {
+	type JsNode,
+	breakStmt,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	obj,
+	arr,
+	throwStmt,
+	newExpr,
+	returnStmt,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -155,7 +176,8 @@ function THROW_IF_NOT_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("v", ctx.peek()),
 		ifStmt(
-			bin(BOp.Or,
+			bin(
+				BOp.Or,
 				bin(BOp.Sneq, un(UOp.Typeof, id("v")), lit("object")),
 				bin(BOp.Seq, id("v"), lit(null))
 			),

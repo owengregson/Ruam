@@ -1,7 +1,20 @@
 /** @module ruamvm/handlers/logical */
 
 import { Op } from "../../compiler/opcodes.js";
-import { id, lit, bin, un, assign, update, varDecl, exprStmt, ifStmt, breakStmt, BOp, UOp } from "../nodes.js";
+import {
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	update,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	breakStmt,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -59,7 +72,8 @@ registry.set(Op.LOGICAL_OR, (ctx: HandlerCtx) => [
 registry.set(Op.NULLISH_COALESCE, (ctx: HandlerCtx) => [
 	varDecl("v", ctx.peek()),
 	ifStmt(
-		bin(BOp.And,
+		bin(
+			BOp.And,
 			bin(BOp.Sneq, id("v"), lit(null)),
 			bin(BOp.Sneq, id("v"), un(UOp.Void, lit(0)))
 		),

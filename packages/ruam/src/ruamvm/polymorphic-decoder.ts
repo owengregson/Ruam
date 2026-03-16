@@ -137,7 +137,7 @@ function applyOpForward(byte: number, op: DecoderOp, posKey: number): number {
 		case "sub":
 			return (byte - ((op.key + posKey) & 0xff)) & 0xff;
 		case "not":
-			return (~byte) & 0xff;
+			return ~byte & 0xff;
 		case "rol":
 			return ((byte << op.n) | (byte >>> (8 - op.n))) & 0xff;
 		case "ror":
@@ -262,7 +262,13 @@ export function buildDecoderFunctionAST(
 	// b = d[i]
 	loopBody.push(
 		exprStmt(
-			assign(b, call(member(id("Math"), "imul"), [bin(BOp.BitXor, id(posSeedName), idx), lit(0x45d9f3b)]))
+			assign(
+				b,
+				call(member(id("Math"), "imul"), [
+					bin(BOp.BitXor, id(posSeedName), idx),
+					lit(0x45d9f3b),
+				])
+			)
 		)
 	);
 	// Inline: pk = (imul(_ps ^ idx, 0x45d9f3b) + i) & 255
@@ -477,15 +483,25 @@ export function buildStringTableAST(
 
 	// function _sa(i) { return _stc[i] || (_stc[i] = _sd(_ste[i], i)) }
 	const i = id("i");
-	const cacheAccess = { type: "IndexExpr" as const, obj: id(cacheName), index: i };
-	const tableAccess = { type: "IndexExpr" as const, obj: id(tableName), index: i };
+	const cacheAccess = {
+		type: "IndexExpr" as const,
+		obj: id(cacheName),
+		index: i,
+	};
+	const tableAccess = {
+		type: "IndexExpr" as const,
+		obj: id(tableName),
+		index: i,
+	};
 	const decodeCall = call(id(decoderName), [tableAccess, i]);
 	const cacheStore = assign(cacheAccess, decodeCall);
 
 	nodes.push(
-		fn(accessorName, ["i"], [
-			returnStmt(bin(BOp.Or, cacheAccess, cacheStore)),
-		])
+		fn(
+			accessorName,
+			["i"],
+			[returnStmt(bin(BOp.Or, cacheAccess, cacheStore))]
+		)
 	);
 
 	return nodes;

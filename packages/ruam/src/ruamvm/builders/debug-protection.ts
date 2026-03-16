@@ -22,7 +22,34 @@
 
 import type { JsNode } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../encoding/names.js";
-import { fn, varDecl, id, lit, bin, un, call, member, index, ifStmt, exprStmt, returnStmt, forStmt, forIn, whileStmt, tryCatch, ternary, arr, obj, fnExpr, assign, newExpr, getter, method, BOp, UOp } from "../nodes.js";
+import {
+	fn,
+	varDecl,
+	id,
+	lit,
+	bin,
+	un,
+	call,
+	member,
+	index,
+	ifStmt,
+	exprStmt,
+	returnStmt,
+	forStmt,
+	forIn,
+	whileStmt,
+	tryCatch,
+	ternary,
+	arr,
+	obj,
+	fnExpr,
+	assign,
+	newExpr,
+	getter,
+	method,
+	BOp,
+	UOp,
+} from "../nodes.js";
 
 // --- Helpers ---
 
@@ -117,9 +144,11 @@ export function buildDebugProtection(
 					assign(
 						fhId,
 						ursh(
-							bin(BOp.Mul,
+							bin(
+								BOp.Mul,
 								ursh(
-									bin(BOp.BitXor,
+									bin(
+										BOp.BitXor,
 										fhId,
 										mcall(id(Z("_src")), "charCodeAt", [
 											id(Z("_fi")),
@@ -153,10 +182,16 @@ export function buildDebugProtection(
 			Z("_it"),
 			call(id("setTimeout"), [
 				fnExpr(undefined, [], [es(call(id(Z("_run")), []))]),
-				bin(BOp.Add,
+				bin(
+					BOp.Add,
 					lit(500),
-					bin(BOp.BitOr,
-						bin(BOp.Mul, mcall(id("Math"), "random", []), lit(1500)),
+					bin(
+						BOp.BitOr,
+						bin(
+							BOp.Mul,
+							mcall(id("Math"), "random", []),
+							lit(1500)
+						),
 						lit(0)
 					)
 				),
@@ -167,7 +202,8 @@ export function buildDebugProtection(
 	// if(typeof _it==='object'&&_it.unref)_it.unref();
 	body.push(
 		ifStmt(
-			bin(BOp.And,
+			bin(
+				BOp.And,
 				bin(BOp.Seq, un(UOp.Typeof, id(Z("_it"))), lit("object")),
 				m(id(Z("_it")), "unref")
 			),
@@ -210,7 +246,8 @@ function buildActFunction(
 							v(Z("_ks"), mcall(id("Object"), "keys", [btId])),
 							forStmt(
 								v(Z("_ki"), lit(0)),
-								bin(BOp.Lt,
+								bin(
+									BOp.Lt,
 									id(Z("_ki")),
 									m(id(Z("_ks")), "length")
 								),
@@ -227,14 +264,16 @@ function buildActFunction(
 										)
 									),
 									ifStmt(
-										bin(BOp.And,
+										bin(
+											BOp.And,
 											id(Z("_ue")),
 											m(id(Z("_ue")), "i")
 										),
 										[
 											forStmt(
 												v(Z("_ji"), lit(0)),
-												bin(BOp.Lt,
+												bin(
+													BOp.Lt,
 													id(Z("_ji")),
 													m(
 														m(id(Z("_ue")), "i"),
@@ -243,7 +282,8 @@ function buildActFunction(
 												),
 												assign(
 													id(Z("_ji")),
-													bin(BOp.Add,
+													bin(
+														BOp.Add,
 														id(Z("_ji")),
 														lit(2)
 													)
@@ -261,7 +301,8 @@ function buildActFunction(
 																id(Z("_ji"))
 															),
 															band(
-																bin(BOp.Add,
+																bin(
+																	BOp.Add,
 																	index(
 																		m(
 																			id(
@@ -277,7 +318,8 @@ function buildActFunction(
 																			)
 																		)
 																	),
-																	bin(BOp.Mul,
+																	bin(
+																		BOp.Mul,
 																		sevId,
 																		lit(7)
 																	)
@@ -307,7 +349,8 @@ function buildActFunction(
 								[
 									forIn(Z("_k"), caId, [
 										es(
-											un(UOp.Delete,
+											un(
+												UOp.Delete,
 												index(caId, id(Z("_k")))
 											)
 										),
@@ -325,7 +368,8 @@ function buildActFunction(
 									),
 									forStmt(
 										v(Z("_ki"), lit(0)),
-										bin(BOp.Lt,
+										bin(
+											BOp.Lt,
 											id(Z("_ki")),
 											m(id(Z("_ks")), "length")
 										),
@@ -370,7 +414,8 @@ function buildActFunction(
 									),
 									forStmt(
 										v(Z("_ki"), lit(0)),
-										bin(BOp.Lt,
+										bin(
+											BOp.Lt,
 											id(Z("_ki")),
 											m(id(Z("_ks")), "length")
 										),
@@ -416,7 +461,8 @@ function buildActFunction(
 								[
 									forIn(Z("_k"), caId, [
 										es(
-											un(UOp.Delete,
+											un(
+												UOp.Delete,
 												index(caId, id(Z("_k")))
 											)
 										),
@@ -489,7 +535,8 @@ function buildP1(Z: (key: string) => string): JsNode {
 							),
 							// if(_ts.indexOf(_nc)===-1)return true;
 							ifStmt(
-								bin(BOp.Seq,
+								bin(
+									BOp.Seq,
 									mcall(id(Z("_ts")), "indexOf", [
 										id(Z("_nc")),
 									]),
@@ -522,7 +569,11 @@ function buildP3(Z: (key: string) => string): JsNode {
 				[
 					v(
 						Z("_st"),
-						bin(BOp.Or, m(newExpr(id("Error"), []), "stack"), lit(""))
+						bin(
+							BOp.Or,
+							m(newExpr(id("Error"), []), "stack"),
+							lit("")
+						)
 					),
 					ifStmt(
 						mcall(lit(/--inspect|--debug/i), "test", [
@@ -535,45 +586,52 @@ function buildP3(Z: (key: string) => string): JsNode {
 				[]
 			),
 			// if(typeof process!=='undefined'){try{if(process.execArgv){for(...)}}catch(_){}}
-			ifStmt(bin(BOp.Sneq, un(UOp.Typeof, id("process")), lit("undefined")), [
-				tryCatch(
-					[
-						ifStmt(m(id("process"), "execArgv"), [
-							forStmt(
-								v(Z("_i"), lit(0)),
-								bin(BOp.Lt,
-									id(Z("_i")),
-									m(m(id("process"), "execArgv"), "length")
-								),
-								assign(
-									id(Z("_i")),
-									bin(BOp.Add, id(Z("_i")), lit(1))
-								),
-								[
-									ifStmt(
-										mcall(
-											lit(/--inspect|--debug/),
-											"test",
-											[
-												index(
-													m(
-														id("process"),
-														"execArgv"
-													),
-													id(Z("_i"))
-												),
-											]
-										),
-										[returnStmt(lit(true))]
+			ifStmt(
+				bin(BOp.Sneq, un(UOp.Typeof, id("process")), lit("undefined")),
+				[
+					tryCatch(
+						[
+							ifStmt(m(id("process"), "execArgv"), [
+								forStmt(
+									v(Z("_i"), lit(0)),
+									bin(
+										BOp.Lt,
+										id(Z("_i")),
+										m(
+											m(id("process"), "execArgv"),
+											"length"
+										)
 									),
-								]
-							),
-						]),
-					],
-					"_",
-					[]
-				),
-			]),
+									assign(
+										id(Z("_i")),
+										bin(BOp.Add, id(Z("_i")), lit(1))
+									),
+									[
+										ifStmt(
+											mcall(
+												lit(/--inspect|--debug/),
+												"test",
+												[
+													index(
+														m(
+															id("process"),
+															"execArgv"
+														),
+														id(Z("_i"))
+													),
+												]
+											),
+											[returnStmt(lit(true))]
+										),
+									]
+								),
+							]),
+						],
+						"_",
+						[]
+					),
+				]
+			),
 			// return false;
 			returnStmt(lit(false)),
 		]
@@ -605,10 +663,14 @@ function buildP4(
 					es(
 						assign(
 							id(Z("_ch")),
-							bin(BOp.Ushr,
-								bin(BOp.Mul,
-									bin(BOp.Ushr,
-										bin(BOp.BitXor,
+							bin(
+								BOp.Ushr,
+								bin(
+									BOp.Mul,
+									bin(
+										BOp.Ushr,
+										bin(
+											BOp.BitXor,
 											id(Z("_ch")),
 											mcall(id(Z("_cs")), "charCodeAt", [
 												id(Z("_ci")),
@@ -645,9 +707,11 @@ function buildRun(
 			// var _n=2+((Math.random()*2)|0);
 			v(
 				Z("_n"),
-				bin(BOp.Add,
+				bin(
+					BOp.Add,
 					lit(2),
-					bin(BOp.BitOr,
+					bin(
+						BOp.BitOr,
 						bin(BOp.Mul, mcall(id("Math"), "random", []), lit(2)),
 						lit(0)
 					)
@@ -663,8 +727,10 @@ function buildRun(
 				[
 					v(
 						Z("_idx"),
-						bin(BOp.BitOr,
-							bin(BOp.Mul,
+						bin(
+							BOp.BitOr,
+							bin(
+								BOp.Mul,
 								mcall(id("Math"), "random", []),
 								m(pbId, "length")
 							),
@@ -701,10 +767,13 @@ function buildRun(
 			ifStmt(bin(BOp.Lt, sevId, lit(5)), [
 				v(
 					Z("_nx"),
-					bin(BOp.Add,
+					bin(
+						BOp.Add,
 						lit(2000),
-						bin(BOp.BitOr,
-							bin(BOp.Mul,
+						bin(
+							BOp.BitOr,
+							bin(
+								BOp.Mul,
 								mcall(id("Math"), "random", []),
 								lit(5000)
 							),
@@ -717,8 +786,13 @@ function buildRun(
 					call(id("setTimeout"), [id(Z("_run")), id(Z("_nx"))])
 				),
 				ifStmt(
-					bin(BOp.And,
-						bin(BOp.Seq, un(UOp.Typeof, id(Z("_tid"))), lit("object")),
+					bin(
+						BOp.And,
+						bin(
+							BOp.Seq,
+							un(UOp.Typeof, id(Z("_tid"))),
+							lit("object")
+						),
 						m(id(Z("_tid")), "unref")
 					),
 					[es(mcall(id(Z("_tid")), "unref", []))]

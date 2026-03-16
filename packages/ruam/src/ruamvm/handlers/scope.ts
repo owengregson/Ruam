@@ -26,7 +26,26 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, whileStmt, throwStmt, breakStmt, newExpr, BOp, UOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	whileStmt,
+	throwStmt,
+	breakStmt,
+	newExpr,
+	BOp,
+	UOp,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -64,7 +83,8 @@ function LOAD_SCOPED(ctx: HandlerCtx): JsNode[] {
 			ifStmt(bin(BOp.Seq, id("_v"), id(ctx.tdzSentinel)), [
 				throwStmt(
 					newExpr(id("ReferenceError"), [
-						bin(BOp.Add,
+						bin(
+							BOp.Add,
 							bin(BOp.Add, lit("Cannot access '"), id("name")),
 							lit("' before initialization")
 						),
@@ -190,7 +210,8 @@ function POP_SCOPE(ctx: HandlerCtx): JsNode[] {
 		exprStmt(
 			assign(
 				id(ctx.SC),
-				bin(BOp.Or,
+				bin(
+					BOp.Or,
 					call(member(id("Object"), "getPrototypeOf"), [id(ctx.SC)]),
 					id(ctx.SC)
 				)
@@ -211,7 +232,8 @@ function TDZ_CHECK(ctx: HandlerCtx): JsNode[] {
 		ifStmt(bin(BOp.Seq, ctx.curSv(), id(ctx.tdzSentinel)), [
 			throwStmt(
 				newExpr(id("ReferenceError"), [
-					bin(BOp.Add,
+					bin(
+						BOp.Add,
 						bin(BOp.Add, lit("Cannot access '"), id("name")),
 						lit("' before initialization")
 					),

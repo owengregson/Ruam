@@ -1,6 +1,48 @@
 import { describe, it, expect } from "vitest";
 import { emit } from "../../src/ruamvm/emit.js";
-import { fn, varDecl, constDecl, exprStmt, block, ifStmt, whileStmt, forStmt, forIn, switchStmt, caseClause, breakStmt, continueStmt, returnStmt, throwStmt, tryCatch, debuggerStmt, id, lit, bin, un, update, assign, call, member, index, ternary, arr, obj, fnExpr, arrowFn, newExpr, seq, awaitExpr, importExpr, iife, rest, BOp, UOp, UpOp, AOp } from "../../src/ruamvm/nodes.js";
+import {
+	fn,
+	varDecl,
+	constDecl,
+	exprStmt,
+	block,
+	ifStmt,
+	whileStmt,
+	forStmt,
+	forIn,
+	switchStmt,
+	caseClause,
+	breakStmt,
+	continueStmt,
+	returnStmt,
+	throwStmt,
+	tryCatch,
+	debuggerStmt,
+	id,
+	lit,
+	bin,
+	un,
+	update,
+	assign,
+	call,
+	member,
+	index,
+	ternary,
+	arr,
+	obj,
+	fnExpr,
+	arrowFn,
+	newExpr,
+	seq,
+	awaitExpr,
+	importExpr,
+	iife,
+	rest,
+	BOp,
+	UOp,
+	UpOp,
+	AOp,
+} from "../../src/ruamvm/nodes.js";
 
 describe("Emitter", () => {
 	describe("declarations", () => {
@@ -170,14 +212,14 @@ describe("Emitter", () => {
 			);
 		});
 		it("precedence: a+b*c", () => {
-			expect(emit(bin(BOp.Add, id("a"), bin(BOp.Mul, id("b"), id("c"))))).toBe(
-				"a+b*c"
-			);
+			expect(
+				emit(bin(BOp.Add, id("a"), bin(BOp.Mul, id("b"), id("c"))))
+			).toBe("a+b*c");
 		});
 		it("precedence: (a+b)*c", () => {
-			expect(emit(bin(BOp.Mul, bin(BOp.Add, id("a"), id("b")), id("c")))).toBe(
-				"(a+b)*c"
-			);
+			expect(
+				emit(bin(BOp.Mul, bin(BOp.Add, id("a"), id("b")), id("c")))
+			).toBe("(a+b)*c");
 		});
 		it("unary !", () => {
 			expect(emit(un(UOp.Not, id("x")))).toBe("!x");
@@ -186,7 +228,9 @@ describe("Emitter", () => {
 			expect(emit(un(UOp.Typeof, id("x")))).toBe("typeof x");
 		});
 		it("unary delete", () => {
-			expect(emit(un(UOp.Delete, member(id("o"), "k")))).toBe("delete o.k");
+			expect(emit(un(UOp.Delete, member(id("o"), "k")))).toBe(
+				"delete o.k"
+			);
 		});
 		it("prefix ++", () => {
 			expect(emit(update(UpOp.Inc, true, id("x")))).toBe("++x");
@@ -314,7 +358,10 @@ describe("Emitter", () => {
 		it("assignment to index", () => {
 			expect(
 				emit(
-					assign(index(id("S"), update(UpOp.Inc, true, id("P"))), id("v"))
+					assign(
+						index(id("S"), update(UpOp.Inc, true, id("P"))),
+						id("v")
+					)
 				)
 			).toBe("S[++P]=v");
 		});

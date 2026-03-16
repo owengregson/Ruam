@@ -16,7 +16,29 @@
  */
 
 import { Op } from "../../compiler/opcodes.js";
-import { type JsNode, id, lit, bin, un, assign, call, member, index, varDecl, exprStmt, ifStmt, breakStmt, forIn, obj, arr, awaitExpr, update, UOp, UpOp, BOp } from "../nodes.js";
+import {
+	type JsNode,
+	id,
+	lit,
+	bin,
+	un,
+	assign,
+	call,
+	member,
+	index,
+	varDecl,
+	exprStmt,
+	ifStmt,
+	breakStmt,
+	forIn,
+	obj,
+	arr,
+	awaitExpr,
+	update,
+	UOp,
+	UpOp,
+	BOp,
+} from "../nodes.js";
 import type { HandlerCtx } from "./registry.js";
 import { registry } from "./registry.js";
 
@@ -100,7 +122,9 @@ function ITER_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.peek()),
 		exprStmt(
-			ctx.push(un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done")))))
+			ctx.push(
+				un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done"))))
+			)
 		),
 		breakStmt(),
 	];
@@ -143,7 +167,9 @@ function ITER_RESULT_UNWRAP(ctx: HandlerCtx): JsNode[] {
 		varDecl("iterObj", ctx.peek()),
 		exprStmt(ctx.push(member(id("iterObj"), ctx.t("_value")))),
 		exprStmt(
-			ctx.push(un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done")))))
+			ctx.push(
+				un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done"))))
+			)
 		),
 		breakStmt(),
 	];
@@ -199,7 +225,8 @@ function FORIN_DONE(ctx: HandlerCtx): JsNode[] {
 		varDecl("fi", ctx.peek()),
 		exprStmt(
 			ctx.push(
-				bin(BOp.Gte,
+				bin(
+					BOp.Gte,
 					member(id("fi"), ctx.t("_idx")),
 					member(member(id("fi"), ctx.t("_keys")), "length")
 				)
@@ -221,7 +248,8 @@ function GET_ASYNC_ITERATOR(ctx: HandlerCtx): JsNode[] {
 		varDecl("iterable", ctx.pop()),
 		varDecl(
 			"method",
-			bin(BOp.Or,
+			bin(
+				BOp.Or,
 				index(id("iterable"), member(id("Symbol"), "asyncIterator")),
 				index(id("iterable"), member(id("Symbol"), "iterator"))
 			)
@@ -279,7 +307,9 @@ function ASYNC_ITER_DONE(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl("iterObj", ctx.peek()),
 		exprStmt(
-			ctx.push(un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done")))))
+			ctx.push(
+				un(UOp.Not, un(UOp.Not, member(id("iterObj"), ctx.t("_done"))))
+			)
 		),
 		breakStmt(),
 	];

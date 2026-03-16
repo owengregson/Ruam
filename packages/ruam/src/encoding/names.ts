@@ -461,8 +461,7 @@ function createNameGenerator(seed: number, externalUsed?: Set<string>) {
 		return variantState;
 	}
 	// Per-build prefix probability: 20-50% of names get prefixed
-	const prefixBias =
-		0.2 + ((variantLcg() >>> 0) / 0x100000000) * 0.3;
+	const prefixBias = 0.2 + ((variantLcg() >>> 0) / 0x100000000) * 0.3;
 	const PREFIXES = ["_"];
 
 	function maybePrefix(name: string): string {
