@@ -165,8 +165,14 @@ function applySharedOverrides(
  * Create a NameRegistry and produce RuntimeNames + TempNames.
  * Drop-in replacement for generateRuntimeNames + generateAlphabet.
  */
-export function setupRegistry(seed: number): RegistryResult {
+export function setupRegistry(
+	seed: number,
+	additionalExclusions?: Set<string>
+): RegistryResult {
 	const registry = new NameRegistry(seed);
+	if (additionalExclusions) {
+		registry.exclude(additionalExclusions);
+	}
 
 	// Runtime names scope
 	const runtimeScope = registry.createScope("runtime", {
@@ -198,9 +204,13 @@ export function setupRegistry(seed: number): RegistryResult {
  */
 export function setupShieldedRegistry(
 	sharedSeed: number,
-	groupSeeds: number[]
+	groupSeeds: number[],
+	additionalExclusions?: Set<string>
 ): ShieldedRegistryResult {
 	const registry = new NameRegistry(sharedSeed);
+	if (additionalExclusions) {
+		registry.exclude(additionalExclusions);
+	}
 
 	// Shared runtime names
 	const sharedRtScope = registry.createScope("shared_runtime", {

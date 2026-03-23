@@ -31,6 +31,18 @@ export class NameRegistry {
 		return this._resolved;
 	}
 
+	/** Exclude additional names from generation. Must be called before resolveAll(). */
+	exclude(names: Iterable<string>): void {
+		if (this._resolved) {
+			throw new Error(
+				"Registry is frozen — cannot exclude after resolveAll()"
+			);
+		}
+		for (const name of names) {
+			this._globalUsed.add(name);
+		}
+	}
+
 	/** Create a child scope. If parent is provided, the scope is nested under it. */
 	createScope(
 		id: string,
@@ -116,19 +128,23 @@ export class NameRegistry {
 
 	private _resolveScope(scope: NameScope): void {
 		const MAX_RETRIES = 50;
+		const ALNUM =
+			"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+		// Length bump carries across tokens within a scope — if previous
+		// tokens needed longer names, subsequent tokens start at that
+		// length instead of burning 50 retries each to rediscover it.
+		let lengthBump = 0;
+
 		for (const [, token] of scope.tokens) {
-			let lengthBump = 0;
 			let retries = 0;
 			let candidate: string;
 
 			do {
 				candidate = scope.generateCandidate();
-				// If candidate is too short due to bump, regenerate with longer minimum
+				// Force longer name when bump is active
 				if (lengthBump > 0 && candidate.length < 2 + lengthBump) {
-					// Force longer name by appending random chars
 					while (candidate.length < 2 + lengthBump) {
-						const ALNUM =
-							"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 						candidate += ALNUM[scope.nextPrng() % ALNUM.length]!;
 					}
 				}

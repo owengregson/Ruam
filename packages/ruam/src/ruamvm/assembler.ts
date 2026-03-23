@@ -346,8 +346,15 @@ export function generateVmRuntime(options: {
 		}
 	}
 
-	pushShuffled(tier0Components, order?.tier0);
-	pushShuffled(tier1Components, order?.tier1);
+	// Merge tier 0 and tier 1 into a single preamble pool and shuffle
+	// together — makes the output beginning vary significantly per build
+	if (structuralChoices?.preambleOrder) {
+		const combined = [...tier0Components, ...tier1Components];
+		pushShuffled(combined, structuralChoices.preambleOrder);
+	} else {
+		pushShuffled(tier0Components, order?.tier0);
+		pushShuffled(tier1Components, order?.tier1);
+	}
 	// Scattered key reassembly: all fragment vars in tier 0 and tier 1 are
 	// now declared. Reassemble the alphabet + build reverse table + decode
 	// function before tier 2 (which may depend on them indirectly).

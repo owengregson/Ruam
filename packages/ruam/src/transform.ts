@@ -36,7 +36,7 @@ import { setupRegistry, setupShieldedRegistry } from "./naming/index.js";
 import { resolveOptions } from "./presets.js";
 import type { ResolvedOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
-import { preprocessIdentifiers, resetHexCounter } from "./preprocess.js";
+import { preprocessIdentifiers } from "./preprocess.js";
 import {
 	BABEL_PARSER_PLUGINS,
 	FNV_OFFSET_BASIS,
@@ -108,21 +108,28 @@ export function obfuscateCode(
 		wrapOutput = false,
 	} = resolved;
 
+	// -- Generate per-file seed (needed for both preprocessing and opcodes) --
+	const shuffleSeed = generateCryptoSeed();
+
 	// -- Optional identifier preprocessing -----------------------------------
 	let code = source;
+	let preprocessUsedNames: Set<string> | undefined;
 	if (preprocess) {
-		resetHexCounter();
-		code = preprocessIdentifiers(code);
+		const ppResult = preprocessIdentifiers(code, shuffleSeed);
+		code = ppResult.code;
+		preprocessUsedNames = ppResult.usedNames;
 	}
 
 	// -- Generate per-file opcode shuffle ------------------------------------
-	const shuffleSeed = generateCryptoSeed();
-
 	resetUnitCounter(shuffleSeed);
 	const shuffleMap = generateShuffleMap(shuffleSeed);
 
 	// -- Generate randomized runtime identifiers + alphabet via NameRegistry --
-	const { runtime: names, temps, alphabet } = setupRegistry(shuffleSeed);
+	const {
+		runtime: names,
+		temps,
+		alphabet,
+	} = setupRegistry(shuffleSeed, preprocessUsedNames);
 
 	// -- Generate per-build structural variation choices --------------------
 	const structuralChoices = generateStructuralChoices(shuffleSeed);
@@ -154,6 +161,7 @@ export function obfuscateCode(
 			stringAtomization,
 			scatteredKeys,
 			wrapOutput,
+			preprocessUsedNames,
 		});
 	}
 
@@ -771,6 +779,7 @@ function assembleShielded(
 		stringAtomization: boolean;
 		scatteredKeys: boolean;
 		wrapOutput: boolean;
+		preprocessUsedNames: Set<string> | undefined;
 	}
 ): string {
 	// Generate per-group seeds (one per root function)
@@ -784,7 +793,7 @@ function assembleShielded(
 		groups: groupNameSets,
 		groupTemps: groupTempSets,
 		alphabet: shieldedAlphabet,
-	} = setupShieldedRegistry(sharedSeed, groupSeeds);
+	} = setupShieldedRegistry(sharedSeed, groupSeeds, opts.preprocessUsedNames);
 
 	// --- Phase 1: Compile all targets (no encoding) ---
 	const groups: ShieldingGroup[] = [];
@@ -1079,9 +1088,22 @@ function assembleOutputFromParts(
 		return result;
 	};
 
+	// Insert the bytecode table init at a seeded position in the first
+	// third of the runtime statements — avoids always starting with
+	// `var bt = {}` which is a recognizable pattern.
+	const insertBtInit = (stmts: t.Statement[]): t.Statement[] => {
+		const result = [...stmts];
+		let s2 = (seed ^ 0xa5a5a5a5) >>> 0;
+		s2 = (s2 * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+		const maxPos = Math.max(1, Math.floor(result.length / 3));
+		const pos = s2 % maxPos;
+		result.splice(pos, 0, btInitNode as t.Statement);
+		return result;
+	};
+
 	if (wrapOutput) {
 		const userStatements = [...ast.program.body];
-		iifeFn.body.body.unshift(btInitNode as t.Statement);
+		iifeFn.body.body = insertBtInit(iifeFn.body.body);
 		iifeFn.body.body = scatterStatements(iifeFn.body.body);
 		iifeFn.body.body.push(
 			...(scopeNodes as t.Statement[]),
@@ -1091,10 +1113,8 @@ function assembleOutputFromParts(
 		ast.program.directives = [];
 	} else {
 		const runtimeStatements = iifeFn.body.body;
-		const scattered = scatterStatements([
-			btInitNode as t.Statement,
-			...runtimeStatements,
-		]);
+		const withBt = insertBtInit(runtimeStatements);
+		const scattered = scatterStatements(withBt);
 		ast.program.body.unshift(
 			...scattered,
 			...(scopeNodes as t.Statement[])

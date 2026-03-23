@@ -16,6 +16,7 @@
 
 import type {
 	JsNode,
+	CallExpr,
 	MemberExpr,
 	BinOp,
 	Literal,
@@ -73,11 +74,7 @@ function walkNode(node: JsNode, ch: StructuralChoices): JsNode {
 			return transformLiteral(node, ch);
 
 		case "CallExpr":
-			return {
-				...node,
-				callee: walkNode(node.callee, ch),
-				args: node.args.map((a) => walkNode(a, ch)),
-			};
+			return transformCallExpr(node, ch);
 
 		// --- Containers: recurse into children ---
 		case "VarDecl":
@@ -291,6 +288,32 @@ function transformBinOp(node: BinOp, ch: StructuralChoices): JsNode {
 	}
 
 	return { ...node, left, right };
+}
+
+// --- Indirect call: f() → (0, f)() ---
+
+function transformCallExpr(node: CallExpr, ch: StructuralChoices): JsNode {
+	const callee = walkNode(node.callee, ch);
+	const args = node.args.map((a) => walkNode(a, ch));
+
+	// Only apply to plain identifier calls (not method calls, new, etc.)
+	// (0, f)() evaluates f without a `this` binding — safe for standalone calls
+	if (
+		callee.type === "Id" &&
+		!GLOBAL_SKIP.has(resolveName(callee.name)) &&
+		ch.prng() < ch.expressionNoise.indirectCallBias
+	) {
+		return {
+			...node,
+			callee: {
+				type: "SequenceExpr",
+				exprs: [{ type: "Literal", value: 0 }, callee],
+			},
+			args,
+		};
+	}
+
+	return { ...node, callee, args };
 }
 
 // --- Numeric literal variation: 42 → 0x2a ---

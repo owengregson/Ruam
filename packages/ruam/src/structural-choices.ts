@@ -30,6 +30,14 @@ export interface StructuralChoices {
 		tier4: number[];
 	};
 
+	/**
+	 * Shuffled indices for the merged tier 0 + tier 1 preamble pool.
+	 * When present, tier 0 and tier 1 components are combined into one
+	 * pool and shuffled together — making the output beginning vary
+	 * significantly between builds.
+	 */
+	preambleOrder: number[];
+
 	/** Interpreter dispatch architecture. */
 	dispatchStyle: DispatchStyle;
 
@@ -157,6 +165,9 @@ export function generateStructuralChoices(seed: number): StructuralChoices {
 		return prngState / 0x100000000;
 	}
 
+	// Preamble order: combined tier 0 + tier 1 shuffle (max 15 items)
+	const preambleOrder = shuffle(TIER_0_SIZE + TIER_1_MAX);
+
 	return {
 		statementOrder: {
 			tier0: shuffle(TIER_0_SIZE),
@@ -165,6 +176,7 @@ export function generateStructuralChoices(seed: number): StructuralChoices {
 			tier3: shuffle(TIER_3_SIZE),
 			tier4: shuffle(TIER_4_MAX),
 		},
+		preambleOrder,
 
 		dispatchStyle: pick([
 			"function-table",

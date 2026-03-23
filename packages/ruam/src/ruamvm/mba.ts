@@ -5,12 +5,15 @@
  * but structurally opaque mixed boolean-arithmetic expressions.
  *
  * Two application modes:
- *  - **Bitwise ops** (`^`, `&`, `|`) — always safe to transform (coerce to int32).
+ *  - **Bitwise ops** (`^`, `&`, `|`) — safe to transform when operands
+ *    are known-integer (no string literals in the sub-tree).
  *  - **Arithmetic ops** (`+`, `-`) — wrapped with a runtime int32 guard:
  *    `(a|0)===a && (b|0)===b ? MBA(a,b) : a op b`
  *
- * MBA expressions are recursively nested to the configured depth for
- * additional obfuscation.
+ * A single pass (depth 1) is applied to avoid exponential expression
+ * growth from nesting — the int32 guard already introduces bitwise ops
+ * that would be re-transformed in deeper passes, producing enormous
+ * output for zero additional security benefit.
  *
  * @module ruamvm/mba
  */
@@ -95,7 +98,7 @@ const OR_VARIANTS: ((x: JsNode, y: JsNode) => JsNode)[] = [
 	(x, y) => bin(BOp.Add, bin(BOp.BitXor, x, y), bin(BOp.BitAnd, x, y)),
 ];
 
-/** Map from operator to variant table (bitwise — always safe). */
+/** Map from operator to variant table (bitwise). */
 const BITWISE_MBA = new Map<BOpKind, ((x: JsNode, y: JsNode) => JsNode)[]>([
 	[BOp.BitXor, XOR_VARIANTS],
 	[BOp.BitAnd, AND_VARIANTS],
@@ -136,6 +139,35 @@ function int32Guard(
 	return ternary(guard, mbaExpr, bin(op, left, right));
 }
 
+// --- String / non-integer detection ---
+
+/**
+ * Check if a node sub-tree may produce a non-integer value.
+ *
+ * Walks BinOps, UnaryOps, and ternaries to find string literals
+ * or non-numeric literals that would make MBA semantically wrong
+ * or produce nonsensical bitwise-on-string expressions.
+ */
+function mayProduceNonInteger(node: JsNode): boolean {
+	if (node.type === "Literal") {
+		return typeof node.value === "string";
+	}
+	if (node.type === "BinOp") {
+		return (
+			mayProduceNonInteger(node.left) || mayProduceNonInteger(node.right)
+		);
+	}
+	if (node.type === "UnaryOp") {
+		return mayProduceNonInteger(node.expr);
+	}
+	if (node.type === "TernaryExpr") {
+		return (
+			mayProduceNonInteger(node.then) || mayProduceNonInteger(node.else)
+		);
+	}
+	return false;
+}
+
 // --- Core transform ---
 
 /**
@@ -148,20 +180,23 @@ function int32Guard(
 function mbaSingle(node: BinOp, lcg: () => number): JsNode {
 	const { op, left, right } = node;
 
-	// Bitwise ops — always safe (coerce to int32)
+	// Bitwise ops — skip when operands may contain non-integer values
 	const bitwiseVariants = BITWISE_MBA.get(op);
 	if (bitwiseVariants) {
+		if (mayProduceNonInteger(left) || mayProduceNonInteger(right)) {
+			return node;
+		}
 		const variant = bitwiseVariants[lcg() % bitwiseVariants.length]!;
 		return variant(left, right);
 	}
 
 	// Arithmetic ops — need int32 guard for user values.
-	// Skip when either operand is a string literal — MBA on string
-	// concatenation produces enormous useless int32-guard blocks
-	// (the guard always fails, falling through to the clean path).
+	// Skip when either operand may produce a non-integer (string
+	// concatenation, object coercion, etc.) — the guard always fails
+	// at runtime, producing enormous dead code for no benefit.
 	const arithVariants = ARITH_MBA.get(op);
 	if (arithVariants) {
-		if (containsStringLiteral(left) || containsStringLiteral(right)) {
+		if (mayProduceNonInteger(left) || mayProduceNonInteger(right)) {
 			return node;
 		}
 		const variant = arithVariants[lcg() % arithVariants.length]!;
@@ -170,23 +205,6 @@ function mbaSingle(node: BinOp, lcg: () => number): JsNode {
 	}
 
 	return node;
-}
-
-/**
- * Check if a node tree contains a string literal anywhere.
- * Used to skip MBA on string concatenation (e.g. error messages).
- */
-function containsStringLiteral(node: JsNode): boolean {
-	if (node.type === "Literal" && typeof node.value === "string") {
-		return true;
-	}
-	if (node.type === "BinOp") {
-		return (
-			containsStringLiteral(node.left) ||
-			containsStringLiteral(node.right)
-		);
-	}
-	return false;
 }
 
 /** Operators eligible for MBA transformation. */
@@ -202,41 +220,28 @@ const MBA_OPS = new Set<BOpKind>([
  * Apply MBA transformation to all eligible BinOp nodes in a JsNode tree.
  *
  * Walks bottom-up, replacing eligible operations with MBA equivalents.
- * Nesting depth controls recursive MBA application to sub-expressions.
+ * Uses depth 1 (single pass) to avoid exponential expression growth —
+ * deeper nesting re-transforms int32Guard's own bitwise ops, producing
+ * enormous output for no additional security.
  *
  * @param nodes - Statement list to transform
  * @param seed - LCG seed for deterministic variant selection
- * @param depth - Nesting depth (default 2)
  * @returns Transformed statement list
  */
-export function applyMBA(
-	nodes: JsNode[],
-	seed: number,
-	depth: number = 2
-): JsNode[] {
+export function applyMBA(nodes: JsNode[], seed: number): JsNode[] {
 	const lcg = makeLcg(seed);
 
-	function walk(node: JsNode, currentDepth: number): JsNode {
+	function walk(node: JsNode): JsNode {
 		// Walk children first (bottom-up)
-		const walked = mapChildren(node, (child) => walk(child, currentDepth));
+		const walked = mapChildren(node, (child) => walk(child));
 
-		// Transform eligible BinOps
+		// Transform eligible BinOps (single pass — no nesting)
 		if (walked.type === "BinOp" && MBA_OPS.has(walked.op)) {
-			let result = mbaSingle(walked, lcg);
-			// Recursive nesting: apply MBA to sub-expressions of the result
-			for (let d = 1; d < currentDepth; d++) {
-				result = mapChildren(result, (child) => {
-					if (child.type === "BinOp" && MBA_OPS.has(child.op)) {
-						return mbaSingle(child, lcg);
-					}
-					return child;
-				});
-			}
-			return result;
+			return mbaSingle(walked, lcg);
 		}
 
 		return walked;
 	}
 
-	return nodes.map((n) => walk(n, depth));
+	return nodes.map((n) => walk(n));
 }
