@@ -108,6 +108,8 @@ export function generateVmRuntime(options: {
 	bytecodeScattering?: boolean;
 	/** Apply incremental cipher encryption (block-epoch keyed). */
 	incrementalCipher?: boolean;
+	/** Apply semantic opacity transforms to handler bodies. */
+	semanticOpacity?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** Whether any compiled units are async (controls async interpreter emit). */
@@ -142,6 +144,7 @@ export function generateVmRuntime(options: {
 		opcodeMutation = false,
 		bytecodeScattering = false,
 		incrementalCipher = false,
+		semanticOpacity = false,
 		alphabet,
 		hasAsyncUnits = true,
 		structuralChoices,
@@ -271,6 +274,7 @@ export function generateVmRuntime(options: {
 			handlerFragmentation,
 			opcodeMutation,
 			incrementalCipher,
+			semanticOpacity,
 		},
 		split,
 		hasAsyncUnits,
@@ -489,6 +493,8 @@ export function generateShieldedVmRuntime(options: {
 	bytecodeScattering?: boolean;
 	/** Apply incremental cipher encryption (block-epoch keyed). */
 	incrementalCipher?: boolean;
+	/** Apply semantic opacity transforms to handler bodies. */
+	semanticOpacity?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** NameRegistry for dynamic name generation. */
@@ -512,6 +518,7 @@ export function generateShieldedVmRuntime(options: {
 		opcodeMutation = false,
 		bytecodeScattering = false,
 		incrementalCipher = false,
+		semanticOpacity = false,
 		alphabet,
 		registry,
 	} = options;
@@ -644,6 +651,7 @@ export function generateShieldedVmRuntime(options: {
 				handlerFragmentation,
 				opcodeMutation,
 				incrementalCipher,
+				semanticOpacity,
 			},
 			groupSplit,
 			group.hasAsyncUnits ?? true,

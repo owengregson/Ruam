@@ -9,6 +9,7 @@ import { describe, it, expect } from "bun:test";
 import { generateOpaquePredicate } from "../../src/ruamvm/opaque-predicates.js";
 import { emit } from "../../src/ruamvm/emit.js";
 import { id } from "../../src/ruamvm/nodes.js";
+import { assertEquivalent } from "../helpers.js";
 
 /** Integer test values covering negatives, zero, positives, and edge cases. */
 const TEST_VALUES = [-1000, -100, -7, -2, -1, 0, 1, 2, 7, 42, 100, 1000];
@@ -79,5 +80,87 @@ describe("opaque predicates", () => {
 		}
 		// 5 distinct families — all should appear within 200 seeds
 		expect(seen.size).toBe(5);
+	});
+});
+
+// --- Handler aliasing e2e tests ---
+
+const soOpts = { semanticOpacity: true };
+
+describe("handler aliasing e2e", () => {
+	it("simple function", () => {
+		assertEquivalent(`function f() { return 42; } f();`, soOpts);
+	});
+
+	it("arithmetic", () => {
+		assertEquivalent(
+			`function f(a, b) { return a + b; } f(3, 7);`,
+			soOpts
+		);
+	});
+
+	it("object operations", () => {
+		assertEquivalent(
+			`
+			function f() {
+				var obj = { a: 1, b: 2 };
+				return obj.a + obj.b;
+			}
+			f();
+		`,
+			soOpts
+		);
+	});
+
+	it("closures", () => {
+		assertEquivalent(
+			`
+			function outer(x) {
+				return function(y) { return x + y; };
+			}
+			outer(10)(20);
+		`,
+			soOpts
+		);
+	});
+
+	it("control flow", () => {
+		assertEquivalent(
+			`
+			function abs(n) {
+				if (n < 0) return -n;
+				return n;
+			}
+			abs(-5) + abs(3);
+		`,
+			soOpts
+		);
+	});
+
+	it("loops", () => {
+		assertEquivalent(
+			`
+			function sum(n) {
+				var s = 0;
+				for (var i = 1; i <= n; i++) s += i;
+				return s;
+			}
+			sum(10);
+		`,
+			soOpts
+		);
+	});
+
+	it("with all features (max preset)", () => {
+		assertEquivalent(
+			`
+			function fib(n) {
+				if (n <= 1) return n;
+				return fib(n-1) + fib(n-2);
+			}
+			fib(10);
+		`,
+			{ preset: "max" }
+		);
 	});
 });

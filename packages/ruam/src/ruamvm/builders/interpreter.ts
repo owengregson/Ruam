@@ -62,6 +62,7 @@ import type { NameRegistry } from "../../naming/registry.js";
 import { obfuscateLocals } from "../transforms.js";
 import { applyMBA } from "../mba.js";
 import { fragmentCases } from "../handler-fragmentation.js";
+import { aliasHandlerBody } from "../handler-aliasing.js";
 import type { StructuralChoices } from "../../structural-choices.js";
 
 /** Options for interpreter filtering and hardening. */
@@ -74,6 +75,7 @@ export interface InterpreterBuildOptions {
 	handlerFragmentation?: boolean;
 	opcodeMutation?: boolean;
 	incrementalCipher?: boolean;
+	semanticOpacity?: boolean;
 }
 
 /** Result from building interpreter functions. */
@@ -564,6 +566,24 @@ function buildCasesForMode(
 		debug,
 		handlerIndices
 	);
+
+	// --- Handler aliasing ---
+	// Apply structural transforms to a subset of handler bodies so that
+	// different builds produce structurally different code for the same opcode.
+	// Must run before MBA and fragmentation (those further transform the aliased bodies).
+	if (interpOpts.semanticOpacity) {
+		let aliasSeed = deriveSeed(seed, "aliasSelect");
+		cases = cases.map((c, idx) => {
+			if (c.label === null) return c;
+			// Each handler gets a deterministic coin flip
+			aliasSeed = (Math.imul(aliasSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			// ~40% of handlers get aliased
+			if ((aliasSeed % 100) < 40) {
+				return caseClause(c.label, aliasHandlerBody(c.body, seed, idx));
+			}
+			return c;
+		});
+	}
 
 	// Default case
 	cases.push(caseClause(null, [breakStmt()]));
