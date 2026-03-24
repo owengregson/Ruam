@@ -100,9 +100,9 @@ describe("anti-reversing properties", () => {
 			const fns1 = [...out1.matchAll(fnPattern)];
 			const fns2 = [...out2.matchAll(fnPattern)];
 
-			// Both should have many handler functions (one per opcode)
-			expect(fns1.length).toBeGreaterThan(50);
-			expect(fns2.length).toBeGreaterThan(50);
+			// Both should have handler functions (dynamicOpcodes strips unused ones)
+			expect(fns1.length).toBeGreaterThan(10);
+			expect(fns2.length).toBeGreaterThan(10);
 
 			// The outputs should differ overall (different seeds → names, etc.)
 			expect(out1).not.toEqual(out2);
@@ -161,12 +161,11 @@ describe("anti-reversing properties", () => {
 			// switches within individual handlers, not the main dispatch)
 			expect(cases.length).toBeLessThan(50);
 
-			// Handler closures should be abundant (regardless of dispatch style:
-			// function table, direct array, or object lookup — all wrap handlers
-			// in function expressions).
+			// Handler closures should be present (dynamicOpcodes strips unused
+			// handlers, so the count depends on opcodes used by the input code).
 			const fnPattern = /function\s*\w*\s*\(/g;
 			const fns = [...out.matchAll(fnPattern)];
-			expect(fns.length).toBeGreaterThan(50);
+			expect(fns.length).toBeGreaterThan(10);
 		});
 
 		it("no recognizable VM patterns in variable names", () => {

@@ -98,7 +98,7 @@ export function obfuscateCode(
 		encryptBytecode = false,
 		debugProtection = false,
 		debugLogging = false,
-		dynamicOpcodes = false,
+		dynamicOpcodes = true,
 		decoyOpcodes = false,
 		deadCodeInjection = false,
 		stackEncoding = false,

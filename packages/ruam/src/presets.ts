@@ -26,7 +26,7 @@ export const PRESETS: Record<
 		preprocessIdentifiers: false,
 		encryptBytecode: false,
 		debugProtection: false,
-		dynamicOpcodes: false,
+		dynamicOpcodes: true,
 		decoyOpcodes: false,
 		deadCodeInjection: false,
 		stackEncoding: false,
