@@ -50,6 +50,7 @@ import { buildLoader } from "./builders/loader.js";
 import { buildDeserializer } from "./builders/deserializer.js";
 import { buildGlobalExposure } from "./builders/globals.js";
 import { buildDecodeFunction } from "./builders/unpack.js";
+import { buildIdentityBindings } from "./observation-resistance.js";
 import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
 import type { StructuralChoices } from "../structural-choices.js";
@@ -110,6 +111,10 @@ export function generateVmRuntime(options: {
 	incrementalCipher?: boolean;
 	/** Apply semantic opacity transforms to handler bodies. */
 	semanticOpacity?: boolean;
+	/** Silently corrupt cipher state when function references are tampered. */
+	observationResistance?: boolean;
+	/** Number of functions to bind for observation resistance (from tuning). */
+	identityBindingCount?: number;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** Whether any compiled units are async (controls async interpreter emit). */
@@ -145,6 +150,8 @@ export function generateVmRuntime(options: {
 		bytecodeScattering = false,
 		incrementalCipher = false,
 		semanticOpacity = false,
+		observationResistance = false,
+		identityBindingCount = 5,
 		alphabet,
 		hasAsyncUnits = true,
 		structuralChoices,
@@ -275,6 +282,7 @@ export function generateVmRuntime(options: {
 			opcodeMutation,
 			incrementalCipher,
 			semanticOpacity,
+			observationResistance,
 		},
 		split,
 		hasAsyncUnits,
@@ -391,6 +399,27 @@ export function generateVmRuntime(options: {
 	}
 	nodes.push(...tier2Nodes); // tier 2 is never shuffled
 	pushShuffled(tier3Components, order?.tier3);
+
+	// Observation resistance: identity bindings must go after all bound
+	// functions (exec, load, vm, deser, rcDeriveKey, rcMix, etc.) are
+	// declared (tiers 2 and 3). Placed before tier 4 (wiring).
+	if (observationResistance && rollingCipher) {
+		const orResult = buildIdentityBindings(
+			names,
+			temps,
+			seed,
+			identityBindingCount,
+			{
+				rollingCipher,
+				encrypt,
+				incrementalCipher,
+			},
+			split,
+			registry
+		);
+		nodes.push(...orResult.declarations, orResult.verifyFn);
+	}
+
 	pushShuffled(tier4Components, order?.tier4);
 
 	// --- String atomization: replace string literals with table lookups ---
@@ -495,6 +524,10 @@ export function generateShieldedVmRuntime(options: {
 	incrementalCipher?: boolean;
 	/** Apply semantic opacity transforms to handler bodies. */
 	semanticOpacity?: boolean;
+	/** Silently corrupt cipher state when function references are tampered. */
+	observationResistance?: boolean;
+	/** Number of functions to bind for observation resistance (from tuning). */
+	identityBindingCount?: number;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** NameRegistry for dynamic name generation. */
@@ -519,6 +552,8 @@ export function generateShieldedVmRuntime(options: {
 		bytecodeScattering = false,
 		incrementalCipher = false,
 		semanticOpacity = false,
+		observationResistance = false,
+		identityBindingCount = 5,
 		alphabet,
 		registry,
 	} = options;
@@ -652,6 +687,7 @@ export function generateShieldedVmRuntime(options: {
 				opcodeMutation,
 				incrementalCipher,
 				semanticOpacity,
+				observationResistance,
 			},
 			groupSplit,
 			group.hasAsyncUnits ?? true,
@@ -715,6 +751,25 @@ export function generateShieldedVmRuntime(options: {
 		nodes.push(
 			...buildLoader(encrypt, gn, true, true, { skipSharedDecls: true })
 		);
+
+		// Observation resistance: per-group identity bindings (after all
+		// bound functions are declared for this group)
+		if (observationResistance) {
+			const orResult = buildIdentityBindings(
+				gn,
+				gt,
+				group.seed,
+				identityBindingCount,
+				{
+					rollingCipher: true, // always on in shielding mode
+					encrypt,
+					incrementalCipher,
+				},
+				groupSplit,
+				registry
+			);
+			nodes.push(...orResult.declarations, orResult.verifyFn);
+		}
 
 		groupRegistrations.push({
 			unitIds: group.unitIds,

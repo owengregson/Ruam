@@ -120,6 +120,7 @@ export function obfuscateCode(
 		bytecodeScattering = false,
 		incrementalCipher = false,
 		semanticOpacity = false,
+		observationResistance = false,
 		wrapOutput = false,
 	} = resolved;
 
@@ -182,6 +183,7 @@ export function obfuscateCode(
 			bytecodeScattering,
 			incrementalCipher,
 			semanticOpacity,
+			observationResistance,
 			wrapOutput,
 			preprocessUsedNames,
 			tuning,
@@ -247,6 +249,7 @@ export function obfuscateCode(
 				opcodeMutation,
 				incrementalCipher,
 				semanticOpacity,
+				observationResistance,
 			},
 			undefined,
 			hasAsyncUnits,
@@ -285,6 +288,8 @@ export function obfuscateCode(
 		bytecodeScattering,
 		incrementalCipher,
 		semanticOpacity,
+		observationResistance,
+		identityBindingCount: tuning.identityBindingCount,
 		alphabet,
 		hasAsyncUnits,
 		structuralChoices,
@@ -905,6 +910,7 @@ function assembleShielded(
 		bytecodeScattering: boolean;
 		incrementalCipher: boolean;
 		semanticOpacity: boolean;
+		observationResistance: boolean;
 		wrapOutput: boolean;
 		preprocessUsedNames: Set<string> | undefined;
 		tuning: Readonly<TuningProfile>;
@@ -1055,6 +1061,7 @@ function assembleShielded(
 					opcodeMutation: opts.opcodeMutation,
 					incrementalCipher: opts.incrementalCipher,
 					semanticOpacity: opts.semanticOpacity,
+					observationResistance: opts.observationResistance,
 				},
 				undefined,
 				gm.hasAsyncUnits
@@ -1099,6 +1106,8 @@ function assembleShielded(
 		bytecodeScattering: opts.bytecodeScattering,
 		incrementalCipher: opts.incrementalCipher,
 		semanticOpacity: opts.semanticOpacity,
+		observationResistance: opts.observationResistance,
+		identityBindingCount: opts.tuning.identityBindingCount,
 		alphabet: shieldedAlphabet,
 		registry: shieldedRegistry,
 	});

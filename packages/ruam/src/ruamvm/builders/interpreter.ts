@@ -80,6 +80,7 @@ export interface InterpreterBuildOptions {
 	opcodeMutation?: boolean;
 	incrementalCipher?: boolean;
 	semanticOpacity?: boolean;
+	observationResistance?: boolean;
 }
 
 /** Result from building interpreter functions. */
@@ -1129,6 +1130,36 @@ function buildScaffoldAST(
 			varDecl(
 				T("_ri"),
 				bin(BOp.Ushr, bin(BOp.Sub, id(IP), lit(2)), lit(1))
+			)
+		);
+	}
+
+	// Optional: observation resistance — periodic identity binding check.
+	// Every ~256 instructions, XOR orVerify() into rcState.  When clean
+	// (untampered), orVerify() returns 0 and XOR is a no-op.  When a
+	// bound function has been replaced, a non-zero corruption constant
+	// silently poisons all subsequent instruction decryption.
+	if (interpOpts.observationResistance && rollingCipher) {
+		// if ((_ri & 0xFF) === 0) { rcState = (rcState ^ orVerify()) >>> 0; }
+		whileBody.push(
+			ifStmt(
+				bin(BOp.Seq, bin(BOp.BitAnd, id(T("_ri")), lit(0xff)), lit(0)),
+				[
+					exprStmt(
+						assign(
+							id(n.rcState),
+							bin(
+								BOp.Ushr,
+								bin(
+									BOp.BitXor,
+									id(n.rcState),
+									call(id(n.orVerify), [])
+								),
+								lit(0)
+							)
+						)
+					),
+				]
 			)
 		);
 	}
