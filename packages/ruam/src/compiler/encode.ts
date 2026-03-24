@@ -31,10 +31,7 @@ import {
 	BINARY_TAG_STRING,
 	BINARY_TAG_ENCODED_STRING,
 } from "../constants.js";
-import {
-	deriveImplicitKey,
-	rollingEncrypt,
-} from "./rolling-cipher.js";
+import { deriveImplicitKey, rollingEncrypt } from "./rolling-cipher.js";
 
 // ---------------------------------------------------------------------------
 // Public API

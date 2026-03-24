@@ -1,87 +1,121 @@
 /**
  * Bytecode scattering engine tests.
  *
- * Unit tests for the chunk splitting engine + round-trip verification.
+ * Unit tests for the heterogeneous fragment engine + round-trip verification.
  */
 
 import { describe, it, expect } from "bun:test";
 import { scatterBytecodeUnit } from "../../src/ruamvm/bytecode-scatter.js";
+import { emit } from "../../src/ruamvm/emit.js";
+
+function makeNameGen(): () => string {
+	let i = 0;
+	return () => "_f" + i++;
+}
 
 describe("bytecode scattering engine", () => {
-	it("returns ordered string chunks", () => {
+	it("returns typed fragments with declarations and reassembly", () => {
 		const result = scatterBytecodeUnit(
 			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
-			42
+			42,
+			makeNameGen(),
+			"__dec"
 		);
-		expect(result.chunks.length).toBeGreaterThanOrEqual(2);
-		for (const chunk of result.chunks) {
-			expect(typeof chunk).toBe("string");
-			expect(chunk.length).toBeGreaterThan(0);
+		expect(result.fragments.length).toBeGreaterThanOrEqual(2);
+		for (const f of result.fragments) {
+			expect(f.decl.type).toBe("VarDecl");
+			expect(typeof f.name).toBe("string");
 		}
+		expect(result.reassembly).toBeTruthy();
 	});
 
-	it("round-trips: joined chunks equal original", () => {
-		const encoded = "testStringABC123xyzQWERTYuiop";
-		const result = scatterBytecodeUnit(encoded, 555);
-		expect(result.chunks.join("")).toBe(encoded);
+	it("round-trips: fragments reconstruct original string", () => {
+		const encoded = "testStringABC123xyzQWERTYuiopASDF";
+		const result = scatterBytecodeUnit(
+			encoded,
+			555,
+			makeNameGen(),
+			"__dec"
+		);
+
+		// Build decode function + fragment declarations + reassembly
+		const decodeFn = `var __dec=function(v){if(typeof v==="number")v=[v];var s="",i,n;for(i=0;i<v.length;i++){n=v[i];s+=String.fromCharCode(n>>>24&255,n>>>16&255,n>>>8&255,n&255)}return s};`;
+		const fragCode = result.fragments
+			.map((f) => emit(f.decl) + ";")
+			.join("");
+		const wrapper = new Function(
+			decodeFn + fragCode + "\nreturn " + emit(result.reassembly) + ";"
+		);
+		expect(wrapper()).toBe(encoded);
 	});
 
 	it("handles short strings (no split)", () => {
-		const result = scatterBytecodeUnit("AB", 1);
-		expect(result.chunks.length).toBe(1);
-		expect(result.chunks[0]).toBe("AB");
+		const result = scatterBytecodeUnit("AB", 1, makeNameGen(), "__dec");
+		expect(result.fragments.length).toBe(1);
+		expect(result.needsDecode).toBe(false);
 	});
 
-	it("handles medium strings", () => {
-		const encoded = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH";
-		const result = scatterBytecodeUnit(encoded, 12345);
-		expect(result.chunks.join("")).toBe(encoded);
-		expect(result.chunks.length).toBeGreaterThanOrEqual(2);
+	it("produces heterogeneous fragment types across seeds", () => {
+		const types = new Set<string>();
+		for (let seed = 0; seed < 50; seed++) {
+			// Use length divisible by 4 to allow packed type
+			const result = scatterBytecodeUnit(
+				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij012345678901",
+				seed,
+				makeNameGen(),
+				"__dec"
+			);
+			for (const f of result.fragments) {
+				if (f.decl.type === "VarDecl" && f.decl.init) {
+					types.add(f.decl.init.type);
+				}
+			}
+		}
+		// Should have string literals AND array expressions (packed ints)
+		expect(types.has("Literal")).toBe(true);
+		expect(types.has("ArrayExpr")).toBe(true);
 	});
 
 	it("respects min/max fragment parameters", () => {
 		const result = scatterBytecodeUnit(
 			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
 			777,
+			makeNameGen(),
+			"__dec",
 			3,
 			4
 		);
-		expect(result.chunks.length).toBeGreaterThanOrEqual(3);
-		expect(result.chunks.length).toBeLessThanOrEqual(4);
+		expect(result.fragments.length).toBeGreaterThanOrEqual(3);
+		expect(result.fragments.length).toBeLessThanOrEqual(4);
 	});
 
 	it("deterministic: same seed produces same output", () => {
-		const encoded = "SameInputSameOutputExpected1234";
-		const r1 = scatterBytecodeUnit(encoded, 42);
-		const r2 = scatterBytecodeUnit(encoded, 42);
-		expect(r1.chunks).toEqual(r2.chunks);
-	});
-
-	it("different seeds produce different splits", () => {
-		const encoded = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop";
-		const r1 = scatterBytecodeUnit(encoded, 1);
-		const r2 = scatterBytecodeUnit(encoded, 999);
-		// Same content but at least some chunks should differ in size
-		expect(r1.chunks.join("")).toBe(r2.chunks.join(""));
-		const differ = r1.chunks.some(
-			(c, i) => c !== (r2.chunks[i] ?? "")
-		);
-		expect(differ).toBe(true);
-	});
-
-	it("produces variable-length chunks (not equal splits)", () => {
-		// Run across seeds and check that chunk sizes vary
-		const sizes = new Set<number>();
-		for (let seed = 0; seed < 20; seed++) {
-			const result = scatterBytecodeUnit(
-				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
-				seed
+		const encoded = "SameInputSameOutputExpected12345678";
+		const r1 = scatterBytecodeUnit(encoded, 42, makeNameGen(), "__dec");
+		const r2 = scatterBytecodeUnit(encoded, 42, makeNameGen(), "__dec");
+		expect(r1.fragments.length).toBe(r2.fragments.length);
+		for (let i = 0; i < r1.fragments.length; i++) {
+			expect(emit(r1.fragments[i]!.decl)).toBe(
+				emit(r2.fragments[i]!.decl)
 			);
-			for (const chunk of result.chunks) {
-				sizes.add(chunk.length);
+		}
+		expect(emit(r1.reassembly)).toBe(emit(r2.reassembly));
+	});
+
+	it("needsDecode is true when packed int fragments exist", () => {
+		let foundDecode = false;
+		for (let seed = 0; seed < 50; seed++) {
+			const result = scatterBytecodeUnit(
+				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefgh",
+				seed,
+				makeNameGen(),
+				"__dec"
+			);
+			if (result.needsDecode) {
+				foundDecode = true;
+				break;
 			}
 		}
-		// Should have at least 3 distinct chunk sizes across 20 seeds
-		expect(sizes.size).toBeGreaterThanOrEqual(3);
+		expect(foundDecode).toBe(true);
 	});
 });

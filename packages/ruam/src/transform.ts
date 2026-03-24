@@ -32,7 +32,11 @@ import {
 } from "./ruamvm/assembler.js";
 import type { ShieldingGroup, VmRuntimeResult } from "./ruamvm/assembler.js";
 import type { RuntimeNames, TempNames } from "./naming/compat-types.js";
-import { setupRegistry, setupShieldedRegistry, deriveSeed } from "./naming/index.js";
+import {
+	setupRegistry,
+	setupShieldedRegistry,
+	deriveSeed,
+} from "./naming/index.js";
 import type { NameRegistry } from "./naming/index.js";
 import { resolveOptions } from "./presets.js";
 import type { ResolvedOptions } from "./presets.js";
@@ -56,10 +60,7 @@ import {
 	adjustEncodingForMutations,
 } from "./compiler/opcode-mutation.js";
 import { scatterBytecodeUnit } from "./ruamvm/bytecode-scatter.js";
-import {
-	getTuningProfile,
-	presetToIntensity,
-} from "./tuning.js";
+import { getTuningProfile, presetToIntensity } from "./tuning.js";
 import type { TuningProfile } from "./tuning.js";
 
 import { randomBytes } from "node:crypto";
@@ -303,7 +304,8 @@ export function obfuscateCode(
 		wrapOutput,
 		shuffleSeed,
 		bytecodeScattering,
-		tuning
+		tuning,
+		registry
 	);
 }
 
@@ -748,52 +750,63 @@ function buildBtParts(
  * strings — the most obvious VM fingerprint.
  */
 /**
- * Build incremental bytecode table assignments for scattering.
+ * Build scattered bytecode table parts with heterogeneous typed fragments.
  *
- * Instead of fragment variables + reassembly expressions, produces
- * ordered `bt["id"] = "chunk"` / `bt["id"] += "chunk"` statements
- * that accumulate the encoded string piece by piece. Each unit's
- * statements must be emitted in order, but different units can be
- * interleaved.
+ * Each encoded bytecode string is split into fragments of random types
+ * (string literals, packed ints, packed int arrays). Fragment declarations
+ * are individually scattered among runtime statements. Each unit gets
+ * a single reassembly assignment: `bt["id"] = frag1 + D(frag2) + frag3`.
  *
- * @returns init statement + per-unit ordered assignment groups
+ * @returns init statement + fragment declaration strings + reassembly strings
  */
 function buildScatteredBtParts(
 	units: Map<string, { encoded: string }>,
 	btName: string,
+	decodeName: string,
 	seed: number,
-	tuning?: Readonly<TuningProfile>,
-): { init: string; unitGroups: string[][] } {
-	const unitGroups: string[][] = [];
+	nameGen: () => string,
+	tuning?: Readonly<TuningProfile>
+): { init: string; fragmentDecls: string[]; assignments: string[] } {
+	const fragmentDecls: string[] = [];
+	const assignments: string[] = [];
 
 	for (const [unitId, { encoded }] of units) {
 		const result = scatterBytecodeUnit(
 			encoded,
 			deriveSeed(seed, `btUnit:${unitId}`),
+			nameGen,
+			decodeName,
 			tuning?.bytecodeFragmentMin,
 			tuning?.bytecodeFragmentMax
 		);
 
-		const stmts: string[] = [];
-		for (let i = 0; i < result.chunks.length; i++) {
-			const chunk = result.chunks[i]!;
-			// JSON.stringify handles escaping of special characters in the chunk
-			const escaped = JSON.stringify(chunk);
-			if (i === 0) {
-				stmts.push(`${btName}[${JSON.stringify(unitId)}]=${escaped}`);
-			} else {
-				stmts.push(`${btName}[${JSON.stringify(unitId)}]+=${escaped}`);
-			}
+		// Emit each fragment as a var declaration (to be scattered individually)
+		for (const frag of result.fragments) {
+			fragmentDecls.push(emit(frag.decl) + ";");
 		}
-		unitGroups.push(stmts);
+
+		// Emit reassembly: bt["id"] = reassembly_expr
+		const assignNode = {
+			type: "ExprStmt" as const,
+			expr: {
+				type: "AssignExpr" as const,
+				target: {
+					type: "IndexExpr" as const,
+					obj: { type: "Id" as const, name: btName },
+					index: { type: "Literal" as const, value: unitId },
+				},
+				value: result.reassembly,
+			},
+		};
+		assignments.push(emit(assignNode) + ";");
 	}
 
 	return {
 		init: `var ${btName}={}`,
-		unitGroups,
+		fragmentDecls,
+		assignments,
 	};
 }
-
 
 /**
  * Collect all logical opcodes used across all compiled bytecode units.
@@ -1116,7 +1129,8 @@ function assembleShielded(
 		opts.wrapOutput,
 		sharedSeed,
 		opts.bytecodeScattering,
-		opts.tuning
+		opts.tuning,
+		shieldedRegistry
 	);
 }
 
@@ -1137,12 +1151,21 @@ function assembleOutputFromParts(
 	wrapOutput: boolean,
 	seed: number = 0,
 	bytecodeScattering = false,
-	tuning?: Readonly<TuningProfile>
+	tuning?: Readonly<TuningProfile>,
+	registry?: NameRegistry
 ): string {
 	// Build bytecode table statements
-	const scatteredBt = bytecodeScattering
-		? buildScatteredBtParts(encodedUnits, names.bt, seed, tuning)
-		: null;
+	const scatteredBt =
+		bytecodeScattering && registry
+			? buildScatteredBtParts(
+					encodedUnits,
+					names.bt,
+					names.btDecode,
+					seed,
+					registry.createDynamicGenerator("btScatter"),
+					tuning
+			  )
+			: null;
 	const plainBt = scatteredBt ? null : buildBtParts(encodedUnits, names.bt);
 
 	// Collect top-level bindings BEFORE adding runtime statements.
@@ -1161,7 +1184,6 @@ function assembleOutputFromParts(
 		.expression as t.CallExpression;
 	const iifeFn = iifeCall.callee as t.FunctionExpression;
 
-	// Parse assignment statements
 	const parseStmt = (s: string): t.Statement =>
 		parse(s, { sourceType: "script" }).program.body[0]! as t.Statement;
 
@@ -1177,38 +1199,35 @@ function assembleOutputFromParts(
 		return result;
 	};
 
-	// scatterAssignments: interleave bytecode assignment statements among
-	// runtime statements. For the non-scattered path, these are simple
-	// `bt["id"] = "encoded"` statements. For the scattered path, these are
-	// ordered `bt["id"] = "chunk"; bt["id"] += "chunk"` groups that must
-	// maintain their internal order but can be interleaved with other units.
-	const scatterAssignments = (base: t.Statement[]): t.Statement[] => {
-		// Collect all assignment statements to scatter
-		let allAssigns: t.Statement[];
-
-		if (scatteredBt) {
-			// Interleave unit groups: round-robin the chunks from each unit
-			// so assignments from different units alternate in the output.
-			const groups = scatteredBt.unitGroups;
-			const maxLen = Math.max(...groups.map((g) => g.length), 0);
-			allAssigns = [];
-			for (let round = 0; round < maxLen; round++) {
-				for (const group of groups) {
-					const stmt = group[round];
-					if (stmt !== undefined) {
-						allAssigns.push(parseStmt(stmt));
-					}
-				}
-			}
-		} else {
-			allAssigns = plainBt!.assignments.map(parseStmt);
-		}
+	// scatterFragsAndAssignments: individually scatter fragment var declarations
+	// among runtime statements, then place reassembly assignments after all
+	// declarations. Fragment vars blend with other runtime var declarations.
+	const scatterFragsAndAssignments = (base: t.Statement[]): t.Statement[] => {
+		const allAssigns = scatteredBt
+			? scatteredBt.assignments.map(parseStmt)
+			: plainBt!.assignments.map(parseStmt);
 
 		if (allAssigns.length === 0) return base;
 
-		const result = [...base];
+		let result = [...base];
 
-		// Find safe floor: after the last declaration and after `var bt = {}`
+		// Phase 1: Scatter fragment declarations individually among runtime
+		// statements. Each fragment var is placed at a random position in
+		// the first 2/3 of the output — blending with other var declarations.
+		if (scatteredBt && scatteredBt.fragmentDecls.length > 0) {
+			const fragNodes = scatteredBt.fragmentDecls.map(parseStmt);
+			let sf = deriveSeed(seed, "scatterFragDecl");
+			for (const fragNode of fragNodes) {
+				sf = (sf * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+				const maxP = Math.max(1, Math.floor((result.length * 2) / 3));
+				// Place after at least the first few statements (avoid position 0)
+				const minP = Math.min(2, maxP);
+				const pos = minP + (sf % Math.max(1, maxP - minP));
+				result.splice(pos, 0, fragNode);
+			}
+		}
+
+		// Phase 2: Place reassembly assignments after all declarations.
 		let safeFloor = 0;
 		for (let j = 0; j < result.length; j++) {
 			const st = result[j]!;
@@ -1220,23 +1239,22 @@ function assembleOutputFromParts(
 			}
 		}
 
-		// Distribute assignments across available slots after the safe floor.
-		// Each statement is inserted at or after the previous one's position
-		// to preserve the round-robin ordering (= before += for each unit).
 		const slotCount = result.length - safeFloor;
-		const gap = Math.max(1, Math.floor(slotCount / (allAssigns.length + 1)));
+		const gap = Math.max(
+			1,
+			Math.floor(slotCount / (allAssigns.length + 1))
+		);
 		let s = deriveSeed(seed, "scatterAssign");
 		let insertAt = safeFloor;
 		for (let i = 0; i < allAssigns.length; i++) {
 			s = (s * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
-			// Advance by gap ± jitter, but never go backwards
-			const jitter = (s % (Math.max(1, gap))) - Math.floor(gap / 4);
+			const jitter = (s % Math.max(1, gap)) - Math.floor(gap / 4);
 			insertAt = Math.min(
 				result.length,
 				Math.max(insertAt, insertAt + gap + jitter)
 			);
 			result.splice(insertAt, 0, allAssigns[i]!);
-			insertAt++; // account for the inserted element
+			insertAt++;
 		}
 		return result;
 	};
@@ -1244,7 +1262,7 @@ function assembleOutputFromParts(
 	if (wrapOutput) {
 		const userStatements = [...ast.program.body];
 		iifeFn.body.body = insertBtInit(iifeFn.body.body);
-		iifeFn.body.body = scatterAssignments(iifeFn.body.body);
+		iifeFn.body.body = scatterFragsAndAssignments(iifeFn.body.body);
 		iifeFn.body.body.push(
 			...(scopeNodes as t.Statement[]),
 			...userStatements
@@ -1254,7 +1272,7 @@ function assembleOutputFromParts(
 	} else {
 		const runtimeStatements = iifeFn.body.body;
 		const withBt = insertBtInit(runtimeStatements);
-		const scattered = scatterAssignments(withBt);
+		const scattered = scatterFragsAndAssignments(withBt);
 		ast.program.body.unshift(
 			...scattered,
 			...(scopeNodes as t.Statement[])

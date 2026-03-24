@@ -15,8 +15,16 @@ export {
 	type TargetEnvironment,
 } from "./types.js";
 export { PRESETS } from "./presets.js";
-export { OPTION_META, AUTO_ENABLE_RULES, OPTION_LABELS } from "./option-meta.js";
-export type { OptionMetaEntry, AutoEnableRule, OptionCategory } from "./option-meta.js";
+export {
+	OPTION_META,
+	AUTO_ENABLE_RULES,
+	OPTION_LABELS,
+} from "./option-meta.js";
+export type {
+	OptionMetaEntry,
+	AutoEnableRule,
+	OptionCategory,
+} from "./option-meta.js";
 
 // --- Single-Source Obfuscation ---
 

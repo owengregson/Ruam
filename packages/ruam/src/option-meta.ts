@@ -46,24 +46,21 @@ export const OPTION_META: OptionMetaEntry[] = [
 		key: "rollingCipher",
 		label: "Rolling Cipher",
 		category: "security",
-		description:
-			"Position-dependent XOR encryption on every instruction",
+		description: "Position-dependent XOR encryption on every instruction",
 		cliFlag: "--rolling-cipher",
 	},
 	{
 		key: "integrityBinding",
 		label: "Integrity Binding",
 		category: "security",
-		description:
-			"Bind bytecode decryption to interpreter source integrity",
+		description: "Bind bytecode decryption to interpreter source integrity",
 		cliFlag: "--integrity-binding",
 	},
 	{
 		key: "debugProtection",
 		label: "Debug Protection",
 		category: "security",
-		description:
-			"Multi-layered anti-debugger with escalating response",
+		description: "Multi-layered anti-debugger with escalating response",
 		cliFlag: "--debug-protection",
 	},
 	{
@@ -87,8 +84,7 @@ export const OPTION_META: OptionMetaEntry[] = [
 		key: "mixedBooleanArithmetic",
 		label: "MBA",
 		category: "obfuscation",
-		description:
-			"Replace arithmetic/bitwise ops with MBA expressions",
+		description: "Replace arithmetic/bitwise ops with MBA expressions",
 		cliFlag: "--mba",
 	},
 	{
@@ -109,16 +105,14 @@ export const OPTION_META: OptionMetaEntry[] = [
 		key: "handlerFragmentation",
 		label: "Handler Fragmentation",
 		category: "obfuscation",
-		description:
-			"Split handlers into interleaved fragments",
+		description: "Split handlers into interleaved fragments",
 		cliFlag: "--handler-fragmentation",
 	},
 	{
 		key: "stringAtomization",
 		label: "String Atomization",
 		category: "obfuscation",
-		description:
-			"Replace string literals with encoded table lookups",
+		description: "Replace string literals with encoded table lookups",
 		cliFlag: "--string-atomization",
 	},
 	{
@@ -170,16 +164,14 @@ export const OPTION_META: OptionMetaEntry[] = [
 		key: "polymorphicDecoder",
 		label: "Polymorphic Decoder",
 		category: "optimization",
-		description:
-			"Per-build random chain of reversible byte operations",
+		description: "Per-build random chain of reversible byte operations",
 		cliFlag: "--polymorphic-decoder",
 	},
 	{
 		key: "scatteredKeys",
 		label: "Scattered Keys",
 		category: "optimization",
-		description:
-			"Fragment key materials across closure tiers",
+		description: "Fragment key materials across closure tiers",
 		cliFlag: "--scattered-keys",
 	},
 ];

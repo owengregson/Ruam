@@ -489,14 +489,10 @@ function printHelp(version: string): void {
 		)}        Scatter key material across closure scopes`
 	);
 	console.log(
-		`    ${f(
-			"--block-permutation"
-		)}     Shuffle bytecode basic block order`
+		`    ${f("--block-permutation")}     Shuffle bytecode basic block order`
 	);
 	console.log(
-		`    ${f(
-			"--opcode-mutation"
-		)}       Runtime handler table mutations`
+		`    ${f("--opcode-mutation")}       Runtime handler table mutations`
 	);
 	console.log(
 		`    ${f(
@@ -710,14 +706,20 @@ async function runInteractive(version: string): Promise<void> {
 				{ name: "Dead Code Injection", value: "deadCodeInjection" },
 				{ name: "Stack Encoding", value: "stackEncoding" },
 				{ name: "VM Shielding", value: "vmShielding" },
-				{ name: "Mixed Boolean Arithmetic", value: "mixedBooleanArithmetic" },
-				{ name: "Handler Fragmentation", value: "handlerFragmentation" },
-			{ name: "String Atomization", value: "stringAtomization" },
-			{ name: "Polymorphic Decoder", value: "polymorphicDecoder" },
-			{ name: "Scattered Keys", value: "scatteredKeys" },
-			{ name: "Block Permutation", value: "blockPermutation" },
-			{ name: "Opcode Mutation", value: "opcodeMutation" },
-			{ name: "Bytecode Scattering", value: "bytecodeScattering" },
+				{
+					name: "Mixed Boolean Arithmetic",
+					value: "mixedBooleanArithmetic",
+				},
+				{
+					name: "Handler Fragmentation",
+					value: "handlerFragmentation",
+				},
+				{ name: "String Atomization", value: "stringAtomization" },
+				{ name: "Polymorphic Decoder", value: "polymorphicDecoder" },
+				{ name: "Scattered Keys", value: "scatteredKeys" },
+				{ name: "Block Permutation", value: "blockPermutation" },
+				{ name: "Opcode Mutation", value: "opcodeMutation" },
+				{ name: "Bytecode Scattering", value: "bytecodeScattering" },
 			],
 		});
 		for (const opt of selected) {

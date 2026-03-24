@@ -760,13 +760,23 @@ function buildExecFunction(
 		...Object.values(names),
 		...Object.values(temps),
 	]);
-	const [obfuscated] = obfuscateLocals([fnNode], opts.seed, reserved, opts.registry);
+	const [obfuscated] = obfuscateLocals(
+		[fnNode],
+		opts.seed,
+		reserved,
+		opts.registry
+	);
 
 	// Also obfuscate handler closures when hoisted to IIFE scope
 	// (they contain handler-local variables like `name`, `val`, etc.)
 	let iifeDecls = ftResult.iifeDecls;
 	if (hoistHandlers && iifeDecls.length > 0) {
-		iifeDecls = obfuscateLocals(iifeDecls, deriveSeed(opts.seed, "iifeLocals"), reserved, opts.registry);
+		iifeDecls = obfuscateLocals(
+			iifeDecls,
+			deriveSeed(opts.seed, "iifeLocals"),
+			reserved,
+			opts.registry
+		);
 	}
 
 	return { fnNode: obfuscated!, iifeDecls };

@@ -292,12 +292,19 @@ export function obfuscateLocals(
 	let genShort: () => string;
 
 	if (registry) {
-		const dynGen = registry.createDynamicGenerator("handlerLocals", "short");
+		const dynGen = registry.createDynamicGenerator(
+			"handlerLocals",
+			"short"
+		);
 		const localUsed = new Set<string>(reserved);
 		genShort = () => {
 			for (;;) {
 				const name = dynGen();
-				if (!KEEP.has(name) && !RESERVED.has(name) && !localUsed.has(name)) {
+				if (
+					!KEEP.has(name) &&
+					!RESERVED.has(name) &&
+					!localUsed.has(name)
+				) {
 					localUsed.add(name);
 					return name;
 				}
@@ -332,11 +339,7 @@ export function obfuscateLocals(
 					const c2 = alnum[lcg() % alnum.length]!;
 					name = c1 + c2;
 				}
-				if (
-					!used.has(name) &&
-					!KEEP.has(name) &&
-					!RESERVED.has(name)
-				) {
+				if (!used.has(name) && !KEEP.has(name) && !RESERVED.has(name)) {
 					used.add(name);
 					return name;
 				}

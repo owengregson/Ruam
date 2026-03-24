@@ -166,17 +166,22 @@ export class NameRegistry {
 		return () => {
 			let retries = 0;
 			for (;;) {
-				state = (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+				state =
+					(Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
 				const effectiveMin = minLen + lengthBump;
-				const effectiveMax = Math.max(maxLen + lengthBump, effectiveMin);
+				const effectiveMax = Math.max(
+					maxLen + lengthBump,
+					effectiveMin
+				);
 				const len =
-					effectiveMin +
-					(state % (effectiveMax - effectiveMin + 1));
-				state = (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+					effectiveMin + (state % (effectiveMax - effectiveMin + 1));
+				state =
+					(Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
 				let name = ALPHA[state % ALPHA.length]!;
 				for (let i = 1; i < len; i++) {
 					state =
-						(Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+						(Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>>
+						0;
 					name += ALNUM[state % ALNUM.length]!;
 				}
 				if (!globalUsed.has(name)) {

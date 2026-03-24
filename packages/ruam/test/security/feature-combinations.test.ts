@@ -157,10 +157,7 @@ describe("feature combinations: 2-feature pairs", () => {
 				polymorphicDecoder: true,
 			},
 		],
-		[
-			"bytecodeScattering alone",
-			{ bytecodeScattering: true },
-		],
+		["bytecodeScattering alone", { bytecodeScattering: true }],
 		[
 			"scattering + MBA",
 			{ bytecodeScattering: true, mixedBooleanArithmetic: true },

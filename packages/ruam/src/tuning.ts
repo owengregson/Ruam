@@ -171,7 +171,9 @@ const PROFILES: Record<Intensity, TuningProfile> = {
  * @param intensity - 0 (conservative), 1 (moderate), or 2 (aggressive)
  * @returns Frozen TuningProfile with all numeric parameters
  */
-export function getTuningProfile(intensity: Intensity): Readonly<TuningProfile> {
+export function getTuningProfile(
+	intensity: Intensity
+): Readonly<TuningProfile> {
 	return PROFILES[intensity];
 }
 

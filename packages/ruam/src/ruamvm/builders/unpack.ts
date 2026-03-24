@@ -1,8 +1,9 @@
 /**
- * Unpack builder — packed-integer to string decoder for bytecode scattering.
+ * Packed-integer decoder for bytecode scattering.
  *
- * Builds a function that converts an array of 32-bit integers into a string
- * (4 characters per integer, big-endian byte order).
+ * Builds a function that converts packed 32-bit integer(s) into a string.
+ * Handles both single integers (4 chars) and arrays of integers (N*4 chars).
+ * Single ints are wrapped in an array internally so one code path handles both.
  *
  * @module ruamvm/builders/unpack
  */
@@ -13,42 +14,46 @@ import {
 	id,
 	lit,
 	bin,
+	un,
 	assign,
 	call,
 	member,
 	index,
 	varDecl,
+	arr,
 	exprStmt,
+	ifStmt,
 	forStmt,
 	returnStmt,
 	fnExpr,
 	update,
 	BOp,
+	UOp,
 	AOp,
 	UpOp,
 } from "../nodes.js";
 
 /**
- * Build the unpack helper function as JsNode[].
+ * Build the decode helper function as JsNode[].
  *
  * Equivalent JS:
  * ```js
- * var _up = function(a) {
+ * var D = function(v) {
+ *   if (typeof v === "number") v = [v];
  *   var s = "", i, n;
- *   for (i = 0; i < a.length; i++) {
- *     n = a[i];
+ *   for (i = 0; i < v.length; i++) {
+ *     n = v[i];
  *     s += String.fromCharCode(n >>> 24 & 255, n >>> 16 & 255, n >>> 8 & 255, n & 255);
  *   }
  *   return s;
  * };
  * ```
  *
- * @param unpackName - Randomized name for the function (from RuntimeNames.unpack)
+ * @param decodeName - Randomized name for the function
  * @returns JsNode[] containing a single var declaration
  */
-export function buildUnpackFunction(unpackName: Name): JsNode[] {
-	// Local variable names (will be renamed by obfuscateLocals)
-	const a = "a",
+export function buildDecodeFunction(decodeName: Name): JsNode[] {
+	const v = "v",
 		s = "s",
 		i = "i",
 		n = "n";
@@ -62,7 +67,6 @@ export function buildUnpackFunction(unpackName: Name): JsNode[] {
 	// n & 255
 	const byte3 = bin(BOp.BitAnd, id(n), lit(255));
 
-	// String.fromCharCode(byte0, byte1, byte2, byte3)
 	const fromCharCode = call(member(id("String"), "fromCharCode"), [
 		byte0,
 		byte1,
@@ -71,20 +75,24 @@ export function buildUnpackFunction(unpackName: Name): JsNode[] {
 	]);
 
 	const body: JsNode[] = [
+		// if (typeof v === "number") v = [v];
+		ifStmt(bin(BOp.Seq, un(UOp.Typeof, id(v)), lit("number")), [
+			exprStmt(assign(id(v), arr(id(v)))),
+		]),
 		varDecl(s, lit("")),
 		varDecl(i),
 		varDecl(n),
 		forStmt(
 			assign(id(i), lit(0)),
-			bin(BOp.Lt, id(i), member(id(a), "length")),
+			bin(BOp.Lt, id(i), member(id(v), "length")),
 			update(UpOp.Inc, false, id(i)),
 			[
-				exprStmt(assign(id(n), index(id(a), id(i)))),
+				exprStmt(assign(id(n), index(id(v), id(i)))),
 				exprStmt(assign(id(s), fromCharCode, AOp.Add)),
 			]
 		),
 		returnStmt(id(s)),
 	];
 
-	return [varDecl(unpackName, fnExpr(undefined, [a], body))];
+	return [varDecl(decodeName, fnExpr(undefined, [v], body))];
 }

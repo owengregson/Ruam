@@ -180,7 +180,7 @@ docs/
 
 These principles govern all contributions to Ruam. They are non-negotiable.
 
-1.  **One centralized system per responsibility.** If Ruam has a universal system for something (naming, seed derivation, tuning), ALL code must use it. No parallel systems, no separate dictionaries, no workarounds that bypass the canonical system. New features work *around* and *into* existing architecture, not around it.
+1.  **One centralized system per responsibility.** If Ruam has a universal system for something (naming, seed derivation, tuning), ALL code must use it. No parallel systems, no separate dictionaries, no workarounds that bypass the canonical system. New features work _around_ and _into_ existing architecture, not around it.
 
 2.  **All seeds, all tests, all the time.** Every test must pass deterministically with any randomized seed. There is no such thing as a "flaky" test — if a test sometimes fails, the code has a real bug. Seed-dependent features must be verified across the full range of PRNG outputs.
 

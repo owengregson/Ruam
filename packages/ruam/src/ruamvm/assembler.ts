@@ -48,6 +48,7 @@ import { buildRunners, buildRouter } from "./builders/runners.js";
 import { buildLoader } from "./builders/loader.js";
 import { buildDeserializer } from "./builders/deserializer.js";
 import { buildGlobalExposure } from "./builders/globals.js";
+import { buildDecodeFunction } from "./builders/unpack.js";
 import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
 import type { StructuralChoices } from "../structural-choices.js";
@@ -177,6 +178,10 @@ export function generateVmRuntime(options: {
 		],
 	];
 
+	// Optional: packed-integer decoder for bytecode scattering
+	if (bytecodeScattering) {
+		tier0Components.push(buildDecodeFunction(names.btDecode));
+	}
 
 	// -- Tier 1: crypto/encoding primitives (shuffleable) ------------------
 	const tier1Components: JsNode[][] = [];
@@ -532,12 +537,17 @@ export function generateShieldedVmRuntime(options: {
 		)
 	);
 
+	// Shared: packed-integer decoder for bytecode scattering
+	if (bytecodeScattering) {
+		nodes.push(...buildDecodeFunction(sharedNames.btDecode));
+	}
 
 	// Shared: custom binary decoder (always emitted)
 	const shieldedBinDecNodes = buildBinaryDecoderSource(sharedNames, alphabet);
 	if (scatteredKeys) {
 		// Scatter the alphabet string: all fragments first, then reassembly
-		const shieldedScatterGen = registry.createDynamicGenerator("shieldedScatter");
+		const shieldedScatterGen =
+			registry.createDynamicGenerator("shieldedScatter");
 		const shieldedScattered = scatterKeyMaterials(
 			[{ name: sharedNames.alpha, value: alphabet, type: "string" }],
 			shieldedScatterGen,
@@ -729,7 +739,6 @@ export function generateShieldedVmRuntime(options: {
 }
 
 // --- Helpers ---
-
 
 /**
  * Build the globalThis detection chain with shuffled check order.

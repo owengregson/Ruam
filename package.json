@@ -1,22 +1,25 @@
 {
-  "name": "ruam-monorepo",
-  "private": true,
-  "workspaces": [
-    "packages/*",
-    "apps/*"
-  ],
-  "scripts": {
-    "build": "bun run build:lib && bun run build:worker && bun run build:web",
-    "build:lib": "cd packages/ruam && bun run build",
-    "build:worker": "cd packages/ruam && bun run build:browser",
-    "build:web": "cd apps/web && bun run build",
-    "test": "cd packages/ruam && bun test",
-    "test:watch": "cd packages/ruam && bun test --watch",
-    "typecheck": "cd packages/ruam && bun run typecheck && cd ../../apps/web && bun run typecheck",
-    "dev": "cd apps/web && bun run dev",
-    "stats": "cd packages/ruam && bun run stats",
-    "clean": "rm -rf packages/ruam/dist apps/web/.next apps/web/out node_modules/.cache",
-    "build:fresh": "bun run clean && bun run build",
-    "test:fresh": "bun run clean && bun run test"
-  }
+	"name": "ruam-monorepo",
+	"private": true,
+	"workspaces": [
+		"packages/*",
+		"apps/*"
+	],
+	"scripts": {
+		"build": "bun run build:lib && bun run build:worker && bun run build:web",
+		"build:lib": "cd packages/ruam && bun run build",
+		"build:worker": "cd packages/ruam && bun run build:browser",
+		"build:web": "cd apps/web && bun run build",
+		"test": "cd packages/ruam && bun test",
+		"test:watch": "cd packages/ruam && bun test --watch",
+		"typecheck": "cd packages/ruam && bun run typecheck && cd ../../apps/web && bun run typecheck",
+		"dev": "cd apps/web && bun run dev",
+		"stats": "cd packages/ruam && bun run stats",
+		"clean": "rm -rf packages/ruam/dist apps/web/.next apps/web/out node_modules/.cache",
+		"build:fresh": "bun run clean && bun run build",
+		"test:fresh": "bun run clean && bun run test"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.3.11"
+	}
 }

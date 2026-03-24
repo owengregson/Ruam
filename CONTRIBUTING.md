@@ -4,8 +4,8 @@ Thanks for your interest in contributing! Ruam is a JS VM obfuscator that compil
 
 ## Prerequisites
 
-- Node.js >= 18
-- npm (ships with Node)
+-   Node.js >= 18
+-   npm (ships with Node)
 
 ## Setup
 
@@ -17,8 +17,8 @@ npm install
 
 This is an npm workspaces monorepo:
 
-- `packages/ruam/` — the core library (TypeScript, ESM)
-- `apps/web/` — the website (Next.js)
+-   `packages/ruam/` — the core library (TypeScript, ESM)
+-   `apps/web/` — the website (Next.js)
 
 ## Development
 
@@ -63,10 +63,10 @@ packages/ruam/
 
 ## Code style
 
-- TypeScript with strict mode
-- ESM imports (use `.js` extensions in import paths)
-- No linter/formatter — follow existing conventions
-- `noUncheckedIndexedAccess: true` — always handle possible `undefined` from indexed access
+-   TypeScript with strict mode
+-   ESM imports (use `.js` extensions in import paths)
+-   No linter/formatter — follow existing conventions
+-   `noUncheckedIndexedAccess: true` — always handle possible `undefined` from indexed access
 
 ## Writing tests
 
@@ -74,11 +74,11 @@ Tests use vitest with globals (`describe`, `it`, `expect` — no imports needed)
 
 ```ts
 describe("my feature", () => {
-  it("should work", () => {
-    assertEquivalent(`
+	it("should work", () => {
+		assertEquivalent(`
       function test() { return 42; }
     `);
-  });
+	});
 });
 ```
 
