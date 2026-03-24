@@ -206,6 +206,10 @@ export const TEMP_KEYS = [
 	"_icState",
 	"_icBk",
 	"_icPrev",
+	"_djtc",
+	"_detc",
+	"_dblc",
+	"_dblm",
 ] as const;
 
 /** Fields of RuntimeNames that are shared across all shielding groups. */

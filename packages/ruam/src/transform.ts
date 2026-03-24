@@ -60,6 +60,10 @@ import {
 	adjustEncodingForMutations,
 } from "./compiler/opcode-mutation.js";
 import { scatterBytecodeUnit } from "./ruamvm/bytecode-scatter.js";
+import {
+	buildCipherBlocks,
+	type CipherBlock,
+} from "./compiler/incremental-cipher.js";
 import { getTuningProfile, presetToIntensity } from "./tuning.js";
 import type { TuningProfile } from "./tuning.js";
 
@@ -114,6 +118,7 @@ export function obfuscateCode(
 		stringAtomization = false,
 		scatteredKeys = false,
 		bytecodeScattering = false,
+		incrementalCipher = false,
 		wrapOutput = false,
 	} = resolved;
 
@@ -174,6 +179,7 @@ export function obfuscateCode(
 			stringAtomization,
 			scatteredKeys,
 			bytecodeScattering,
+			incrementalCipher,
 			wrapOutput,
 			preprocessUsedNames,
 			tuning,
@@ -237,6 +243,7 @@ export function obfuscateCode(
 				mixedBooleanArithmetic,
 				handlerFragmentation,
 				opcodeMutation,
+				incrementalCipher,
 			},
 			undefined,
 			hasAsyncUnits,
@@ -273,6 +280,7 @@ export function obfuscateCode(
 		scatteredKeys,
 		opcodeMutation,
 		bytecodeScattering,
+		incrementalCipher,
 		alphabet,
 		hasAsyncUnits,
 		structuralChoices,
@@ -291,7 +299,8 @@ export function obfuscateCode(
 		cipherSalt,
 		keyAnchor,
 		alphabet,
-		opcodeMutation
+		opcodeMutation,
+		incrementalCipher
 	);
 
 	// -- Assemble output -----------------------------------------------------
@@ -469,7 +478,8 @@ function encodeAllUnits(
 	cipherSalt?: number,
 	keyAnchor?: number,
 	alphabet?: string,
-	opcodeMutationOpt: boolean = false
+	opcodeMutationOpt: boolean = false,
+	incrementalCipherOpt: boolean = false
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
 	const result = new Map<string, { unit: BytecodeUnit; encoded: string }>();
 
@@ -481,6 +491,14 @@ function encodeAllUnits(
 	}
 
 	for (const [unitId, { unit }] of compiledUnits) {
+		// Compute cipher blocks BEFORE opcode mutation modifies the unit's
+		// instruction opcodes. identifyBasicBlocks needs logical opcodes to
+		// correctly identify jump instructions and block boundaries.
+		let cipherBlocks: CipherBlock[] | undefined;
+		if (incrementalCipherOpt) {
+			cipherBlocks = buildCipherBlocks(unit);
+		}
+
 		// For mutation units, pre-encode opcodes and use identity shuffle map
 		const effectiveMap = opcodeMutationOpt
 			? (adjustEncodingForMutations(unit, shuffleMap, OPCODE_COUNT),
@@ -496,7 +514,9 @@ function encodeAllUnits(
 			integrityHash,
 			cipherSalt,
 			keyAnchor,
-			alphabet!
+			alphabet!,
+			incrementalCipherOpt,
+			cipherBlocks
 		);
 		result.set(unitId, { unit, encoded });
 	}
@@ -833,7 +853,9 @@ function encodeUnit(
 	integrityHash?: number,
 	cipherSalt?: number,
 	keyAnchor?: number,
-	alphabet: string = ""
+	alphabet: string = "",
+	incrementalCipher: boolean = false,
+	precomputedCipherBlocks?: CipherBlock[]
 ): string {
 	return encodeBytecodeUnit(unit, {
 		shuffleMap,
@@ -844,6 +866,8 @@ function encodeUnit(
 		keyAnchor,
 		stringKey,
 		alphabet,
+		incrementalCipher,
+		precomputedCipherBlocks,
 	});
 }
 
@@ -875,6 +899,7 @@ function assembleShielded(
 		stringAtomization: boolean;
 		scatteredKeys: boolean;
 		bytecodeScattering: boolean;
+		incrementalCipher: boolean;
 		wrapOutput: boolean;
 		preprocessUsedNames: Set<string> | undefined;
 		tuning: Readonly<TuningProfile>;
@@ -1023,6 +1048,7 @@ function assembleShielded(
 					mixedBooleanArithmetic: opts.mixedBooleanArithmetic,
 					handlerFragmentation: opts.handlerFragmentation,
 					opcodeMutation: opts.opcodeMutation,
+					incrementalCipher: opts.incrementalCipher,
 				},
 				undefined,
 				gm.hasAsyncUnits
@@ -1065,6 +1091,7 @@ function assembleShielded(
 		scatteredKeys: opts.scatteredKeys,
 		opcodeMutation: opts.opcodeMutation,
 		bytecodeScattering: opts.bytecodeScattering,
+		incrementalCipher: opts.incrementalCipher,
 		alphabet: shieldedAlphabet,
 		registry: shieldedRegistry,
 	});
@@ -1088,6 +1115,11 @@ function assembleShielded(
 		const groupKeyAnchor = runtimeResult.groupKeyAnchors[gi];
 
 		const encodeGroupUnit = (u: BytecodeUnit) => {
+			// Compute cipher blocks BEFORE opcode mutation modifies the unit
+			let unitCipherBlocks: CipherBlock[] | undefined;
+			if (opts.incrementalCipher) {
+				unitCipherBlocks = buildCipherBlocks(u);
+			}
 			// When opcode mutation is active, pre-encode opcodes and use identity map
 			if (opts.opcodeMutation) {
 				adjustEncodingForMutations(u, gm.shuffleMap, OPCODE_COUNT);
@@ -1101,7 +1133,9 @@ function assembleShielded(
 				group.integrityHash,
 				gm.cipherSalt,
 				groupKeyAnchor,
-				shieldedAlphabet
+				shieldedAlphabet,
+				opts.incrementalCipher,
+				unitCipherBlocks
 			);
 		};
 

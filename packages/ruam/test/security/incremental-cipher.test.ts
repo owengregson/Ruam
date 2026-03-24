@@ -25,7 +25,8 @@ function incrementalDecrypt(
 			const operandIdx = ip * 2 + 1;
 
 			// Decrypt: XOR with chain state to recover plaintext
-			const plainOp = (instrs[opcodeIdx]! ^ (chainState & 0xffff)) & 0xffff;
+			const plainOp =
+				(instrs[opcodeIdx]! ^ (chainState & 0xffff)) & 0xffff;
 			const plainOperand = (instrs[operandIdx]! ^ chainState) | 0;
 
 			// Write back plaintext
@@ -295,14 +296,14 @@ describe("incremental cipher build-time", () => {
 		it("block 1 encryption does not depend on block 0 content", () => {
 			// Create two units with different block 0 content but same block 1
 			const instrA = [
-				{ opcode: 10, operand: 20 },  // block 0
-				{ opcode: 30, operand: 40 },  // block 1
-				{ opcode: 50, operand: 60 },  // block 1
+				{ opcode: 10, operand: 20 }, // block 0
+				{ opcode: 30, operand: 40 }, // block 1
+				{ opcode: 50, operand: 60 }, // block 1
 			];
 			const instrB = [
-				{ opcode: 99, operand: 88 },  // block 0 — DIFFERENT
-				{ opcode: 30, operand: 40 },  // block 1 — SAME
-				{ opcode: 50, operand: 60 },  // block 1 — SAME
+				{ opcode: 99, operand: 88 }, // block 0 — DIFFERENT
+				{ opcode: 30, operand: 40 }, // block 1 — SAME
+				{ opcode: 50, operand: 60 }, // block 1 — SAME
 			];
 
 			// Use exception table to create block boundary at IP 1
@@ -472,4 +473,231 @@ describe("incremental cipher build-time", () => {
 			expect(flat).toEqual(original);
 		});
 	});
+});
+
+// ---------------------------------------------------------------------------
+// End-to-end tests — verify the full pipeline (compile + encrypt + runtime)
+// ---------------------------------------------------------------------------
+
+import { assertEquivalent } from "../helpers.js";
+
+const icOpts = { incrementalCipher: true };
+
+describe("incremental cipher e2e", () => {
+	it("simple return", () => {
+		assertEquivalent(`function f() { return 42; } f();`, icOpts);
+	});
+
+	it("arithmetic", () => {
+		assertEquivalent(
+			`function f(a, b) { return a + b * 2 - 1; } f(10, 3);`,
+			icOpts
+		);
+	});
+
+	it("conditionals", () => {
+		assertEquivalent(
+			`function f(x) { if (x > 0) return "pos"; else return "neg"; } [f(5), f(-1)];`,
+			icOpts
+		);
+	});
+
+	it("loops", () => {
+		assertEquivalent(
+			`function f(n) { var s = 0; for (var i = 0; i < n; i++) s += i; return s; } f(10);`,
+			icOpts
+		);
+	});
+
+	it("closures", () => {
+		assertEquivalent(
+			`function f() { var x = 10; function g() { return x + 1; } return g(); } f();`,
+			icOpts
+		);
+	});
+
+	it("recursion", () => {
+		assertEquivalent(
+			`function fib(n) { if (n <= 1) return n; return fib(n-1) + fib(n-2); } fib(10);`,
+			icOpts
+		);
+	});
+
+	it("try-catch", () => {
+		assertEquivalent(
+			`function f() { try { return JSON.parse('{"a":1}').a; } catch(e) { return -1; } } f();`,
+			icOpts
+		);
+	});
+
+	it("try-catch error path", () => {
+		assertEquivalent(
+			`function f() { try { return JSON.parse('bad'); } catch(e) { return null; } } f();`,
+			icOpts
+		);
+	});
+
+	it("try-finally", () => {
+		assertEquivalent(
+			`function f() { var x = 0; try { x = 1; return x; } finally { x = 2; } } f();`,
+			icOpts
+		);
+	});
+
+	it("empty function", () => {
+		assertEquivalent(`function f() {} f();`, icOpts);
+	});
+
+	it("switch statement", () => {
+		assertEquivalent(
+			`function f(x) { switch(x) { case 1: return "a"; case 2: return "b"; default: return "c"; } } [f(1), f(2), f(3)];`,
+			icOpts
+		);
+	});
+
+	it("switch with fallthrough", () => {
+		assertEquivalent(
+			`function f(x) { var r = ""; switch(x) { case 1: r += "a"; case 2: r += "b"; break; case 3: r += "c"; } return r; } [f(1), f(2), f(3)];`,
+			icOpts
+		);
+	});
+
+	it("while loop", () => {
+		assertEquivalent(
+			`function f(n) { var i = 0, s = 0; while (i < n) { s += i; i++; } return s; } f(5);`,
+			icOpts
+		);
+	});
+
+	it("nested closures", () => {
+		assertEquivalent(
+			`function f() { var a = 1; function g() { var b = 2; function h() { return a + b; } return h(); } return g(); } f();`,
+			icOpts
+		);
+	});
+
+	it("array operations", () => {
+		assertEquivalent(
+			`function f() { var a = [3,1,2]; return a.sort().join(","); } f();`,
+			icOpts
+		);
+	});
+
+	it("object operations", () => {
+		assertEquivalent(
+			`function f() { var o = {x:1,y:2}; o.z = o.x + o.y; return o.z; } f();`,
+			icOpts
+		);
+	});
+
+	it("string operations", () => {
+		assertEquivalent(
+			`function f(s) { return s.toUpperCase().slice(0,3); } f("hello");`,
+			icOpts
+		);
+	});
+
+	it("ternary", () => {
+		assertEquivalent(
+			`function f(x) { return x > 0 ? x * 2 : -x; } [f(5), f(-3)];`,
+			icOpts
+		);
+	});
+
+	it("logical operators", () => {
+		assertEquivalent(
+			`function f(a,b) { return (a || b) && !(a && b); } [f(true,false), f(true,true), f(false,false)];`,
+			icOpts
+		);
+	});
+
+	it("class with methods", () => {
+		assertEquivalent(
+			`function f() { class C { constructor(x) { this.x = x; } get() { return this.x; } } return new C(42).get(); } f();`,
+			icOpts
+		);
+	});
+
+	// --- Feature combinations ---
+
+	it("with blockPermutation", () => {
+		assertEquivalent(
+			`function f(n) { var s = 0; for (var i = 0; i < n; i++) { if (i % 2 === 0) s += i; else s -= i; } return s; } f(10);`,
+			{ incrementalCipher: true, blockPermutation: true }
+		);
+	});
+
+	it("with opcodeMutation", () => {
+		assertEquivalent(
+			`function f(n) { var s = 0; for (var i = 0; i < n; i++) s += i; return s; } f(10);`,
+			{ incrementalCipher: true, opcodeMutation: true }
+		);
+	});
+
+	it("with blockPermutation + opcodeMutation", () => {
+		assertEquivalent(
+			`function f(n) { var s = 0; for (var i = 0; i < n; i++) { if (i % 2 === 0) s += i; else s -= i; } return s; } f(10);`,
+			{
+				incrementalCipher: true,
+				blockPermutation: true,
+				opcodeMutation: true,
+			}
+		);
+	});
+
+	it("with integrityBinding", () => {
+		assertEquivalent(`function f() { return 42; } f();`, {
+			incrementalCipher: true,
+			integrityBinding: true,
+		});
+	});
+
+	it("with deadCodeInjection", () => {
+		assertEquivalent(
+			`function f(x) { if (x) return 1; return 0; } [f(true), f(false)];`,
+			{ incrementalCipher: true, deadCodeInjection: true }
+		);
+	});
+
+	it("with stackEncoding", () => {
+		assertEquivalent(`function f(a, b) { return a + b; } f(10, 20);`, {
+			incrementalCipher: true,
+			stackEncoding: true,
+		});
+	});
+
+	it("full max preset: simple", () => {
+		assertEquivalent(`function f() { return 42; } f();`, { preset: "max" });
+	});
+
+	it("full max preset: try-catch", () => {
+		assertEquivalent(
+			`function f() { try { return JSON.parse('{"x":1}').x; } catch(e) { return -1; } } f();`,
+			{ preset: "max" }
+		);
+	});
+
+	it("full max preset: closures + recursion", () => {
+		assertEquivalent(
+			`function f() { function fib(n) { if (n <= 1) return n; return fib(n-1) + fib(n-2); } return fib(10); } f();`,
+			{ preset: "max" }
+		);
+	});
+
+	it("full max preset: loop + conditionals", () => {
+		assertEquivalent(
+			`function f(n) { var s = 0; for (var i = 1; i <= n; i++) { if (i % 3 === 0) s += i; } return s; } f(15);`,
+			{ preset: "max" }
+		);
+	});
+
+	it("async function", () => {
+		assertEquivalent(
+			`async function f() { return await Promise.resolve(42); } f();`,
+			icOpts
+		);
+	});
+
+	// Note: generators with for-of are a pre-existing issue (fails without
+	// incrementalCipher too), so not tested here.
 });

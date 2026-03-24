@@ -32,6 +32,7 @@ import {
 	BINARY_TAG_ENCODED_STRING,
 } from "../constants.js";
 import { deriveImplicitKey, rollingEncrypt } from "./rolling-cipher.js";
+import { buildCipherBlocks, incrementalEncrypt } from "./incremental-cipher.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -55,6 +56,10 @@ export interface EncodeOptions {
 	stringKey?: number;
 	/** Custom encoding alphabet (shuffled 64-char string). */
 	alphabet: string;
+	/** Apply incremental cipher encryption on top of rolling cipher. */
+	incrementalCipher?: boolean;
+	/** Pre-computed cipher blocks (needed when opcode mutation modifies the unit). */
+	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>;
 }
 
 /**
@@ -73,7 +78,9 @@ export function encodeBytecodeUnit(
 		options.integrityHash,
 		options.cipherSalt,
 		options.keyAnchor,
-		options.stringKey
+		options.stringKey,
+		options.incrementalCipher,
+		options.precomputedCipherBlocks
 	);
 	if (options.encrypt) {
 		const key = computeFingerprint().toString(16);
@@ -243,7 +250,9 @@ function serializeUnit(
 	integrityHash?: number,
 	cipherSalt?: number,
 	keyAnchor?: number,
-	stringKey?: number
+	stringKey?: number,
+	applyIncrementalCipher: boolean = false,
+	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>
 ): Uint8Array {
 	const buf = new ArrayBuffer(estimateSize(unit));
 	const view = new DataView(buf);
@@ -328,13 +337,15 @@ function serializeUnit(
 	}
 
 	// Apply rolling cipher encryption if enabled (must happen after shuffle)
+	// Compute master key for both rolling cipher and incremental cipher
+	let masterKey: number | undefined;
 	if (applyRollingCipher) {
 		// Combine key anchor + integrity hash into effective anchor
 		let effectiveAnchor = keyAnchor;
 		if (effectiveAnchor !== undefined && integrityHash !== undefined) {
 			effectiveAnchor = (effectiveAnchor ^ integrityHash) >>> 0;
 		}
-		const masterKey = deriveImplicitKey(
+		masterKey = deriveImplicitKey(
 			unit.instructions.length,
 			unit.registerCount,
 			unit.paramCount,
@@ -343,6 +354,15 @@ function serializeUnit(
 			effectiveAnchor
 		);
 		rollingEncrypt(flatInstrs, masterKey);
+	}
+
+	// Apply incremental cipher on top of rolling cipher (outer layer).
+	// Uses pre-computed cipher blocks when available (necessary for opcode
+	// mutation which modifies the unit's opcodes before serialization).
+	let cipherBlocks: ReturnType<typeof buildCipherBlocks> | undefined;
+	if (applyIncrementalCipher && masterKey !== undefined) {
+		cipherBlocks = precomputedCipherBlocks ?? buildCipherBlocks(unit);
+		incrementalEncrypt(flatInstrs, masterKey, cipherBlocks);
 	}
 
 	// Write instructions to binary buffer
@@ -366,6 +386,18 @@ function serializeUnit(
 		writeU32(entry.endIp);
 		writeI32(entry.catchIp);
 		writeI32(entry.finallyIp);
+	}
+
+	// Block leader map (incremental cipher) — serialize block boundaries
+	// as (startIp, blockId) pairs so runtime can reconstruct block leader set.
+	if (cipherBlocks !== undefined) {
+		writeU32(cipherBlocks.length);
+		for (const block of cipherBlocks) {
+			writeU32(block.startIp);
+			writeU32(block.blockId);
+		}
+	} else {
+		writeU32(0); // no blocks — incremental cipher disabled
 	}
 
 	// Function name constant index
@@ -470,6 +502,7 @@ function estimateSize(unit: BytecodeUnit): number {
 	size += 4 + unit.instructions.length * 6; // instructions
 	size += 4 + Object.keys(unit.jumpTable).length * 8; // jump table
 	size += 4 + unit.exceptionTable.length * 16; // exception table
+	size += 4 + unit.instructions.length * 8; // block leader map (worst case: 1 block per instruction)
 	size += 4; // name const index
 	return size + 1024; // safety margin
 }

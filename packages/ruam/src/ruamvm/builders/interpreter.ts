@@ -73,6 +73,7 @@ export interface InterpreterBuildOptions {
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
 	opcodeMutation?: boolean;
+	incrementalCipher?: boolean;
 }
 
 /** Result from building interpreter functions. */
@@ -1024,6 +1025,17 @@ function buildScaffoldAST(
 		tryBody.push(varDecl(n.rcState, call(id(n.rcDeriveKey), [id(U)])));
 	}
 
+	// Optional: incremental cipher init
+	// var _icState = icBlockKey(rcState, 0)  — start in block 0
+	if (interpOpts.incrementalCipher && rollingCipher) {
+		tryBody.push(
+			varDecl(
+				T("_icState"),
+				call(id(n.icBlockKey), [id(n.rcState), lit(0)])
+			)
+		);
+	}
+
 	// Optional: stack encoding proxy
 	if (interpOpts.stackEncoding) {
 		tryBody.push(...buildStackEncodingProxyAST(n, temps, split));
@@ -1042,7 +1054,7 @@ function buildScaffoldAST(
 	whileBody.push(declOrAssign(O, index(id(I), bin(BOp.Add, id(IP), lit(1)))));
 	whileBody.push(exprStmt(assign(id(IP), lit(2), AOp.Add)));
 
-	// Optional: rolling cipher decrypt (inlined rcMix for performance)
+	// Compute instruction index (shared by incremental cipher + rolling cipher)
 	if (rollingCipher) {
 		// var _ri=(IP-2)>>>1
 		whileBody.push(
@@ -1051,6 +1063,79 @@ function buildScaffoldAST(
 				bin(BOp.Ushr, bin(BOp.Sub, id(IP), lit(2)), lit(1))
 			)
 		);
+	}
+
+	// Optional: incremental cipher decrypt (outer layer — must come BEFORE rolling cipher)
+	// At block boundaries, reset the chain state to the block's base key.
+	// Then XOR-decrypt PH and O using the current chain state.
+	// Finally advance the chain using the DECRYPTED (plaintext) values.
+	if (interpOpts.incrementalCipher && rollingCipher) {
+		const icState = T("_icState");
+		const ri = T("_ri");
+
+		// Block boundary check: if(U.bl[_ri]!==void 0){_icState=icBlockKey(rcState,U.bl[_ri])}
+		whileBody.push(
+			ifStmt(
+				bin(
+					BOp.Sneq,
+					index(member(id(U), "bl"), id(ri)),
+					un(UOp.Void, lit(0))
+				),
+				[
+					exprStmt(
+						assign(
+							id(icState),
+							call(id(n.icBlockKey), [
+								id(n.rcState),
+								index(member(id(U), "bl"), id(ri)),
+							])
+						)
+					),
+				]
+			)
+		);
+
+		// Decrypt: PH = (PH ^ (_icState & 0xFFFF)) & 0xFFFF
+		whileBody.push(
+			exprStmt(
+				assign(
+					id(PH),
+					bin(
+						BOp.BitAnd,
+						bin(
+							BOp.BitXor,
+							id(PH),
+							bin(BOp.BitAnd, id(icState), lit(0xffff))
+						),
+						lit(0xffff)
+					)
+				)
+			)
+		);
+
+		// Decrypt: O = (O ^ _icState) | 0
+		whileBody.push(
+			exprStmt(
+				assign(
+					id(O),
+					bin(BOp.BitOr, bin(BOp.BitXor, id(O), id(icState)), lit(0))
+				)
+			)
+		);
+
+		// Advance chain: _icState = icMix(_icState, PH, O)
+		whileBody.push(
+			exprStmt(
+				assign(
+					id(icState),
+					call(id(n.icMix), [id(icState), id(PH), id(O)])
+				)
+			)
+		);
+	}
+
+	// Optional: rolling cipher decrypt (inlined rcMix for performance)
+	if (rollingCipher) {
 		// Inline rcMix(rcState, _ri, _ri ^ 0x9E3779B9):
 		// var _ks = rcState;
 		whileBody.push(varDecl(T("_ks"), id(n.rcState)));

@@ -43,6 +43,7 @@ import {
 import { buildDebugProtection } from "./builders/debug-protection.js";
 import { buildDebugLogging } from "./builders/debug-logging.js";
 import { buildRollingCipherSource } from "./builders/rolling-cipher.js";
+import { buildIncrementalCipherSource } from "./builders/incremental-cipher.js";
 import { buildInterpreterFunctions } from "./builders/interpreter.js";
 import { buildRunners, buildRouter } from "./builders/runners.js";
 import { buildLoader } from "./builders/loader.js";
@@ -105,6 +106,8 @@ export function generateVmRuntime(options: {
 	opcodeMutation?: boolean;
 	/** Split encoded bytecode into mixed-type fragments. */
 	bytecodeScattering?: boolean;
+	/** Apply incremental cipher encryption (block-epoch keyed). */
+	incrementalCipher?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** Whether any compiled units are async (controls async interpreter emit). */
@@ -138,6 +141,7 @@ export function generateVmRuntime(options: {
 		scatteredKeys = false,
 		opcodeMutation = false,
 		bytecodeScattering = false,
+		incrementalCipher = false,
 		alphabet,
 		hasAsyncUnits = true,
 		structuralChoices,
@@ -266,6 +270,7 @@ export function generateVmRuntime(options: {
 			mixedBooleanArithmetic,
 			handlerFragmentation,
 			opcodeMutation,
+			incrementalCipher,
 		},
 		split,
 		hasAsyncUnits,
@@ -305,6 +310,10 @@ export function generateVmRuntime(options: {
 				cipherSalt
 			)
 		);
+	}
+	// Incremental cipher helpers (must come after rolling cipher helpers)
+	if (incrementalCipher) {
+		tier2Nodes.push(...buildIncrementalCipherSource(names, split));
 	}
 	// Interpreter function bodies
 	tier2Nodes.push(...interpResult.interpreters);
@@ -478,6 +487,8 @@ export function generateShieldedVmRuntime(options: {
 	opcodeMutation?: boolean;
 	/** Split encoded bytecode into mixed-type fragments. */
 	bytecodeScattering?: boolean;
+	/** Apply incremental cipher encryption (block-epoch keyed). */
+	incrementalCipher?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** NameRegistry for dynamic name generation. */
@@ -500,6 +511,7 @@ export function generateShieldedVmRuntime(options: {
 		scatteredKeys = false,
 		opcodeMutation = false,
 		bytecodeScattering = false,
+		incrementalCipher = false,
 		alphabet,
 		registry,
 	} = options;
@@ -631,6 +643,7 @@ export function generateShieldedVmRuntime(options: {
 				mixedBooleanArithmetic,
 				handlerFragmentation,
 				opcodeMutation,
+				incrementalCipher,
 			},
 			groupSplit,
 			group.hasAsyncUnits ?? true,
@@ -672,6 +685,11 @@ export function generateShieldedVmRuntime(options: {
 				group.cipherSalt
 			)
 		);
+
+		// Incremental cipher helpers (must come after rolling cipher helpers)
+		if (incrementalCipher) {
+			nodes.push(...buildIncrementalCipherSource(gn, groupSplit));
+		}
 
 		// Interpreter function bodies
 		nodes.push(...interpResult.interpreters);

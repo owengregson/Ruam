@@ -363,9 +363,61 @@ export function buildDeserializer(
 		)
 	);
 
+	// --- Skip jump table ---
+	// var _djtc = r.u32();  for(var i=0; i<_djtc; i++){ r.u32(); r.u32(); }
+	const DJTC = T("_djtc");
+	body.push(varDecl(DJTC, rcall(DU32)));
+	body.push(
+		forStmt(
+			varDecl("i", lit(0)),
+			bin(BOp.Lt, id("i"), id(DJTC)),
+			update(UpOp.Inc, false, id("i")),
+			[exprStmt(rcall(DU32)), exprStmt(rcall(DU32))]
+		)
+	);
+
+	// --- Skip exception table ---
+	// var _detc = r.u32();  for(var i=0; i<_detc; i++){ r.u32(); r.u32(); r.i32(); r.i32(); }
+	const DETC = T("_detc");
+	body.push(varDecl(DETC, rcall(DU32)));
+	body.push(
+		forStmt(
+			varDecl("i", lit(0)),
+			bin(BOp.Lt, id("i"), id(DETC)),
+			update(UpOp.Inc, false, id("i")),
+			[
+				exprStmt(rcall(DU32)),
+				exprStmt(rcall(DU32)),
+				exprStmt(rcall(DI32)),
+				exprStmt(rcall(DI32)),
+			]
+		)
+	);
+
+	// --- Block leader map (incremental cipher) ---
+	// var _dblc = r.u32();
+	// var _dblm = {};
+	// for(var i=0; i<_dblc; i++){ _dblm[r.u32()] = r.u32(); }
+	const DBLC = T("_dblc");
+	const DBLM = T("_dblm");
+	body.push(varDecl(DBLC, rcall(DU32)));
+	body.push(varDecl(DBLM, obj()));
+	body.push(
+		forStmt(
+			varDecl("i", lit(0)),
+			bin(BOp.Lt, id("i"), id(DBLC)),
+			update(UpOp.Inc, false, id("i")),
+			[exprStmt(assign(index(id(DBLM), rcall(DU32)), rcall(DU32)))]
+		)
+	);
+
+	// --- Skip function name constant index ---
+	// r.i32(); (consumed and discarded)
+	body.push(exprStmt(rcall(DI32)));
+
 	// --- Return object ---
 
-	// return {c:cs,i:ins,r:rc,sl:0,p:pc,g:!!(fl&1),s:!!(fl&2),st:!!(fl&4),a:!!(fl&8)};
+	// return {c:cs,i:ins,r:rc,sl:0,p:pc,g:!!(fl&1),s:!!(fl&2),st:!!(fl&4),a:!!(fl&8),bl:_dblm};
 	const band = (v: JsNode, mask: number): JsNode =>
 		un(UOp.Not, un(UOp.Not, bin(BOp.BitAnd, v, lit(mask))));
 	body.push(
@@ -379,7 +431,8 @@ export function buildDeserializer(
 				["g", band(flags, 1)],
 				["s", band(flags, 2)],
 				["st", band(flags, 4)],
-				["a", band(flags, 8)]
+				["a", band(flags, 8)],
+				["bl", id(DBLM)]
 			)
 		)
 	);
