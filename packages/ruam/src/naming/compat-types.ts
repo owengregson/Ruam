@@ -1,6 +1,6 @@
 /**
  * @module naming/compat-types
- * RuntimeNames and TempNames interfaces — extracted from encoding/names.ts.
+ * RuntimeNames and TempNames interfaces — canonical type definitions.
  * These interfaces are used throughout the codebase as the shape of
  * randomized identifier mappings produced by the NameRegistry.
  */

@@ -4,7 +4,7 @@
  * Maps RuntimeNames fields and TEMP_NAME_CATALOG entries to descriptive keys.
  */
 
-// --- Runtime Names (from encoding/names.ts RuntimeNames interface) ---
+// --- Runtime Names (from naming/compat-types.ts RuntimeNames interface) ---
 
 /** Canonical keys matching the RuntimeNames interface fields (in generation order). */
 export const RUNTIME_KEYS = [
@@ -74,7 +74,7 @@ export const RUNTIME_POST_TEMP_KEYS = [
 	"unpack",
 ] as const;
 
-// --- Temp Names (from encoding/names.ts TEMP_NAME_CATALOG) ---
+// --- Temp Names (from naming/claims.ts TEMP_NAME_KEYS) ---
 
 /** Canonical temp name keys (exact match of TEMP_NAME_CATALOG order). */
 export const TEMP_KEYS = [
