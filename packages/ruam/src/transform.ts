@@ -1120,10 +1120,8 @@ function assembleShielded(
 		runtimeResult.source,
 		opts.wrapOutput,
 		sharedSeed,
-		// Bytecode scattering disabled in shielded mode — each group already
-		// has unique opcode shuffle + rolling cipher key, providing natural
-		// bytecode diversity without needing fragment scattering.
-		false
+		opts.bytecodeScattering,
+		shieldedRegistry
 	);
 }
 
