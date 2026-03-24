@@ -72,6 +72,13 @@ export const OPTION_META: OptionMetaEntry[] = [
 		cliFlag: "--vm-shielding",
 	},
 	{
+		key: "incrementalCipher",
+		label: "Incremental Cipher",
+		category: "security",
+		description: "Move instruction decryption into the VM dispatch loop",
+		cliFlag: "--incremental-cipher",
+	},
+	{
 		key: "encryptBytecode",
 		label: "Encrypt Bytecode",
 		category: "security",
@@ -187,6 +194,7 @@ export const AUTO_ENABLE_RULES: AutoEnableRule[] = [
 	{ when: "vmShielding", enables: "rollingCipher" },
 	{ when: "stringAtomization", enables: "polymorphicDecoder" },
 	{ when: "opcodeMutation", enables: "rollingCipher" },
+	{ when: "incrementalCipher", enables: "rollingCipher" },
 ];
 
 // --- Derived exports for CLI backward compat ---

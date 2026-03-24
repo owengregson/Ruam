@@ -166,6 +166,18 @@ export interface VmObfuscationOptions {
 	bytecodeScattering?: boolean;
 
 	/**
+	 * Move instruction decryption from load-time into the VM dispatch loop.
+	 *
+	 * Each instruction is decrypted just-in-time using a chain state that
+	 * evolves based on previously decrypted instructions. Hooking the loader
+	 * yields only encrypted bytecode. Block-epoch keying ensures loops and
+	 * jumps work correctly.
+	 *
+	 * Requires {@link rollingCipher} (auto-enabled).
+	 */
+	incrementalCipher?: boolean;
+
+	/**
 	 * Target execution environment.
 	 *
 	 * Controls environment-specific output settings. Explicit options

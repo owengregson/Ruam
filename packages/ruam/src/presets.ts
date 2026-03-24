@@ -41,6 +41,7 @@ export const PRESETS: Record<
 		blockPermutation: false,
 		opcodeMutation: false,
 		bytecodeScattering: false,
+		incrementalCipher: false,
 	},
 	medium: {
 		targetMode: "root",
@@ -63,6 +64,7 @@ export const PRESETS: Record<
 		blockPermutation: false,
 		opcodeMutation: false,
 		bytecodeScattering: true,
+		incrementalCipher: false,
 	},
 	max: {
 		targetMode: "root",
@@ -85,6 +87,7 @@ export const PRESETS: Record<
 		blockPermutation: true,
 		opcodeMutation: true,
 		bytecodeScattering: true,
+		incrementalCipher: true,
 	},
 };
 
@@ -160,6 +163,11 @@ export function resolveOptions(
 
 	// opcodeMutation requires rollingCipher (entangled key derivation)
 	if (resolved.opcodeMutation && !resolved.rollingCipher) {
+		resolved.rollingCipher = true;
+	}
+
+	// incrementalCipher requires rollingCipher
+	if (resolved.incrementalCipher && !resolved.rollingCipher) {
 		resolved.rollingCipher = true;
 	}
 
