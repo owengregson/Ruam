@@ -6,7 +6,7 @@
  * given JS engine version but differs across engines, providing a weak
  * form of environment binding.
  *
- * @module encoding/fingerprint
+ * @module compiler/fingerprint
  */
 
 // The fingerprint uses an inverted-square-root magic constant as a seed,

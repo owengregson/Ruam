@@ -5,7 +5,7 @@
  * - FNV-1a+LCG stream cipher (symmetric encrypt/decrypt)
  * - Custom alphabet binary encoding (replaces base64)
  *
- * @module encoding/decoder
+ * @module compiler/crypto
  */
 
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";

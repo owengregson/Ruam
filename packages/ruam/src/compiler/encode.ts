@@ -12,8 +12,8 @@
  */
 
 import type { BytecodeUnit, ConstantPoolEntry } from "../types.js";
-import { computeFingerprint } from "../encoding/fingerprint.js";
-import { rc4, customEncode } from "../encoding/decoder.js";
+import { computeFingerprint } from "./fingerprint.js";
+import { rc4, customEncode } from "./crypto.js";
 import {
 	LCG_MULTIPLIER,
 	LCG_INCREMENT,
@@ -34,7 +34,7 @@ import {
 import {
 	deriveImplicitKey,
 	rollingEncrypt,
-} from "../encoding/rolling-cipher.js";
+} from "./rolling-cipher.js";
 
 // ---------------------------------------------------------------------------
 // Public API

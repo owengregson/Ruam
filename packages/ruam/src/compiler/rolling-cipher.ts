@@ -5,7 +5,7 @@
  * that evolves instruction-by-instruction.  The master key is derived
  * from bytecode metadata — no plaintext seed is stored in the output.
  *
- * @module encoding/rolling-cipher
+ * @module compiler/rolling-cipher
  */
 
 import {
