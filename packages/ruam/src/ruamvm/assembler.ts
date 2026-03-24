@@ -112,7 +112,7 @@ export function generateVmRuntime(options: {
 	/** Per-build structural variation choices. */
 	structuralChoices?: StructuralChoices;
 	/** NameRegistry for dynamic name generation (scatter/btScatter). */
-	registry?: NameRegistry;
+	registry: NameRegistry;
 }): VmRuntimeResult {
 	const {
 		opcodeShuffleMap,
@@ -198,9 +198,7 @@ export function generateVmRuntime(options: {
 		// All fragments go to tiers 0 and 1 (before the reassembly).
 		// The reassembly + binary decoder rest go after tier 1 but before
 		// tier 2 so the decode function is available for the loader.
-		const scatterNameGen = registry
-			? registry.createDynamicGenerator("scatter")
-			: createScatterNameGenFallback(seed);
+		const scatterNameGen = registry.createDynamicGenerator("scatter");
 		const scattered = scatterKeyMaterials(
 			[{ name: names.alpha, value: alphabet, type: "string" }],
 			scatterNameGen,
@@ -483,7 +481,7 @@ export function generateShieldedVmRuntime(options: {
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** NameRegistry for dynamic name generation. */
-	registry?: NameRegistry;
+	registry: NameRegistry;
 }): ShieldedVmRuntimeResult {
 	const {
 		groups,
@@ -548,9 +546,7 @@ export function generateShieldedVmRuntime(options: {
 	const shieldedBinDecNodes = buildBinaryDecoderSource(sharedNames, alphabet);
 	if (scatteredKeys) {
 		// Scatter the alphabet string: all fragments first, then reassembly
-		const shieldedScatterGen = registry
-			? registry.createDynamicGenerator("shieldedScatter")
-			: createScatterNameGenFallback(groups[0]?.seed ?? 0x12345678);
+		const shieldedScatterGen = registry.createDynamicGenerator("shieldedScatter");
 		const shieldedScattered = scatterKeyMaterials(
 			[{ name: sharedNames.alpha, value: alphabet, type: "string" }],
 			shieldedScatterGen,
@@ -743,36 +739,6 @@ export function generateShieldedVmRuntime(options: {
 
 // --- Helpers ---
 
-/**
- * Fallback scatter name generator for when no NameRegistry is available.
- * Uses deriveSeed() for PRNG isolation instead of ad-hoc XOR constants.
- *
- * @deprecated Callers should pass a NameRegistry instead.
- */
-function createScatterNameGenFallback(seed: number): () => string {
-	const ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	const ALNUM =
-		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-	const used = new Set<string>();
-	let s = deriveSeed(seed, "scatter");
-	return () => {
-		for (let attempt = 0; attempt < 1000; attempt++) {
-			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const len = 3 + (s % 2);
-			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			let name = ALPHA[s % ALPHA.length]!;
-			for (let i = 1; i < len; i++) {
-				s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-				name += ALNUM[s % ALNUM.length]!;
-			}
-			if (!used.has(name)) {
-				used.add(name);
-				return name;
-			}
-		}
-		throw new Error("Scatter name generator exhausted");
-	};
-}
 
 /**
  * Build the globalThis detection chain with shuffled check order.

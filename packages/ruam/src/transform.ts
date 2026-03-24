@@ -755,11 +755,8 @@ function buildScatteredBtParts(
 	tuning?: Readonly<TuningProfile>,
 	registry?: NameRegistry
 ): { init: string; fragmentDecls: string[]; assignments: string[] } {
-	// Use registry dynamic generator for collision-free naming,
-	// or fall back to a standalone generator if no registry is available.
-	const nameGen = registry
-		? registry.createDynamicGenerator("btScatter")
-		: createBtScatterNameGenFallback(seed);
+	if (!registry) throw new Error("buildScatteredBtParts requires a NameRegistry");
+	const nameGen = registry.createDynamicGenerator("btScatter");
 	const fragmentDecls: string[] = [];
 	const assignments: string[] = [];
 
@@ -802,36 +799,6 @@ function buildScatteredBtParts(
 	};
 }
 
-/**
- * Fallback bytecode scatter name generator for when no NameRegistry is available.
- * Uses deriveSeed() for PRNG isolation instead of ad-hoc XOR constants.
- *
- * @deprecated Callers should pass a NameRegistry instead.
- */
-function createBtScatterNameGenFallback(seed: number): () => string {
-	const ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-	const ALNUM =
-		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-	const used = new Set<string>();
-	let s = deriveSeed(seed, "btScatter");
-	return () => {
-		for (let attempt = 0; attempt < 1000; attempt++) {
-			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const len = 3 + (s % 3);
-			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			let name = ALPHA[s % ALPHA.length]!;
-			for (let i = 1; i < len; i++) {
-				s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-				name += ALNUM[s % ALNUM.length]!;
-			}
-			if (!used.has(name)) {
-				used.add(name);
-				return name;
-			}
-		}
-		throw new Error("Bytecode scatter name generator exhausted");
-	};
-}
 
 /**
  * Collect all logical opcodes used across all compiled bytecode units.
