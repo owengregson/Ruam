@@ -18,160 +18,25 @@ import {
 type PresetName = "low" | "medium" | "max";
 type TargetEnv = "node" | "browser" | "browser-extension";
 
-interface ObfuscationOptions {
-	preset?: PresetName;
-	target?: TargetEnv;
-	preprocessIdentifiers?: boolean;
-	encryptBytecode?: boolean;
-	rollingCipher?: boolean;
-	integrityBinding?: boolean;
-	debugProtection?: boolean;
-	vmShielding?: boolean;
-	mixedBooleanArithmetic?: boolean;
-	stackEncoding?: boolean;
-	deadCodeInjection?: boolean;
-	decoyOpcodes?: boolean;
-	dynamicOpcodes?: boolean;
-	handlerFragmentation?: boolean;
-	stringAtomization?: boolean;
-	polymorphicDecoder?: boolean;
-	scatteredKeys?: boolean;
-	blockPermutation?: boolean;
-	opcodeMutation?: boolean;
+interface ManifestOption {
+	key: string;
+	label: string;
+	category: string;
+	description?: string;
+	cliFlag?: string;
 }
 
-// --- Preset defaults (mirrors src/presets.ts) ---
-
-const PRESET_DEFAULTS: Record<
-	PresetName,
-	Required<Omit<ObfuscationOptions, "preset" | "target">>
-> = {
-	low: {
-		preprocessIdentifiers: false,
-		encryptBytecode: false,
-		rollingCipher: false,
-		integrityBinding: false,
-		debugProtection: false,
-		vmShielding: false,
-		mixedBooleanArithmetic: false,
-		stackEncoding: false,
-		deadCodeInjection: false,
-		decoyOpcodes: false,
-		dynamicOpcodes: false,
-		handlerFragmentation: false,
-		stringAtomization: false,
-		polymorphicDecoder: false,
-		scatteredKeys: false,
-		blockPermutation: false,
-		opcodeMutation: false,
-	},
-	medium: {
-		preprocessIdentifiers: true,
-		encryptBytecode: true,
-		rollingCipher: true,
-		integrityBinding: false,
-		debugProtection: false,
-		vmShielding: false,
-		mixedBooleanArithmetic: false,
-		stackEncoding: false,
-		deadCodeInjection: false,
-		decoyOpcodes: true,
-		dynamicOpcodes: true,
-		handlerFragmentation: false,
-		stringAtomization: true,
-		polymorphicDecoder: true,
-		scatteredKeys: true,
-		blockPermutation: false,
-		opcodeMutation: false,
-	},
-	max: {
-		preprocessIdentifiers: true,
-		encryptBytecode: true,
-		rollingCipher: true,
-		integrityBinding: true,
-		debugProtection: true,
-		vmShielding: true,
-		mixedBooleanArithmetic: true,
-		stackEncoding: true,
-		deadCodeInjection: true,
-		decoyOpcodes: true,
-		dynamicOpcodes: true,
-		handlerFragmentation: true,
-		stringAtomization: true,
-		polymorphicDecoder: true,
-		scatteredKeys: true,
-		blockPermutation: true,
-		opcodeMutation: true,
-	},
-};
-
-// --- Option metadata for UI ---
+interface OptionManifest {
+	options: ManifestOption[];
+	presets: Record<string, Record<string, boolean>>;
+	autoEnableRules: { when: string; enables: string }[];
+}
 
 interface OptionMeta {
-	key: keyof typeof PRESET_DEFAULTS.low;
+	key: string;
 	label: string;
-	group: "security" | "obfuscation" | "optimization";
+	group: string;
 }
-
-const OPTIONS: OptionMeta[] = [
-	{ key: "rollingCipher", label: "rolling cipher", group: "security" },
-	{
-		key: "integrityBinding",
-		label: "integrity binding",
-		group: "security",
-	},
-	{
-		key: "debugProtection",
-		label: "debug protection",
-		group: "security",
-	},
-	{ key: "vmShielding", label: "VM shielding", group: "security" },
-	{ key: "encryptBytecode", label: "encrypt bytecode", group: "security" },
-	{
-		key: "mixedBooleanArithmetic",
-		label: "MBA",
-		group: "obfuscation",
-	},
-	{ key: "stackEncoding", label: "stack encoding", group: "obfuscation" },
-	{
-		key: "deadCodeInjection",
-		label: "dead code injection",
-		group: "obfuscation",
-	},
-	{
-		key: "handlerFragmentation",
-		label: "handler fragmentation",
-		group: "obfuscation",
-	},
-	{
-		key: "stringAtomization",
-		label: "string atomization",
-		group: "obfuscation",
-	},
-	{
-		key: "blockPermutation",
-		label: "block permutation",
-		group: "obfuscation",
-	},
-	{
-		key: "opcodeMutation",
-		label: "opcode mutation",
-		group: "obfuscation",
-	},
-	{
-		key: "preprocessIdentifiers",
-		label: "rename identifiers",
-		group: "optimization",
-	},
-	{ key: "dynamicOpcodes", label: "dynamic opcodes", group: "optimization" },
-	{ key: "decoyOpcodes", label: "decoy opcodes", group: "optimization" },
-	{
-		key: "polymorphicDecoder",
-		label: "polymorphic decoder",
-		group: "optimization",
-	},
-	{ key: "scatteredKeys", label: "scattered keys", group: "optimization" },
-];
 
 // --- Default input code ---
 
@@ -394,7 +259,7 @@ function useWorker() {
 	}, []);
 
 	const obfuscate = useCallback(
-		(code: string, options: ObfuscationOptions) =>
+		(code: string, options: Record<string, boolean | string>) =>
 			new Promise<{ result: string; elapsed: number }>(
 				(resolve, reject) => {
 					if (!workerRef.current) {
@@ -446,10 +311,34 @@ function useWorker() {
 // --- Playground component ---
 
 export default function Playground() {
+	// --- Manifest loading ---
+	const [manifest, setManifest] = useState<OptionManifest | null>(null);
+	const [manifestError, setManifestError] = useState<string | null>(null);
+
+	useEffect(() => {
+		const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+		fetch(`${basePath}/option-manifest.json`)
+			.then((res) => {
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				return res.json();
+			})
+			.then((data: OptionManifest) => setManifest(data))
+			.catch((err) =>
+				setManifestError(err instanceof Error ? err.message : String(err))
+			);
+	}, []);
+
+	// --- Derived option metadata ---
+	const OPTIONS: OptionMeta[] = (manifest?.options ?? []).map((o) => ({
+		key: o.key,
+		label: o.label,
+		group: o.category,
+	}));
+
 	// --- State ---
 	const [preset, setPreset] = useState<PresetName>("medium");
 	const [target, setTarget] = useState<TargetEnv>("browser");
-	const [toggles, setToggles] = useState(PRESET_DEFAULTS.medium);
+	const [toggles, setToggles] = useState<Record<string, boolean>>({});
 	const [isCustom, setIsCustom] = useState(false);
 	const [optionsOpen, setOptionsOpen] = useState(false);
 
@@ -458,6 +347,15 @@ export default function Playground() {
 	const [running, setRunning] = useState(false);
 	const [elapsed, setElapsed] = useState<number | null>(null);
 	const [copied, setCopied] = useState(false);
+
+	// Initialize toggles from manifest medium preset once loaded
+	const manifestLoaded = useRef(false);
+	useEffect(() => {
+		if (manifest && !manifestLoaded.current) {
+			manifestLoaded.current = true;
+			setToggles(manifest.presets["medium"] ?? {});
+		}
+	}, [manifest]);
 
 	const inputRef = useRef<HTMLDivElement>(null);
 	const outputRef = useRef<HTMLDivElement>(null);
@@ -483,25 +381,27 @@ export default function Playground() {
 
 	const { ready: workerReady, obfuscate, initError: workerError } = useWorker();
 
-	const allLoaded = inputLoaded && outputLoaded && workerReady;
+	const allLoaded = inputLoaded && outputLoaded && workerReady && manifest !== null;
 
 	// --- Preset selection ---
 	const selectPreset = useCallback((name: PresetName) => {
+		if (!manifest) return;
 		setPreset(name);
-		setToggles(PRESET_DEFAULTS[name]);
+		setToggles(manifest.presets[name] ?? {});
 		setIsCustom(false);
-	}, []);
+	}, [manifest]);
 
 	// --- Toggle individual option ---
 	const toggleOption = useCallback(
-		(key: keyof typeof PRESET_DEFAULTS.low) => {
+		(key: string) => {
 			setToggles((prev) => {
 				const next = { ...prev, [key]: !prev[key] };
 				// Check if it still matches a preset
 				const matchesPreset = (["low", "medium", "max"] as const).find(
 					(p) => {
-						const pd = PRESET_DEFAULTS[p];
-						return (Object.keys(pd) as (keyof typeof pd)[]).every(
+						const pd = manifest?.presets[p];
+						if (!pd) return false;
+						return Object.keys(pd).every(
 							(k) => pd[k] === next[k]
 						);
 					}
@@ -515,7 +415,7 @@ export default function Playground() {
 				return next;
 			});
 		},
-		[]
+		[manifest]
 	);
 
 	// --- Run obfuscation ---
@@ -525,7 +425,7 @@ export default function Playground() {
 		setError(null);
 		setElapsed(null);
 
-		const options: ObfuscationOptions = {
+		const options: Record<string, boolean | string> = {
 			...(isCustom ? toggles : { preset }),
 			target,
 		};
@@ -849,7 +749,7 @@ export default function Playground() {
 									["security", "Security"],
 									["obfuscation", "Obfuscation"],
 									["optimization", "Optimization"],
-								] as const
+								] as [string, string][]
 							).map(([group, label]) => (
 								<div key={group} className="mb-3 last:mb-0">
 									<span className="mb-2 block font-mono text-[10px] font-semibold uppercase tracking-wider text-ash">
@@ -887,13 +787,13 @@ export default function Playground() {
 				{!allLoaded && (
 					<div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
 						<div className="flex flex-col items-center gap-4">
-							{workerError ? (
+							{workerError || manifestError ? (
 								<>
 									<p className="font-mono text-sm text-alert">
 										Failed to load Ruam engine
 									</p>
 									<p className="max-w-md text-center font-mono text-xs text-ash">
-										{workerError}
+										{workerError || manifestError}
 									</p>
 								</>
 							) : (

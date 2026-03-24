@@ -1,0 +1,210 @@
+{
+  "options": [
+    {
+      "key": "rollingCipher",
+      "label": "Rolling Cipher",
+      "category": "security",
+      "description": "Position-dependent XOR encryption on every instruction",
+      "cliFlag": "--rolling-cipher"
+    },
+    {
+      "key": "integrityBinding",
+      "label": "Integrity Binding",
+      "category": "security",
+      "description": "Bind bytecode decryption to interpreter source integrity",
+      "cliFlag": "--integrity-binding"
+    },
+    {
+      "key": "debugProtection",
+      "label": "Debug Protection",
+      "category": "security",
+      "description": "Multi-layered anti-debugger with escalating response",
+      "cliFlag": "--debug-protection"
+    },
+    {
+      "key": "vmShielding",
+      "label": "VM Shielding",
+      "category": "security",
+      "description": "Per-function micro-interpreters with independent opcode shuffle",
+      "cliFlag": "--vm-shielding"
+    },
+    {
+      "key": "encryptBytecode",
+      "label": "Encrypt Bytecode",
+      "category": "security",
+      "description": "RC4 encryption using an environment fingerprint key",
+      "cliFlag": "--encrypt"
+    },
+    {
+      "key": "mixedBooleanArithmetic",
+      "label": "MBA",
+      "category": "obfuscation",
+      "description": "Replace arithmetic/bitwise ops with MBA expressions",
+      "cliFlag": "--mba"
+    },
+    {
+      "key": "stackEncoding",
+      "label": "Stack Encoding",
+      "category": "obfuscation",
+      "description": "XOR-encode VM stack values during execution",
+      "cliFlag": "--stack-encoding"
+    },
+    {
+      "key": "deadCodeInjection",
+      "label": "Dead Code Injection",
+      "category": "obfuscation",
+      "description": "Insert unreachable bytecode sequences after RETURN",
+      "cliFlag": "--dead-code"
+    },
+    {
+      "key": "handlerFragmentation",
+      "label": "Handler Fragmentation",
+      "category": "obfuscation",
+      "description": "Split handlers into interleaved fragments",
+      "cliFlag": "--handler-fragmentation"
+    },
+    {
+      "key": "stringAtomization",
+      "label": "String Atomization",
+      "category": "obfuscation",
+      "description": "Replace string literals with encoded table lookups",
+      "cliFlag": "--string-atomization"
+    },
+    {
+      "key": "blockPermutation",
+      "label": "Block Permutation",
+      "category": "obfuscation",
+      "description": "Shuffle bytecode basic block order",
+      "cliFlag": "--block-permutation"
+    },
+    {
+      "key": "opcodeMutation",
+      "label": "Opcode Mutation",
+      "category": "obfuscation",
+      "description": "Runtime handler table mutations via MUTATE opcodes",
+      "cliFlag": "--opcode-mutation"
+    },
+    {
+      "key": "bytecodeScattering",
+      "label": "Bytecode Scattering",
+      "category": "obfuscation",
+      "description": "Split bytecode into mixed-type fragments scattered through output",
+      "cliFlag": "--bytecode-scattering"
+    },
+    {
+      "key": "preprocessIdentifiers",
+      "label": "Rename Identifiers",
+      "category": "optimization",
+      "description": "Rename identifiers before compilation",
+      "cliFlag": "--preprocess"
+    },
+    {
+      "key": "dynamicOpcodes",
+      "label": "Dynamic Opcodes",
+      "category": "optimization",
+      "description": "Filter unused opcode handlers from interpreter",
+      "cliFlag": "--dynamic-opcodes"
+    },
+    {
+      "key": "decoyOpcodes",
+      "label": "Decoy Opcodes",
+      "category": "optimization",
+      "description": "Inject realistic fake opcode handlers",
+      "cliFlag": "--decoy-opcodes"
+    },
+    {
+      "key": "polymorphicDecoder",
+      "label": "Polymorphic Decoder",
+      "category": "optimization",
+      "description": "Per-build random chain of reversible byte operations",
+      "cliFlag": "--polymorphic-decoder"
+    },
+    {
+      "key": "scatteredKeys",
+      "label": "Scattered Keys",
+      "category": "optimization",
+      "description": "Fragment key materials across closure tiers",
+      "cliFlag": "--scattered-keys"
+    }
+  ],
+  "presets": {
+    "low": {
+      "preprocessIdentifiers": false,
+      "encryptBytecode": false,
+      "debugProtection": false,
+      "dynamicOpcodes": false,
+      "decoyOpcodes": false,
+      "deadCodeInjection": false,
+      "stackEncoding": false,
+      "rollingCipher": false,
+      "integrityBinding": false,
+      "vmShielding": false,
+      "mixedBooleanArithmetic": false,
+      "handlerFragmentation": false,
+      "stringAtomization": false,
+      "polymorphicDecoder": false,
+      "scatteredKeys": false,
+      "blockPermutation": false,
+      "opcodeMutation": false,
+      "bytecodeScattering": false
+    },
+    "medium": {
+      "preprocessIdentifiers": true,
+      "encryptBytecode": true,
+      "debugProtection": false,
+      "dynamicOpcodes": true,
+      "decoyOpcodes": true,
+      "deadCodeInjection": false,
+      "stackEncoding": false,
+      "rollingCipher": true,
+      "integrityBinding": false,
+      "vmShielding": false,
+      "mixedBooleanArithmetic": false,
+      "handlerFragmentation": false,
+      "stringAtomization": true,
+      "polymorphicDecoder": true,
+      "scatteredKeys": true,
+      "blockPermutation": false,
+      "opcodeMutation": false,
+      "bytecodeScattering": true
+    },
+    "max": {
+      "preprocessIdentifiers": true,
+      "encryptBytecode": true,
+      "debugProtection": true,
+      "dynamicOpcodes": true,
+      "decoyOpcodes": true,
+      "deadCodeInjection": true,
+      "stackEncoding": true,
+      "rollingCipher": true,
+      "integrityBinding": true,
+      "vmShielding": true,
+      "mixedBooleanArithmetic": true,
+      "handlerFragmentation": true,
+      "stringAtomization": true,
+      "polymorphicDecoder": true,
+      "scatteredKeys": true,
+      "blockPermutation": true,
+      "opcodeMutation": true,
+      "bytecodeScattering": true
+    }
+  },
+  "autoEnableRules": [
+    {
+      "when": "integrityBinding",
+      "enables": "rollingCipher"
+    },
+    {
+      "when": "vmShielding",
+      "enables": "rollingCipher"
+    },
+    {
+      "when": "stringAtomization",
+      "enables": "polymorphicDecoder"
+    },
+    {
+      "when": "opcodeMutation",
+      "enables": "rollingCipher"
+    }
+  ]
+}
