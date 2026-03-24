@@ -16,25 +16,9 @@
  * @module ruamvm/handler-aliasing
  */
 
-import { deriveSeed } from "../naming/scope.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import { deriveSeed, lcgNext } from "../naming/scope.js";
 import type { JsNode, IfStmt, ExprStmt } from "./nodes.js";
-import {
-	exprStmt,
-	un,
-	lit,
-	seq,
-	ifStmt,
-	UOp,
-	mapChildren,
-} from "./nodes.js";
-
-// --- LCG helper ---
-
-/** Advance an LCG state and return the next value. */
-function lcgNext(state: number): number {
-	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-}
+import { exprStmt, un, lit, seq, ifStmt, UOp, mapChildren } from "./nodes.js";
 
 // --- Transforms ---
 
@@ -45,11 +29,7 @@ function lcgNext(state: number): number {
  */
 function invertIfElse(node: IfStmt): IfStmt {
 	if (!node.else || node.else.length === 0) return node;
-	return ifStmt(
-		un(UOp.Not, node.test),
-		node.else,
-		node.then
-	);
+	return ifStmt(un(UOp.Not, node.test), node.else, node.then);
 }
 
 /**
@@ -79,10 +59,7 @@ function makeNoop(): JsNode {
  * @param state - Current LCG state (mutated via closure)
  * @returns Object with transformed node and updated state
  */
-function walkWithState(
-	node: JsNode,
-	state: { s: number }
-): JsNode {
+function walkWithState(node: JsNode, state: { s: number }): JsNode {
 	// First recurse into children
 	const walked = mapChildren(node, (child) => walkWithState(child, state));
 

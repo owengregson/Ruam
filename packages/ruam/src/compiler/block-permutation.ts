@@ -20,7 +20,7 @@
  */
 
 import type { BytecodeUnit, Instruction } from "../types.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import { lcgNext } from "../naming/scope.js";
 
 // --- Jump analysis ---
 
@@ -46,12 +46,6 @@ const TERMINAL_OPS = new Set<Op>([
 	Op.ASYNC_GENERATOR_RETURN,
 	Op.ASYNC_GENERATOR_THROW,
 ]);
-
-// --- LCG PRNG ---
-
-function lcgNext(state: number): number {
-	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-}
 
 // --- Block permutation ---
 

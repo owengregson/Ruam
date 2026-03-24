@@ -33,8 +33,7 @@ import {
 	fn,
 	arr,
 } from "./nodes.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
-import { deriveSeed } from "../naming/scope.js";
+import { deriveSeed, lcgNext } from "../naming/scope.js";
 
 // --- Operation types ---
 
@@ -54,12 +53,6 @@ export interface DecoderChain {
 	ops: DecoderOp[];
 	/** Per-build LCG seed for position-dependent key variation. */
 	positionSeed: number;
-}
-
-// --- LCG helpers ---
-
-function lcgNext(state: number): number {
-	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
 }
 
 // --- Chain generation ---

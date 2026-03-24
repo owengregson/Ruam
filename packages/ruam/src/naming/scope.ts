@@ -38,6 +38,19 @@ export function deriveSeed(parentSeed: number, scopeId: string): number {
 	return h;
 }
 
+/**
+ * Advance an LCG state by one step.
+ *
+ * Uses the project's canonical LCG parameters from constants.ts.
+ * Shared across all modules that need seeded pseudo-random sequences.
+ *
+ * @param state - Current 32-bit unsigned LCG state.
+ * @returns Next 32-bit unsigned LCG state.
+ */
+export function lcgNext(state: number): number {
+	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+}
+
 // --- NameScope ---
 
 export class NameScope {

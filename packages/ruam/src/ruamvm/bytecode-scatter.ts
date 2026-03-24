@@ -16,14 +16,7 @@
 
 import type { JsNode } from "./nodes.js";
 import { id, lit, bin, varDecl, arr, call, BOp } from "./nodes.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
-import { deriveSeed } from "../naming/scope.js";
-
-// --- LCG helper ---
-
-function lcgNext(state: number): number {
-	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-}
+import { deriveSeed, lcgNext } from "../naming/scope.js";
 
 // --- Fragment types ---
 

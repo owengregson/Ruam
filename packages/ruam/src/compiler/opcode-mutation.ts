@@ -17,11 +17,8 @@
 
 import type { BytecodeUnit, Instruction } from "../types.js";
 import { Op, OPCODE_COUNT, ALL_JUMP_OPS, PACKED_JUMP_OPS } from "./opcodes.js";
-import {
-	LCG_MULTIPLIER,
-	LCG_INCREMENT,
-	GOLDEN_RATIO_PRIME,
-} from "../constants.js";
+import { GOLDEN_RATIO_PRIME } from "../constants.js";
+import { lcgNext } from "../naming/scope.js";
 
 // --- Constants ---
 
@@ -31,12 +28,6 @@ const MIN_MUTATION_INTERVAL = 20;
 const MAX_MUTATION_INTERVAL = 50;
 /** Number of swaps per mutation. */
 const SWAPS_PER_MUTATION = 4;
-
-// --- LCG helpers ---
-
-function lcgNext(state: number): number {
-	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-}
 
 // --- Mutation state tracking ---
 

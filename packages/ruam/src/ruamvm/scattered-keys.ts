@@ -27,14 +27,7 @@ import {
 	member,
 	arr,
 } from "./nodes.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
-import { deriveSeed } from "../naming/scope.js";
-
-// --- LCG helpers ---
-
-function lcgNext(state: number): number {
-	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-}
+import { deriveSeed, lcgNext } from "../naming/scope.js";
 
 // --- Reassembly strategies ---
 
