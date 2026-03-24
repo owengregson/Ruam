@@ -138,4 +138,113 @@ describe("observation resistance", () => {
 			);
 		});
 	});
+
+	describe("witness counter + canaries + probes", () => {
+		it("basic arithmetic", () => {
+			assertEquivalent(
+				`function f(a, b) { return a + b; } f(3, 7);`,
+				orOpts
+			);
+		});
+
+		it("complex program", () => {
+			assertEquivalent(
+				`
+				function test() {
+					var result = [];
+					for (var i = 0; i < 5; i++) {
+						result.push(i * i);
+					}
+					return result.join(",");
+				}
+				test();
+			`,
+				orOpts
+			);
+		});
+
+		it("exception handling", () => {
+			assertEquivalent(
+				`
+				function f() {
+					try { throw new Error("test"); }
+					catch (e) { return e.message; }
+				}
+				f();
+			`,
+				orOpts
+			);
+		});
+
+		it("max preset still works", () => {
+			assertEquivalent(
+				`
+				function fibonacci(n) {
+					if (n <= 1) return n;
+					return fibonacci(n - 1) + fibonacci(n - 2);
+				}
+				fibonacci(10);
+			`,
+				{ preset: "max" }
+			);
+		});
+
+		it("nested function calls", () => {
+			assertEquivalent(
+				`
+				function add(a, b) { return a + b; }
+				function mul(a, b) { return a * b; }
+				function compute(x) { return add(mul(x, x), mul(x, 2)); }
+				compute(5);
+			`,
+				orOpts
+			);
+		});
+
+		it("switch statement", () => {
+			assertEquivalent(
+				`
+				function classify(n) {
+					switch (true) {
+						case n < 0: return "negative";
+						case n === 0: return "zero";
+						default: return "positive";
+					}
+				}
+				classify(-1) + "," + classify(0) + "," + classify(1);
+			`,
+				orOpts
+			);
+		});
+
+		it("object manipulation", () => {
+			assertEquivalent(
+				`
+				function test() {
+					var obj = { a: 1, b: 2, c: 3 };
+					var sum = 0;
+					for (var k in obj) { sum += obj[k]; }
+					return sum;
+				}
+				test();
+			`,
+				orOpts
+			);
+		});
+
+		it("with all hardening options", () => {
+			assertEquivalent(
+				`
+				function f(a, b) { return a + b; }
+				f(10, 20);
+			`,
+				{
+					observationResistance: true,
+					rollingCipher: true,
+					incrementalCipher: true,
+					integrityBinding: true,
+				}
+			);
+		});
+	});
 });

@@ -68,6 +68,11 @@ import {
 	injectOpaquePredicate,
 } from "../opaque-predicates.js";
 import type { StructuralChoices } from "../../structural-choices.js";
+import {
+	buildWitnessCounter,
+	buildWeakMapCanary,
+	buildStackProbe,
+} from "../observation-resistance.js";
 
 /** Options for interpreter filtering and hardening. */
 export interface InterpreterBuildOptions {
@@ -572,6 +577,48 @@ function buildCasesForMode(
 		handlerIndices
 	);
 
+	// --- Observation resistance: witness counter + stack probes ---
+	// Prepend witness counter increments to every handler body and
+	// append verification checks + stack probes to a random subset.
+	// Runs before aliasing/MBA/fragmentation so the injected code
+	// gets further transformed by those passes.
+	if (interpOpts.observationResistance) {
+		const witnessResult = buildWitnessCounter(names, temps, seed, split);
+		const probeResult = buildStackProbe(names, seed, split);
+
+		// PRNG for witness check selection
+		let witnessSeed = deriveSeed(seed, "witnessCheck") >>> 0;
+		const witnessLcg = (): number => {
+			witnessSeed =
+				(Math.imul(witnessSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			return witnessSeed;
+		};
+
+		// PRNG for stack probe selection
+		let probeSeed = deriveSeed(seed, "stackProbe") >>> 0;
+		const probeLcg = (): number => {
+			probeSeed =
+				(Math.imul(probeSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			return probeSeed;
+		};
+
+		cases = cases.map((c) => {
+			if (c.label === null) return c;
+			const body = [...c.body];
+			// Prepend witness counter increment to every handler
+			body.unshift(witnessResult.incrementStmt());
+			// ~25% of handlers get witness verification check
+			if (witnessLcg() % 100 < 25) {
+				body.push(...witnessResult.verifyStmts());
+			}
+			// ~5% of handlers get a stack integrity probe
+			if (probeLcg() % 100 < 5) {
+				body.push(...probeResult.probeStmts());
+			}
+			return caseClause(c.label, body);
+		});
+	}
+
 	// --- Handler aliasing ---
 	// Apply structural transforms to a subset of handler bodies so that
 	// different builds produce structurally different code for the same opcode.
@@ -820,7 +867,8 @@ function buildExecFunction(
 		ftResult.dispatchNodes,
 		ftResult.preLoopDecls,
 		opts.split,
-		hoistHandlers
+		hoistHandlers,
+		opts.seed
 	);
 
 	// Apply tree-based obfuscation of local variable names.
@@ -881,7 +929,8 @@ function buildScaffoldAST(
 	dispatchNodes: JsNode[],
 	htInit?: JsNode[],
 	split?: SplitFn,
-	hoistHandlers = false
+	hoistHandlers = false,
+	seed = 0
 ): JsNode {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const fnName = isAsync ? n.execAsync : n.exec;
@@ -1134,32 +1183,96 @@ function buildScaffoldAST(
 		);
 	}
 
-	// Optional: observation resistance — periodic identity binding check.
-	// Every ~256 instructions, XOR orVerify() into rcState.  When clean
-	// (untampered), orVerify() returns 0 and XOR is a no-op.  When a
-	// bound function has been replaced, a non-zero corruption constant
-	// silently poisons all subsequent instruction decryption.
+	// Optional: observation resistance — periodic identity binding + canary check.
+	// Every ~256 instructions, XOR orVerify() into rcState (identity binding)
+	// and also check the WeakMap canary.  When clean (untampered), both return
+	// 0 and XOR is a no-op.  When a bound function has been replaced or the
+	// canary has been tampered with, a non-zero corruption constant silently
+	// poisons all subsequent instruction decryption.
 	if (interpOpts.observationResistance && rollingCipher) {
-		// if ((_ri & 0xFF) === 0) { rcState = (rcState ^ orVerify()) >>> 0; }
+		const checkBody: JsNode[] = [
+			// rcState = (rcState ^ orVerify()) >>> 0;
+			exprStmt(
+				assign(
+					id(n.rcState),
+					bin(
+						BOp.Ushr,
+						bin(
+							BOp.BitXor,
+							id(n.rcState),
+							call(id(n.orVerify), [])
+						),
+						lit(0)
+					)
+				)
+			),
+		];
+
+		// WeakMap canary check — XOR a corruption constant if canary is
+		// tampered, or 0 if clean.  Uses temps _orRef (canary object) and
+		// _orExp (WeakMap instance).
+		const canaryRef = temps["_orRef"];
+		const canaryWm = temps["_orExp"];
+		if (canaryRef !== undefined && canaryWm !== undefined) {
+			// Derive per-build canary corruption constant
+			const canaryCorruptSeed = deriveSeed(
+				seed,
+				"canaryCorrupt"
+			);
+			const canaryCorrupt =
+				(canaryCorruptSeed || 0xcafebabe) >>> 0;
+
+			// rcState = (rcState ^ ((!(_orExp instanceof WeakMap) || _orExp.get(_orRef) !== true) ? CORRUPT : 0)) >>> 0;
+			checkBody.push(
+				exprStmt(
+					assign(
+						id(n.rcState),
+						bin(
+							BOp.Ushr,
+							bin(
+								BOp.BitXor,
+								id(n.rcState),
+								ternary(
+									bin(
+										BOp.Or,
+										un(
+											UOp.Not,
+											bin(
+												BOp.Instanceof,
+												id(canaryWm),
+												id("WeakMap")
+											)
+										),
+										bin(
+											BOp.Sneq,
+											call(
+												member(
+													id(canaryWm),
+													"get"
+												),
+												[id(canaryRef)]
+											),
+											lit(true)
+										)
+									),
+									split
+										? split(canaryCorrupt)
+										: lit(canaryCorrupt),
+									lit(0)
+								)
+							),
+							lit(0)
+						)
+					)
+				)
+			);
+		}
+
+		// if ((_ri & 0xFF) === 0) { ...checks... }
 		whileBody.push(
 			ifStmt(
 				bin(BOp.Seq, bin(BOp.BitAnd, id(T("_ri")), lit(0xff)), lit(0)),
-				[
-					exprStmt(
-						assign(
-							id(n.rcState),
-							bin(
-								BOp.Ushr,
-								bin(
-									BOp.BitXor,
-									id(n.rcState),
-									call(id(n.orVerify), [])
-								),
-								lit(0)
-							)
-						)
-					),
-				]
+				checkBody
 			)
 		);
 	}

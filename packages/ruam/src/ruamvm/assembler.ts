@@ -50,7 +50,11 @@ import { buildLoader } from "./builders/loader.js";
 import { buildDeserializer } from "./builders/deserializer.js";
 import { buildGlobalExposure } from "./builders/globals.js";
 import { buildDecodeFunction } from "./builders/unpack.js";
-import { buildIdentityBindings } from "./observation-resistance.js";
+import {
+	buildIdentityBindings,
+	buildWitnessCounter,
+	buildWeakMapCanary,
+} from "./observation-resistance.js";
 import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
 import type { StructuralChoices } from "../structural-choices.js";
@@ -400,9 +404,10 @@ export function generateVmRuntime(options: {
 	nodes.push(...tier2Nodes); // tier 2 is never shuffled
 	pushShuffled(tier3Components, order?.tier3);
 
-	// Observation resistance: identity bindings must go after all bound
-	// functions (exec, load, vm, deser, rcDeriveKey, rcMix, etc.) are
-	// declared (tiers 2 and 3). Placed before tier 4 (wiring).
+	// Observation resistance: identity bindings, witness counter, and
+	// WeakMap canary must go after all bound functions (exec, load, vm,
+	// deser, rcDeriveKey, rcMix, etc.) are declared (tiers 2 and 3).
+	// Placed before tier 4 (wiring).
 	if (observationResistance && rollingCipher) {
 		const orResult = buildIdentityBindings(
 			names,
@@ -418,6 +423,20 @@ export function generateVmRuntime(options: {
 			registry
 		);
 		nodes.push(...orResult.declarations, orResult.verifyFn);
+
+		// Witness counter declarations (IIFE scope)
+		const witnessResult = buildWitnessCounter(names, temps, seed, split);
+		nodes.push(...witnessResult.declarations);
+
+		// WeakMap canary declarations (IIFE scope)
+		const canaryResult = buildWeakMapCanary(
+			names,
+			temps,
+			seed,
+			split,
+			registry
+		);
+		nodes.push(...canaryResult.declarations);
 	}
 
 	pushShuffled(tier4Components, order?.tier4);
@@ -752,8 +771,9 @@ export function generateShieldedVmRuntime(options: {
 			...buildLoader(encrypt, gn, true, true, { skipSharedDecls: true })
 		);
 
-		// Observation resistance: per-group identity bindings (after all
-		// bound functions are declared for this group)
+		// Observation resistance: per-group identity bindings, witness
+		// counter, and WeakMap canary (after all bound functions are
+		// declared for this group)
 		if (observationResistance) {
 			const orResult = buildIdentityBindings(
 				gn,
@@ -769,6 +789,25 @@ export function generateShieldedVmRuntime(options: {
 				registry
 			);
 			nodes.push(...orResult.declarations, orResult.verifyFn);
+
+			// Witness counter declarations (per-group IIFE scope)
+			const witnessResult = buildWitnessCounter(
+				gn,
+				gt,
+				group.seed,
+				groupSplit
+			);
+			nodes.push(...witnessResult.declarations);
+
+			// WeakMap canary declarations (per-group IIFE scope)
+			const canaryResult = buildWeakMapCanary(
+				gn,
+				gt,
+				group.seed,
+				groupSplit,
+				registry
+			);
+			nodes.push(...canaryResult.declarations);
 		}
 
 		groupRegistrations.push({
