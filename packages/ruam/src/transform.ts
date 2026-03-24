@@ -55,6 +55,11 @@ import {
 	adjustEncodingForMutations,
 } from "./compiler/opcode-mutation.js";
 import { scatterBytecodeUnit } from "./ruamvm/bytecode-scatter.js";
+import {
+	getTuningProfile,
+	presetToIntensity,
+} from "./tuning.js";
+import type { TuningProfile } from "./tuning.js";
 
 import { randomBytes } from "node:crypto";
 
@@ -109,6 +114,9 @@ export function obfuscateCode(
 		bytecodeScattering = false,
 		wrapOutput = false,
 	} = resolved;
+
+	// -- Compute tuning profile from preset intensity -------------------------
+	const tuning = getTuningProfile(presetToIntensity(resolved.preset));
 
 	// -- Generate per-file seed (needed for both preprocessing and opcodes) --
 	const shuffleSeed = generateCryptoSeed();
@@ -165,6 +173,7 @@ export function obfuscateCode(
 			bytecodeScattering,
 			wrapOutput,
 			preprocessUsedNames,
+			tuning,
 		});
 	}
 
@@ -179,7 +188,8 @@ export function obfuscateCode(
 		shuffleSeed,
 		temps["_ps"],
 		blockPermutation,
-		opcodeMutation
+		opcodeMutation,
+		tuning
 	);
 
 	if (compiledUnits.size === 0) return code;
@@ -388,7 +398,8 @@ function compileTargetsOnly(
 	seed: number,
 	scopeVarName?: string,
 	blockPermutationOpt: boolean = false,
-	opcodeMutationOpt: boolean = false
+	opcodeMutationOpt: boolean = false,
+	tuning?: Readonly<TuningProfile>
 ): Map<string, { unit: BytecodeUnit }> {
 	const compiledUnits: Map<string, { unit: BytecodeUnit }> = new Map();
 
@@ -398,9 +409,9 @@ function compileTargetsOnly(
 
 			// --- Dead code injection (before block permutation) ---
 			if (deadCodeInjection) {
-				injectDeadCode(unit, seed);
+				injectDeadCode(unit, seed, tuning);
 				for (const child of unit.childUnits) {
-					injectDeadCode(child, seed);
+					injectDeadCode(child, seed, tuning);
 				}
 			}
 
@@ -498,7 +509,11 @@ function encodeAllUnits(
  * code but are never executed. This confuses static analysis tools and
  * makes the bytecode harder to reverse-engineer.
  */
-function injectDeadCode(unit: BytecodeUnit, seed: number): void {
+function injectDeadCode(
+	unit: BytecodeUnit,
+	seed: number,
+	tuning?: Readonly<TuningProfile>
+): void {
 	const instrs = unit.instructions;
 	if (instrs.length < 4) return;
 
@@ -551,11 +566,14 @@ function injectDeadCode(unit: BytecodeUnit, seed: number): void {
 		if (i + 1 >= instrs.length) continue;
 		if (jumpTargets.has(i + 1)) continue;
 
-		// ~40% chance to inject at each eligible site
-		if (lcg() % 100 >= 40) continue;
+		// Probability-gated injection at each eligible site
+		const prob = tuning?.deadCodeProbability ?? 40;
+		if (lcg() % 100 >= prob) continue;
 
-		// Generate a fake sequence of 3-6 instructions
-		const blockLen = 3 + (lcg() % 4);
+		// Generate a fake instruction sequence
+		const minBlock = tuning?.deadCodeBlockMin ?? 3;
+		const maxBlock = tuning?.deadCodeBlockMax ?? 6;
+		const blockLen = minBlock + (lcg() % (maxBlock - minBlock + 1));
 		const block: { opcode: number; operand: number }[] = [];
 
 		for (let j = 0; j < blockLen; j++) {
@@ -729,7 +747,8 @@ function buildScatteredBtParts(
 	units: Map<string, { encoded: string }>,
 	btName: string,
 	unpackName: string,
-	seed: number
+	seed: number,
+	tuning?: Readonly<TuningProfile>
 ): { init: string; fragmentDecls: string[]; assignments: string[] } {
 	// Use a dedicated name generator with '$' prefix to avoid colliding
 	// with scattered-keys names (which use '_' prefix)
@@ -743,7 +762,9 @@ function buildScatteredBtParts(
 			seed ^ unitId.length,
 			nameGen,
 			new Set(),
-			unpackName
+			unpackName,
+			tuning?.bytecodeFragmentMin,
+			tuning?.bytecodeFragmentMax
 		);
 
 		// Emit fragment declarations (must appear before assignments)
@@ -873,6 +894,7 @@ function assembleShielded(
 		bytecodeScattering: boolean;
 		wrapOutput: boolean;
 		preprocessUsedNames: Set<string> | undefined;
+		tuning: Readonly<TuningProfile>;
 	}
 ): string {
 	// Generate per-group seeds (one per root function)
@@ -927,9 +949,9 @@ function assembleShielded(
 
 		// Dead code injection
 		if (opts.deadCodeInjection) {
-			injectDeadCode(unit, groupSeed);
+			injectDeadCode(unit, groupSeed, opts.tuning);
 			for (const child of unit.childUnits) {
-				injectDeadCode(child, groupSeed);
+				injectDeadCode(child, groupSeed, opts.tuning);
 			}
 		}
 
