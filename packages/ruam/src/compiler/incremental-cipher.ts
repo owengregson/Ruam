@@ -10,7 +10,12 @@
  * @module compiler/incremental-cipher
  */
 
-import { FNV_PRIME, MIX_PRIME1, MIX_PRIME2 } from "../constants.js";
+import {
+	FNV_PRIME,
+	MIX_PRIME1,
+	MIX_PRIME2,
+	GOLDEN_RATIO_PRIME,
+} from "../constants.js";
 import type { BytecodeUnit } from "../types.js";
 import { identifyBasicBlocks, type BasicBlock } from "./basic-blocks.js";
 
@@ -37,7 +42,11 @@ export interface CipherBlock extends BasicBlock {
 export function deriveBlockKey(masterKey: number, blockId: number): number {
 	let h = masterKey;
 	h = Math.imul(h ^ blockId, FNV_PRIME) >>> 0;
-	h = Math.imul(h ^ (Math.imul(blockId, 0x9e3779b9) >>> 0), MIX_PRIME1) >>> 0;
+	h =
+		Math.imul(
+			h ^ (Math.imul(blockId, GOLDEN_RATIO_PRIME) >>> 0),
+			MIX_PRIME1
+		) >>> 0;
 	h ^= h >>> 16;
 	h = Math.imul(h, MIX_PRIME2) >>> 0;
 	h ^= h >>> 13;
@@ -57,7 +66,11 @@ export function deriveBlockKey(masterKey: number, blockId: number): number {
  * @param operand - Decrypted (plaintext) operand value.
  * @returns Updated 32-bit unsigned chain state.
  */
-export function chainMix(state: number, opcode: number, operand: number): number {
+export function chainMix(
+	state: number,
+	opcode: number,
+	operand: number
+): number {
 	let h = state;
 	h = Math.imul(h ^ opcode, MIX_PRIME1) >>> 0;
 	h = Math.imul(h ^ operand, MIX_PRIME2) >>> 0;

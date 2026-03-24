@@ -42,6 +42,7 @@ import {
 	UOp,
 } from "./nodes.js";
 import type { NameRegistry } from "../naming/registry.js";
+import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // --- Candidate Functions ---
 
@@ -126,7 +127,7 @@ export function buildIdentityBindings(
 
 	let s = selSeed >>> 0;
 	const lcgNext = (): number => {
-		s = (Math.imul(s, 0x41c64e6d) + 0x3039) >>> 0;
+		s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
 		return s;
 	};
 	for (let i = pool.length - 1; i > 0; i--) {
