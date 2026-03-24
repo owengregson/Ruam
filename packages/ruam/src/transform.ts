@@ -290,6 +290,7 @@ export function obfuscateCode(
 		semanticOpacity,
 		observationResistance,
 		identityBindingCount: tuning.identityBindingCount,
+		witnessCheckProbability: tuning.witnessCheckProbability,
 		alphabet,
 		hasAsyncUnits,
 		structuralChoices,

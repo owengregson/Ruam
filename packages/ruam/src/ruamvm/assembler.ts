@@ -119,6 +119,8 @@ export function generateVmRuntime(options: {
 	observationResistance?: boolean;
 	/** Number of functions to bind for observation resistance (from tuning). */
 	identityBindingCount?: number;
+	/** Tuning: probability (0-100) of witness check per handler. */
+	witnessCheckProbability?: number;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** Whether any compiled units are async (controls async interpreter emit). */
@@ -156,6 +158,7 @@ export function generateVmRuntime(options: {
 		semanticOpacity = false,
 		observationResistance = false,
 		identityBindingCount = 5,
+		witnessCheckProbability,
 		alphabet,
 		hasAsyncUnits = true,
 		structuralChoices,
@@ -287,6 +290,7 @@ export function generateVmRuntime(options: {
 			incrementalCipher,
 			semanticOpacity,
 			observationResistance,
+			witnessCheckProbability,
 		},
 		split,
 		hasAsyncUnits,
@@ -547,6 +551,8 @@ export function generateShieldedVmRuntime(options: {
 	observationResistance?: boolean;
 	/** Number of functions to bind for observation resistance (from tuning). */
 	identityBindingCount?: number;
+	/** Tuning: probability (0-100) of witness check per handler. */
+	witnessCheckProbability?: number;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** NameRegistry for dynamic name generation. */
@@ -573,6 +579,7 @@ export function generateShieldedVmRuntime(options: {
 		semanticOpacity = false,
 		observationResistance = false,
 		identityBindingCount = 5,
+		witnessCheckProbability,
 		alphabet,
 		registry,
 	} = options;
@@ -707,6 +714,7 @@ export function generateShieldedVmRuntime(options: {
 				incrementalCipher,
 				semanticOpacity,
 				observationResistance,
+				witnessCheckProbability,
 			},
 			groupSplit,
 			group.hasAsyncUnits ?? true,

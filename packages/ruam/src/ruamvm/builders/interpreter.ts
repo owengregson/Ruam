@@ -86,6 +86,8 @@ export interface InterpreterBuildOptions {
 	incrementalCipher?: boolean;
 	semanticOpacity?: boolean;
 	observationResistance?: boolean;
+	/** Tuning: probability (0-100) of witness check per handler. */
+	witnessCheckProbability?: number;
 }
 
 /** Result from building interpreter functions. */
@@ -607,11 +609,14 @@ function buildCasesForMode(
 			const body = [...c.body];
 			// Prepend witness counter increment to every handler
 			body.unshift(witnessResult.incrementStmt());
-			// ~25% of handlers get witness verification check
-			if (witnessLcg() % 100 < 25) {
+			// Witness verification check (probability from tuning)
+			if (
+				witnessLcg() % 100 <
+				(interpOpts.witnessCheckProbability ?? 25)
+			) {
 				body.push(...witnessResult.verifyStmts());
 			}
-			// ~5% of handlers get a stack integrity probe
+			// Stack integrity probe (~5% of handlers)
 			if (probeLcg() % 100 < 5) {
 				body.push(...probeResult.probeStmts());
 			}
@@ -628,9 +633,10 @@ function buildCasesForMode(
 		cases = cases.map((c, idx) => {
 			if (c.label === null) return c;
 			// Each handler gets a deterministic coin flip
-			aliasSeed = (Math.imul(aliasSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			// ~40% of handlers get aliased
-			if ((aliasSeed % 100) < 40) {
+			aliasSeed =
+				(Math.imul(aliasSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			// Handler aliasing (~40% of handlers)
+			if (aliasSeed % 100 < 40) {
 				return caseClause(c.label, aliasHandlerBody(c.body, seed, idx));
 			}
 			return c;
@@ -649,9 +655,10 @@ function buildCasesForMode(
 			// Only inject into handlers with 3+ statements (small handlers
 			// aren't worth obfuscating — the predicate would dominate)
 			if (c.body.length < 3) return c;
-			// ~50% of eligible handlers get a predicate wrapper
-			predSeed = (Math.imul(predSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			if ((predSeed % 100) >= 50) return c;
+			// Opaque predicate injection (~50% of eligible handlers)
+			predSeed =
+				(Math.imul(predSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			if (predSeed % 100 >= 50) return c;
 
 			// Use the instruction pointer (always an integer) as the
 			// predicate input — bitwise OR with 0 ensures int32 semantics
@@ -665,7 +672,8 @@ function buildCasesForMode(
 			// Dead code for the never-taken branch: a few harmless
 			// statements that look plausible but never execute.
 			// Use a deterministic pick of dead code patterns.
-			const deadSeed = (Math.imul(predSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const deadSeed =
+				(Math.imul(predSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
 			const deadBody = generateDeadBody(deadSeed);
 
 			return caseClause(
@@ -1215,12 +1223,8 @@ function buildScaffoldAST(
 		const canaryWm = temps["_orExp"];
 		if (canaryRef !== undefined && canaryWm !== undefined) {
 			// Derive per-build canary corruption constant
-			const canaryCorruptSeed = deriveSeed(
-				seed,
-				"canaryCorrupt"
-			);
-			const canaryCorrupt =
-				(canaryCorruptSeed || 0xcafebabe) >>> 0;
+			const canaryCorruptSeed = deriveSeed(seed, "canaryCorrupt");
+			const canaryCorrupt = (canaryCorruptSeed || 0xcafebabe) >>> 0;
 
 			// rcState = (rcState ^ ((!(_orExp instanceof WeakMap) || _orExp.get(_orRef) !== true) ? CORRUPT : 0)) >>> 0;
 			checkBody.push(
@@ -1245,13 +1249,9 @@ function buildScaffoldAST(
 										),
 										bin(
 											BOp.Sneq,
-											call(
-												member(
-													id(canaryWm),
-													"get"
-												),
-												[id(canaryRef)]
-											),
+											call(member(id(canaryWm), "get"), [
+												id(canaryRef),
+											]),
 											lit(true)
 										)
 									),
