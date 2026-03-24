@@ -1,4 +1,5 @@
 name: CI
+# v2: bun migration
 
 permissions:
   contents: read
