@@ -632,9 +632,15 @@ function buildCasesForMode(
 
 	// --- MBA ---
 	if (interpOpts.mixedBooleanArithmetic) {
-		cases = cases.map((c) => {
+		cases = cases.map((c, idx) => {
 			if (c.label === null) return c;
-			return caseClause(c.label, applyMBA(c.body, seed));
+			// When semanticOpacity is on, derive a distinct seed per handler so
+			// that the same logical operation (e.g. XOR) looks structurally
+			// different across handlers — per-handler variant selection.
+			const mbaSeed = interpOpts.semanticOpacity
+				? deriveSeed(seed, "mbaVariant_" + idx)
+				: seed;
+			return caseClause(c.label, applyMBA(c.body, mbaSeed));
 		});
 	}
 

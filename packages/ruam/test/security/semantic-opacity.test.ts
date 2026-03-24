@@ -93,10 +93,7 @@ describe("handler aliasing e2e", () => {
 	});
 
 	it("arithmetic", () => {
-		assertEquivalent(
-			`function f(a, b) { return a + b; } f(3, 7);`,
-			soOpts
-		);
+		assertEquivalent(`function f(a, b) { return a + b; } f(3, 7);`, soOpts);
 	});
 
 	it("object operations", () => {
@@ -230,6 +227,51 @@ describe("opaque predicate injection e2e", () => {
 			f();
 		`,
 			soOpts
+		);
+	});
+});
+
+// --- Per-handler MBA variant e2e tests ---
+
+describe("per-handler MBA variants e2e", () => {
+	const mbaOpts = { semanticOpacity: true, mixedBooleanArithmetic: true };
+
+	it("arithmetic still works", () => {
+		assertEquivalent(
+			`function f(a, b) { return a + b; } f(3, 7);`,
+			mbaOpts
+		);
+	});
+
+	it("bitwise operations", () => {
+		assertEquivalent(
+			`
+			function f(a, b) { return (a ^ b) | (a & b); }
+			f(0xFF, 0x0F);
+		`,
+			mbaOpts
+		);
+	});
+
+	it("complex expression", () => {
+		assertEquivalent(
+			`
+			function f(x) {
+				return (x & 0xFF) ^ ((x >> 8) & 0xFF) | ((x >> 16) & 0xFF);
+			}
+			f(0x123456);
+		`,
+			mbaOpts
+		);
+	});
+
+	it("with max preset", () => {
+		assertEquivalent(
+			`
+			function f(a, b) { return (a + b) * (a - b); }
+			f(10, 3);
+		`,
+			{ preset: "max" }
 		);
 	});
 });
