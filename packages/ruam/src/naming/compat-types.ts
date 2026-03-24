@@ -69,6 +69,7 @@ export interface RuntimeNames {
 	strTbl: string;
 	strCache: string;
 	strAcc: string;
+	unpack: string;
 }
 
 /**

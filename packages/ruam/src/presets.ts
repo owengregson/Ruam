@@ -40,6 +40,7 @@ export const PRESETS: Record<
 		scatteredKeys: false,
 		blockPermutation: false,
 		opcodeMutation: false,
+		bytecodeScattering: false,
 	},
 	medium: {
 		targetMode: "root",
@@ -61,6 +62,7 @@ export const PRESETS: Record<
 		scatteredKeys: true,
 		blockPermutation: false,
 		opcodeMutation: false,
+		bytecodeScattering: true,
 	},
 	max: {
 		targetMode: "root",
@@ -82,6 +84,7 @@ export const PRESETS: Record<
 		scatteredKeys: true,
 		blockPermutation: true,
 		opcodeMutation: true,
+		bytecodeScattering: true,
 	},
 };
 

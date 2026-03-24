@@ -71,6 +71,7 @@ export const RUNTIME_POST_TEMP_KEYS = [
 	"strTbl",
 	"strCache",
 	"strAcc",
+	"unpack",
 ] as const;
 
 // --- Temp Names (from encoding/names.ts TEMP_NAME_CATALOG) ---
@@ -226,4 +227,5 @@ export const SHARED_RUNTIME_KEYS = [
 	"strTbl",
 	"strCache",
 	"strAcc",
+	"unpack",
 ] as const;

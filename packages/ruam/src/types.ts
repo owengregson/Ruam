@@ -162,6 +162,9 @@ export interface VmObfuscationOptions {
 	/** Insert runtime handler table mutations. Requires rollingCipher (auto-enabled). */
 	opcodeMutation?: boolean;
 
+	/** Split encoded bytecode into mixed-type fragments scattered through output. */
+	bytecodeScattering?: boolean;
+
 	/**
 	 * Target execution environment.
 	 *
