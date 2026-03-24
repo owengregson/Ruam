@@ -19,7 +19,8 @@
 	],
 	"scripts": {
 		"build": "tsup",
-		"build:browser": "node scripts/build-browser.mjs",
+		"generate-manifest": "node scripts/generate-manifest.mjs",
+		"build:browser": "node scripts/generate-manifest.mjs && node scripts/build-browser.mjs",
 		"typecheck": "tsc --noEmit",
 		"dev": "tsup --watch",
 		"test": "vitest run",

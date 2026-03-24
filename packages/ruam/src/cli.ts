@@ -53,27 +53,7 @@ const PALETTE = [
 ];
 
 /** Human-readable labels for boolean obfuscation options. */
-const OPTION_LABELS: Record<string, string> = {
-	preprocessIdentifiers: "Identifier Renaming",
-	encryptBytecode: "Bytecode Encryption",
-	debugProtection: "Debug Protection",
-	debugLogging: "Debug Logging",
-	dynamicOpcodes: "Dynamic Opcodes",
-	decoyOpcodes: "Decoy Opcodes",
-	deadCodeInjection: "Dead Code Injection",
-	stackEncoding: "Stack Encoding",
-	rollingCipher: "Rolling Cipher",
-	integrityBinding: "Integrity Binding",
-	vmShielding: "VM Shielding",
-	mixedBooleanArithmetic: "Mixed Boolean Arithmetic",
-	handlerFragmentation: "Handler Fragmentation",
-	stringAtomization: "String Atomization",
-	polymorphicDecoder: "Polymorphic Decoder",
-	scatteredKeys: "Scattered Keys",
-	blockPermutation: "Block Permutation",
-	opcodeMutation: "Opcode Mutation",
-	bytecodeScattering: "Bytecode Scattering",
-};
+import { OPTION_LABELS } from "./option-meta.js";
 
 // --- CLI Argument Types ---
 
