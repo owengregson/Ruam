@@ -271,7 +271,8 @@ export function generateVmRuntime(options: {
 		},
 		split,
 		hasAsyncUnits,
-		structuralChoices
+		structuralChoices,
+		registry
 	);
 
 	const tier2Nodes: JsNode[] = [];
@@ -635,7 +636,9 @@ export function generateShieldedVmRuntime(options: {
 				opcodeMutation,
 			},
 			groupSplit,
-			group.hasAsyncUnits ?? true
+			group.hasAsyncUnits ?? true,
+			undefined, // structuralChoices not used in shielded mode
+			registry
 		);
 
 		// Handler table + key anchor init (must come before rolling cipher

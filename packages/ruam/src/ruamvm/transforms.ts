@@ -11,6 +11,7 @@
 import type { JsNode } from "./nodes.js";
 import { id, mapChildren } from "./nodes.js";
 import { resolveName } from "../naming/index.js";
+import type { NameRegistry } from "../naming/registry.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // --- Generic tree walker ---
@@ -256,12 +257,17 @@ export const RESERVED = new Set([
  * @param reserved - Optional set of names that must not be used as
  *   replacement targets (e.g. RuntimeNames/TempNames values already
  *   allocated for the same scope).
+ * @param registry - Optional NameRegistry for collision-safe name generation.
+ *   When provided, replacement names are allocated via the registry's
+ *   dynamic generator, ensuring handler-local names never collide with
+ *   IIFE-scope identifiers.
  * @returns Transformed statement list
  */
 export function obfuscateLocals(
 	nodes: JsNode[],
 	seed: number,
-	reserved?: ReadonlySet<string>
+	reserved?: ReadonlySet<string>,
+	registry?: NameRegistry
 ): JsNode[] {
 	// Collect names to rename
 	const toRename = new Set<string>();
@@ -280,54 +286,75 @@ export function obfuscateLocals(
 
 	if (toRename.size === 0) return nodes;
 
-	// Generate short replacement names via LCG
-	let s = seed >>> 0;
-	function lcg(): number {
-		s = (s * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
-		return s;
-	}
-	const alpha = "abcdefghijklmnopqrstuvwxyz";
-	const alnum = "abcdefghijklmnopqrstuvwxyz0123456789";
-	const used = new Set<string>(reserved);
+	// Generate replacement names — prefer registry dynamic generator
+	// for collision-safe allocation against the global used set.
+	// Falls back to internal LCG when no registry is available.
+	let genShort: () => string;
 
-	// Per-seed name length preference: some builds get 2-char handler
-	// locals, others get 2-3 char mix, breaking the "all handler
-	// locals are exactly N chars" fingerprint.
-	const threeCharBias = ((lcg() >>> 0) / 0x100000000) * 0.6; // 0-60%
-
-	function genShort(): string {
-		for (let attempt = 0; ; attempt++) {
-			const useThree = (lcg() >>> 0) / 0x100000000 < threeCharBias;
-			let name: string;
-			if (useThree) {
-				const c1 = alpha[lcg() % alpha.length]!;
-				const c2 = alnum[lcg() % alnum.length]!;
-				const c3 = alnum[lcg() % alnum.length]!;
-				name = c1 + c2 + c3;
-			} else {
-				const c1 = alpha[lcg() % alpha.length]!;
-				const c2 = alnum[lcg() % alnum.length]!;
-				name = c1 + c2;
-			}
-			if (!used.has(name) && !KEEP.has(name) && !RESERVED.has(name)) {
-				used.add(name);
-				return name;
-			}
-			// Safety: after many attempts, just use 2-char
-			if (attempt > 500) {
-				const c1 = alpha[lcg() % alpha.length]!;
-				const c2 = alnum[lcg() % alnum.length]!;
-				const fallback = c1 + c2;
-				if (
-					!used.has(fallback) &&
-					!KEEP.has(fallback) &&
-					!RESERVED.has(fallback)
-				) {
-					used.add(fallback);
-					return fallback;
+	if (registry) {
+		const dynGen = registry.createDynamicGenerator("handlerLocals", "short");
+		const localUsed = new Set<string>(reserved);
+		genShort = () => {
+			for (;;) {
+				const name = dynGen();
+				if (!KEEP.has(name) && !RESERVED.has(name) && !localUsed.has(name)) {
+					localUsed.add(name);
+					return name;
 				}
 			}
+		};
+	} else {
+		let s = seed >>> 0;
+		function lcg(): number {
+			s = (s * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
+			return s;
 		}
+		const alpha = "abcdefghijklmnopqrstuvwxyz";
+		const alnum = "abcdefghijklmnopqrstuvwxyz0123456789";
+		const used = new Set<string>(reserved);
+
+		// Per-seed name length preference: some builds get 2-char handler
+		// locals, others get 2-3 char mix, breaking the "all handler
+		// locals are exactly N chars" fingerprint.
+		const threeCharBias = ((lcg() >>> 0) / 0x100000000) * 0.6; // 0-60%
+
+		genShort = (): string => {
+			for (let attempt = 0; ; attempt++) {
+				const useThree = (lcg() >>> 0) / 0x100000000 < threeCharBias;
+				let name: string;
+				if (useThree) {
+					const c1 = alpha[lcg() % alpha.length]!;
+					const c2 = alnum[lcg() % alnum.length]!;
+					const c3 = alnum[lcg() % alnum.length]!;
+					name = c1 + c2 + c3;
+				} else {
+					const c1 = alpha[lcg() % alpha.length]!;
+					const c2 = alnum[lcg() % alnum.length]!;
+					name = c1 + c2;
+				}
+				if (
+					!used.has(name) &&
+					!KEEP.has(name) &&
+					!RESERVED.has(name)
+				) {
+					used.add(name);
+					return name;
+				}
+				if (attempt > 500) {
+					const c1 = alpha[lcg() % alpha.length]!;
+					const c2 = alnum[lcg() % alnum.length]!;
+					const fallback = c1 + c2;
+					if (
+						!used.has(fallback) &&
+						!KEEP.has(fallback) &&
+						!RESERVED.has(fallback)
+					) {
+						used.add(fallback);
+						return fallback;
+					}
+				}
+			}
+		};
 	}
 
 	const renameMap = new Map<string, string>();

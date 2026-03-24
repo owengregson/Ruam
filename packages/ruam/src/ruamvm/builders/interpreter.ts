@@ -58,6 +58,7 @@ import {
 	WATERMARK_MAGIC,
 } from "../../constants.js";
 import { deriveSeed } from "../../naming/scope.js";
+import type { NameRegistry } from "../../naming/registry.js";
 import { obfuscateLocals } from "../transforms.js";
 import { applyMBA } from "../mba.js";
 import { fragmentCases } from "../handler-fragmentation.js";
@@ -106,7 +107,8 @@ export function buildInterpreterFunctions(
 	interpOpts: InterpreterBuildOptions = {},
 	split?: SplitFn,
 	hasAsyncUnits = true,
-	structuralChoices?: StructuralChoices
+	structuralChoices?: StructuralChoices,
+	registry?: NameRegistry
 ): InterpreterBuildResult {
 	// Function table dispatch replaces the switch — disable handler
 	// fragmentation since handlers are naturally isolated in separate
@@ -151,6 +153,7 @@ export function buildInterpreterFunctions(
 		split,
 		fragmentLabelMap: syncCases.fragmentLabelMap,
 		structuralChoices,
+		registry,
 	});
 
 	// Hoist sentinel/return-value declarations to IIFE scope
@@ -229,6 +232,7 @@ export function buildInterpreterFunctions(
 		// so it doesn't look like a carbon copy of the sync interpreter
 		asyncGroupOffset: 1,
 		structuralChoices,
+		registry,
 	});
 
 	// Async iifeDecls are the same sentinel/return-value vars — already declared
@@ -680,6 +684,8 @@ function buildExecFunction(
 		/** Offset to apply to group count for structural differentiation. */
 		asyncGroupOffset?: number;
 		structuralChoices?: StructuralChoices;
+		/** NameRegistry for collision-safe obfuscateLocals renaming. */
+		registry?: NameRegistry;
 	}
 ): { fnNode: JsNode; iifeDecls: JsNode[] } {
 	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
@@ -754,13 +760,13 @@ function buildExecFunction(
 		...Object.values(names),
 		...Object.values(temps),
 	]);
-	const [obfuscated] = obfuscateLocals([fnNode], opts.seed, reserved);
+	const [obfuscated] = obfuscateLocals([fnNode], opts.seed, reserved, opts.registry);
 
 	// Also obfuscate handler closures when hoisted to IIFE scope
 	// (they contain handler-local variables like `name`, `val`, etc.)
 	let iifeDecls = ftResult.iifeDecls;
 	if (hoistHandlers && iifeDecls.length > 0) {
-		iifeDecls = obfuscateLocals(iifeDecls, deriveSeed(opts.seed, "iifeLocals"), reserved);
+		iifeDecls = obfuscateLocals(iifeDecls, deriveSeed(opts.seed, "iifeLocals"), reserved, opts.registry);
 	}
 
 	return { fnNode: obfuscated!, iifeDecls };
