@@ -42,6 +42,7 @@ export const PRESETS: Record<
 		opcodeMutation: false,
 		bytecodeScattering: false,
 		incrementalCipher: false,
+		semanticOpacity: false,
 	},
 	medium: {
 		targetMode: "root",
@@ -65,6 +66,7 @@ export const PRESETS: Record<
 		opcodeMutation: false,
 		bytecodeScattering: true,
 		incrementalCipher: false,
+		semanticOpacity: false,
 	},
 	max: {
 		targetMode: "root",
@@ -88,6 +90,7 @@ export const PRESETS: Record<
 		opcodeMutation: true,
 		bytecodeScattering: true,
 		incrementalCipher: true,
+		semanticOpacity: true,
 	},
 };
 

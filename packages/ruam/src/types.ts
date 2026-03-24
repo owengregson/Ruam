@@ -178,6 +178,15 @@ export interface VmObfuscationOptions {
 	incrementalCipher?: boolean;
 
 	/**
+	 * Make handler logic resist automated semantic analysis.
+	 *
+	 * Injects opaque predicates (always-true/false branches using number
+	 * theory), creates handler aliases (structurally different implementations
+	 * of the same opcode), and diversifies value encoding across handlers.
+	 */
+	semanticOpacity?: boolean;
+
+	/**
 	 * Target execution environment.
 	 *
 	 * Controls environment-specific output settings. Explicit options

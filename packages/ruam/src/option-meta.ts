@@ -79,6 +79,13 @@ export const OPTION_META: OptionMetaEntry[] = [
 		cliFlag: "--incremental-cipher",
 	},
 	{
+		key: "semanticOpacity",
+		label: "Semantic Opacity",
+		category: "security",
+		description: "Opaque predicates, handler aliasing, and encoding diversity",
+		cliFlag: "--semantic-opacity",
+	},
+	{
 		key: "encryptBytecode",
 		label: "Encrypt Bytecode",
 		category: "security",

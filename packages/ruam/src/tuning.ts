@@ -79,6 +79,14 @@ export interface TuningProfile {
 	dotBracketBiasRange: [number, number];
 	/** Numeric variation bias range: [min, max]. */
 	numericVariationBiasRange: [number, number];
+
+	// -- Semantic opacity --
+	/** Number of opaque predicate injections per handler body. */
+	opaquePredicateCount: number;
+	/** Number of high-value opcodes to alias. */
+	handlerAliasCount: number;
+	/** Number of distinct value encoding domains. */
+	encodingDomainCount: number;
 }
 
 // --- Profile definitions ---
@@ -108,6 +116,9 @@ const PROFILES: Record<Intensity, TuningProfile> = {
 		ternaryBiasRange: [0.1, 0.3],
 		dotBracketBiasRange: [0.05, 0.2],
 		numericVariationBiasRange: [0.05, 0.15],
+		opaquePredicateCount: 1,
+		handlerAliasCount: 2,
+		encodingDomainCount: 2,
 	},
 
 	// Intensity 1: moderate (medium preset) — current defaults
@@ -134,6 +145,9 @@ const PROFILES: Record<Intensity, TuningProfile> = {
 		ternaryBiasRange: [0.15, 0.6],
 		dotBracketBiasRange: [0.1, 0.45],
 		numericVariationBiasRange: [0.1, 0.4],
+		opaquePredicateCount: 2,
+		handlerAliasCount: 4,
+		encodingDomainCount: 3,
 	},
 
 	// Intensity 2: aggressive (max preset)
@@ -160,6 +174,9 @@ const PROFILES: Record<Intensity, TuningProfile> = {
 		ternaryBiasRange: [0.2, 0.7],
 		dotBracketBiasRange: [0.15, 0.55],
 		numericVariationBiasRange: [0.15, 0.5],
+		opaquePredicateCount: 3,
+		handlerAliasCount: 6,
+		encodingDomainCount: 4,
 	},
 };
 
