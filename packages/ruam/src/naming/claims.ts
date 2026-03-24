@@ -62,12 +62,9 @@ export const RUNTIME_KEYS = [
 	"spreadSym",
 	"hop",
 	"globalRef",
-	"icDecrypt",
 	"icMix",
 	"icBlockKey",
-	"orBindings",
 	"orVerify",
-	"orWitness",
 ] as const;
 
 /** Runtime keys generated AFTER temps (for LCG sequence compatibility). */
@@ -208,7 +205,6 @@ export const TEMP_KEYS = [
 	"_mt",
 	"_icState",
 	"_icBk",
-	"_icPrev",
 	"_djtc",
 	"_detc",
 	"_dblc",
