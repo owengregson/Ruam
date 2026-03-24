@@ -48,6 +48,7 @@ import { buildRunners, buildRouter } from "./builders/runners.js";
 import { buildLoader } from "./builders/loader.js";
 import { buildDeserializer } from "./builders/deserializer.js";
 import { buildGlobalExposure } from "./builders/globals.js";
+import { buildUnpackFunction } from "./builders/unpack.js";
 import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
 import type { StructuralChoices } from "../structural-choices.js";
@@ -100,6 +101,8 @@ export function generateVmRuntime(options: {
 	scatteredKeys?: boolean;
 	/** Enable runtime opcode mutation (dense handler table required). */
 	opcodeMutation?: boolean;
+	/** Split encoded bytecode into mixed-type fragments. */
+	bytecodeScattering?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 	/** Whether any compiled units are async (controls async interpreter emit). */
@@ -130,6 +133,7 @@ export function generateVmRuntime(options: {
 		stringAtomization = false,
 		scatteredKeys = false,
 		opcodeMutation = false,
+		bytecodeScattering = false,
 		alphabet,
 		hasAsyncUnits = true,
 		structuralChoices,
@@ -168,6 +172,11 @@ export function generateVmRuntime(options: {
 			),
 		],
 	];
+
+	// Optional: unpack function for bytecode scattering
+	if (bytecodeScattering) {
+		tier0Components.push(buildUnpackFunction(names.unpack));
+	}
 
 	// -- Tier 1: crypto/encoding primitives (shuffleable) ------------------
 	const tier1Components: JsNode[][] = [];
@@ -461,6 +470,8 @@ export function generateShieldedVmRuntime(options: {
 	scatteredKeys?: boolean;
 	/** Enable runtime opcode mutation (dense handler table required). */
 	opcodeMutation?: boolean;
+	/** Split encoded bytecode into mixed-type fragments. */
+	bytecodeScattering?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
 }): ShieldedVmRuntimeResult {
@@ -480,6 +491,7 @@ export function generateShieldedVmRuntime(options: {
 		stringAtomization = false,
 		scatteredKeys = false,
 		opcodeMutation = false,
+		bytecodeScattering = false,
 		alphabet,
 	} = options;
 
@@ -515,6 +527,11 @@ export function generateShieldedVmRuntime(options: {
 			call(member(id("Object"), "create"), [lit(null)])
 		)
 	);
+
+	// Shared: unpack function for bytecode scattering
+	if (bytecodeScattering) {
+		nodes.push(...buildUnpackFunction(sharedNames.unpack));
+	}
 
 	// Shared: custom binary decoder (always emitted)
 	const shieldedBinDecNodes = buildBinaryDecoderSource(sharedNames, alphabet);
@@ -724,7 +741,7 @@ const SCATTER_LETTERS = "etnoiasuclfdphmgvbwykxjqz";
  * @param seed - Per-build seed
  * @returns A name generator function
  */
-function createScatterNameGen(seed: number): () => string {
+export function createScatterNameGen(seed: number): () => string {
 	const used = new Set<string>();
 	let s = (seed ^ 0xfeed4321) >>> 0;
 	return () => {
