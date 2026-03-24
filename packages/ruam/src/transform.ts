@@ -54,6 +54,7 @@ import {
 	insertMutationOpcodes,
 	adjustEncodingForMutations,
 } from "./compiler/opcode-mutation.js";
+import { scatterBytecodeUnit } from "./ruamvm/bytecode-scatter.js";
 
 import { randomBytes } from "node:crypto";
 
@@ -105,6 +106,7 @@ export function obfuscateCode(
 		polymorphicDecoder = false,
 		stringAtomization = false,
 		scatteredKeys = false,
+		bytecodeScattering = false,
 		wrapOutput = false,
 	} = resolved;
 
@@ -160,6 +162,7 @@ export function obfuscateCode(
 			polymorphicDecoder,
 			stringAtomization,
 			scatteredKeys,
+			bytecodeScattering,
 			wrapOutput,
 			preprocessUsedNames,
 		});
@@ -256,6 +259,7 @@ export function obfuscateCode(
 		stringAtomization,
 		scatteredKeys,
 		opcodeMutation,
+		bytecodeScattering,
 		alphabet,
 		hasAsyncUnits,
 		structuralChoices,
@@ -284,7 +288,8 @@ export function obfuscateCode(
 		temps,
 		runtimeResult.source,
 		wrapOutput,
-		shuffleSeed
+		shuffleSeed,
+		bytecodeScattering
 	);
 }
 
@@ -713,6 +718,93 @@ function buildBtParts(
 }
 
 /**
+ * Build bytecode table declarations using the scatter engine.
+ *
+ * Each unit's encoded string is split into heterogeneous fragments
+ * (string literals, char code arrays, packed integer arrays) that are
+ * scattered throughout the output. Eliminates long contiguous encoded
+ * strings — the most obvious VM fingerprint.
+ */
+function buildScatteredBtParts(
+	units: Map<string, { encoded: string }>,
+	btName: string,
+	unpackName: string,
+	seed: number
+): { init: string; fragmentDecls: string[]; assignments: string[] } {
+	// Use a dedicated name generator with '$' prefix to avoid colliding
+	// with scattered-keys names (which use '_' prefix)
+	const nameGen = createBtScatterNameGen(seed);
+	const fragmentDecls: string[] = [];
+	const assignments: string[] = [];
+
+	for (const [unitId, { encoded }] of units) {
+		const result = scatterBytecodeUnit(
+			encoded,
+			seed ^ unitId.length,
+			nameGen,
+			new Set(),
+			unpackName
+		);
+
+		// Emit fragment declarations (must appear before assignments)
+		for (const frag of result.fragments) {
+			fragmentDecls.push(emit(frag) + ";");
+		}
+
+		// Emit reassembly assignment: bt["id"] = reassemblyExpr
+		const assignNode = {
+			type: "ExprStmt" as const,
+			expr: {
+				type: "AssignExpr" as const,
+				target: {
+					type: "IndexExpr" as const,
+					obj: { type: "Id" as const, name: btName },
+					index: { type: "Literal" as const, value: unitId },
+				},
+				value: result.reassembly,
+			},
+		};
+		assignments.push(emit(assignNode) + ";");
+	}
+
+	return {
+		init: `var ${btName}={};`,
+		fragmentDecls,
+		assignments,
+	};
+}
+
+const BT_SCATTER_LETTERS = "qwrtypsdfghjklzxcvbnm";
+
+/**
+ * Create a name generator for bytecode scatter fragment variables.
+ * Uses '$' prefix + 4 chars to avoid any collision with the assembler's
+ * scattered-keys names (which use '_' prefix + 3 chars).
+ */
+function createBtScatterNameGen(seed: number): () => string {
+	const used = new Set<string>();
+	let s = (seed ^ 0x5ca77e12) >>> 0;
+	return () => {
+		for (let attempt = 0; attempt < 1000; attempt++) {
+			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const c1 = BT_SCATTER_LETTERS[s % 21]!;
+			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const c2 = BT_SCATTER_LETTERS[s % 21]!;
+			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const c3 = BT_SCATTER_LETTERS[s % 21]!;
+			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const c4 = BT_SCATTER_LETTERS[s % 21]!;
+			const name = "$$" + c1 + c2 + c3 + c4;
+			if (!used.has(name)) {
+				used.add(name);
+				return name;
+			}
+		}
+		throw new Error("Bytecode scatter name generator exhausted");
+	};
+}
+
+/**
  * Collect all logical opcodes used across all compiled bytecode units.
  */
 function collectUsedOpcodes(
@@ -778,6 +870,7 @@ function assembleShielded(
 		polymorphicDecoder: boolean;
 		stringAtomization: boolean;
 		scatteredKeys: boolean;
+		bytecodeScattering: boolean;
 		wrapOutput: boolean;
 		preprocessUsedNames: Set<string> | undefined;
 	}
@@ -965,6 +1058,7 @@ function assembleShielded(
 		stringAtomization: opts.stringAtomization,
 		scatteredKeys: opts.scatteredKeys,
 		opcodeMutation: opts.opcodeMutation,
+		bytecodeScattering: opts.bytecodeScattering,
 		alphabet: shieldedAlphabet,
 	});
 
@@ -1026,7 +1120,11 @@ function assembleShielded(
 		sharedTemps,
 		runtimeResult.source,
 		opts.wrapOutput,
-		sharedSeed
+		sharedSeed,
+		// Bytecode scattering disabled in shielded mode — each group already
+		// has unique opcode shuffle + rolling cipher key, providing natural
+		// bytecode diversity without needing fragment scattering.
+		false
 	);
 }
 
@@ -1045,10 +1143,14 @@ function assembleOutputFromParts(
 	temps: TempNames,
 	runtimeSource: string,
 	wrapOutput: boolean,
-	seed: number = 0
+	seed: number = 0,
+	bytecodeScattering = false
 ): string {
 	// Build bytecode table: empty init + individual assignment statements
-	const btParts = buildBtParts(encodedUnits, names.bt);
+	const scatteredBt = bytecodeScattering
+		? buildScatteredBtParts(encodedUnits, names.bt, names.unpack, seed)
+		: null;
+	const btParts = scatteredBt ?? buildBtParts(encodedUnits, names.bt);
 
 	// Collect top-level bindings BEFORE adding runtime statements.
 	const topLevelBindings = collectTopLevelBindings(ast.program.body);
@@ -1063,6 +1165,14 @@ function assembleOutputFromParts(
 		(s) =>
 			parse(s, { sourceType: "script" }).program.body[0]! as t.Statement
 	);
+	// Fragment declarations must appear BEFORE assignments that reference them
+	const btFragNodes = scatteredBt
+		? scatteredBt.fragmentDecls.map(
+				(s) =>
+					parse(s, { sourceType: "script" }).program
+						.body[0]! as t.Statement
+			)
+		: [];
 	const runtimeNode = parse(runtimeSource, { sourceType: "script" }).program
 		.body[0]!;
 	const iifeCall = (runtimeNode as t.ExpressionStatement)
@@ -1088,8 +1198,8 @@ function assembleOutputFromParts(
 		return result;
 	};
 
-	// Insert the bytecode table init at a seeded position in the first
-	// third of the runtime statements — avoids always starting with
+	// Insert the bytecode table init (and fragment declarations for scattering)
+	// in the first third of the runtime statements — avoids always starting with
 	// `var bt = {}` which is a recognizable pattern.
 	const insertBtInit = (stmts: t.Statement[]): t.Statement[] => {
 		const result = [...stmts];
@@ -1097,7 +1207,9 @@ function assembleOutputFromParts(
 		s2 = (s2 * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
 		const maxPos = Math.max(1, Math.floor(result.length / 3));
 		const pos = s2 % maxPos;
-		result.splice(pos, 0, btInitNode as t.Statement);
+		// bt init first, then fragment declarations (order matters:
+		// fragments reference runtime names, assignments reference fragments)
+		result.splice(pos, 0, btInitNode as t.Statement, ...btFragNodes);
 		return result;
 	};
 

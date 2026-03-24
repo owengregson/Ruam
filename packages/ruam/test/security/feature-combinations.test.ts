@@ -157,6 +157,26 @@ describe("feature combinations: 2-feature pairs", () => {
 				polymorphicDecoder: true,
 			},
 		],
+		[
+			"bytecodeScattering alone",
+			{ bytecodeScattering: true },
+		],
+		[
+			"scattering + MBA",
+			{ bytecodeScattering: true, mixedBooleanArithmetic: true },
+		],
+		[
+			"scattering + rollingCipher",
+			{ bytecodeScattering: true, rollingCipher: true },
+		],
+		[
+			"scattering + stringAtom",
+			{
+				bytecodeScattering: true,
+				stringAtomization: true,
+				polymorphicDecoder: true,
+			},
+		],
 	];
 
 	for (const [name, opts] of pairs) {

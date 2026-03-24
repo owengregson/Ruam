@@ -89,12 +89,13 @@ describe("bytecode scattering engine", () => {
 		expect(wrapper()).toBe(encoded);
 	});
 
-	it("produces different fragment types", () => {
+	it("produces different fragment types (string + packed)", () => {
 		// Run multiple seeds and check that we get variety
 		const types = new Set<string>();
 		for (let seed = 0; seed < 50; seed++) {
+			// Use length divisible by 4 to allow packed type
 			const result = scatterBytecodeUnit(
-				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop",
+				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij012345678901",
 				seed,
 				makeNameGen(),
 				new Set(),
@@ -106,7 +107,7 @@ describe("bytecode scattering engine", () => {
 				}
 			}
 		}
-		// Should have string literals and array expressions at minimum
+		// Should have string literals and array expressions (packed ints)
 		expect(types.has("Literal")).toBe(true);
 		expect(types.has("ArrayExpr")).toBe(true);
 	});

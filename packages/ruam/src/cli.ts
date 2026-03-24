@@ -72,6 +72,7 @@ const OPTION_LABELS: Record<string, string> = {
 	scatteredKeys: "Scattered Keys",
 	blockPermutation: "Block Permutation",
 	opcodeMutation: "Opcode Mutation",
+	bytecodeScattering: "Bytecode Scattering",
 };
 
 // --- CLI Argument Types ---
@@ -344,6 +345,9 @@ function parseArgs(argv: string[]): CliArgs {
 			case "--opcode-mutation":
 				result.options.opcodeMutation = true;
 				break;
+			case "--bytecode-scattering":
+				result.options.bytecodeScattering = true;
+				break;
 			case "--target":
 				result.options.target = nextArg(arg) as TargetEnvironment;
 				break;
@@ -513,6 +517,11 @@ function printHelp(version: string): void {
 		`    ${f(
 			"--opcode-mutation"
 		)}       Runtime handler table mutations`
+	);
+	console.log(
+		`    ${f(
+			"--bytecode-scattering"
+		)}   Scatter bytecode into mixed-type fragments`
 	);
 	console.log();
 
@@ -728,6 +737,7 @@ async function runInteractive(version: string): Promise<void> {
 			{ name: "Scattered Keys", value: "scatteredKeys" },
 			{ name: "Block Permutation", value: "blockPermutation" },
 			{ name: "Opcode Mutation", value: "opcodeMutation" },
+			{ name: "Bytecode Scattering", value: "bytecodeScattering" },
 			],
 		});
 		for (const opt of selected) {

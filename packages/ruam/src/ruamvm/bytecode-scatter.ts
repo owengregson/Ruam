@@ -102,12 +102,13 @@ export function scatterBytecodeUnit(
 		state = lcgNext(state);
 		const name = nameGen();
 
-		// Choose type — but only allow packed for parts with length divisible by 4
-		// (or we'd need padding which complicates reassembly)
-		let fragType = (state >>> 16) % FRAG_TYPE_COUNT;
+		// Choose between String and Packed representations.
+		// CharCodes (fromCharCode.apply) is avoided — Babel parse→generate
+		// round-trips can subtly alter numeric array representations.
+		let fragType: FragType =
+			(state >>> 16) % 2 === 0 ? FragType.String : FragType.Packed;
 		if (fragType === FragType.Packed && part.length % 4 !== 0) {
-			// Fall back to charCodes
-			fragType = FragType.CharCodes;
+			fragType = FragType.String;
 		}
 
 		switch (fragType as FragType) {
