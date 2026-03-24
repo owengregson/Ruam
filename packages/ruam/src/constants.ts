@@ -231,6 +231,20 @@ export const AVALANCHE_CONSTANT = 0x45d9f3b;
  */
 export const WATERMARK_MAGIC = 0x2812af9a;
 
+// --- Observation Resistance Corruption Fallbacks ---
+// Used when a deriveSeed-based corruption constant happens to be 0.
+// Each observation resistance mechanism has its own fallback to avoid
+// accidental zero-XOR (which would be a no-op, negating the corruption).
+
+/** Fallback corruption constant for function identity binding. */
+export const OR_CORRUPT_IDENTITY = 0xdeadbeef;
+/** Fallback corruption constant for monotonic witness counter. */
+export const OR_CORRUPT_WITNESS = 0xbaadf00d;
+/** Fallback corruption constant for WeakMap canary. */
+export const OR_CORRUPT_CANARY = 0xcafebabe;
+/** Fallback corruption constant for stack integrity probe. */
+export const OR_CORRUPT_PROBE = 0xfeedface;
+
 // --- Binary Format Type Tags ---
 // Shared between encode.ts (build-time) and deserializer.ts (runtime).
 

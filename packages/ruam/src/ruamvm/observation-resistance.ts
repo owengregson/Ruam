@@ -42,7 +42,14 @@ import {
 	UOp,
 } from "./nodes.js";
 import type { NameRegistry } from "../naming/registry.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import {
+	LCG_MULTIPLIER,
+	LCG_INCREMENT,
+	OR_CORRUPT_IDENTITY,
+	OR_CORRUPT_WITNESS,
+	OR_CORRUPT_CANARY,
+	OR_CORRUPT_PROBE,
+} from "../constants.js";
 
 // --- Candidate Functions ---
 
@@ -156,13 +163,13 @@ export function buildIdentityBindings(
 		const refName = nameGen
 			? nameGen()
 			: temps["_orRef"]
-				? `${temps["_orRef"]}${i}`
-				: `_orRef${i}`;
+			? `${temps["_orRef"]}${i}`
+			: `_orRef${i}`;
 
 		// Per-build corruption constant via deriveSeed
 		const corruptSeed = deriveSeed(seed, `orCorruption_${i}`);
 		// Use the full 32-bit value, ensure non-zero
-		const corruptConst = (corruptSeed || 0xdeadbeef) >>> 0;
+		const corruptConst = (corruptSeed || OR_CORRUPT_IDENTITY) >>> 0;
 
 		refNames.push(refName);
 		funcNames.push(funcName);
@@ -185,21 +192,22 @@ export function buildIdentityBindings(
 
 	for (let i = 0; i < selected.length; i++) {
 		verifyBody.push(
-			ifStmt(
-				bin(BOp.Sneq, id(refNames[i]!), id(funcNames[i]!)),
-				[
-					exprStmt(
-						assign(
-							id("c"),
+			ifStmt(bin(BOp.Sneq, id(refNames[i]!), id(funcNames[i]!)), [
+				exprStmt(
+					assign(
+						id("c"),
+						bin(
+							BOp.Ushr,
 							bin(
-								BOp.Ushr,
-								bin(BOp.BitXor, id("c"), L(corruptionConstants[i]!)),
-								lit(0)
-							)
+								BOp.BitXor,
+								id("c"),
+								L(corruptionConstants[i]!)
+							),
+							lit(0)
 						)
-					),
-				]
-			)
+					)
+				),
+			])
 		);
 	}
 
@@ -259,7 +267,7 @@ export function buildWitnessCounter(
 
 	// Per-build corruption constant
 	const corruptSeed = deriveSeed(seed, "witnessCorrupt");
-	const corruptConst = (corruptSeed || 0xbaadf00d) >>> 0;
+	const corruptConst = (corruptSeed || OR_CORRUPT_WITNESS) >>> 0;
 
 	const declarations: JsNode[] = [
 		varDecl(orW, lit(0)),
@@ -343,7 +351,7 @@ export function buildWeakMapCanary(
 
 	// Per-build corruption constant
 	const corruptSeed = deriveSeed(seed, "canaryCorrupt");
-	const corruptConst = (corruptSeed || 0xcafebabe) >>> 0;
+	const corruptConst = (corruptSeed || OR_CORRUPT_CANARY) >>> 0;
 
 	const declarations: JsNode[] = [
 		// var _orRef = {};
@@ -351,9 +359,7 @@ export function buildWeakMapCanary(
 		// var _orExp = new WeakMap();
 		varDecl(canaryWm, newExpr(id("WeakMap"), [])),
 		// _orExp.set(_orRef, true);
-		exprStmt(
-			call(member(id(canaryWm), "set"), [id(canaryRef), lit(true)])
-		),
+		exprStmt(call(member(id(canaryWm), "set"), [id(canaryRef), lit(true)])),
 	];
 
 	return {
@@ -413,7 +419,7 @@ export function buildStackProbe(
 
 	// Per-build corruption constant
 	const corruptSeed = deriveSeed(seed, "probeCorrupt");
-	const corruptConst = (corruptSeed || 0xfeedface) >>> 0;
+	const corruptConst = (corruptSeed || OR_CORRUPT_PROBE) >>> 0;
 
 	return {
 		probeStmts: () => [
@@ -448,4 +454,3 @@ export function buildStackProbe(
 		],
 	};
 }
-
