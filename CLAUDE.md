@@ -4,10 +4,19 @@ JS VM obfuscator — compiles JavaScript functions into custom bytecode executed
 
 ## Quick Reference
 
--   **Build**: `npm run build` (tsup, ESM-only)
--   **Typecheck**: `npm run typecheck` (tsc --noEmit)
--   **Test**: `npm run test` (vitest, 1913 tests)
--   **Test watch**: `npm run test:watch`
+-   **Package manager**: `bun` (bun workspaces)
+-   **Build all**: `bun run build` (lib + worker + website)
+-   **Build lib only**: `bun run build:lib` (tsup, ESM-only)
+-   **Build worker**: `bun run build:worker` (esbuild + manifest generation)
+-   **Build website**: `bun run build:web` (Next.js static export)
+-   **Typecheck**: `bun run typecheck` (tsc --noEmit)
+-   **Test**: `bun run test` (bun:test, 2095 tests)
+-   **Test watch**: `bun run test:watch`
+-   **Dev server**: `bun run dev` (Next.js dev)
+-   **Stats**: `bun run stats`
+-   **Clean**: `bun run clean` (remove dist, .next, caches)
+-   **Fresh build**: `bun run build:fresh` (clean + build)
+-   **Fresh test**: `bun run test:fresh` (clean + test)
 -   **Node**: >= 18, **Module**: ESM (`"type": "module"`)
 
 ## Project Structure
@@ -21,6 +30,8 @@ src/
   constants.ts              Shared constants (parser plugins, globals list, limits, hash/mixing constants, binary tags)
   babel-compat.ts           Babel ESM/CJS compatibility layer (normalized traverse/generate exports)
   presets.ts                Preset definitions (low/medium/max) + resolveOptions()
+  tuning.ts                 Centralized tuning parameters: TuningProfile, getTuningProfile(intensity)
+  option-meta.ts            Single source of truth for option metadata (labels, categories, CLI flags)
   preprocess.ts             Optional identifier renaming
   structural-choices.ts     Per-build structural variation: dispatch/return polymorphism, statement shuffling, expression noise
   browser-entry.ts          Browser ESM entry point (re-exports obfuscateCode, presets, types)
@@ -71,6 +82,7 @@ src/
     polymorphic-decoder.ts  Per-build decoder chain generator (4-8 reversible byte ops: xor, add, sub, not, rol, ror, swap_nibbles)
     scattered-keys.ts       Key material fragmentation across IIFE tiers (3-5 string fragments, 2-4 array chunks)
     string-atomization.ts   String literal atomization: collects, encodes, replaces with indexed table lookups
+    bytecode-scatter.ts     Bytecode scattering: splits encoded strings into heterogeneous fragment types
     builders/
       interpreter.ts        Interpreter builder: assembles sync/async exec from handler registry
       loader.ts             Bytecode loader (binary-only: customDecode → RC4 → deser), cache, depth tracking
@@ -82,6 +94,7 @@ src/
       debug-protection.ts   Multi-layered anti-debugger (3 detection layers + escalating response)
       debug-logging.ts      Debug trace infrastructure
       globals.ts            Global exposure (globalThis binding)
+      unpack.ts             Packed-integer to string decoder for bytecode scattering
     handlers/
       registry.ts           Handler registry (Map<Op, HandlerFn>), HandlerCtx type, makeHandlerCtx
       helpers.ts            Shared handler helpers (buildThisBoxing, debugTrace, superProto, etc.)
@@ -138,7 +151,7 @@ docs/
 -   **Rolling cipher** (`rollingCipher` option): Position-dependent XOR encryption on every instruction. The master key is derived implicitly from bytecode metadata (instruction count, register count, param count, constant count) via FNV-1a, then XOR'd with the key anchor (closure-entangled with the handler table). No plaintext seed appears in the output. Each instruction is encrypted with `mixState(baseKey, index, index ^ 0x9E3779B9)`. Implemented in `encoding/rolling-cipher.ts` (build-time) and `ruamvm/builders/rolling-cipher.ts` (runtime). When enabled, string encoding also uses the implicit key.
 -   **Integrity binding** (`integrityBinding` option): A per-build hash (FNV-1a of the interpreter template source) is XOR-folded into the key anchor (`_ka = (_ka ^ integrityHash) >>> 0`) instead of stored as a standalone variable. If an attacker modifies the interpreter, the key anchor changes, and all instruction decryption produces garbage. No longer a greppable `var _x = digits^` pattern. Requires `rollingCipher`.
 -   **VM Shielding** (`vmShielding` option): Each root function gets its own micro-interpreter with unique opcode shuffle, identifier names, and rolling cipher key. A shared router function maps unit IDs to group dispatch functions. Shared infrastructure (cache, fingerprint, deserializer) is emitted once. Auto-enables `rollingCipher`. Implemented in `transform.ts` (`assembleShielded()`), `ruamvm/assembler.ts` (`generateShieldedVmRuntime()`), `encoding/names.ts` (`generateShieldedNames()`), and `ruamvm/builders/runners.ts` (`buildRouterSource()`).
--   **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes, string atomization, polymorphic decoder, scattered keys), `max` (+debug protection, integrity binding, dead code, stack encoding, VM shielding, MBA, handler fragmentation, block permutation, opcode mutation). Defined in `presets.ts`.
+-   **Presets**: `low` (VM only), `medium` (+preprocess, encrypt, rolling cipher, decoy/dynamic opcodes, string atomization, polymorphic decoder, scattered keys, bytecode scattering), `max` (+debug protection, integrity binding, dead code, stack encoding, VM shielding, MBA, handler fragmentation, block permutation, opcode mutation). Defined in `presets.ts`.
 -   **VM recursion limit**: 500 (`VM_MAX_RECURSION_DEPTH` in `constants.ts`)
 -   `obfuscateCode()` is synchronous; `obfuscateFile()` and `runVmObfuscation()` are async
 -   **Home object (`[[HomeObject]]`)**: Class methods get `fn._ho = target` stamped at define-time. The home object is passed through the VM dispatch chain (`_vm.call` → `exec`) so `super` resolves correctly in multi-level inheritance. `GET_SUPER_PROP`, `SET_SUPER_PROP`, `CALL_SUPER_METHOD`, `SUPER_CALL` all use `Object.getPrototypeOf(homeObject)` when available.
@@ -153,6 +166,9 @@ docs/
 -   **Scattered keys** (`scatteredKeys` option): Key materials (alphabet string, handler table data, decoder keys) are split into 3-5 fragments scattered across IIFE scope tiers (tier0–tier4). Fragments are reassembled via per-build random strategies (concat, array.join, spread). Forces attackers to trace the full closure chain to recover key material. Implemented in `ruamvm/scattered-keys.ts`.
 -   **Block permutation** (`blockPermutation` option): Identifies basic blocks in each bytecode unit and shuffles their order via Fisher-Yates. The entry block (IP 0) stays in place; all other blocks are permuted. Explicit JMP instructions are inserted for fall-through blocks. All jump targets, exception table entries, and jump table entries are rewritten to new positions. Zero runtime overhead. Implemented in `compiler/block-permutation.ts`.
 -   **Opcode mutation** (`opcodeMutation` option): MUTATE opcodes are inserted into bytecode at pseudo-random intervals (every 20-50 instructions). Each MUTATE performs 4 deterministic LCG-driven swaps on the handler table at runtime, so the same physical opcode byte executes different handlers at different execution points. Mutations are cumulative — each builds on the previous state. Makes static disassembly impossible. Auto-enables `rollingCipher` (entangled key derivation). Implemented in `compiler/opcode-mutation.ts` (insertion) and `ruamvm/handlers/mutation.ts` (runtime handler).
+-   **Bytecode scattering** (`bytecodeScattering` option, `--bytecode-scattering` CLI): Splits each encoded bytecode string into 2-6 heterogeneous fragments — plain string literals, packed 32-bit integer arrays, or char code arrays. Fragments are scattered throughout the output as individual `var` declarations. The reassembly expression concatenates them back at runtime. An `unpack` function (AST-built, goes through `obfuscateLocals`/MBA/structural transforms) converts packed int arrays to strings. Uses `$$xxxx` variable names to avoid collisions with scattered-keys names. Disabled in vmShielding mode (each group already has unique bytecode). Implemented in `ruamvm/bytecode-scatter.ts` (fragment engine), `ruamvm/builders/unpack.ts` (unpack builder), and `transform.ts` (`buildScatteredBtParts`).
+-   **Centralized tuning** (`tuning.ts`): A `TuningProfile` interface maps ~20 numeric parameters (mutation intervals, fragment counts, decoder chain lengths, dead code probability, etc.) from three intensity levels (0=conservative, 1=moderate, 2=aggressive) derived from the preset. Modules import from `tuning.ts` instead of hardcoding magic numbers.
+-   **Option manifest** (`option-meta.ts` + `scripts/generate-manifest.mjs`): Single source of truth for option metadata (labels, categories, descriptions, CLI flags). Build-time script generates `dist/option-manifest.json` consumed by the website. Adding a new option only requires updating `option-meta.ts` and `presets.ts` — the website picks it up automatically after rebuild.
 -   **Conditional async emit**: When no compiled units are async (`hasAsyncUnits = false`), the full async interpreter is skipped entirely. Instead, a simple alias `var execAsync = exec` is emitted (dead-code-path safety). Saves ~46% output size for sync-only code. When both interpreters are needed, they use different handler group counts (e.g., sync=4 groups, async=3 groups via `asyncGroupOffset`) for structural differentiation. Implemented in `ruamvm/builders/interpreter.ts` (`buildInterpreterFunctions`), wired through `ruamvm/assembler.ts` and `transform.ts`.
 -   **Natural function stubs**: Compiled function bodies use rest parameters (`...args`) instead of `Array.prototype.slice.call(arguments)`. Regular functions call `vm(id, args, scope, this)` directly instead of `vm.call(this, id, args, scope)` — this-boxing is handled inside the `vm()` dispatch function (guarded by `TV !== void 0` so closures calling `exec` directly are unaffected). A decoy body statement (`var _n = __args.length | 0`) breaks the bare one-liner pattern. Arrow functions omit `this` from the dispatch call. Implemented in `transform.ts` (`replaceFunctionBody`) and `ruamvm/builders/runners.ts` (this-boxing in `buildRunners`).
 -   **Target environment** (`target` option, `--target` CLI): Controls environment-specific output settings. Three targets: `"node"` (Node.js CJS/ESM), `"browser"` (plain `<script>` tags, default), `"browser-extension"` (Chrome extension MAIN world — wraps output in IIFE to avoid TrustedScript CSP errors on pages with `require-trusted-types-for 'script'`). Target defaults can be overridden by explicit options. Not included in presets — set independently.
