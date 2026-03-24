@@ -32,7 +32,8 @@ import {
 } from "./ruamvm/assembler.js";
 import type { ShieldingGroup, VmRuntimeResult } from "./ruamvm/assembler.js";
 import type { RuntimeNames, TempNames } from "./naming/compat-types.js";
-import { setupRegistry, setupShieldedRegistry } from "./naming/index.js";
+import { setupRegistry, setupShieldedRegistry, deriveSeed } from "./naming/index.js";
+import type { NameRegistry } from "./naming/index.js";
 import { resolveOptions } from "./presets.js";
 import type { ResolvedOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
@@ -136,6 +137,7 @@ export function obfuscateCode(
 
 	// -- Generate randomized runtime identifiers + alphabet via NameRegistry --
 	const {
+		registry,
 		runtime: names,
 		temps,
 		alphabet,
@@ -273,6 +275,7 @@ export function obfuscateCode(
 		alphabet,
 		hasAsyncUnits,
 		structuralChoices,
+		registry,
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
@@ -299,7 +302,8 @@ export function obfuscateCode(
 		runtimeResult.source,
 		wrapOutput,
 		shuffleSeed,
-		bytecodeScattering
+		bytecodeScattering,
+		registry
 	);
 }
 
@@ -748,18 +752,21 @@ function buildScatteredBtParts(
 	btName: string,
 	unpackName: string,
 	seed: number,
-	tuning?: Readonly<TuningProfile>
+	tuning?: Readonly<TuningProfile>,
+	registry?: NameRegistry
 ): { init: string; fragmentDecls: string[]; assignments: string[] } {
-	// Use a dedicated name generator with '$' prefix to avoid colliding
-	// with scattered-keys names (which use '_' prefix)
-	const nameGen = createBtScatterNameGen(seed);
+	// Use registry dynamic generator for collision-free naming,
+	// or fall back to a standalone generator if no registry is available.
+	const nameGen = registry
+		? registry.createDynamicGenerator("btScatter")
+		: createBtScatterNameGenFallback(seed);
 	const fragmentDecls: string[] = [];
 	const assignments: string[] = [];
 
 	for (const [unitId, { encoded }] of units) {
 		const result = scatterBytecodeUnit(
 			encoded,
-			seed ^ unitId.length,
+			deriveSeed(seed, `btUnit:${unitId}`),
 			nameGen,
 			new Set(),
 			unpackName,
@@ -795,27 +802,28 @@ function buildScatteredBtParts(
 	};
 }
 
-const BT_SCATTER_LETTERS = "qwrtypsdfghjklzxcvbnm";
-
 /**
- * Create a name generator for bytecode scatter fragment variables.
- * Uses '$' prefix + 4 chars to avoid any collision with the assembler's
- * scattered-keys names (which use '_' prefix + 3 chars).
+ * Fallback bytecode scatter name generator for when no NameRegistry is available.
+ * Uses deriveSeed() for PRNG isolation instead of ad-hoc XOR constants.
+ *
+ * @deprecated Callers should pass a NameRegistry instead.
  */
-function createBtScatterNameGen(seed: number): () => string {
+function createBtScatterNameGenFallback(seed: number): () => string {
+	const ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	const ALNUM =
+		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	const used = new Set<string>();
-	let s = (seed ^ 0x5ca77e12) >>> 0;
+	let s = deriveSeed(seed, "btScatter");
 	return () => {
 		for (let attempt = 0; attempt < 1000; attempt++) {
 			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const c1 = BT_SCATTER_LETTERS[s % 21]!;
+			const len = 3 + (s % 3);
 			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const c2 = BT_SCATTER_LETTERS[s % 21]!;
-			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const c3 = BT_SCATTER_LETTERS[s % 21]!;
-			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const c4 = BT_SCATTER_LETTERS[s % 21]!;
-			const name = "$$" + c1 + c2 + c3 + c4;
+			let name = ALPHA[s % ALPHA.length]!;
+			for (let i = 1; i < len; i++) {
+				s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+				name += ALNUM[s % ALNUM.length]!;
+			}
 			if (!used.has(name)) {
 				used.add(name);
 				return name;
@@ -903,6 +911,7 @@ function assembleShielded(
 
 	// Generate names: shared + per-group via NameRegistry
 	const {
+		registry: shieldedRegistry,
 		shared: sharedNames,
 		sharedTemps,
 		groups: groupNameSets,
@@ -1082,6 +1091,7 @@ function assembleShielded(
 		opcodeMutation: opts.opcodeMutation,
 		bytecodeScattering: opts.bytecodeScattering,
 		alphabet: shieldedAlphabet,
+		registry: shieldedRegistry,
 	});
 
 	// --- Phase 3: Encode all units (using per-group key anchors) ---
@@ -1166,11 +1176,12 @@ function assembleOutputFromParts(
 	runtimeSource: string,
 	wrapOutput: boolean,
 	seed: number = 0,
-	bytecodeScattering = false
+	bytecodeScattering = false,
+	registry?: NameRegistry
 ): string {
 	// Build bytecode table: empty init + individual assignment statements
 	const scatteredBt = bytecodeScattering
-		? buildScatteredBtParts(encodedUnits, names.bt, names.unpack, seed)
+		? buildScatteredBtParts(encodedUnits, names.bt, names.unpack, seed, undefined, registry)
 		: null;
 	const btParts = scatteredBt ?? buildBtParts(encodedUnits, names.bt);
 
@@ -1201,18 +1212,31 @@ function assembleOutputFromParts(
 		.expression as t.CallExpression;
 	const iifeFn = iifeCall.callee as t.FunctionExpression;
 
-	// Scatter unit assignments among runtime statements using seeded positions
+	// Scatter unit assignments among runtime statements using seeded positions.
+	// Assignments may reference runtime functions (e.g. `unpack` for bytecode
+	// scattering), so they must be placed AFTER all runtime declarations.
 	const scatterStatements = (base: t.Statement[]): t.Statement[] => {
 		if (btAssignNodes.length === 0) return base;
 
-		// Insert assignments at evenly-distributed positions with seeded jitter
 		const result = [...base];
+
+		// Find the safe insertion floor: after the last var/function declaration
+		// in the runtime statements. This guarantees all runtime infrastructure
+		// (including unpack, string decoder, etc.) is defined before any
+		// bytecode assignment that may reference them.
+		let lastDeclIdx = 0;
+		for (let j = 0; j < result.length; j++) {
+			const st = result[j]!;
+			if (st.type === "VariableDeclaration" || st.type === "FunctionDeclaration") {
+				lastDeclIdx = j;
+			}
+		}
+		const safeFloor = lastDeclIdx + 1;
+
 		let s = seed >>> 0;
 		for (let i = 0; i < btAssignNodes.length; i++) {
 			s = (s * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
-			// Insert in the second half of the runtime statements
-			// (after variable declarations but before user code)
-			const minPos = Math.max(1, Math.floor(result.length / 3));
+			const minPos = Math.max(safeFloor, Math.floor(result.length / 3));
 			const maxPos = result.length;
 			const pos = minPos + (s % Math.max(1, maxPos - minPos));
 			result.splice(pos, 0, btAssignNodes[i]!);
@@ -1225,7 +1249,7 @@ function assembleOutputFromParts(
 	// `var bt = {}` which is a recognizable pattern.
 	const insertBtInit = (stmts: t.Statement[]): t.Statement[] => {
 		const result = [...stmts];
-		let s2 = (seed ^ 0xa5a5a5a5) >>> 0;
+		let s2 = deriveSeed(seed, "btInit");
 		s2 = (s2 * LCG_MULTIPLIER + LCG_INCREMENT) >>> 0;
 		const maxPos = Math.max(1, Math.floor(result.length / 3));
 		const pos = s2 % maxPos;

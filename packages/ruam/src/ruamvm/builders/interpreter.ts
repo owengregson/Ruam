@@ -57,6 +57,7 @@ import {
 	LCG_INCREMENT,
 	WATERMARK_MAGIC,
 } from "../../constants.js";
+import { deriveSeed } from "../../naming/scope.js";
 import { obfuscateLocals } from "../transforms.js";
 import { applyMBA } from "../mba.js";
 import { fragmentCases } from "../handler-fragmentation.js";
@@ -759,7 +760,7 @@ function buildExecFunction(
 	// (they contain handler-local variables like `name`, `val`, etc.)
 	let iifeDecls = ftResult.iifeDecls;
 	if (hoistHandlers && iifeDecls.length > 0) {
-		iifeDecls = obfuscateLocals(iifeDecls, opts.seed ^ 0x1234, reserved);
+		iifeDecls = obfuscateLocals(iifeDecls, deriveSeed(opts.seed, "iifeLocals"), reserved);
 	}
 
 	return { fnNode: obfuscated!, iifeDecls };

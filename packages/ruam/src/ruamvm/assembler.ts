@@ -59,6 +59,8 @@ import {
 } from "./polymorphic-decoder.js";
 import { atomizeStrings } from "./string-atomization.js";
 import { scatterKeyMaterials } from "./scattered-keys.js";
+import type { NameRegistry } from "../naming/registry.js";
+import { deriveSeed } from "../naming/scope.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 /** Result from generating the VM runtime. */
@@ -109,6 +111,8 @@ export function generateVmRuntime(options: {
 	hasAsyncUnits?: boolean;
 	/** Per-build structural variation choices. */
 	structuralChoices?: StructuralChoices;
+	/** NameRegistry for dynamic name generation (scatter/btScatter). */
+	registry?: NameRegistry;
 }): VmRuntimeResult {
 	const {
 		opcodeShuffleMap,
@@ -137,6 +141,7 @@ export function generateVmRuntime(options: {
 		alphabet,
 		hasAsyncUnits = true,
 		structuralChoices,
+		registry,
 	} = options;
 
 	// Create constant splitter — replaces well-known numeric literals with
@@ -193,7 +198,9 @@ export function generateVmRuntime(options: {
 		// All fragments go to tiers 0 and 1 (before the reassembly).
 		// The reassembly + binary decoder rest go after tier 1 but before
 		// tier 2 so the decode function is available for the loader.
-		const scatterNameGen = createScatterNameGen(seed);
+		const scatterNameGen = registry
+			? registry.createDynamicGenerator("scatter")
+			: createScatterNameGenFallback(seed);
 		const scattered = scatterKeyMaterials(
 			[{ name: names.alpha, value: alphabet, type: "string" }],
 			scatterNameGen,
@@ -376,7 +383,7 @@ export function generateVmRuntime(options: {
 
 	// --- String atomization: replace string literals with table lookups ---
 	if (stringAtomization) {
-		const atomChain = generateDecoderChain(seed ^ 0x5a5a5a5a);
+		const atomChain = generateDecoderChain(deriveSeed(seed, "atomization"));
 		const atomResult = atomizeStrings(nodes, atomChain, {
 			decoder: names.polyDec,
 			posSeed: names.polyPosSeed,
@@ -474,6 +481,8 @@ export function generateShieldedVmRuntime(options: {
 	bytecodeScattering?: boolean;
 	/** Shuffled 64-char alphabet for custom binary encoding. */
 	alphabet: string;
+	/** NameRegistry for dynamic name generation. */
+	registry?: NameRegistry;
 }): ShieldedVmRuntimeResult {
 	const {
 		groups,
@@ -493,6 +502,7 @@ export function generateShieldedVmRuntime(options: {
 		opcodeMutation = false,
 		bytecodeScattering = false,
 		alphabet,
+		registry,
 	} = options;
 
 	// Shared constant splitter for shared builders (fingerprint, decoder)
@@ -537,9 +547,9 @@ export function generateShieldedVmRuntime(options: {
 	const shieldedBinDecNodes = buildBinaryDecoderSource(sharedNames, alphabet);
 	if (scatteredKeys) {
 		// Scatter the alphabet string: all fragments first, then reassembly
-		const shieldedScatterGen = createScatterNameGen(
-			groups[0]?.seed ?? 0x12345678
-		);
+		const shieldedScatterGen = registry
+			? registry.createDynamicGenerator("shieldedScatter")
+			: createScatterNameGenFallback(groups[0]?.seed ?? 0x12345678);
 		const shieldedScattered = scatterKeyMaterials(
 			[{ name: sharedNames.alpha, value: alphabet, type: "string" }],
 			shieldedScatterGen,
@@ -703,7 +713,7 @@ export function generateShieldedVmRuntime(options: {
 	let finalShieldedNodes = nodes;
 	if (stringAtomization) {
 		const atomChain = generateDecoderChain(
-			(groups[0]?.seed ?? 0x12345678) ^ 0x5a5a5a5a
+			deriveSeed(groups[0]?.seed ?? 0x12345678, "shieldedAtomization")
 		);
 		const atomResult = atomizeStrings(finalShieldedNodes, atomChain, {
 			decoder: sharedNames.polyDec,
@@ -730,29 +740,28 @@ export function generateShieldedVmRuntime(options: {
 
 // --- Helpers ---
 
-/** Letters used for scatter name generation. */
-const SCATTER_LETTERS = "etnoiasuclfdphmgvbwykxjqz";
-
 /**
- * Create a simple LCG-based name generator for scattered key fragment
- * variable names. Returns underscore-prefixed 4-char names, guaranteed
- * unique via an internal used set.
+ * Fallback scatter name generator for when no NameRegistry is available.
+ * Uses deriveSeed() for PRNG isolation instead of ad-hoc XOR constants.
  *
- * @param seed - Per-build seed
- * @returns A name generator function
+ * @deprecated Callers should pass a NameRegistry instead.
  */
-export function createScatterNameGen(seed: number): () => string {
+function createScatterNameGenFallback(seed: number): () => string {
+	const ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	const ALNUM =
+		"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 	const used = new Set<string>();
-	let s = (seed ^ 0xfeed4321) >>> 0;
+	let s = deriveSeed(seed, "scatter");
 	return () => {
 		for (let attempt = 0; attempt < 1000; attempt++) {
 			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const c1 = SCATTER_LETTERS[s % 25]!;
+			const len = 3 + (s % 2);
 			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const c2 = SCATTER_LETTERS[s % 25]!;
-			s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-			const c3 = SCATTER_LETTERS[s % 25]!;
-			const name = "_" + c1 + c2 + c3;
+			let name = ALPHA[s % ALPHA.length]!;
+			for (let i = 1; i < len; i++) {
+				s = (Math.imul(s, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+				name += ALNUM[s % ALNUM.length]!;
+			}
 			if (!used.has(name)) {
 				used.add(name);
 				return name;

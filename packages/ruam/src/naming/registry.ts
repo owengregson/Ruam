@@ -124,6 +124,74 @@ export class NameRegistry {
 		return count;
 	}
 
+	/**
+	 * Create a dynamic name generator for on-demand identifier allocation.
+	 *
+	 * Unlike `createScope()` + `claim()` + `resolveAll()`, this returns a
+	 * `() => string` closure that generates collision-free names one at a
+	 * time — suitable for systems where the number of names is not known
+	 * until build time (e.g. bytecode scattering, scattered keys).
+	 *
+	 * Uses the registry's global used-name set for collision avoidance,
+	 * and `deriveSeed()` for PRNG isolation.
+	 *
+	 * Must be called after `resolveAll()`.
+	 *
+	 * @param scopeId - Descriptive identifier for seed derivation
+	 * @param lengthTier - Name length range (default "medium")
+	 */
+	createDynamicGenerator(
+		scopeId: string,
+		lengthTier: LengthTier = "medium"
+	): () => string {
+		if (!this._resolved) {
+			throw new Error(
+				"createDynamicGenerator() requires resolveAll() first"
+			);
+		}
+		const LENGTH_RANGES: Record<LengthTier, readonly [number, number]> = {
+			short: [2, 3],
+			medium: [3, 4],
+			long: [4, 5],
+		};
+		const ALPHA = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		const ALNUM =
+			"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+		const [minLen, maxLen] = LENGTH_RANGES[lengthTier];
+		let state = deriveSeed(this._seed, scopeId);
+		const globalUsed = this._globalUsed;
+		let lengthBump = 0;
+		const MAX_RETRIES = 50;
+
+		return () => {
+			let retries = 0;
+			for (;;) {
+				state = (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+				const effectiveMin = minLen + lengthBump;
+				const effectiveMax = Math.max(maxLen + lengthBump, effectiveMin);
+				const len =
+					effectiveMin +
+					(state % (effectiveMax - effectiveMin + 1));
+				state = (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+				let name = ALPHA[state % ALPHA.length]!;
+				for (let i = 1; i < len; i++) {
+					state =
+						(Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+					name += ALNUM[state % ALNUM.length]!;
+				}
+				if (!globalUsed.has(name)) {
+					globalUsed.add(name);
+					return name;
+				}
+				retries++;
+				if (retries > MAX_RETRIES) {
+					lengthBump++;
+					retries = 0;
+				}
+			}
+		};
+	}
+
 	// --- Private ---
 
 	private _resolveScope(scope: NameScope): void {

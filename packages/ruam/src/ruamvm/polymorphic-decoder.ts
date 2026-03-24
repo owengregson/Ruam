@@ -34,6 +34,7 @@ import {
 	arr,
 } from "./nodes.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import { deriveSeed } from "../naming/scope.js";
 
 // --- Operation types ---
 
@@ -77,7 +78,7 @@ const MAX_CHAIN_LEN = 8;
  * @returns A decoder chain with 4-8 operations
  */
 export function generateDecoderChain(seed: number): DecoderChain {
-	let state = (seed ^ 0xa5a5a5a5) >>> 0;
+	let state = deriveSeed(seed, "polyDecChain");
 
 	const nextByte = (): number => {
 		state = lcgNext(state);

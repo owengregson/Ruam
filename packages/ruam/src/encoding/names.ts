@@ -13,6 +13,7 @@
  */
 
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import { deriveSeed } from "../naming/scope.js";
 import { RESERVED } from "../ruamvm/transforms.js";
 
 /**
@@ -456,7 +457,7 @@ function createNameGenerator(seed: number, externalUsed?: Set<string>) {
 	// Prefixed names (`_et`, `$et`) can never collide with the pool
 	// (which is lowercase-only) or handler locals (alpha+alnum only),
 	// making this approach collision-safe by construction.
-	let variantState = (seed ^ 0x4a3b2c1d) >>> 0;
+	let variantState = deriveSeed(seed, "nameVariant");
 	function variantLcg(): number {
 		variantState =
 			(Math.imul(variantState, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;

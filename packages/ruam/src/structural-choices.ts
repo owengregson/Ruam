@@ -10,6 +10,7 @@
  */
 
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "./constants.js";
+import { deriveSeed } from "./naming/scope.js";
 
 // --- Public interfaces ---
 
@@ -121,17 +122,15 @@ export const TIER_4_MAX = 3;
 /**
  * Generate all structural choices from a build seed.
  *
- * Uses a separate LCG stream (seeded from `seed ^ 0xDEADBEEF`) so it
- * doesn't perturb the existing opcode-shuffle / name-generation PRNG
- * sequences. Existing builds that don't use structural choices are
- * unaffected.
+ * Uses a separate LCG stream (seeded via deriveSeed) so it doesn't
+ * perturb the existing opcode-shuffle / name-generation PRNG sequences.
  *
  * @param seed - The per-build CSPRNG seed (same as opcode shuffle seed).
  * @returns A frozen {@link StructuralChoices} object.
  */
 export function generateStructuralChoices(seed: number): StructuralChoices {
 	// Separate LCG stream so we don't alter existing PRNG sequences
-	let state = (seed ^ 0xdeadbeef) >>> 0;
+	let state = deriveSeed(seed, "structural");
 	function lcg(): number {
 		state = (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
 		return state;

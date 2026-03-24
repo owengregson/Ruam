@@ -12,6 +12,7 @@
 import type { JsNode } from "./nodes.js";
 import { id, lit, bin, varDecl, arr, call, member, index, BOp } from "./nodes.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import { deriveSeed } from "../naming/scope.js";
 
 // --- LCG helper ---
 
@@ -49,7 +50,7 @@ export interface ScatterResult {
  *
  * @param encoded   - The encoded bytecode string to scatter
  * @param seed      - Per-build seed for deterministic LCG choices
- * @param nameGen   - Name generator function (from createScatterNameGen)
+ * @param nameGen   - Name generator function (from NameRegistry.createDynamicGenerator)
  * @param excluded  - Set of names to avoid (currently unused — nameGen handles collisions)
  * @param unpackName - Runtime name of the unpack function
  * @param minFragments - Minimum fragment count (default 2)
@@ -65,7 +66,7 @@ export function scatterBytecodeUnit(
 	minFragments = 2,
 	maxFragments = 6
 ): ScatterResult {
-	let state = (seed ^ 0xbcbc1234) >>> 0;
+	let state = deriveSeed(seed, "btScatterFrag");
 
 	// Short strings: no split
 	if (encoded.length < 8) {

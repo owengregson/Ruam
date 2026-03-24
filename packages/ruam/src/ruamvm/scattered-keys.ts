@@ -28,6 +28,7 @@ import {
 	arr,
 } from "./nodes.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import { deriveSeed } from "../naming/scope.js";
 
 // --- LCG helpers ---
 
@@ -75,7 +76,7 @@ export function fragmentString(
 	resultName: string,
 	seed: number
 ): { fragments: JsNode[]; reassembly: JsNode } {
-	let state = (seed ^ 0xbeef1234) >>> 0;
+	let state = deriveSeed(seed, "scatterStrFrag");
 
 	// Use the number of provided fragment names (caller determines count)
 	state = lcgNext(state); // advance LCG for strategy selection below
@@ -150,7 +151,7 @@ export function fragmentArray(
 	resultName: string,
 	seed: number
 ): { fragments: JsNode[]; reassembly: JsNode } {
-	let state = (seed ^ 0xdead5678) >>> 0;
+	let state = deriveSeed(seed, "scatterArrFrag");
 
 	// Use the number of provided fragment names (caller determines count)
 	state = lcgNext(state); // advance LCG for strategy selection below
@@ -251,7 +252,7 @@ export function scatterKeyMaterials(
 		reassemblyNodes: [],
 	};
 
-	let state = (seed ^ 0xcafe9abc) >>> 0;
+	let state = deriveSeed(seed, "scatterTier");
 	const tiers = [
 		result.tier0Fragments,
 		result.tier1Fragments,
