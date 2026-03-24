@@ -5,7 +5,7 @@
  * catch variable isolation, and typeof through the scope chain.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { assertEquivalent } from "../helpers.js";
 
 // ---------------------------------------------------------------------------

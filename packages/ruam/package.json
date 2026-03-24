@@ -23,8 +23,8 @@
 		"build:browser": "node scripts/generate-manifest.mjs && node scripts/build-browser.mjs",
 		"typecheck": "tsc --noEmit",
 		"dev": "tsup --watch",
-		"test": "vitest run",
-		"test:watch": "vitest",
+		"test": "bun test",
+		"test:watch": "bun test --watch",
 		"stats": "node scripts/collect-stats.mjs",
 		"stats:test": "node scripts/collect-stats.mjs --test"
 	},
@@ -50,7 +50,6 @@
 		"@types/node": "^20.14.0",
 		"esbuild": "^0.27.4",
 		"tsup": "^8.4.0",
-		"typescript": "^5.7.0",
-		"vitest": "^4.0.18"
+		"typescript": "^5.7.0"
 	}
 }

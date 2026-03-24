@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { evalOriginal, evalObfuscated } from "../helpers.js";
 
 describe("async/await support", () => {

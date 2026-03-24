@@ -6,7 +6,7 @@
  * averaging over many iterations to produce a stable multiplier.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { obfuscateCode } from "../../src/index.js";
 
 // ---------------------------------------------------------------------------

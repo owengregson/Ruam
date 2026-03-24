@@ -1,4 +1,4 @@
-import { describe, it } from "vitest";
+import { describe, it } from "bun:test";
 import { assertEquivalent } from "../helpers.js";
 
 describe("closures", () => {

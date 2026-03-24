@@ -4,7 +4,7 @@
  * Unit tests for the fragment engine + round-trip verification.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { scatterBytecodeUnit } from "../../src/ruamvm/bytecode-scatter.js";
 import { emit } from "../../src/ruamvm/emit.js";
 

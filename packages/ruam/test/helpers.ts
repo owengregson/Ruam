@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { obfuscateCode } from "../src/transform.js";
 import type { VmObfuscationOptions } from "../src/types.js";
 import vm from "node:vm";

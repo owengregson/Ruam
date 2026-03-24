@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { NameRegistry } from "../../src/naming/index.js";
 import { id, varDecl, fn as fnDecl } from "../../src/ruamvm/nodes.js";
 import { emit } from "../../src/ruamvm/emit.js";

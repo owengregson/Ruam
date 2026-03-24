@@ -9,7 +9,7 @@
  * destructuring, loops).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { assertEquivalent, evalObfuscated } from "../helpers.js";
 import type { VmObfuscationOptions } from "../../src/types.js";
 

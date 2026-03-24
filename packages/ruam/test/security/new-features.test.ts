@@ -7,7 +7,7 @@
  * - Runtime opcode mutation
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { assertEquivalent, evalObfuscated } from "../helpers.js";
 import { obfuscateCode } from "../../src/index.js";
 import {

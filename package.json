@@ -1,21 +1,22 @@
 {
   "name": "ruam-monorepo",
   "private": true,
-  "packageManager": "npm@11.9.0",
   "workspaces": [
     "packages/*",
     "apps/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
-    "stats": "turbo run stats",
-    "lint": "turbo run lint",
-    "dev": "turbo run dev",
-    "dev:web": "turbo run dev --filter=web"
-  },
-  "devDependencies": {
-    "turbo": "^2.8.14"
+    "build": "bun run build:lib && bun run build:worker && bun run build:web",
+    "build:lib": "cd packages/ruam && bun run build",
+    "build:worker": "cd packages/ruam && bun run build:browser",
+    "build:web": "cd apps/web && bun run build",
+    "test": "cd packages/ruam && bun test",
+    "test:watch": "cd packages/ruam && bun test --watch",
+    "typecheck": "cd packages/ruam && bun run typecheck && cd ../../apps/web && bun run typecheck",
+    "dev": "cd apps/web && bun run dev",
+    "stats": "cd packages/ruam && bun run stats",
+    "clean": "rm -rf packages/ruam/dist apps/web/.next apps/web/out node_modules/.cache",
+    "build:fresh": "bun run clean && bun run build",
+    "test:fresh": "bun run clean && bun run test"
   }
 }

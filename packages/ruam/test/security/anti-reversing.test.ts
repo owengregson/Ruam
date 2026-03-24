@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { assertEquivalent } from "../helpers.js";
 import { obfuscateCode } from "../../src/transform.js";
 

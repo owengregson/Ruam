@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import { emit } from "../../src/ruamvm/emit.js";
 import { obfuscateLocals, KEEP } from "../../src/ruamvm/transforms.js";
 import {
