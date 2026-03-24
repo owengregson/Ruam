@@ -87,6 +87,14 @@ export interface TuningProfile {
 	handlerAliasCount: number;
 	/** Number of distinct value encoding domains. */
 	encodingDomainCount: number;
+
+	// -- Observation resistance --
+	/** Probability (0-100) of witness check per handler invocation. */
+	witnessCheckProbability: number;
+	/** Number of function identity bindings. */
+	identityBindingCount: number;
+	/** Number of hidden witness register slots. */
+	witnessSlotCount: number;
 }
 
 // --- Profile definitions ---
@@ -119,6 +127,9 @@ const PROFILES: Record<Intensity, TuningProfile> = {
 		opaquePredicateCount: 1,
 		handlerAliasCount: 2,
 		encodingDomainCount: 2,
+		witnessCheckProbability: 10,
+		identityBindingCount: 3,
+		witnessSlotCount: 2,
 	},
 
 	// Intensity 1: moderate (medium preset) — current defaults
@@ -148,6 +159,9 @@ const PROFILES: Record<Intensity, TuningProfile> = {
 		opaquePredicateCount: 2,
 		handlerAliasCount: 4,
 		encodingDomainCount: 3,
+		witnessCheckProbability: 25,
+		identityBindingCount: 5,
+		witnessSlotCount: 3,
 	},
 
 	// Intensity 2: aggressive (max preset)
@@ -177,6 +191,9 @@ const PROFILES: Record<Intensity, TuningProfile> = {
 		opaquePredicateCount: 3,
 		handlerAliasCount: 6,
 		encodingDomainCount: 4,
+		witnessCheckProbability: 40,
+		identityBindingCount: 8,
+		witnessSlotCount: 4,
 	},
 };
 

@@ -43,6 +43,7 @@ export const PRESETS: Record<
 		bytecodeScattering: false,
 		incrementalCipher: false,
 		semanticOpacity: false,
+		observationResistance: false,
 	},
 	medium: {
 		targetMode: "root",
@@ -67,6 +68,7 @@ export const PRESETS: Record<
 		bytecodeScattering: true,
 		incrementalCipher: false,
 		semanticOpacity: false,
+		observationResistance: false,
 	},
 	max: {
 		targetMode: "root",
@@ -91,6 +93,7 @@ export const PRESETS: Record<
 		bytecodeScattering: true,
 		incrementalCipher: true,
 		semanticOpacity: true,
+		observationResistance: true,
 	},
 };
 
@@ -171,6 +174,11 @@ export function resolveOptions(
 
 	// incrementalCipher requires rollingCipher
 	if (resolved.incrementalCipher && !resolved.rollingCipher) {
+		resolved.rollingCipher = true;
+	}
+
+	// observationResistance requires rollingCipher
+	if (resolved.observationResistance && !resolved.rollingCipher) {
 		resolved.rollingCipher = true;
 	}
 

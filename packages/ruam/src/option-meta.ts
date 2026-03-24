@@ -82,8 +82,17 @@ export const OPTION_META: OptionMetaEntry[] = [
 		key: "semanticOpacity",
 		label: "Semantic Opacity",
 		category: "security",
-		description: "Opaque predicates, handler aliasing, and encoding diversity",
+		description:
+			"Opaque predicates, handler aliasing, and encoding diversity",
 		cliFlag: "--semantic-opacity",
+	},
+	{
+		key: "observationResistance",
+		label: "Observation Resistance",
+		category: "security",
+		description:
+			"Silent computation corruption when instrumentation detected",
+		cliFlag: "--observation-resistance",
 	},
 	{
 		key: "encryptBytecode",
@@ -202,6 +211,7 @@ export const AUTO_ENABLE_RULES: AutoEnableRule[] = [
 	{ when: "stringAtomization", enables: "polymorphicDecoder" },
 	{ when: "opcodeMutation", enables: "rollingCipher" },
 	{ when: "incrementalCipher", enables: "rollingCipher" },
+	{ when: "observationResistance", enables: "rollingCipher" },
 ];
 
 // --- Derived exports for CLI backward compat ---

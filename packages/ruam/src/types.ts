@@ -187,6 +187,18 @@ export interface VmObfuscationOptions {
 	semanticOpacity?: boolean;
 
 	/**
+	 * Silently corrupt computation when instrumentation is detected.
+	 *
+	 * Uses function identity binding, cross-handler witness values,
+	 * prototype chain canaries, and stack integrity probes to detect
+	 * observation. No timing-based detection. When triggered, silently
+	 * poisons cipher state so the attacker gets plausible but wrong results.
+	 *
+	 * Requires {@link rollingCipher} (auto-enabled).
+	 */
+	observationResistance?: boolean;
+
+	/**
 	 * Target execution environment.
 	 *
 	 * Controls environment-specific output settings. Explicit options
