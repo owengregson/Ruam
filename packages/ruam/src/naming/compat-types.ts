@@ -54,6 +54,9 @@ export interface RuntimeNames {
 	rcState: string;
 	rcDeriveKey: string;
 	rcMix: string;
+	icDecrypt: string;
+	icMix: string;
+	icBlockKey: string;
 	ihash: string;
 	ihashFn: string;
 	keyAnchor: string;

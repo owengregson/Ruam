@@ -62,6 +62,9 @@ export const RUNTIME_KEYS = [
 	"spreadSym",
 	"hop",
 	"globalRef",
+	"icDecrypt",
+	"icMix",
+	"icBlockKey",
 ] as const;
 
 /** Runtime keys generated AFTER temps (for LCG sequence compatibility). */
@@ -200,6 +203,9 @@ export const TEMP_KEYS = [
 	"_mi",
 	"_mj",
 	"_mt",
+	"_icState",
+	"_icBk",
+	"_icPrev",
 ] as const;
 
 /** Fields of RuntimeNames that are shared across all shielding groups. */
