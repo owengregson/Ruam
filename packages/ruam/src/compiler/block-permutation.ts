@@ -26,7 +26,12 @@ import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 
 // Import opcode sets for identifying jumps. We import the names and check
 // against the canonical opcode enum (before shuffle map is applied).
-import { Op, JUMP_OPS, ALL_JUMP_OPS, PACKED_JUMP_OPS } from "./opcodes.js";
+import { Op, ALL_JUMP_OPS, PACKED_JUMP_OPS } from "./opcodes.js";
+
+// --- Basic block identification (shared module) ---
+
+import { identifyBasicBlocks } from "./basic-blocks.js";
+import type { BasicBlock } from "./basic-blocks.js";
 
 // --- Terminal opcodes ---
 // Opcodes that never fall through to the next instruction.
@@ -46,87 +51,6 @@ const TERMINAL_OPS = new Set<Op>([
 
 function lcgNext(state: number): number {
 	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
-}
-
-// --- Basic block identification ---
-
-/** A basic block: a contiguous range of instructions [startIp, endIp). */
-interface BasicBlock {
-	/** First instruction IP (inclusive). */
-	startIp: number;
-	/** One past the last instruction IP (exclusive). */
-	endIp: number;
-}
-
-/**
- * Identify basic block boundaries in a bytecode unit.
- *
- * Block boundaries occur at:
- * - Jump targets (start of block)
- * - Instructions after jumps (start of block)
- * - Exception handler entry points (start of block)
- *
- * @param unit - The bytecode unit to analyze
- * @returns Array of basic blocks covering the entire instruction stream
- */
-function identifyBasicBlocks(unit: BytecodeUnit): BasicBlock[] {
-	const instrs = unit.instructions;
-	if (instrs.length === 0) return [];
-
-	// Collect all block-start IPs
-	const blockStarts = new Set<number>();
-	blockStarts.add(0); // First instruction is always a block start
-
-	for (let ip = 0; ip < instrs.length; ip++) {
-		const instr = instrs[ip]!;
-		const opcode = instr.opcode;
-
-		if (JUMP_OPS.has(opcode)) {
-			// The jump target is a block start
-			const target = instr.operand;
-			if (target >= 0 && target < instrs.length) {
-				blockStarts.add(target);
-			}
-			// The instruction after the jump is a block start
-			if (ip + 1 < instrs.length) {
-				blockStarts.add(ip + 1);
-			}
-		}
-
-		if (PACKED_JUMP_OPS.has(opcode)) {
-			// Packed jumps encode target in upper bits
-			const target = instr.operand >>> 16;
-			if (target >= 0 && target < instrs.length) {
-				blockStarts.add(target);
-			}
-			if (ip + 1 < instrs.length) {
-				blockStarts.add(ip + 1);
-			}
-		}
-	}
-
-	// Exception handler entry points
-	for (const entry of unit.exceptionTable) {
-		if (entry.catchIp >= 0) blockStarts.add(entry.catchIp);
-		if (entry.finallyIp >= 0) blockStarts.add(entry.finallyIp);
-		blockStarts.add(entry.startIp);
-		if (entry.endIp < instrs.length) blockStarts.add(entry.endIp);
-	}
-
-	// Sort block starts and create blocks
-	const sorted = [...blockStarts]
-		.filter((ip) => ip < instrs.length)
-		.sort((a, b) => a - b);
-	const blocks: BasicBlock[] = [];
-	for (let i = 0; i < sorted.length; i++) {
-		const start = sorted[i]!;
-		const end = i + 1 < sorted.length ? sorted[i + 1]! : instrs.length;
-		if (start < end) {
-			blocks.push({ startIp: start, endIp: end });
-		}
-	}
-
-	return blocks;
 }
 
 // --- Block permutation ---
