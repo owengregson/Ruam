@@ -145,46 +145,77 @@ function collectTestStats(runTests) {
 	if (runTests) {
 		console.log("  Running tests...");
 		try {
-			execSync(
-				"npx vitest run --reporter=default --reporter=json --outputFile.json=test-results.json",
-				{
-					cwd: PKG_ROOT,
-					stdio: ["ignore", "pipe", "pipe"],
-					timeout: 600_000,
-				}
-			);
-		} catch {
-			if (!existsSync(TEST_RESULTS_PATH)) {
-				console.error("  Tests failed — no results file produced.");
-				return null;
+			// bun test writes results to stderr, so merge streams
+			const output = execSync("bun test 2>&1", {
+				cwd: PKG_ROOT,
+				stdio: ["ignore", "pipe", "pipe"],
+				timeout: 600_000,
+				shell: true,
+			}).toString();
+
+			// Parse bun:test summary output — the FINAL lines look like:
+			//  2204 pass
+			//  0 fail
+			//  4486 expect() calls
+			// Ran 2204 tests across 41 files. [6.72s]
+			//
+			// Must match the summary lines, not per-suite "99 passed" lines.
+			// Summary uses "pass"/"fail" (not "passed"/"failed") with leading whitespace.
+			const passMatch = output.match(/^\s+(\d+)\s+pass$/m);
+			const failMatch = output.match(/^\s+(\d+)\s+fail$/m);
+			const totalMatch = output.match(/Ran\s+(\d+)\s+tests\s+across\s+(\d+)\s+files/);
+			const timeMatch = output.match(/\[([0-9.]+)s\]/);
+
+			if (passMatch && totalMatch) {
+				const passed = parseInt(passMatch[1], 10);
+				const failed = failMatch ? parseInt(failMatch[1], 10) : 0;
+				const total = parseInt(totalMatch[1], 10);
+				const suites = parseInt(totalMatch[2], 10);
+				const durationMs = timeMatch
+					? Math.round(parseFloat(timeMatch[1]) * 1000)
+					: null;
+
+				const result = { total, passed, failed, suites, durationMs };
+
+				// Write test-results.json for caching
+				writeFileSync(
+					TEST_RESULTS_PATH,
+					JSON.stringify(result, null, 2) + "\n"
+				);
+				return result;
 			}
+		} catch (e) {
+			// bun test exits non-zero on failures; try to parse stderr
+			const stderr = e.stderr?.toString() ?? "";
+			const passMatch = stderr.match(/(\d+)\s+pass/);
+			const failMatch = stderr.match(/(\d+)\s+fail/);
+			const totalMatch = stderr.match(/Ran\s+(\d+)\s+tests/);
+
+			if (passMatch && totalMatch) {
+				const result = {
+					total: parseInt(totalMatch[1], 10),
+					passed: parseInt(passMatch[1], 10),
+					failed: failMatch ? parseInt(failMatch[1], 10) : 0,
+					suites: 0,
+					durationMs: null,
+				};
+				writeFileSync(
+					TEST_RESULTS_PATH,
+					JSON.stringify(result, null, 2) + "\n"
+				);
+				return result;
+			}
+
+			console.error("  Tests failed — could not parse output.");
+			return null;
 		}
 	}
 
+	// Fall back to cached results
 	if (!existsSync(TEST_RESULTS_PATH)) return null;
 
 	try {
-		const json = JSON.parse(readFileSync(TEST_RESULTS_PATH, "utf8"));
-
-		// Count test categories from suite names
-		const suiteNames = (json.testResults ?? []).map((r) => r.name ?? "");
-		const categories = new Set(
-			suiteNames
-				.map((n) => {
-					const m = n.match(/test[/\\](\w+)[/\\]/);
-					return m ? m[1] : null;
-				})
-				.filter(Boolean)
-		);
-
-		return {
-			total: json.numTotalTests,
-			passed: json.numPassedTests,
-			failed: json.numFailedTests ?? 0,
-			suites: json.numTotalTestSuites ?? 0,
-			categories: [...categories],
-			durationMs: json.startTime ? Date.now() - json.startTime : null,
-		};
+		return JSON.parse(readFileSync(TEST_RESULTS_PATH, "utf8"));
 	} catch {
 		console.error("  Could not parse test-results.json");
 		return null;

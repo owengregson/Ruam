@@ -1,0 +1,146 @@
+{
+  "version": "2.0.0",
+  "collectedAt": "2026-03-24T23:12:07.673Z",
+  "opcodes": {
+    "count": 301,
+    "categories": 25,
+    "superinstructions": 18,
+    "compounds": 33,
+    "slotOpcodes": 10
+  },
+  "source": {
+    "files": 90,
+    "lines": 31300,
+    "testFiles": 42,
+    "testLines": 17392,
+    "totalFiles": 132,
+    "totalLines": 48692,
+    "templateFiles": 0,
+    "visitorFiles": 4
+  },
+  "tests": {
+    "total": 2204,
+    "passed": 2204,
+    "failed": 0,
+    "suites": 41,
+    "durationMs": 18540
+  },
+  "performance": {
+    "weightedAvg": 32.9,
+    "median": 46.3,
+    "fastest": {
+      "name": "try/catch",
+      "multiplier": 6.8
+    },
+    "slowest": {
+      "name": "fibonacci (n=20)",
+      "multiplier": 114.2
+    },
+    "workloadCount": 10,
+    "workloads": [
+      {
+        "name": "arithmetic loop (10k)",
+        "multiplier": 24.7,
+        "nativeMs": 0.139,
+        "vmMs": 3.43
+      },
+      {
+        "name": "fibonacci (n=20)",
+        "multiplier": 114.2,
+        "nativeMs": 0.155,
+        "vmMs": 17.652
+      },
+      {
+        "name": "array ops",
+        "multiplier": 28.6,
+        "nativeMs": 0.136,
+        "vmMs": 3.876
+      },
+      {
+        "name": "string ops",
+        "multiplier": 58.3,
+        "nativeMs": 0.024,
+        "vmMs": 1.375
+      },
+      {
+        "name": "object creation",
+        "multiplier": 46.3,
+        "nativeMs": 0.042,
+        "vmMs": 1.929
+      },
+      {
+        "name": "closures + HOF",
+        "multiplier": 79.8,
+        "nativeMs": 0.022,
+        "vmMs": 1.78
+      },
+      {
+        "name": "class + methods",
+        "multiplier": 69,
+        "nativeMs": 0.033,
+        "vmMs": 2.282
+      },
+      {
+        "name": "nested loops",
+        "multiplier": 21.2,
+        "nativeMs": 0.222,
+        "vmMs": 4.716
+      },
+      {
+        "name": "switch dispatch",
+        "multiplier": 25.3,
+        "nativeMs": 0.092,
+        "vmMs": 2.331
+      },
+      {
+        "name": "try/catch",
+        "multiplier": 6.8,
+        "nativeMs": 0.418,
+        "vmMs": 2.838
+      }
+    ]
+  },
+  "size": {
+    "sampleInputBytes": 110,
+    "low": {
+      "bytes": 11756,
+      "ratio": 106.9
+    },
+    "medium": {
+      "bytes": 16862,
+      "ratio": 153.3
+    },
+    "high": {
+      "bytes": 12363,
+      "ratio": 112.4
+    }
+  },
+  "heroSnippet": {
+    "head": [
+      "var Yl0 = Math.imul;",
+      "var Y7c = Symbol();",
+      "var EL6 = Object.prototype['hasOwnProperty'];",
+      "var ET0 = 'CGioKrHLA8wkImWNUb5XMpY04cEguB6vRZQytnSls...",
+      "var ET0R = {};"
+    ],
+    "totalLines": 580,
+    "tail": [
+      "function fibonacci(...__args) {",
+      "  var _n = __args.length | 0;",
+      "  return Uzm(\"6zzdb\", __args, wb2, this);",
+      "}"
+    ]
+  },
+  "badges": {
+    "tests": "2,204",
+    "testsPassing": "2,204 passing",
+    "opcodes": "301",
+    "categories": "25",
+    "loc": "31.3k",
+    "totalLoc": "48.7k",
+    "overhead": "~32.9x",
+    "overheadMedian": "~46.3x",
+    "sizeRatioLow": "106.9x",
+    "sizeRatioHigh": "112.4x"
+  }
+}
