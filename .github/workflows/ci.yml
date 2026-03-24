@@ -28,21 +28,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: npm
 
-      - run: npm ci
+      - run: bun install
 
-      # macOS-generated lockfile doesn't resolve Linux optional deps (npm/cli#4828).
-      - name: Fix rollup platform binary
-        run: |
-          ROLLUP_V=$(node -p "require('./node_modules/rollup/package.json').version")
-          npm install --no-save "@rollup/rollup-linux-x64-gnu@${ROLLUP_V}"
-
-      # Single turbo invocation: build → typecheck+test (parallel) → stats
-      - run: npx turbo run build typecheck test stats --filter=ruam
+      - run: bun run build:lib
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run stats
 
       - uses: actions/upload-artifact@v4
         if: github.ref == 'refs/heads/main'
@@ -58,11 +57,11 @@ jobs:
       # Build browser worker bundle for the playground
       - name: Build browser worker bundle
         if: github.ref == 'refs/heads/main'
-        run: npx turbo run build:browser --filter=ruam
+        run: bun run build:worker
 
       - name: Build site with stats
         if: github.ref == 'refs/heads/main'
-        run: npx turbo run build --filter=web
+        run: bun run build:web
 
       - uses: actions/upload-pages-artifact@v4
         if: github.ref == 'refs/heads/main'
