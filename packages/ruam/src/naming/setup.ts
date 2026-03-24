@@ -134,7 +134,6 @@ function buildRuntimeNames(tokens: Map<string, NameToken>): RuntimeNames {
 		strTbl: get("strTbl"),
 		strCache: get("strCache"),
 		strAcc: get("strAcc"),
-		unpack: get("unpack"),
 	};
 }
 

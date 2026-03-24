@@ -1,142 +1,87 @@
 /**
  * Bytecode scattering engine tests.
  *
- * Unit tests for the fragment engine + round-trip verification.
+ * Unit tests for the chunk splitting engine + round-trip verification.
  */
 
 import { describe, it, expect } from "bun:test";
 import { scatterBytecodeUnit } from "../../src/ruamvm/bytecode-scatter.js";
-import { emit } from "../../src/ruamvm/emit.js";
-
-function makeNameGen(): () => string {
-	let i = 0;
-	return () => "_f" + i++;
-}
 
 describe("bytecode scattering engine", () => {
-	it("returns JsNode varDecl fragments", () => {
+	it("returns ordered string chunks", () => {
 		const result = scatterBytecodeUnit(
 			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij",
-			42,
-			makeNameGen(),
-			new Set(),
-			"__up"
+			42
 		);
-		expect(result.fragments.length).toBeGreaterThanOrEqual(2);
-		for (const f of result.fragments) {
-			expect(f.type).toBe("VarDecl");
+		expect(result.chunks.length).toBeGreaterThanOrEqual(2);
+		for (const chunk of result.chunks) {
+			expect(typeof chunk).toBe("string");
+			expect(chunk.length).toBeGreaterThan(0);
 		}
 	});
 
-	it("reassembly emits valid JS", () => {
-		const result = scatterBytecodeUnit(
-			"ABCDEFGHIJKLMNOPabcdefghijklmnop",
-			99,
-			makeNameGen(),
-			new Set(),
-			"__up"
-		);
-		const reassemblyStr = emit(result.reassembly);
-		expect(reassemblyStr).toBeTruthy();
-		expect(typeof reassemblyStr).toBe("string");
-	});
-
-	it("round-trips: fragments + reassembly = original", () => {
+	it("round-trips: joined chunks equal original", () => {
 		const encoded = "testStringABC123xyzQWERTYuiop";
-		const result = scatterBytecodeUnit(
-			encoded,
-			555,
-			makeNameGen(),
-			new Set(),
-			"__up"
-		);
-
-		// Build executable code: emit all fragments + reassembly
-		const unpackFn = `var __up=function(a){var s="",i,n;for(i=0;i<a.length;i++){n=a[i];s+=String.fromCharCode(n>>>24&255,n>>>16&255,n>>>8&255,n&255)}return s};`;
-		const fragCode = result.fragments.map((f) => emit(f) + ";").join("\n");
-		const wrapper = new Function(
-			unpackFn + fragCode + "\nreturn " + emit(result.reassembly) + ";"
-		);
-		expect(wrapper()).toBe(encoded);
+		const result = scatterBytecodeUnit(encoded, 555);
+		expect(result.chunks.join("")).toBe(encoded);
 	});
 
 	it("handles short strings (no split)", () => {
-		const result = scatterBytecodeUnit(
-			"AB",
-			1,
-			makeNameGen(),
-			new Set(),
-			"__up"
-		);
-		expect(result.fragments.length).toBe(1);
+		const result = scatterBytecodeUnit("AB", 1);
+		expect(result.chunks.length).toBe(1);
+		expect(result.chunks[0]).toBe("AB");
 	});
 
 	it("handles medium strings", () => {
 		const encoded = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGH";
-		const result = scatterBytecodeUnit(
-			encoded,
-			12345,
-			makeNameGen(),
-			new Set(),
-			"__up"
-		);
-
-		const unpackFn = `var __up=function(a){var s="",i,n;for(i=0;i<a.length;i++){n=a[i];s+=String.fromCharCode(n>>>24&255,n>>>16&255,n>>>8&255,n&255)}return s};`;
-		const fragCode = result.fragments.map((f) => emit(f) + ";").join("\n");
-		const wrapper = new Function(
-			unpackFn + fragCode + "\nreturn " + emit(result.reassembly) + ";"
-		);
-		expect(wrapper()).toBe(encoded);
-	});
-
-	it("produces different fragment types (string + packed)", () => {
-		// Run multiple seeds and check that we get variety
-		const types = new Set<string>();
-		for (let seed = 0; seed < 50; seed++) {
-			// Use length divisible by 4 to allow packed type
-			const result = scatterBytecodeUnit(
-				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij012345678901",
-				seed,
-				makeNameGen(),
-				new Set(),
-				"__up"
-			);
-			for (const f of result.fragments) {
-				if (f.type === "VarDecl" && f.init) {
-					types.add(f.init.type);
-				}
-			}
-		}
-		// Should have string literals and array expressions (packed ints)
-		expect(types.has("Literal")).toBe(true);
-		expect(types.has("ArrayExpr")).toBe(true);
+		const result = scatterBytecodeUnit(encoded, 12345);
+		expect(result.chunks.join("")).toBe(encoded);
+		expect(result.chunks.length).toBeGreaterThanOrEqual(2);
 	});
 
 	it("respects min/max fragment parameters", () => {
 		const result = scatterBytecodeUnit(
 			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
 			777,
-			makeNameGen(),
-			new Set(),
-			"__up",
 			3,
 			4
 		);
-		expect(result.fragments.length).toBeGreaterThanOrEqual(3);
-		expect(result.fragments.length).toBeLessThanOrEqual(4);
+		expect(result.chunks.length).toBeGreaterThanOrEqual(3);
+		expect(result.chunks.length).toBeLessThanOrEqual(4);
 	});
 
 	it("deterministic: same seed produces same output", () => {
 		const encoded = "SameInputSameOutputExpected1234";
-		const gen1 = makeNameGen();
-		const gen2 = makeNameGen();
-		const r1 = scatterBytecodeUnit(encoded, 42, gen1, new Set(), "__up");
-		const r2 = scatterBytecodeUnit(encoded, 42, gen2, new Set(), "__up");
+		const r1 = scatterBytecodeUnit(encoded, 42);
+		const r2 = scatterBytecodeUnit(encoded, 42);
+		expect(r1.chunks).toEqual(r2.chunks);
+	});
 
-		expect(r1.fragments.length).toBe(r2.fragments.length);
-		for (let i = 0; i < r1.fragments.length; i++) {
-			expect(emit(r1.fragments[i]!)).toBe(emit(r2.fragments[i]!));
+	it("different seeds produce different splits", () => {
+		const encoded = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnop";
+		const r1 = scatterBytecodeUnit(encoded, 1);
+		const r2 = scatterBytecodeUnit(encoded, 999);
+		// Same content but at least some chunks should differ in size
+		expect(r1.chunks.join("")).toBe(r2.chunks.join(""));
+		const differ = r1.chunks.some(
+			(c, i) => c !== (r2.chunks[i] ?? "")
+		);
+		expect(differ).toBe(true);
+	});
+
+	it("produces variable-length chunks (not equal splits)", () => {
+		// Run across seeds and check that chunk sizes vary
+		const sizes = new Set<number>();
+		for (let seed = 0; seed < 20; seed++) {
+			const result = scatterBytecodeUnit(
+				"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789",
+				seed
+			);
+			for (const chunk of result.chunks) {
+				sizes.add(chunk.length);
+			}
 		}
-		expect(emit(r1.reassembly)).toBe(emit(r2.reassembly));
+		// Should have at least 3 distinct chunk sizes across 20 seeds
+		expect(sizes.size).toBeGreaterThanOrEqual(3);
 	});
 });

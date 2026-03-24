@@ -1,16 +1,14 @@
 /**
  * Bytecode scattering engine.
  *
- * Splits encoded bytecode strings into heterogeneous fragments (string
- * literals, char code arrays, packed 32-bit integer arrays) and produces
- * JsNode declarations + a reassembly expression. Eliminates the most
- * obvious VM fingerprint: long encoded strings assigned to an object.
+ * Splits encoded bytecode strings into ordered chunks for incremental
+ * accumulation. The caller emits `bt["id"] = chunk0` followed by
+ * `bt["id"] += chunk1`, `bt["id"] += chunk2`, etc. — scattered among
+ * runtime statements so no contiguous encoded block appears in output.
  *
  * @module ruamvm/bytecode-scatter
  */
 
-import type { JsNode } from "./nodes.js";
-import { id, lit, bin, varDecl, arr, call, member, index, BOp } from "./nodes.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 import { deriveSeed } from "../naming/scope.js";
 
@@ -20,49 +18,26 @@ function lcgNext(state: number): number {
 	return (Math.imul(state, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
 }
 
-// --- Fragment representation types ---
-
-const enum FragType {
-	/** Plain string literal. */
-	String = 0,
-	/** Array of char codes → String.fromCharCode.apply(null, arr). */
-	CharCodes = 1,
-	/** Array of packed 32-bit ints → unpack(arr). */
-	Packed = 2,
-}
-
-const FRAG_TYPE_COUNT = 3;
-
 // --- Core API ---
 
 /** Result of scattering a single bytecode unit. */
 export interface ScatterResult {
-	/** VarDecl nodes for each fragment. */
-	fragments: JsNode[];
-	/** Expression node that reassembles fragments back to the original string. */
-	reassembly: JsNode;
-	/** Whether any packed-int fragments were generated (needs unpack fn). */
-	needsUnpack: boolean;
+	/** Ordered string chunks. First is assigned with `=`, rest with `+=`. */
+	chunks: string[];
 }
 
 /**
- * Split an encoded bytecode string into mixed-type fragments.
+ * Split an encoded bytecode string into ordered chunks.
  *
- * @param encoded   - The encoded bytecode string to scatter
- * @param seed      - Per-build seed for deterministic LCG choices
- * @param nameGen   - Name generator function (from NameRegistry.createDynamicGenerator)
- * @param excluded  - Set of names to avoid (currently unused — nameGen handles collisions)
- * @param unpackName - Runtime name of the unpack function
+ * @param encoded      - The encoded bytecode string to scatter
+ * @param seed         - Per-build seed for deterministic LCG choices
  * @param minFragments - Minimum fragment count (default 2)
  * @param maxFragments - Maximum fragment count (default 6)
- * @returns ScatterResult with fragment declarations and reassembly expression
+ * @returns ScatterResult with ordered string chunks
  */
 export function scatterBytecodeUnit(
 	encoded: string,
 	seed: number,
-	nameGen: () => string,
-	_excluded: Set<string>,
-	unpackName: string,
 	minFragments = 2,
 	maxFragments = 6
 ): ScatterResult {
@@ -70,12 +45,7 @@ export function scatterBytecodeUnit(
 
 	// Short strings: no split
 	if (encoded.length < 8) {
-		const name = nameGen();
-		return {
-			fragments: [varDecl(name, lit(encoded))],
-			reassembly: id(name),
-			needsUnpack: false,
-		};
+		return { chunks: [encoded] };
 	}
 
 	// Determine fragment count based on string length + LCG
@@ -83,80 +53,30 @@ export function scatterBytecodeUnit(
 	const range = maxFragments - minFragments + 1;
 	const fragCount = minFragments + ((state >>> 16) % range);
 
-	// Split string into roughly equal parts
-	const partLen = Math.ceil(encoded.length / fragCount);
-	const parts: string[] = [];
-	for (let i = 0; i < fragCount; i++) {
-		const start = i * partLen;
-		const end = Math.min(start + partLen, encoded.length);
-		if (start < encoded.length) {
-			parts.push(encoded.slice(start, end));
-		}
-	}
+	// Vary chunk sizes instead of equal splits — avoids the
+	// "all chunks are exactly N chars" fingerprint.
+	const chunks: string[] = [];
+	let offset = 0;
+	const remaining = encoded.length;
 
-	// For each part, choose a representation type via LCG
-	const fragments: JsNode[] = [];
-	const reassemblyParts: JsNode[] = [];
-	let needsUnpack = false;
-
-	for (const part of parts) {
+	for (let i = 0; i < fragCount && offset < remaining; i++) {
+		const left = fragCount - i;
+		const baseLen = Math.ceil((remaining - offset) / left);
+		// Jitter: ±25% variation on chunk size
 		state = lcgNext(state);
-		const name = nameGen();
-
-		// Choose between String and Packed representations.
-		// CharCodes (fromCharCode.apply) is avoided — Babel parse→generate
-		// round-trips can subtly alter numeric array representations.
-		let fragType: FragType =
-			(state >>> 16) % 2 === 0 ? FragType.String : FragType.Packed;
-		if (fragType === FragType.Packed && part.length % 4 !== 0) {
-			fragType = FragType.String;
-		}
-
-		switch (fragType as FragType) {
-			case FragType.String: {
-				fragments.push(varDecl(name, lit(part)));
-				reassemblyParts.push(id(name));
-				break;
-			}
-			case FragType.CharCodes: {
-				const codes = Array.from(part, (ch) => lit(ch.charCodeAt(0)));
-				fragments.push(varDecl(name, arr(...codes)));
-				// String.fromCharCode.apply(null, name)
-				reassemblyParts.push(
-					call(
-						member(
-							member(id("String"), "fromCharCode"),
-							"apply"
-						),
-						[lit(null), id(name)]
-					)
-				);
-				break;
-			}
-			case FragType.Packed: {
-				const ints: JsNode[] = [];
-				for (let j = 0; j < part.length; j += 4) {
-					const packed =
-						((part.charCodeAt(j) & 0xff) << 24) |
-						((part.charCodeAt(j + 1) & 0xff) << 16) |
-						((part.charCodeAt(j + 2) & 0xff) << 8) |
-						(part.charCodeAt(j + 3) & 0xff);
-					ints.push(lit(packed >>> 0));
-				}
-				fragments.push(varDecl(name, arr(...ints)));
-				// unpack(name)
-				reassemblyParts.push(call(id(unpackName), [id(name)]));
-				needsUnpack = true;
-				break;
-			}
-		}
+		const jitter = ((state >>> 16) % 51) - 25; // -25 to +25
+		const len = Math.max(
+			4,
+			Math.min(remaining - offset, baseLen + Math.floor((baseLen * jitter) / 100))
+		);
+		chunks.push(encoded.slice(offset, offset + len));
+		offset += len;
 	}
 
-	// Build reassembly expression: chain of Add
-	let reassembly: JsNode = reassemblyParts[0]!;
-	for (let i = 1; i < reassemblyParts.length; i++) {
-		reassembly = bin(BOp.Add, reassembly, reassemblyParts[i]!);
+	// Append any remainder to the last chunk
+	if (offset < remaining && chunks.length > 0) {
+		chunks[chunks.length - 1] += encoded.slice(offset);
 	}
 
-	return { fragments, reassembly, needsUnpack };
+	return { chunks };
 }

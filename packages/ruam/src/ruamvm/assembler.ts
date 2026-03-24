@@ -48,7 +48,6 @@ import { buildRunners, buildRouter } from "./builders/runners.js";
 import { buildLoader } from "./builders/loader.js";
 import { buildDeserializer } from "./builders/deserializer.js";
 import { buildGlobalExposure } from "./builders/globals.js";
-import { buildUnpackFunction } from "./builders/unpack.js";
 import { makeConstantSplitter } from "./constant-splitting.js";
 import type { SplitFn } from "./constant-splitting.js";
 import type { StructuralChoices } from "../structural-choices.js";
@@ -178,10 +177,6 @@ export function generateVmRuntime(options: {
 		],
 	];
 
-	// Optional: unpack function for bytecode scattering
-	if (bytecodeScattering) {
-		tier0Components.push(buildUnpackFunction(names.unpack));
-	}
 
 	// -- Tier 1: crypto/encoding primitives (shuffleable) ------------------
 	const tier1Components: JsNode[][] = [];
@@ -537,10 +532,6 @@ export function generateShieldedVmRuntime(options: {
 		)
 	);
 
-	// Shared: unpack function for bytecode scattering
-	if (bytecodeScattering) {
-		nodes.push(...buildUnpackFunction(sharedNames.unpack));
-	}
 
 	// Shared: custom binary decoder (always emitted)
 	const shieldedBinDecNodes = buildBinaryDecoderSource(sharedNames, alphabet);
