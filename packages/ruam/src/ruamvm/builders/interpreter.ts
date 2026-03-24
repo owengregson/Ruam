@@ -63,6 +63,10 @@ import { obfuscateLocals } from "../transforms.js";
 import { applyMBA } from "../mba.js";
 import { fragmentCases } from "../handler-fragmentation.js";
 import { aliasHandlerBody } from "../handler-aliasing.js";
+import {
+	generateOpaquePredicate,
+	injectOpaquePredicate,
+} from "../opaque-predicates.js";
 import type { StructuralChoices } from "../../structural-choices.js";
 
 /** Options for interpreter filtering and hardening. */
@@ -582,6 +586,44 @@ function buildCasesForMode(
 				return caseClause(c.label, aliasHandlerBody(c.body, seed, idx));
 			}
 			return c;
+		});
+	}
+
+	// --- Opaque predicate injection ---
+	// Wrap eligible handler bodies behind always-true/always-false predicates
+	// so the real code is hidden in one branch and dead code in the other.
+	// Must run after aliasing (so aliased bodies get wrapped) but before MBA
+	// and fragmentation (those further transform the wrapped bodies).
+	if (interpOpts.semanticOpacity) {
+		let predSeed = deriveSeed(seed, "opaquePredSelect");
+		cases = cases.map((c, idx) => {
+			if (c.label === null) return c;
+			// Only inject into handlers with 3+ statements (small handlers
+			// aren't worth obfuscating — the predicate would dominate)
+			if (c.body.length < 3) return c;
+			// ~50% of eligible handlers get a predicate wrapper
+			predSeed = (Math.imul(predSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			if ((predSeed % 100) >= 50) return c;
+
+			// Use the instruction pointer (always an integer) as the
+			// predicate input — bitwise OR with 0 ensures int32 semantics
+			const inputExpr = bin(BOp.BitOr, id(names.ip), lit(0));
+			const predicate = generateOpaquePredicate(
+				inputExpr,
+				deriveSeed(seed, "opaquePred_" + idx),
+				idx
+			);
+
+			// Dead code for the never-taken branch: a few harmless
+			// statements that look plausible but never execute.
+			// Use a deterministic pick of dead code patterns.
+			const deadSeed = (Math.imul(predSeed, LCG_MULTIPLIER) + LCG_INCREMENT) >>> 0;
+			const deadBody = generateDeadBody(deadSeed);
+
+			return caseClause(
+				c.label,
+				injectOpaquePredicate(c.body, deadBody, predicate)
+			);
 		});
 	}
 
@@ -1551,6 +1593,47 @@ function generateDecoyHandlers(
 		const physicalOp = shuffleMap[logicalOp]!;
 		return caseClause(lit(physicalOp), [...factory(), breakStmt()]);
 	});
+}
+
+// --- Opaque predicate dead code ---
+
+/**
+ * Generate a dead code body for the never-taken branch of an opaque predicate.
+ *
+ * Produces 2-4 harmless statements that look plausible (variable declarations,
+ * void expressions, arithmetic) but never execute. Uses a deterministic seed
+ * so the dead code pattern is reproducible.
+ *
+ * @param seed - Deterministic seed for pattern selection
+ * @returns Array of dead code JsNode statements
+ */
+function generateDeadBody(seed: number): JsNode[] {
+	const pattern = seed % 4;
+	switch (pattern) {
+		case 0:
+			// var _d = 0; void 0;
+			return [varDecl("_d", lit(0)), exprStmt(un(UOp.Void, lit(0)))];
+		case 1:
+			// var _d = 0; _d = _d + 1;
+			return [
+				varDecl("_d", lit(0)),
+				exprStmt(assign(id("_d"), bin(BOp.Add, id("_d"), lit(1)))),
+			];
+		case 2:
+			// var _d = 0; var _e = 1; void (_d + _e);
+			return [
+				varDecl("_d", lit(0)),
+				varDecl("_e", lit(1)),
+				exprStmt(un(UOp.Void, bin(BOp.Add, id("_d"), id("_e")))),
+			];
+		case 3:
+		default:
+			// var _d = 0 | 0; void _d;
+			return [
+				varDecl("_d", bin(BOp.BitOr, lit(0), lit(0))),
+				exprStmt(un(UOp.Void, id("_d"))),
+			];
+	}
 }
 
 // --- Function table dispatch (Sig 3: eliminates switch pattern) ---

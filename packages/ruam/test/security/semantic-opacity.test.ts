@@ -164,3 +164,72 @@ describe("handler aliasing e2e", () => {
 		);
 	});
 });
+
+// --- Opaque predicate injection e2e tests ---
+
+describe("opaque predicate injection e2e", () => {
+	it("factorial with predicates", () => {
+		assertEquivalent(
+			`
+			function factorial(n) {
+				if (n <= 1) return 1;
+				return n * factorial(n - 1);
+			}
+			factorial(10);
+		`,
+			soOpts
+		);
+	});
+
+	it("array operations", () => {
+		assertEquivalent(
+			`
+			function f() {
+				var arr = [1, 2, 3, 4, 5];
+				var sum = 0;
+				for (var i = 0; i < arr.length; i++) sum += arr[i];
+				return sum;
+			}
+			f();
+		`,
+			soOpts
+		);
+	});
+
+	it("class with methods", () => {
+		assertEquivalent(
+			`
+			function test() {
+				class Point {
+					constructor(x, y) { this.x = x; this.y = y; }
+					dist() { return Math.sqrt(this.x * this.x + this.y * this.y); }
+				}
+				return new Point(3, 4).dist();
+			}
+			test();
+		`,
+			soOpts
+		);
+	});
+
+	it("try-catch-finally", () => {
+		assertEquivalent(
+			`
+			function f() {
+				var result = "";
+				try {
+					result += "try";
+					throw new Error("test");
+				} catch (e) {
+					result += "catch";
+				} finally {
+					result += "finally";
+				}
+				return result;
+			}
+			f();
+		`,
+			soOpts
+		);
+	});
+});
