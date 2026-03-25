@@ -68,7 +68,7 @@ describe("opaque predicates", () => {
 			const p0 = generateOpaquePredicate(id("x"), i, 0);
 			const p1 = generateOpaquePredicate(id("x"), i, 1);
 			return emit(p0.expr) !== emit(p1.expr) ? 1 : 0;
-		}).reduce((a, b) => a + b, 0);
+		}).reduce<number>((a, b) => a + b, 0);
 		expect(diffCount).toBeGreaterThan(0);
 	});
 
