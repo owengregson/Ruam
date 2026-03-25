@@ -62,3 +62,6 @@ apps/web/public/ruam-worker.mjs
 
 # Superpowers brainstorm sessions
 .superpowers/
+
+# Serena data files
+.serena/
