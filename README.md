@@ -7,9 +7,9 @@
  888b "88bo,88    .d888 888   888,888 Y88" 888o
  MMMM   "W"  "YmmMMMM"" YMM   ""` MMM  M'  "MMM</pre>
 
-<strong>Virtualization-Based JavaScript Obfuscation</strong><br>
+<strong>Virtualization-Based (VM) JavaScript Obfuscator</strong><br>
 
-<p>Compiles JavaScript functions into custom bytecode executed by an embedded virtual machine.<br>
+<p>Compiles JavaScript (JS) functions into custom bytecode executed by an embedded virtual machine.<br>
 No deobfuscator exists for RuamVM bytecode.</p>
 
 <a href="https://nodejs.org/en/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white&color=1F49AC" alt="Node.js >= 18"></a>
