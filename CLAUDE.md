@@ -135,9 +135,6 @@ test/
   integration/              Real-world patterns (Chrome extension, RuamTester)
   ruamvm/                   AST emitter and transform tests
   naming/                   Unified naming system tests (NameRegistry, AST integration, setup bridge)
-
-docs/
-  v1-transformations.md     Archived v1 pipeline documentation
 ```
 
 ## Architecture Notes
@@ -233,4 +230,3 @@ These principles govern all contributions to Ruam. They are non-negotiable.
 ## Directories to Ignore
 
 -   `TestInputExt/` and `TestOutputExt/` are manual test fixtures (a Chrome extension) — not part of the library
--   `docs/` contains only archived v1 documentation

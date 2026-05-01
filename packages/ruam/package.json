@@ -2,6 +2,28 @@
 	"name": "ruam",
 	"version": "2.0.0",
 	"description": "JS VM obfuscator — compiles functions to custom bytecode executed by an embedded interpreter",
+	"keywords": [
+		"obfuscator",
+		"obfuscation",
+		"javascript-obfuscator",
+		"vm",
+		"virtual-machine",
+		"bytecode",
+		"code-protection",
+		"anti-tamper",
+		"anti-debug",
+		"security"
+	],
+	"homepage": "https://github.com/owengregson/Ruam#readme",
+	"bugs": {
+		"url": "https://github.com/owengregson/Ruam/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/owengregson/Ruam.git",
+		"directory": "packages/ruam"
+	},
+	"author": "Owen Gregson <owen@owen.lol> (https://github.com/owengregson)",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",

@@ -29,6 +29,27 @@
       "cliFlag": "--vm-shielding"
     },
     {
+      "key": "incrementalCipher",
+      "label": "Incremental Cipher",
+      "category": "security",
+      "description": "Move instruction decryption into the VM dispatch loop",
+      "cliFlag": "--incremental-cipher"
+    },
+    {
+      "key": "semanticOpacity",
+      "label": "Semantic Opacity",
+      "category": "security",
+      "description": "Opaque predicates, handler aliasing, and encoding diversity",
+      "cliFlag": "--semantic-opacity"
+    },
+    {
+      "key": "observationResistance",
+      "label": "Observation Resistance",
+      "category": "security",
+      "description": "Silent computation corruption when instrumentation detected",
+      "cliFlag": "--observation-resistance"
+    },
+    {
       "key": "encryptBytecode",
       "label": "Encrypt Bytecode",
       "category": "security",
@@ -146,7 +167,10 @@
       "scatteredKeys": false,
       "blockPermutation": false,
       "opcodeMutation": false,
-      "bytecodeScattering": false
+      "bytecodeScattering": false,
+      "incrementalCipher": false,
+      "semanticOpacity": false,
+      "observationResistance": false
     },
     "medium": {
       "preprocessIdentifiers": true,
@@ -166,7 +190,10 @@
       "scatteredKeys": true,
       "blockPermutation": false,
       "opcodeMutation": false,
-      "bytecodeScattering": true
+      "bytecodeScattering": true,
+      "incrementalCipher": false,
+      "semanticOpacity": false,
+      "observationResistance": false
     },
     "max": {
       "preprocessIdentifiers": true,
@@ -186,7 +213,10 @@
       "scatteredKeys": true,
       "blockPermutation": true,
       "opcodeMutation": true,
-      "bytecodeScattering": true
+      "bytecodeScattering": true,
+      "incrementalCipher": true,
+      "semanticOpacity": true,
+      "observationResistance": true
     }
   },
   "autoEnableRules": [
@@ -204,6 +234,14 @@
     },
     {
       "when": "opcodeMutation",
+      "enables": "rollingCipher"
+    },
+    {
+      "when": "incrementalCipher",
+      "enables": "rollingCipher"
+    },
+    {
+      "when": "observationResistance",
       "enables": "rollingCipher"
     }
   ]

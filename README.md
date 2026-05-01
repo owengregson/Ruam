@@ -98,8 +98,15 @@ No deobfuscator exists for RuamVM bytecode.</p>
 
 <h2 id="installation">Installation</h2>
 
-<h4>NPM COMING SOON</h4>
-<pre><code>npm install ruam</code></pre>
+<pre><code>npm install ruam
+# or
+bun add ruam
+# or
+pnpm add ruam
+# or
+yarn add ruam</code></pre>
+
+<p>Requires Node.js &gt;= 18. Ships as ESM only.</p>
 
 <hr>
 
