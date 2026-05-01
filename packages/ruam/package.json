@@ -1,5 +1,5 @@
 {
-	"name": "ruam",
+	"name": "ruamvm",
 	"version": "2.0.0",
 	"description": "JS VM obfuscator — compiles functions to custom bytecode executed by an embedded interpreter",
 	"keywords": [
@@ -34,13 +34,15 @@
 		}
 	},
 	"bin": {
-		"ruam": "./dist/cli.js"
+		"ruam": "dist/cli.js",
+		"ruamvm": "dist/cli.js"
 	},
 	"files": [
 		"dist"
 	],
 	"scripts": {
 		"build": "tsup",
+		"prepublishOnly": "bun run typecheck && bun test && bun run build",
 		"generate-manifest": "node scripts/generate-manifest.mjs",
 		"build:browser": "node scripts/generate-manifest.mjs && node scripts/build-browser.mjs",
 		"typecheck": "tsc --noEmit",

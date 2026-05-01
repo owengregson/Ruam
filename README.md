@@ -98,15 +98,17 @@ No deobfuscator exists for RuamVM bytecode.</p>
 
 <h2 id="installation">Installation</h2>
 
-<pre><code>npm install ruam
+<pre><code>npm install ruam@npm:ruamvm
 # or
-bun add ruam
+bun add ruam@npm:ruamvm
 # or
-pnpm add ruam
+pnpm add ruam@npm:ruamvm
 # or
-yarn add ruam</code></pre>
+yarn add ruam@npm:ruamvm</code></pre>
 
 <p>Requires Node.js &gt;= 18. Ships as ESM only.</p>
+
+<p><i>Ruam is published to npm under the name <code>ruamvm</code> (the registry rejects <code>ruam</code> as too similar to <code>raf</code>/<code>rax</code>/<code>read</code>). Installing via the <code>ruam@npm:ruamvm</code> alias keeps imports and CLI invocations as <code>ruam</code> everywhere. The CLI binary is also installed as <code>ruamvm</code> if you prefer.</i></p>
 
 <hr>
 
