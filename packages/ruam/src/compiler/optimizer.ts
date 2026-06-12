@@ -21,6 +21,8 @@ import {
 	PURE_PUSH_OPS,
 	REG_BINOP_MAP,
 	REG_CONST_BINOP_MAP,
+	REG_CONST_CMP_JF_MAP,
+	REG_REG_CMP_JF_MAP,
 } from "./opcodes.js";
 import type { Emitter } from "./emitter.js";
 
@@ -235,6 +237,104 @@ function superinstructionPass(emitter: Emitter): boolean {
 		const c = instrs[i + 2]!;
 		if (jumpTargets.has(i + 2)) continue;
 
+		// --- Four-instruction fusions ---
+		//
+		// Attempted BEFORE the three-instruction fusions below: a
+		// compare-and-branch sequence (`LOAD_REG + operand + <cmp> +
+		// JMP_FALSE`) must collapse into a single fused opcode. If the
+		// three-instruction reg-reg / reg-const binop fusions ran first they
+		// would consume the `<cmp>` (e.g. `LOAD_REG + LOAD_REG + LT` →
+		// REG_LT), leaving the JMP_FALSE unfused and the `*_REG_JF`
+		// superinstructions dead. On guard failure these intentionally fall
+		// through to the three-instruction fusions.
+		if (i + 3 < instrs.length && !jumpTargets.has(i + 3)) {
+			const d = instrs[i + 3]!;
+
+			// LOAD_REG(r) + PUSH_CONST(c) + <cmp> + JMP_FALSE(target)
+			//   → REG_<cmp>_CONST_JF(r | c<<8 | target<<16)
+			if (
+				a.opcode === Op.LOAD_REG &&
+				b.opcode === Op.PUSH_CONST &&
+				d.opcode === Op.JMP_FALSE
+			) {
+				const superOp = REG_CONST_CMP_JF_MAP.get(c.opcode);
+				if (superOp != null) {
+					const r = a.operand;
+					const constIdx = b.operand;
+					const target = d.operand;
+					if (r <= 0xff && constIdx <= 0xff && target <= 0xffff) {
+						a.opcode = superOp;
+						a.operand =
+							(r & 0xff) |
+							((constIdx & 0xff) << 8) |
+							((target & 0xffff) << 16);
+						b.opcode = Op.NOP;
+						b.operand = 0;
+						c.opcode = Op.NOP;
+						c.operand = 0;
+						d.opcode = Op.NOP;
+						d.operand = 0;
+						changed = true;
+						continue;
+					}
+				}
+			}
+
+			// LOAD_REG(a) + LOAD_REG(b) + <cmp> + JMP_FALSE(target)
+			//   → REG_<cmp>_REG_JF(a | b<<8 | target<<16)
+			if (
+				a.opcode === Op.LOAD_REG &&
+				b.opcode === Op.LOAD_REG &&
+				d.opcode === Op.JMP_FALSE
+			) {
+				const superOp = REG_REG_CMP_JF_MAP.get(c.opcode);
+				if (superOp != null) {
+					const ra = a.operand;
+					const rb = b.operand;
+					const target = d.operand;
+					if (ra <= 0xff && rb <= 0xff && target <= 0xffff) {
+						a.opcode = superOp;
+						a.operand =
+							(ra & 0xff) |
+							((rb & 0xff) << 8) |
+							((target & 0xffff) << 16);
+						b.opcode = Op.NOP;
+						b.operand = 0;
+						c.opcode = Op.NOP;
+						c.operand = 0;
+						d.opcode = Op.NOP;
+						d.operand = 0;
+						changed = true;
+						continue;
+					}
+				}
+			}
+
+			// LOAD_REG(r) + PUSH_CONST(c) + ADD + STORE_REG(r) → REG_ADD_CONST
+			if (
+				a.opcode === Op.LOAD_REG &&
+				b.opcode === Op.PUSH_CONST &&
+				c.opcode === Op.ADD &&
+				d.opcode === Op.STORE_REG &&
+				d.operand === a.operand
+			) {
+				const r = a.operand;
+				const constIdx = b.operand;
+				if (r <= 0xffff && constIdx <= 0xffff) {
+					a.opcode = Op.REG_ADD_CONST;
+					a.operand = (r & 0xffff) | ((constIdx & 0xffff) << 16);
+					b.opcode = Op.NOP;
+					b.operand = 0;
+					c.opcode = Op.NOP;
+					c.operand = 0;
+					d.opcode = Op.NOP;
+					d.operand = 0;
+					changed = true;
+					continue;
+				}
+			}
+		}
+
 		// --- Three-instruction fusions ---
 
 		// LOAD_REG(a) + LOAD_REG(b) + <binop> → REG_<binop>(a | b<<16)
@@ -272,90 +372,6 @@ function superinstructionPass(emitter: Emitter): boolean {
 					changed = true;
 					continue;
 				}
-			}
-		}
-
-		if (i + 3 >= instrs.length) continue;
-		const d = instrs[i + 3]!;
-		if (jumpTargets.has(i + 3)) continue;
-
-		// --- Four-instruction fusions ---
-
-		// LOAD_REG(r) + PUSH_CONST(c) + LT + JMP_FALSE(target) → REG_LT_CONST_JF
-		if (
-			a.opcode === Op.LOAD_REG &&
-			b.opcode === Op.PUSH_CONST &&
-			c.opcode === Op.LT &&
-			d.opcode === Op.JMP_FALSE
-		) {
-			const r = a.operand;
-			const constIdx = b.operand;
-			const target = d.operand;
-			if (r <= 0xff && constIdx <= 0xff) {
-				a.opcode = Op.REG_LT_CONST_JF;
-				a.operand =
-					(r & 0xff) |
-					((constIdx & 0xff) << 8) |
-					((target & 0xffff) << 16);
-				b.opcode = Op.NOP;
-				b.operand = 0;
-				c.opcode = Op.NOP;
-				c.operand = 0;
-				d.opcode = Op.NOP;
-				d.operand = 0;
-				changed = true;
-				continue;
-			}
-		}
-
-		// LOAD_REG(a) + LOAD_REG(b) + LT + JMP_FALSE(target) → REG_LT_REG_JF
-		if (
-			a.opcode === Op.LOAD_REG &&
-			b.opcode === Op.LOAD_REG &&
-			c.opcode === Op.LT &&
-			d.opcode === Op.JMP_FALSE
-		) {
-			const ra = a.operand;
-			const rb = b.operand;
-			const target = d.operand;
-			if (ra <= 0xff && rb <= 0xff) {
-				a.opcode = Op.REG_LT_REG_JF;
-				a.operand =
-					(ra & 0xff) |
-					((rb & 0xff) << 8) |
-					((target & 0xffff) << 16);
-				b.opcode = Op.NOP;
-				b.operand = 0;
-				c.opcode = Op.NOP;
-				c.operand = 0;
-				d.opcode = Op.NOP;
-				d.operand = 0;
-				changed = true;
-				continue;
-			}
-		}
-
-		// LOAD_REG(r) + PUSH_CONST(c) + ADD + STORE_REG(r) → REG_ADD_CONST
-		if (
-			a.opcode === Op.LOAD_REG &&
-			b.opcode === Op.PUSH_CONST &&
-			c.opcode === Op.ADD &&
-			d.opcode === Op.STORE_REG &&
-			d.operand === a.operand
-		) {
-			const r = a.operand;
-			const constIdx = b.operand;
-			if (r <= 0xffff && constIdx <= 0xffff) {
-				a.opcode = Op.REG_ADD_CONST;
-				a.operand = (r & 0xffff) | ((constIdx & 0xffff) << 16);
-				b.opcode = Op.NOP;
-				b.operand = 0;
-				c.opcode = Op.NOP;
-				c.operand = 0;
-				d.opcode = Op.NOP;
-				d.operand = 0;
-				changed = true;
-				continue;
 			}
 		}
 	}
@@ -397,10 +413,10 @@ function removeNops(emitter: Emitter): void {
 			if (finallyIp !== 0xffff && finallyIp < instrs.length)
 				finallyIp = indexMap[finallyIp]!;
 			instr.operand = ((catchIp & 0xffff) << 16) | (finallyIp & 0xffff);
-		} else if (
-			instr.opcode === Op.REG_LT_CONST_JF ||
-			instr.opcode === Op.REG_LT_REG_JF
-		) {
+		} else if (PACKED_JUMP_OPS.has(instr.opcode)) {
+			// All other packed jumps (the REG_*_CONST_JF / REG_*_REG_JF
+			// compare-and-branch superinstructions) carry a single IP target
+			// in bits 16-31; the low 16 bits hold register/constant indices.
 			const low = instr.operand & 0xffff;
 			let target = (instr.operand >>> 16) & 0xffff;
 			if (target < instrs.length) target = indexMap[target]!;

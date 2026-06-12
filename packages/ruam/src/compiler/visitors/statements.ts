@@ -26,6 +26,19 @@ export interface LoopContext {
 	breakLabel: number;
 	continueLabel: number;
 	labelName?: string;
+	/**
+	 * True for a `switch` context. A switch is `break`-able but NOT a target
+	 * for unlabeled `continue` — an unlabeled `continue` inside a switch must
+	 * continue the nearest enclosing loop, skipping switch contexts.
+	 */
+	isSwitch?: boolean;
+	/**
+	 * The AST node of the loop / switch / labeled statement this context
+	 * represents. Used by `break`/`continue` compilation to bound the walk
+	 * that discovers intervening `try`/`finally` blocks which must be executed
+	 * before control transfers (matching native abrupt-completion semantics).
+	 */
+	node?: t.Node;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +187,8 @@ export function compileStatement(
 			compileBreakStatement(
 				path as NodePath<t.BreakStatement>,
 				emitter,
+				scope,
+				ctx,
 				loopStack
 			);
 			break;
@@ -182,6 +197,8 @@ export function compileStatement(
 			compileContinueStatement(
 				path as NodePath<t.ContinueStatement>,
 				emitter,
+				scope,
+				ctx,
 				loopStack
 			);
 			break;
@@ -726,6 +743,7 @@ function compileForStatement(
 	const loopCtx: LoopContext = {
 		breakLabel: breakTarget,
 		continueLabel: continueTarget,
+		node: path.node,
 	};
 	loopStack.push(loopCtx);
 
@@ -780,7 +798,11 @@ function compileWhileStatement(
 	compileExpression(path.get("test"), emitter, scope, ctx);
 	const exitJump = emitter.emit(Op.JMP_FALSE, 0);
 
-	const loopCtx: LoopContext = { breakLabel: -1, continueLabel: testIp };
+	const loopCtx: LoopContext = {
+		breakLabel: -1,
+		continueLabel: testIp,
+		node: path.node,
+	};
 	loopStack.push(loopCtx);
 
 	compileStatement(path.get("body"), emitter, scope, ctx, loopStack);
@@ -801,7 +823,11 @@ function compileDoWhileStatement(
 ): void {
 	const bodyIp = emitter.ip;
 
-	const loopCtx: LoopContext = { breakLabel: -1, continueLabel: -1 };
+	const loopCtx: LoopContext = {
+		breakLabel: -1,
+		continueLabel: -1,
+		node: path.node,
+	};
 	loopStack.push(loopCtx);
 
 	compileStatement(path.get("body"), emitter, scope, ctx, loopStack);
@@ -869,7 +895,11 @@ function compileForInStatement(
 		);
 	}
 
-	const loopCtx: LoopContext = { breakLabel: -1, continueLabel: testIp };
+	const loopCtx: LoopContext = {
+		breakLabel: -1,
+		continueLabel: testIp,
+		node: path.node,
+	};
 	loopStack.push(loopCtx);
 
 	compileStatement(path.get("body"), emitter, scope, ctx, loopStack);
@@ -957,7 +987,11 @@ function compileForOfStatement(
 		);
 	}
 
-	const loopCtx: LoopContext = { breakLabel: -1, continueLabel: testIp };
+	const loopCtx: LoopContext = {
+		breakLabel: -1,
+		continueLabel: testIp,
+		node: path.node,
+	};
 	loopStack.push(loopCtx);
 
 	compileStatement(path.get("body"), emitter, scope, ctx, loopStack);
@@ -1017,7 +1051,12 @@ function compileSwitchStatement(
 		caseJumps[defaultJump] = emitter.emit(Op.JMP, 0);
 	}
 
-	const loopCtx: LoopContext = { breakLabel: -1, continueLabel: -1 };
+	const loopCtx: LoopContext = {
+		breakLabel: -1,
+		continueLabel: -1,
+		isSwitch: true,
+		node: path.node,
+	};
 	loopStack.push(loopCtx);
 
 	const caseBodyIps: number[] = [];
@@ -1170,35 +1209,160 @@ export function decodeTryTarget(encoded: number): {
 function compileBreakStatement(
 	path: NodePath<t.BreakStatement>,
 	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext,
 	loopStack: LoopContext[]
 ): void {
+	let targetIdx = -1;
 	if (path.node.label) {
 		const label = path.node.label.name;
 		for (let i = loopStack.length - 1; i >= 0; i--) {
 			if (loopStack[i]!.labelName === label) {
-				emitter.emit(Op.BREAK, i);
-				return;
+				targetIdx = i;
+				break;
 			}
 		}
 	}
-	emitter.emit(Op.BREAK, loopStack.length - 1);
+	// Unlabeled `break` targets the innermost enclosing loop or switch.
+	if (targetIdx < 0) targetIdx = loopStack.length - 1;
+
+	emitCrossedFinallys(
+		path,
+		loopStack[targetIdx]?.node,
+		emitter,
+		scope,
+		ctx,
+		loopStack
+	);
+	emitter.emit(Op.BREAK, targetIdx);
 }
 
 function compileContinueStatement(
 	path: NodePath<t.ContinueStatement>,
 	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext,
 	loopStack: LoopContext[]
 ): void {
+	let targetIdx = -1;
 	if (path.node.label) {
 		const label = path.node.label.name;
 		for (let i = loopStack.length - 1; i >= 0; i--) {
 			if (loopStack[i]!.labelName === label) {
-				emitter.emit(Op.CONTINUE, i);
-				return;
+				targetIdx = i;
+				break;
 			}
 		}
 	}
-	emitter.emit(Op.CONTINUE, loopStack.length - 1);
+	if (targetIdx < 0) {
+		// Unlabeled `continue` targets the nearest enclosing LOOP, not a switch.
+		// A switch is break-able but has no continue semantics (continueLabel = -1),
+		// so targeting it would patch to `JMP -1` and corrupt dispatch. Skip switch
+		// contexts and continue the nearest real loop (matching native semantics).
+		for (let i = loopStack.length - 1; i >= 0; i--) {
+			if (!loopStack[i]!.isSwitch) {
+				targetIdx = i;
+				break;
+			}
+		}
+	}
+	// No enclosing loop (continue not legally reachable here) — emit innermost.
+	if (targetIdx < 0) targetIdx = loopStack.length - 1;
+
+	emitCrossedFinallys(
+		path,
+		loopStack[targetIdx]?.node,
+		emitter,
+		scope,
+		ctx,
+		loopStack
+	);
+	emitter.emit(Op.CONTINUE, targetIdx);
+}
+
+/**
+ * Emit the `finally` blocks that lie between a `break`/`continue` statement
+ * and its target loop/switch/label, so they execute (in order, innermost
+ * first) before control transfers — matching native abrupt-completion
+ * semantics.
+ *
+ * `break`/`continue` compile to a plain JMP (via {@link patchBreaksAndContinues}).
+ * A bare JMP would skip any intervening `finally` and leave the corresponding
+ * exception-handler frames dangling on the runtime handler stack. To match JS
+ * semantics this walks the AST from the statement up to its target, and for
+ * each enclosing `try` whose handler frame is active at this point:
+ *   - emits `TRY_POP` to remove that frame from the handler stack, then
+ *   - compiles the `try`'s `finalizer` inline (if any).
+ *
+ * A `try` frame is active (and therefore crossed) when the statement is inside
+ * the `try` block (a `TRY_PUSH` frame is always live there), or inside a
+ * `catch` clause of a `try` that also has a `finally` (the catch body runs
+ * under its own `TRY_PUSH` frame guarding the `finally`). A statement already
+ * inside a `finalizer`, or inside a `catch` of a `try` with no `finally`, has
+ * no live frame for that `try` and contributes nothing.
+ *
+ * The inlined finalizer is compiled with the same scope/loop context as the
+ * statement, so abrupt completions inside the finalizer (a nested
+ * `return`/`break`/`continue`/`throw` that overrides the original transfer)
+ * compile correctly and naturally take precedence. Exceptions raised by an
+ * inlined finalizer propagate through the still-live outer frames via the
+ * normal exception mechanism, so the duplicated tail of this sequence is dead
+ * on that path (matching native semantics).
+ */
+function emitCrossedFinallys(
+	path: NodePath<t.BreakStatement | t.ContinueStatement>,
+	targetNode: t.Node | undefined,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext,
+	loopStack: LoopContext[]
+): void {
+	if (!targetNode) return;
+
+	let cur: NodePath | null = path;
+	while (cur && cur.node !== targetNode) {
+		const parent: NodePath | null = cur.parentPath;
+		if (!parent) break;
+
+		if (parent.isTryStatement()) {
+			const tnode = parent.node;
+			let crossed = false;
+			let finalizerPath: NodePath<t.Statement> | null = null;
+
+			if (cur.node === tnode.block) {
+				// Inside the try block: a TRY_PUSH frame is always live here.
+				crossed = true;
+				finalizerPath = tnode.finalizer
+					? (parent.get("finalizer") as NodePath<t.Statement>)
+					: null;
+			} else if (tnode.handler && cur.node === tnode.handler) {
+				// Inside a catch clause: a frame is live only when the try has a
+				// finally (the catch body runs under its own guarding TRY_PUSH).
+				if (tnode.finalizer) {
+					crossed = true;
+					finalizerPath = parent.get(
+						"finalizer"
+					) as NodePath<t.Statement>;
+				}
+			}
+			// Inside the finalizer itself: no live frame, nothing to cross.
+
+			if (crossed) {
+				emitter.emit(Op.TRY_POP, 0);
+				if (finalizerPath) {
+					compileStatement(
+						finalizerPath,
+						emitter,
+						scope,
+						ctx,
+						loopStack
+					);
+				}
+			}
+		}
+
+		cur = parent;
+	}
 }
 
 function compileLabeledStatement(
@@ -1213,6 +1377,7 @@ function compileLabeledStatement(
 		breakLabel: -1,
 		continueLabel: -1,
 		labelName,
+		node: path.node,
 	};
 	loopStack.push(loopCtx);
 

@@ -29,6 +29,25 @@ const MAX_MUTATION_INTERVAL = 50;
 /** Number of swaps per mutation. */
 const SWAPS_PER_MUTATION = 4;
 
+/**
+ * Opcodes that unconditionally transfer control, so the instruction lexically
+ * following them is NOT reached by fall-through. A MUTATE inserted before such
+ * a successor would never execute via the straight-line path — it is only
+ * reachable (if at all) by a jump that lands *after* the inserted MUTATE, or it
+ * is dead code. Either way the runtime mutation state desyncs from the linear
+ * build-time encoding. (TABLE_SWITCH/LOOKUP_SWITCH are reserved/unused today but
+ * are unconditional transfers at runtime, so they are listed for safety.)
+ */
+const UNCONDITIONAL_TRANSFER_OPS = new Set<number>([
+	Op.JMP,
+	Op.RETURN,
+	Op.RETURN_VOID,
+	Op.THROW,
+	Op.RETHROW,
+	Op.TABLE_SWITCH,
+	Op.LOOKUP_SWITCH,
+]);
+
 // --- Mutation state tracking ---
 
 /**
@@ -84,41 +103,106 @@ export class MutationState {
 // --- Loop detection ---
 
 /**
- * Build a set of IPs that are inside loop bodies (backward jump targets).
+ * Build the set of IPs that are UNSAFE for a MUTATE.
  *
- * A backward jump is any jump instruction whose target IP <= its own IP.
- * The range [target, jumpIP] is a loop body. Any IP inside this range
- * must not receive a MUTATE because MUTATEs inside loops execute multiple
- * times, but adjustEncodingForMutations assumes single execution.
+ * `adjustEncodingForMutations` encodes instructions in a single LINEAR pass,
+ * assuming every MUTATE executes exactly once, in lexical order, before any
+ * instruction lexically after it. A MUTATE only honours that assumption when it
+ * sits on a point reached exactly once on every execution path. Two control-flow
+ * shapes violate it and so must be excluded:
+ *
+ *  - **Backward-jump (loop) spans** `[target, jumpIp]`: a MUTATE inside a loop
+ *    body executes on every iteration, diverging from the single-execution model.
+ *  - **Forward-jump spans** `[jumpIp+1, target]`: instructions skipped when a
+ *    forward branch is taken (if/else arms, switch cases) — and, crucially, the
+ *    body of a `try` (an exception edge jumps from anywhere in the try body to
+ *    the catch/finally target packed in `TRY_PUSH`). A MUTATE there is reached
+ *    only on some paths, so the runtime mutation state desyncs from the encoding.
+ *    The span is **target-inclusive**: a forward branch *lands on* its target,
+ *    and an inserted MUTATE precedes the original instruction at that IP, so the
+ *    landing edge is remapped to *after* the MUTATE (the loader inserts the
+ *    MUTATE before the target's instruction). The branch-taken path therefore
+ *    bypasses the MUTATE while the fall-through path runs it — exactly the
+ *    desync the linear encoding cannot represent. So the target itself is unsafe.
+ *  - **Jump-only / dead successors**: an IP whose lexical predecessor is an
+ *    unconditional transfer (`JMP`/`RETURN`/`THROW`/…) has no fall-through edge.
+ *    A MUTATE placed before it never runs on the straight-line path — control
+ *    only arrives via a jump (which lands after the MUTATE) or never (dead
+ *    code) — so build-time counts a mutation the runtime never applies.
+ *
+ * Excluding all of these leaves only straight-line, fall-through-reached
+ * positions whose mutation is crossed exactly once — correctness over mutation
+ * density (heavily-branched units may receive no MUTATEs, which is fine).
  */
-function findLoopBodyIPs(
+function findUnsafeMutationIPs(
 	instrs: readonly Instruction[],
 	jumpTable: Record<number, number>
 ): Set<number> {
-	const inLoop = new Set<number>();
+	const unsafe = new Set<number>();
+	const mark = (a: number, b: number): void => {
+		const lo = Math.max(0, a);
+		const hi = Math.min(instrs.length - 1, b);
+		for (let j = lo; j <= hi; j++) unsafe.add(j);
+	};
+
+	// An IP with no fall-through predecessor is reachable only via a jump (which
+	// lands *after* an inserted MUTATE) or not at all. Either way a MUTATE there
+	// would not be crossed exactly-once on the linear path. Mark all such IPs.
+	for (let ip = 1; ip < instrs.length; ip++) {
+		if (UNCONDITIONAL_TRANSFER_OPS.has(instrs[ip - 1]!.opcode)) {
+			unsafe.add(ip);
+		}
+	}
+
+	// Exception handling is reached via RUNTIME control edges (the exec loop's
+	// catch routes `IP = _h._ci*2 / _h._fi*2`, and RETURN/RETHROW defer through
+	// the finally) that are invisible to instruction-stream jump analysis. A
+	// catch/finally body — and anything after it, since finally-resumption can
+	// re-route — is reachable in non-linear order, so once a unit enters any
+	// try region the linear single-pass mutation encoding no longer holds.
+	// Conservatively exclude everything from the first TRY_PUSH to the end; only
+	// the straight-line prologue before any try can safely carry a MUTATE.
+	let firstTry = -1;
+	for (let ip = 0; ip < instrs.length; ip++) {
+		if (instrs[ip]!.opcode === Op.TRY_PUSH) {
+			firstTry = ip;
+			break;
+		}
+	}
+	if (firstTry >= 0) mark(firstTry, instrs.length - 1);
 
 	for (let ip = 0; ip < instrs.length; ip++) {
 		const instr = instrs[ip]!;
-		let targetIP: number | undefined;
+		const targets: number[] = [];
 
 		if (ALL_JUMP_OPS.has(instr.opcode)) {
-			// Operand is a direct IP target (or jump table label if table is used)
-			targetIP = jumpTable[instr.operand] ?? instr.operand;
+			targets.push(jumpTable[instr.operand] ?? instr.operand);
 		} else if (PACKED_JUMP_OPS.has(instr.opcode)) {
-			// Target packed in upper bits (e.g. TRY_PUSH, REG_LT_CONST_JF)
-			const packedTarget = (instr.operand >>> 16) & 0xffff;
-			targetIP = jumpTable[packedTarget] ?? packedTarget;
+			// Upper 16 bits: catch IP (TRY_PUSH) or jump target (REG_*_JF).
+			const hi = (instr.operand >>> 16) & 0xffff;
+			if (hi !== 0xffff) targets.push(jumpTable[hi] ?? hi);
+			// TRY_PUSH packs a SECOND forward target (finally IP) in the low bits.
+			if (instr.opcode === Op.TRY_PUSH) {
+				const lo = instr.operand & 0xffff;
+				if (lo !== 0xffff) targets.push(jumpTable[lo] ?? lo);
+			}
 		}
 
-		if (targetIP !== undefined && targetIP <= ip) {
-			// Backward jump: mark entire range [targetIP, ip] as in-loop
-			for (let j = targetIP; j <= ip; j++) {
-				inLoop.add(j);
+		for (const t of targets) {
+			if (t === 0xffff) continue; // "no target" sentinel
+			if (t <= ip) {
+				mark(t, ip); // backward jump → loop body (target inclusive)
+			} else {
+				// Forward jump → conditionally-skipped region, TARGET INCLUSIVE.
+				// The target is the branch's landing point; a MUTATE inserted
+				// before it is bypassed by the branch-taken path but run by the
+				// fall-through path, so it cannot sit at the target either.
+				mark(ip + 1, t);
 			}
 		}
 	}
 
-	return inLoop;
+	return unsafe;
 }
 
 /**
@@ -150,8 +234,11 @@ export function insertMutationOpcodes(
 	// against the initial shuffleMap — their dispatch would be wrong.
 	if (unit.childUnits.length > 0) return [];
 
-	// Identify IPs inside loop bodies — MUTATE must not go there
-	const loopIPs = findLoopBodyIPs(instrs, unit.jumpTable);
+	// Identify IPs that are unsafe for a MUTATE — inside loop bodies (backward
+	// jumps), conditionally-skipped forward-branch spans, or try bodies. The
+	// build-time linear encoding only holds for MUTATEs reached exactly once on
+	// every path, so MUTATEs go only at unconditionally-reached positions.
+	const unsafeIPs = findUnsafeMutationIPs(instrs, unit.jumpTable);
 
 	let state = (seed ^ GOLDEN_RATIO_PRIME) >>> 0;
 	const mutationSeeds: number[] = [];
@@ -168,7 +255,7 @@ export function insertMutationOpcodes(
 	for (let ip = 0; ip < instrs.length; ip++) {
 		// Insert mutation before this instruction if interval reached
 		// AND we're not inside a loop body
-		if (instrCount >= nextMutation && ip > 0 && !loopIPs.has(ip)) {
+		if (instrCount >= nextMutation && ip > 0 && !unsafeIPs.has(ip)) {
 			// Generate mutation seed
 			state = lcgNext(state);
 			const mutSeed = state >>> 0;
@@ -208,7 +295,7 @@ export function insertMutationOpcodes(
 
 		for (let oldIp = 0; oldIp < instrs.length; oldIp++) {
 			// Must mirror the exact insertion condition from above
-			if (count >= nextMut2 && oldIp > 0 && !loopIPs.has(oldIp)) {
+			if (count >= nextMut2 && oldIp > 0 && !unsafeIPs.has(oldIp)) {
 				newIp++; // Skip the MUTATE instruction
 				count = 0;
 				st2 = lcgNext(st2); // mutSeed

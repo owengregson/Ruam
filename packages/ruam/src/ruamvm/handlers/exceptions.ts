@@ -30,6 +30,7 @@ import {
 	throwStmt,
 	newExpr,
 	returnStmt,
+	whileStmt,
 	BOp,
 	UOp,
 } from "../nodes.js";
@@ -153,15 +154,30 @@ function FINALLY_MARK(_ctx: HandlerCtx): JsNode[] {
 /**
  * END_FINALLY: complete a finally block.
  *
- * Re-throws pending exception if one exists.
- * Completes deferred return if completion type is set.
+ * Re-throws a pending exception if one exists. Otherwise, if a `return` was
+ * deferred to run this finally (CT===1), the return must continue through any
+ * *outer* enclosing `finally` blocks before completing — so the handler stack
+ * is unwound to the next finally (preserving the deferred value in CV) and
+ * control transfers there; only when no further finally remains does the
+ * function actually return. This makes `return`-through-`finally` correct for
+ * arbitrarily nested `try`/`finally`, not just a single level.
+ *
+ * The unwind loop is driven purely by its condition (no inner
+ * `break`/`continue`/`return`) so it survives the handler-body break/return
+ * transforms applied by every dispatch style.
  *
  * ```
  * if(HPE){var ex=PE;PE=null;HPE=false;throw ex;}
- * if(CT===1){var _rv2=CV;CT=0;CV=void 0;return _rv2;}break;
+ * if(CT===1){
+ *   var _df=1;
+ *   while(_df&&EX&&EX.length>0){var _h=EX.pop();S.length=_h._sp;if(_h._fi>=0){IP=_h._fi*2;_df=0;}}
+ *   if(_df){var _rv2=CV;CT=0;CV=void 0;return _rv2;}
+ * }
+ * break;
  * ```
  */
 function END_FINALLY(ctx: HandlerCtx): JsNode[] {
+	const flag = ctx.local("retDefer");
 	return [
 		ifStmt(id(ctx.HPE), [
 			varDecl(ctx.local("error"), id(ctx.PE)),
@@ -170,10 +186,53 @@ function END_FINALLY(ctx: HandlerCtx): JsNode[] {
 			throwStmt(id(ctx.local("error"))),
 		]),
 		ifStmt(bin(BOp.Seq, id(ctx.CT), lit(1)), [
-			varDecl(ctx.t("_rv2"), id(ctx.CV)),
-			exprStmt(assign(id(ctx.CT), lit(0))),
-			exprStmt(assign(id(ctx.CV), un(UOp.Void, lit(0)))),
-			returnStmt(id(ctx.t("_rv2"))),
+			varDecl(flag, lit(1)),
+			whileStmt(
+				bin(
+					BOp.And,
+					id(flag),
+					bin(
+						BOp.And,
+						id(ctx.EX),
+						bin(BOp.Gt, member(id(ctx.EX), "length"), lit(0))
+					)
+				),
+				[
+					varDecl(ctx.t("_h"), call(member(id(ctx.EX), "pop"), [])),
+					exprStmt(
+						assign(
+							member(id(ctx.S), "length"),
+							member(id(ctx.t("_h")), ctx.t("_sp"))
+						)
+					),
+					ifStmt(
+						bin(
+							BOp.Gte,
+							member(id(ctx.t("_h")), ctx.t("_fi")),
+							lit(0)
+						),
+						[
+							exprStmt(
+								assign(
+									id(ctx.IP),
+									bin(
+										BOp.Mul,
+										member(id(ctx.t("_h")), ctx.t("_fi")),
+										lit(2)
+									)
+								)
+							),
+							exprStmt(assign(id(flag), lit(0))),
+						]
+					),
+				]
+			),
+			ifStmt(id(flag), [
+				varDecl(ctx.t("_rv2"), id(ctx.CV)),
+				exprStmt(assign(id(ctx.CT), lit(0))),
+				exprStmt(assign(id(ctx.CV), un(UOp.Void, lit(0)))),
+				returnStmt(id(ctx.t("_rv2"))),
+			]),
 		]),
 		breakStmt(),
 	];

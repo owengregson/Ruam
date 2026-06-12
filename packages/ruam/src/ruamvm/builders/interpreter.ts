@@ -823,6 +823,27 @@ function buildExecFunction(
 	const returnMech = opts.structuralChoices?.returnMechanism ?? "sentinel";
 	const returnTag = opts.structuralChoices?.returnTag ?? 1;
 
+	// --- Decode-once execution cache (Phase 1) ---
+	// When enabled, the unit's instruction stream is materialized once into a
+	// per-unit Int32Array of [resolved handler index, decrypted operand], cached
+	// on the unit. The steady-state dispatch loop then reads it directly — no
+	// per-instruction `_ht` indirection and (under rolling cipher) no
+	// per-iteration re-decryption. Gated OFF for the features whose threat model
+	// is runtime-memory instruction secrecy / tamper response (caching would
+	// defeat them). At-rest bytecode security is fully preserved (the serialized
+	// string and key derivation are untouched); this trades only runtime-memory
+	// instruction secrecy, consistent with the already-cached plaintext pool U.c.
+	// Gated to rolling-cipher builds: that is where the cache is a decisive win
+	// (it amortizes the per-instruction keystream derivation the slow path repeats
+	// every loop iteration). Without rolling cipher the operand stream is already
+	// plaintext, so caching would only duplicate memory for a marginal saving.
+	const io = opts.interpOpts;
+	const decodeCache =
+		opts.rollingCipher &&
+		!io.incrementalCipher &&
+		!io.opcodeMutation &&
+		!io.observationResistance;
+
 	let ftResult: {
 		preLoopDecls: JsNode[];
 		iifeDecls: JsNode[];
@@ -837,7 +858,8 @@ function buildExecFunction(
 			ctx.PH as string,
 			opts.isAsync,
 			returnMech,
-			returnTag
+			returnTag,
+			decodeCache
 		);
 	} else if (dispatchStyle === "object-lookup") {
 		ftResult = buildObjectLookupDispatch(
@@ -847,7 +869,8 @@ function buildExecFunction(
 			ctx.PH as string,
 			opts.isAsync,
 			returnMech,
-			returnTag
+			returnTag,
+			decodeCache
 		);
 	} else {
 		// "function-table" — the original grouped dispatch
@@ -857,7 +880,8 @@ function buildExecFunction(
 			htName,
 			ctx.PH as string,
 			opts.isAsync,
-			opts.asyncGroupOffset
+			opts.asyncGroupOffset,
+			decodeCache
 		);
 	}
 
@@ -876,7 +900,8 @@ function buildExecFunction(
 		ftResult.preLoopDecls,
 		opts.split,
 		hoistHandlers,
-		opts.seed
+		opts.seed,
+		decodeCache
 	);
 
 	// Apply tree-based obfuscation of local variable names.
@@ -938,7 +963,8 @@ function buildScaffoldAST(
 	htInit?: JsNode[],
 	split?: SplitFn,
 	hoistHandlers = false,
-	seed = 0
+	seed = 0,
+	decodeCache = false
 ): JsNode {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const fnName = isAsync ? n.execAsync : n.exec;
@@ -1099,7 +1125,11 @@ function buildScaffoldAST(
 	);
 	tryBody.push(declOrAssign(IP, lit(0)));
 	tryBody.push(declOrAssign(C, member(id(U), "c")));
-	tryBody.push(varDecl(I, member(id(U), "i"))); // I is not a slot (dispatch-only)
+	// I is not a slot (dispatch-only). With the decode-once cache, I instead
+	// points at the materialized stream (built below, after rcState init).
+	if (!decodeCache) {
+		tryBody.push(varDecl(I, member(id(U), "i")));
+	}
 	tryBody.push(declOrAssign(EX, lit(null)));
 	tryBody.push(declOrAssign(PE, lit(null)));
 	tryBody.push(declOrAssign(HPE, lit(false)));
@@ -1146,9 +1176,23 @@ function buildScaffoldAST(
 		);
 	}
 
-	// Optional: rolling cipher init — var rcState=rcDeriveKey(U)
+	// Optional: rolling cipher init. rcDeriveKey(U) is a pure function of the
+	// unit's constant metadata (folded with the closure key anchor), so it is
+	// invariant across every exec() of a given unit — memoize it on U.k to avoid
+	// recomputing the FNV derivation per call (a hot cost under recursion). Only
+	// the per-exec LOCAL rcState is ever poisoned (observation resistance); the
+	// memoized U.k stays the clean master key, so tamper response is unaffected.
 	if (rollingCipher) {
-		tryBody.push(varDecl(n.rcState, call(id(n.rcDeriveKey), [id(U)])));
+		tryBody.push(
+			varDecl(
+				n.rcState,
+				ternary(
+					bin(BOp.Sneq, member(id(U), "k"), un(UOp.Void, lit(0))),
+					member(id(U), "k"),
+					assign(member(id(U), "k"), call(id(n.rcDeriveKey), [id(U)]))
+				)
+			)
+		);
 	}
 
 	// Optional: incremental cipher init
@@ -1167,6 +1211,156 @@ function buildScaffoldAST(
 		tryBody.push(...buildStackEncodingProxyAST(n, temps, split));
 	}
 
+	// --- Decode-once execution cache (Phase 1) ---
+	// Materialize, once per unit, an Int32Array holding [resolved handler index,
+	// decrypted operand] for every instruction, cached on U.d. The keystream is a
+	// pure function of instruction index (position-keyed), so a single forward
+	// pass yields the correct plaintext for EVERY position regardless of how the
+	// loop later reaches it (sequential, jump, or exception route). I then points
+	// at the cache; the dispatch loop reads handler index + operand directly.
+	if (decodeCache) {
+		const HT = T("_ht");
+		const DI = "d"; // unit-object property holding the decoded stream
+		const SRC = "mvSrc",
+			LEN = "mvLen",
+			ARR = "mvArr",
+			POS = "mvPos",
+			IDX = "mvIdx",
+			KS = "mvKs";
+
+		// Per-instruction body: resolve handler index + decode operand.
+		const loopBody: JsNode[] = [];
+		if (rollingCipher) {
+			// var mvIdx = mvPos >>> 1;  (instruction index = keystream position)
+			loopBody.push(varDecl(IDX, bin(BOp.Ushr, id(POS), lit(1))));
+			// Inline rcMix(rcState, mvIdx, mvIdx ^ GOLDEN): byte-identical to the
+			// per-instruction decrypt the slow path performs.
+			loopBody.push(varDecl(KS, id(n.rcState)));
+			loopBody.push(
+				exprStmt(
+					assign(
+						id(KS),
+						bin(
+							BOp.Ushr,
+							call(id(n.imul), [
+								bin(BOp.BitXor, id(KS), id(IDX)),
+								L(0x85ebca6b),
+							]),
+							lit(0)
+						)
+					)
+				)
+			);
+			loopBody.push(
+				exprStmt(
+					assign(
+						id(KS),
+						bin(
+							BOp.Ushr,
+							call(id(n.imul), [
+								bin(
+									BOp.BitXor,
+									id(KS),
+									bin(BOp.BitXor, id(IDX), L(0x9e3779b9))
+								),
+								L(0xc2b2ae35),
+							]),
+							lit(0)
+						)
+					)
+				)
+			);
+			loopBody.push(
+				exprStmt(
+					assign(
+						id(KS),
+						bin(BOp.BitXor, id(KS), bin(BOp.Ushr, id(KS), lit(16)))
+					)
+				)
+			);
+			loopBody.push(
+				exprStmt(assign(id(KS), bin(BOp.Ushr, id(KS), lit(0))))
+			);
+			// mvArr[mvPos] = _ht[ (mvSrc[mvPos] ^ (mvKs & 0xFFFF)) & 0xFFFF ];
+			loopBody.push(
+				exprStmt(
+					assign(
+						index(id(ARR), id(POS)),
+						index(
+							id(HT),
+							bin(
+								BOp.BitAnd,
+								bin(
+									BOp.BitXor,
+									index(id(SRC), id(POS)),
+									bin(BOp.BitAnd, id(KS), lit(0xffff))
+								),
+								lit(0xffff)
+							)
+						)
+					)
+				)
+			);
+			// mvArr[mvPos+1] = (mvSrc[mvPos+1] ^ mvKs) | 0;
+			loopBody.push(
+				exprStmt(
+					assign(
+						index(id(ARR), bin(BOp.Add, id(POS), lit(1))),
+						bin(
+							BOp.BitOr,
+							bin(
+								BOp.BitXor,
+								index(id(SRC), bin(BOp.Add, id(POS), lit(1))),
+								id(KS)
+							),
+							lit(0)
+						)
+					)
+				)
+			);
+		} else {
+			// Light variant (no rolling cipher): pre-resolve handler indices,
+			// operand passthrough. mvSrc is already plaintext, so the cache
+			// exposes nothing new — purely removes the _ht indirection.
+			loopBody.push(
+				exprStmt(
+					assign(
+						index(id(ARR), id(POS)),
+						index(id(HT), index(id(SRC), id(POS)))
+					)
+				)
+			);
+			loopBody.push(
+				exprStmt(
+					assign(
+						index(id(ARR), bin(BOp.Add, id(POS), lit(1))),
+						index(id(SRC), bin(BOp.Add, id(POS), lit(1)))
+					)
+				)
+			);
+		}
+
+		// if (!U.d) { var mvSrc=U.i; var mvLen=mvSrc.length; var mvArr=new
+		//   Int32Array(mvLen); for(var mvPos=0; mvPos<mvLen; mvPos+=2){ ... }
+		//   U.d = mvArr; }
+		tryBody.push(
+			ifStmt(un(UOp.Not, member(id(U), DI)), [
+				varDecl(SRC, member(id(U), "i")),
+				varDecl(LEN, member(id(SRC), "length")),
+				varDecl(ARR, newExpr(id("Int32Array"), [id(LEN)])),
+				forStmt(
+					varDecl(POS, lit(0)),
+					bin(BOp.Lt, id(POS), id(LEN)),
+					assign(id(POS), lit(2), AOp.Add),
+					loopBody
+				),
+				exprStmt(assign(member(id(U), DI), id(ARR))),
+			])
+		);
+		// var I = U.d;
+		tryBody.push(varDecl(I, member(id(U), DI)));
+	}
+
 	// var _il=I.length
 	tryBody.push(varDecl(T("_il"), member(id(I), "length")));
 
@@ -1180,8 +1374,9 @@ function buildScaffoldAST(
 	whileBody.push(declOrAssign(O, index(id(I), bin(BOp.Add, id(IP), lit(1)))));
 	whileBody.push(exprStmt(assign(id(IP), lit(2), AOp.Add)));
 
-	// Compute instruction index (shared by incremental cipher + rolling cipher)
-	if (rollingCipher) {
+	// Compute instruction index (shared by incremental cipher + rolling cipher).
+	// Skipped under the decode cache — operands are already decrypted in U.d.
+	if (rollingCipher && !decodeCache) {
 		// var _ri=(IP-2)>>>1
 		whileBody.push(
 			varDecl(
@@ -1346,8 +1541,9 @@ function buildScaffoldAST(
 		);
 	}
 
-	// Optional: rolling cipher decrypt (inlined rcMix for performance)
-	if (rollingCipher) {
+	// Optional: rolling cipher decrypt (inlined rcMix for performance).
+	// Skipped under the decode cache — the materialized stream is already decrypted.
+	if (rollingCipher && !decodeCache) {
 		// Inline rcMix(rcState, _ri, _ri ^ 0x9E3779B9):
 		// var _ks = rcState;
 		whileBody.push(varDecl(T("_ks"), id(n.rcState)));
@@ -1870,7 +2066,8 @@ function buildFunctionTableDispatch(
 	htName: string,
 	phName: string,
 	isAsync: boolean,
-	groupCountOffset = 0
+	groupCountOffset = 0,
+	decodeCache = false
 ): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
 	const FRS = temps["_frs"];
 	const FRV = temps["_frv"];
@@ -1966,7 +2163,14 @@ function buildFunctionTableDispatch(
 	const dispatchNodes: JsNode[] = [];
 
 	// var _fdi = _ht[PH]
-	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+	// Under the decode cache, PH already holds the resolved handler index
+	// (pre-computed during materialization); otherwise resolve via _ht.
+	dispatchNodes.push(
+		varDecl(
+			FDI,
+			decodeCache ? id(phName) : index(id(htName), id(phName))
+		)
+	);
 
 	// Build if-else routing tree with grouped dispatch calls.
 	// Each branch: if (_fgN[_fdi - offset]() === _frs) return _frv;
@@ -2075,7 +2279,8 @@ function buildDirectArrayDispatch(
 	phName: string,
 	isAsync: boolean,
 	returnMech: string,
-	returnTag: number
+	returnTag: number,
+	decodeCache = false
 ): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
 	const FRS = temps["_frs"];
 	const FRV = temps["_frv"];
@@ -2141,7 +2346,14 @@ function buildDirectArrayDispatch(
 
 	// Dispatch nodes
 	const dispatchNodes: JsNode[] = [];
-	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+	// Under the decode cache, PH already holds the resolved handler index
+	// (pre-computed during materialization); otherwise resolve via _ht.
+	dispatchNodes.push(
+		varDecl(
+			FDI,
+			decodeCache ? id(phName) : index(id(htName), id(phName))
+		)
+	);
 
 	const awaitNode = (expr: JsNode): JsNode =>
 		({ type: "AwaitExpr", expr } as JsNode);
@@ -2198,7 +2410,8 @@ function buildObjectLookupDispatch(
 	phName: string,
 	isAsync: boolean,
 	returnMech: string,
-	returnTag: number
+	returnTag: number,
+	decodeCache = false
 ): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
 	const FRS = temps["_frs"];
 	const FRV = temps["_frv"];
@@ -2262,7 +2475,14 @@ function buildObjectLookupDispatch(
 
 	// Dispatch nodes
 	const dispatchNodes: JsNode[] = [];
-	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+	// Under the decode cache, PH already holds the resolved handler index
+	// (pre-computed during materialization); otherwise resolve via _ht.
+	dispatchNodes.push(
+		varDecl(
+			FDI,
+			decodeCache ? id(phName) : index(id(htName), id(phName))
+		)
+	);
 
 	const awaitNode = (expr: JsNode): JsNode =>
 		({ type: "AwaitExpr", expr } as JsNode);
