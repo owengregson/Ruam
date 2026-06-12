@@ -2614,21 +2614,31 @@ function buildStackEncodingKeyExpr(n: RuntimeNames, split?: SplitFn): JsNode {
 /**
  * Build the IIFE-scope stack-encoding helper functions `stkEnc` / `stkDec`.
  *
- * These replace the legacy `Proxy` get/set traps with plain function calls:
+ * These replace the legacy `Proxy` get/set traps with plain function calls and
+ * use an allocation-free representation on the int32 hot path:
  *
  *   stkEnc(v, i, k) -> the stored entry for value v at slot i (key base k):
- *     int32  -> [0, v ^ ((k ^ (i*GR))>>>0)]   (position-XOR-masked)
- *     bool   -> [1, v?1:0]
- *     string -> [2, v]
- *     else   -> [3, v]                          (floats, objects, undefined: raw)
- *   stkDec(e, i, k) -> the decoded value from entry e at slot i (inverse).
+ *     int32  -> v ^ ((k ^ (i*GR))>>>0)   (BARE masked number — NO allocation)
+ *     else   -> [v]                       (boxed: floats, bool, string, object,
+ *                                          null, undefined, function, symbol, …)
+ *   stkDec(e, i, k) -> the decoded value from entry e at slot i (inverse):
+ *     typeof e === 'number' -> e ^ ((k ^ (i*GR))>>>0)   (masked int, incl. 0)
+ *     else                  -> e[0]                      (unbox)
  *
- * The representation and key formula are byte-identical to the old Proxy, so
- * encode/decode remain exact inverses (and position re-keying on stack moves is
- * preserved by callers passing the destination index to stkEnc). Defined once at
- * IIFE scope and shared across all exec calls; the per-unit key is passed in as
- * `k` (a per-exec local) rather than captured, so recursion with differing units
- * stays correct.
+ * The ONLY bare numbers on the stack are masked int32s, so a `typeof` test
+ * unambiguously distinguishes them from boxed values. A float is also
+ * `typeof === 'number'` but is NOT an int32 ((v|0)===v fails), so it is boxed —
+ * never bare — preventing stkDec from wrongly unmasking it. -0 masks-as-int and
+ * round-trips to +0 (`-0 ^ k === k`, `k ^ k === 0`), matching JS `-0|0===0` and
+ * the old `[tag,payload]` scheme exactly. NaN/Infinity/2^31..2^32 are boxed.
+ *
+ * The key formula and per-unit `_sek` key are byte-identical to the old Proxy,
+ * so int32 stack values remain position-XOR-masked with the same keystream;
+ * non-ints remain exposed (boxed, unmasked) exactly as before. The eliminated
+ * allocation is the per-push `[tag,payload]` array, which dominated push/pop.
+ * Defined once at IIFE scope and shared across all exec calls; the per-unit key
+ * is passed in as `k` (a per-exec local) rather than captured, so recursion with
+ * differing units stays correct.
  *
  * @param n - Runtime identifier names (provides stkEnc/stkDec)
  * @param split - Optional constant splitter for numeric obfuscation
@@ -2652,43 +2662,29 @@ export function buildStackEncodingHelpers(
 
 	// stkEnc(v,i,k)
 	const encBody: JsNode[] = [
-		// var t=typeof v
-		varDecl("t", un(UOp.Typeof, id("v"))),
-		// if(t==='number'&&(v|0)===v)return[0,v^key]
+		// if(typeof v==='number'&&(v|0)===v)return v^key  — bare masked int, no alloc
 		ifStmt(
 			bin(
 				BOp.And,
-				bin(BOp.Seq, id("t"), lit("number")),
+				bin(BOp.Seq, un(UOp.Typeof, id("v")), lit("number")),
 				bin(BOp.Seq, bin(BOp.BitOr, id("v"), lit(0)), id("v"))
 			),
-			[returnStmt(arr(lit(0), bin(BOp.BitXor, id("v"), xorKey(id("i")))))]
+			[returnStmt(bin(BOp.BitXor, id("v"), xorKey(id("i"))))]
 		),
-		// if(t==='boolean')return[1,v?1:0]
-		ifStmt(bin(BOp.Seq, id("t"), lit("boolean")), [
-			returnStmt(arr(lit(1), ternary(id("v"), lit(1), lit(0)))),
-		]),
-		// if(t==='string')return[2,v]
-		ifStmt(bin(BOp.Seq, id("t"), lit("string")), [
-			returnStmt(arr(lit(2), id("v"))),
-		]),
-		// return[3,v]
-		returnStmt(arr(lit(3), id("v"))),
+		// return[v]  — box everything else (floats/bool/string/object/null/…)
+		returnStmt(arr(id("v"))),
 	];
 
 	// stkDec(e,i,k)
 	const decBody: JsNode[] = [
-		// if(!e)return void 0
+		// if(typeof e==='number')return e^key  — masked int (incl. 0)
+		ifStmt(bin(BOp.Seq, un(UOp.Typeof, id("e")), lit("number")), [
+			returnStmt(bin(BOp.BitXor, id("e"), xorKey(id("i")))),
+		]),
+		// if(!e)return void 0  — empty/undefined slot (e is not a number here)
 		ifStmt(un(UOp.Not, id("e")), [returnStmt(un(UOp.Void, lit(0)))]),
-		// if(e[0]===0)return e[1]^key
-		ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(0)), [
-			returnStmt(bin(BOp.BitXor, index(id("e"), lit(1)), xorKey(id("i")))),
-		]),
-		// if(e[0]===1)return !!e[1]
-		ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(1)), [
-			returnStmt(un(UOp.Not, un(UOp.Not, index(id("e"), lit(1))))),
-		]),
-		// return e[1]
-		returnStmt(index(id("e"), lit(1))),
+		// return e[0]  — unbox
+		returnStmt(index(id("e"), lit(0))),
 	];
 
 	return [

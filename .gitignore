@@ -65,3 +65,6 @@ apps/web/public/ruam-worker.mjs
 
 # Serena data files
 .serena/
+
+# transient agent worktrees
+.claude/worktrees/
