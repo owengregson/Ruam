@@ -433,6 +433,8 @@ export function buildDeserializer(
 				["st", band(flags, 4)],
 				["a", band(flags, 8)],
 				["el", band(flags, 16)],
+				["xh", band(flags, 32)],
+				["tc", band(flags, 64)],
 				["bl", id(DBLM)]
 			)
 		)

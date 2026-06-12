@@ -300,6 +300,26 @@ export interface BytecodeUnit {
 	 */
 	scopeless: boolean;
 
+	/**
+	 * Whether the unit uses the exception-completion machinery
+	 * (`PE`/`HPE`/`CT`/`CV` interpreter slots + the dispatch-loop `catch`
+	 * routing). `true` when the (logical) bytecode contains any exception
+	 * opcode (try/catch/finally/rethrow). Drives the per-call save/restore of
+	 * those four hoisted slots: a unit with `false` never reads or writes them,
+	 * so they are neither initialized nor snapshotted on entry. Computed from
+	 * the post-optimization logical opcodes (see compiler/slot-analysis.ts).
+	 */
+	usesExceptions: boolean;
+
+	/**
+	 * Whether the unit reads the this-context interpreter slots `TV`/`NT`/`HO`
+	 * (`this`, `new.target`, lexical-`this` closures, `super`). `true` when the
+	 * (logical) bytecode contains any such opcode. Drives the per-call
+	 * copy-in/save/restore of those three hoisted slots; a `false` unit leaves
+	 * the caller's values untouched.
+	 */
+	usesThisContext: boolean;
+
 	/** Constant pool index for the function's name (`-1` if anonymous). */
 	nameConstIndex: number;
 

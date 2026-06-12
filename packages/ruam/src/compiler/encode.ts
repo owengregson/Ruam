@@ -236,6 +236,8 @@ export function serializeUnitToJson(
 		st: unit.isStrict,
 		a: unit.isArrow || false,
 		el: unit.scopeless || false,
+		xh: unit.usesExceptions || false,
+		tc: unit.usesThisContext || false,
 	});
 }
 
@@ -308,7 +310,13 @@ function serializeUnit(
 		(unit.isAsync ? 2 : 0) |
 		(unit.isStrict ? 4 : 0) |
 		(unit.isArrow ? 8 : 0) |
-		(unit.scopeless ? 16 : 0);
+		(unit.scopeless ? 16 : 0) |
+		// bit 32: unit uses exception-completion machinery (PE/HPE/CT/CV).
+		// Precomputed at compile time on LOGICAL opcodes — `unit.instructions`
+		// here may already be physical (adjustEncodingForMutations).
+		(unit.usesExceptions ? 32 : 0) |
+		// bit 64: unit reads this-context slots (TV/NT/HO).
+		(unit.usesThisContext ? 64 : 0);
 
 	writeU8(1); // format version
 	writeU16(flags);

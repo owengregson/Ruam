@@ -1052,6 +1052,54 @@ function buildScaffoldAST(
 		slotNames.push(T("_sek"));
 	}
 
+	// --- Per-unit minimal save/restore partition ---
+	// The per-call slot snapshot/restore is the dominant overhead under deep
+	// recursion. Most units touch only a subset of slots, so two groups are
+	// saved/restored only when the unit actually uses them (flags packed on U
+	// at compile time — see compiler/slot-analysis.ts):
+	//   • EXC group {PE,HPE,CT,CV} — gated on `U.xh` (exception machinery).
+	//   • TC  group {TV,NT,HO}     — gated on `U.tc` (this/super/new.target/closure).
+	// Everything else (incl. EX, which RETURN reads on every return, and A,
+	// read by ordinary param loads) is CORE — always saved. The snapshot uses
+	// scalar locals (not a per-call array) to avoid an allocation each call.
+	const EXC_SET = new Set([PE, HPE, CT, CV]);
+	const TC_SET = new Set([n.tVal, n.nTgt, n.ho]);
+	const coreSlots = slotNames.filter(
+		(s) => !EXC_SET.has(s) && !TC_SET.has(s)
+	);
+	const excSlots = slotNames.filter((s) => EXC_SET.has(s));
+	const tcSlots = slotNames.filter((s) => TC_SET.has(s));
+	// Snapshot-local name per slot (renamed to a short name by obfuscateLocals).
+	const snapName = new Map<string, string>();
+	slotNames.forEach((s, i) => snapName.set(s, "vmSnap" + i));
+	const snap = (s: string): JsNode => id(snapName.get(s)!);
+	// Runtime flag locals (read once from U). `unitP` is the unit param.
+	const fXh = "vmUsesXh";
+	const fTc = "vmUsesTc";
+	/** Partitioned slot restore (used by the recursion guard + the outer finally). */
+	const buildSlotRestore = (): JsNode[] => {
+		const out: JsNode[] = coreSlots.map((s) =>
+			exprStmt(assign(id(s), snap(s)))
+		);
+		if (excSlots.length > 0) {
+			out.push(
+				ifStmt(
+					id(fXh),
+					excSlots.map((s) => exprStmt(assign(id(s), snap(s))))
+				)
+			);
+		}
+		if (tcSlots.length > 0) {
+			out.push(
+				ifStmt(
+					id(fTc),
+					tcSlots.map((s) => exprStmt(assign(id(s), snap(s))))
+				)
+			);
+		}
+		return out;
+	};
+
 	// When hoisting, use distinct parameter names so they don't shadow
 	// the IIFE-scope slot variables. These names (length >= 3, no _ prefix)
 	// will be renamed by obfuscateLocals to short 2-char names.
@@ -1068,18 +1116,53 @@ function buildScaffoldAST(
 	// depth++
 	outerBody.push(exprStmt(update(UpOp.Inc, false, id(n.depth))));
 
-	// When hoisting, save current IIFE-scope slot values and copy params
+	// When hoisting, snapshot current IIFE-scope slot values and copy params.
 	if (hoistHandlers) {
-		// var saved = [S, R, IP, C, O, SC, EX, PE, HPE, CT, CV, U, A, TV, NT, HO, _g]
-		outerBody.push(
-			varDecl("saved", arr(...slotNames.map((name) => id(name))))
-		);
-		// Copy params to IIFE-scope slots
+		// Read the per-unit slot-usage flags once (packed on U at compile time).
+		outerBody.push(varDecl(fXh, member(id(paramU), "xh")));
+		outerBody.push(varDecl(fTc, member(id(paramU), "tc")));
+		// CORE snapshot — scalar locals (no per-call array allocation).
+		for (const s of coreSlots) {
+			outerBody.push(varDecl(snapName.get(s)!, id(s)));
+		}
+		// EXC + TC snapshot vars are declared unconditionally (so the finally
+		// restore can reference them) but only assigned when the unit uses them.
+		for (const s of [...excSlots, ...tcSlots]) {
+			outerBody.push(varDecl(snapName.get(s)!));
+		}
+		if (excSlots.length > 0) {
+			outerBody.push(
+				ifStmt(
+					id(fXh),
+					excSlots.map((s) =>
+						exprStmt(assign(id(snapName.get(s)!), id(s)))
+					)
+				)
+			);
+		}
+		if (tcSlots.length > 0) {
+			outerBody.push(
+				ifStmt(
+					id(fTc),
+					tcSlots.map((s) =>
+						exprStmt(assign(id(snapName.get(s)!), id(s)))
+					)
+				)
+			);
+		}
+		// Copy params to IIFE-scope slots. U/A are CORE (always). The
+		// this-context params are copied only when the unit reads them.
 		outerBody.push(exprStmt(assign(id(U), id(paramU))));
 		outerBody.push(exprStmt(assign(id(A), id(paramA))));
-		outerBody.push(exprStmt(assign(id(n.tVal), id(paramTV))));
-		outerBody.push(exprStmt(assign(id(n.nTgt), id(paramNT))));
-		outerBody.push(exprStmt(assign(id(n.ho), id(paramHO))));
+		if (tcSlots.length > 0) {
+			outerBody.push(
+				ifStmt(id(fTc), [
+					exprStmt(assign(id(n.tVal), id(paramTV))),
+					exprStmt(assign(id(n.nTgt), id(paramNT))),
+					exprStmt(assign(id(n.ho), id(paramHO))),
+				])
+			);
+		}
 	}
 
 	// callStack tracking — only in debug mode (avoids per-call array push/pop)
@@ -1105,12 +1188,8 @@ function buildScaffoldAST(
 		guardBody.push(exprStmt(call(member(id(n.callStack), "pop"), [])));
 	}
 	if (hoistHandlers) {
-		// Restore slot values before throwing (save array is still in scope)
-		for (let i = 0; i < slotNames.length; i++) {
-			guardBody.push(
-				exprStmt(assign(id(slotNames[i]!), index(id("saved"), lit(i))))
-			);
-		}
+		// Restore snapshot values before throwing (snapshot locals still in scope)
+		guardBody.push(...buildSlotRestore());
 	}
 	guardBody.push(
 		throwStmt(
@@ -1158,10 +1237,25 @@ function buildScaffoldAST(
 		tryBody.push(varDecl(I, member(id(U), "i")));
 	}
 	tryBody.push(declOrAssign(EX, lit(null)));
-	tryBody.push(declOrAssign(PE, lit(null)));
-	tryBody.push(declOrAssign(HPE, lit(false)));
-	tryBody.push(declOrAssign(CT, lit(0)));
-	tryBody.push(declOrAssign(CV, un(UOp.Void, lit(0))));
+	if (hoistHandlers) {
+		// PE/HPE/CT/CV are touched only by exception units; initialize them
+		// (and save/restore them) only when `U.xh` is set. A non-exception unit
+		// never reads or writes them, so the caller's values pass through
+		// untouched and need no snapshot.
+		tryBody.push(
+			ifStmt(id(fXh), [
+				exprStmt(assign(id(PE), lit(null))),
+				exprStmt(assign(id(HPE), lit(false))),
+				exprStmt(assign(id(CT), lit(0))),
+				exprStmt(assign(id(CV), un(UOp.Void, lit(0)))),
+			])
+		);
+	} else {
+		tryBody.push(declOrAssign(PE, lit(null)));
+		tryBody.push(declOrAssign(HPE, lit(false)));
+		tryBody.push(declOrAssign(CT, lit(0)));
+		tryBody.push(declOrAssign(CV, un(UOp.Void, lit(0))));
+	}
 	// Scope-object elision: units whose compiled body never mutates, reassigns,
 	// or captures their scope (`U.el`) can reuse the outer scope directly,
 	// avoiding a per-call `Object.create` allocation + a prototype-chain hop.
@@ -1707,11 +1801,17 @@ function buildScaffoldAST(
 		);
 	}
 
+	// The exception-completion machinery (PE/HPE/CT/CV resets + EX routing) is
+	// collected here so it can be gated on `U.xh` when hoisting: a non-exception
+	// unit never touches these slots, so its caught native exceptions must
+	// propagate via the bare `throw e` below without disturbing them.
+	const excCatch: JsNode[] = [];
+
 	// HPE=false; PE=null; CT=0; CV=void 0;
-	catchBody.push(exprStmt(assign(id(HPE), lit(false))));
-	catchBody.push(exprStmt(assign(id(PE), lit(null))));
-	catchBody.push(exprStmt(assign(id(CT), lit(0))));
-	catchBody.push(exprStmt(assign(id(CV), un(UOp.Void, lit(0)))));
+	excCatch.push(exprStmt(assign(id(HPE), lit(false))));
+	excCatch.push(exprStmt(assign(id(PE), lit(null))));
+	excCatch.push(exprStmt(assign(id(CT), lit(0))));
+	excCatch.push(exprStmt(assign(id(CV), un(UOp.Void, lit(0)))));
 
 	// if(EX&&EX.length>0){...}
 	const exHandlerBody: JsNode[] = [];
@@ -1804,12 +1904,21 @@ function buildScaffoldAST(
 		)
 	);
 
-	catchBody.push(
+	excCatch.push(
 		ifStmt(
 			bin(BOp.And, id(EX), bin(BOp.Gt, member(id(EX), "length"), lit(0))),
 			exHandlerBody
 		)
 	);
+
+	// Emit the exception machinery: gated on `U.xh` when hoisting (so
+	// non-exception units leave PE/HPE/CT/CV — which they never save — alone),
+	// inline otherwise (async path uses per-call locals, always needed).
+	if (hoistHandlers) {
+		catchBody.push(ifStmt(id(fXh), excCatch));
+	} else {
+		catchBody.push(...excCatch);
+	}
 
 	// Optional: debug uncaught logging
 	if (debug) {
@@ -1849,13 +1958,10 @@ function buildScaffoldAST(
 	if (debug) {
 		finallyBody.push(exprStmt(call(member(id(n.callStack), "pop"), [])));
 	}
-	// Restore saved slot values when hoisting
+	// Restore snapshot slot values when hoisting (partitioned: CORE always,
+	// EXC/TC only when the unit uses them — matching what was snapshotted).
 	if (hoistHandlers) {
-		for (let i = 0; i < slotNames.length; i++) {
-			finallyBody.push(
-				exprStmt(assign(id(slotNames[i]!), index(id("saved"), lit(i))))
-			);
-		}
+		finallyBody.push(...buildSlotRestore());
 	}
 
 	// Outer try-finally wrapping the whole body

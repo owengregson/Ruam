@@ -21,6 +21,10 @@ import {
 } from "./visitors/statements.js";
 import { compileClassExpr } from "./visitors/classes.js";
 import type { BytecodeUnit } from "../types.js";
+import {
+	computeUsesExceptions,
+	computeUsesThisContext,
+} from "./slot-analysis.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 import {
 	analyzeCapturedVars,
@@ -368,6 +372,15 @@ function compileFunctionInner(
 		captureResult.hasDynamicScope
 	);
 
+	// Per-unit interpreter-slot usage flags. Computed here on the FINAL logical
+	// opcodes (post-optimization, pre-shuffle/mutation) — NOT in encode.ts,
+	// because `adjustEncodingForMutations` rewrites `instructions[].opcode` to
+	// physical values before serialization, which would make a logical-opcode
+	// scan there return seed-dependent garbage. These drive the hoisted-slot
+	// save/restore minimization (see compiler/slot-analysis.ts).
+	const usesExceptions = computeUsesExceptions(emitter.instructions);
+	const usesThisContext = computeUsesThisContext(emitter.instructions);
+
 	return {
 		id: genUnitId(),
 		constants: emitter.constants,
@@ -382,6 +395,8 @@ function compileFunctionInner(
 		isAsync,
 		isArrow,
 		scopeless,
+		usesExceptions,
+		usesThisContext,
 		nameConstIndex,
 		outerNames: scope.outerNames,
 		childUnits: [],
