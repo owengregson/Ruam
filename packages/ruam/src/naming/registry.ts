@@ -5,7 +5,11 @@
 
 import { NameScope, type LengthTier, deriveSeed } from "./scope.js";
 import { RESERVED_WORDS, EXCLUDED_NAMES } from "./reserved.js";
-import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
+import {
+	LCG_MULTIPLIER,
+	LCG_INCREMENT,
+	GLOBAL_IDENTIFIERS,
+} from "../constants.js";
 
 // --- Alphabet ---
 
@@ -23,7 +27,18 @@ export class NameRegistry {
 
 	constructor(seed: number) {
 		this._seed = seed >>> 0;
-		this._globalUsed = new Set([...RESERVED_WORDS, ...EXCLUDED_NAMES]);
+		// Exclude reserved words, excluded short names, AND all well-known
+		// globals — a generated identifier emitted as a top-level `var X = …`
+		// must never collide with a host global. Read-only globals the runtime
+		// does not itself use (e.g. `Bun`, `Deno`, `NaN`, `Infinity`,
+		// `globalThis`) would throw "assign to readonly property"; runtime-used
+		// globals (`Object`, `Map`, …) would shadow and break the VM. Excluding
+		// the canonical GLOBAL_IDENTIFIERS set closes both at the source.
+		this._globalUsed = new Set([
+			...RESERVED_WORDS,
+			...EXCLUDED_NAMES,
+			...GLOBAL_IDENTIFIERS,
+		]);
 	}
 
 	/** Whether resolveAll() has been called. */

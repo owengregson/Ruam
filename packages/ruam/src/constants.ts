@@ -82,13 +82,21 @@ export const GLOBAL_IDENTIFIERS = new Set([
 	"cancelAnimationFrame",
 	"queueMicrotask",
 
-	// Node.js globals
+	// Node.js / runtime globals
 	"require",
 	"module",
 	"exports",
 	"__dirname",
 	"__filename",
 	"process",
+	"Bun",
+	"Deno",
+	"setTimeout",
+	"setInterval",
+	"clearTimeout",
+	"clearInterval",
+	"queueMicrotask",
+	"setImmediate",
 	"Buffer",
 
 	// Browser globals
