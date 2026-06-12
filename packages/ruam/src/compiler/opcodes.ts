@@ -808,6 +808,42 @@ export enum Op {
 	/** LOAD_REG(a) + LOAD_REG(b) + SNEQ + JMP_FALSE(t). */
 	REG_SNEQ_REG_JF,
 
+	// --- Superinstructions (Tier 3, batch 2) ---
+	//
+	//     Additional semantics-preserving fusions in the pure register / stack /
+	//     compare "safe zone": no method-receiver, `this`, property-write, or
+	//     call-arg ordering. Appended here (just before MUTATE) so the numeric
+	//     values of all pre-existing opcodes are preserved.
+
+	/** ADD_ASSIGN_REG(r) + POP → `R[r]+=TOS`, result discarded. Operand: r. */
+	REG_ADD_ASSIGN_VOID,
+	/** SUB_ASSIGN_REG(r) + POP → `R[r]-=TOS`, no push. Operand: r. */
+	REG_SUB_ASSIGN_VOID,
+	/** MUL_ASSIGN_REG(r) + POP → `R[r]*=TOS`, no push. Operand: r. */
+	REG_MUL_ASSIGN_VOID,
+	/** DIV_ASSIGN_REG(r) + POP → `R[r]/=TOS`, no push. Operand: r. */
+	REG_DIV_ASSIGN_VOID,
+	/** MOD_ASSIGN_REG(r) + POP → `R[r]%=TOS`, no push. Operand: r. */
+	REG_MOD_ASSIGN_VOID,
+
+	/** LOAD_REG(r) + GET_PROP_DYNAMIC → `S[top]=S[top][R[r]]` (index TOS by register). Operand: r. */
+	IDX_REG,
+	/** LOAD_REG(a) + LOAD_REG(b) + GET_PROP_DYNAMIC → push R[a][R[b]]. Operand: a | (b << 16). */
+	REG_GET_PROP_DYN,
+
+	/** PUSH_CONST(c) + LT + JMP_FALSE(t) → `if(!(pop()<C[c]))IP=t*2`. Operand: c | (t << 16). */
+	CONST_LT_JF,
+	/** PUSH_CONST(c) + LTE + JMP_FALSE(t). Operand: c | (t << 16). */
+	CONST_LTE_JF,
+	/** PUSH_CONST(c) + GT + JMP_FALSE(t). Operand: c | (t << 16). */
+	CONST_GT_JF,
+	/** PUSH_CONST(c) + GTE + JMP_FALSE(t). Operand: c | (t << 16). */
+	CONST_GTE_JF,
+	/** PUSH_CONST(c) + SEQ + JMP_FALSE(t) → `if(!(pop()===C[c]))IP=t*2`. Operand: c | (t << 16). */
+	CONST_SEQ_JF,
+	/** PUSH_CONST(c) + SNEQ + JMP_FALSE(t). Operand: c | (t << 16). */
+	CONST_SNEQ_JF,
+
 	// ═════════════════════════════════════════════════════════════════════════
 	// 25. Runtime Mutation
 	// ═════════════════════════════════════════════════════════════════════════
@@ -880,6 +916,14 @@ export const PACKED_JUMP_OPS = new Set<Op>([
 	Op.REG_GTE_REG_JF,
 	Op.REG_SEQ_REG_JF,
 	Op.REG_SNEQ_REG_JF,
+	// Const compare-and-branch (TOS vs constant): jump target in bits 16-31,
+	// constant index in the low 16 bits.
+	Op.CONST_LT_JF,
+	Op.CONST_LTE_JF,
+	Op.CONST_GT_JF,
+	Op.CONST_GTE_JF,
+	Op.CONST_SEQ_JF,
+	Op.CONST_SNEQ_JF,
 ]);
 
 /**
@@ -977,6 +1021,37 @@ export const REG_REG_CMP_JF_MAP = new Map<Op, Op>([
 	[Op.GTE, Op.REG_GTE_REG_JF],
 	[Op.SEQ, Op.REG_SEQ_REG_JF],
 	[Op.SNEQ, Op.REG_SNEQ_REG_JF],
+]);
+
+/**
+ * Mapping from comparison opcode to its fused TOS-vs-constant compare-and-branch
+ * superinstruction (`PUSH_CONST + <cmp> + JMP_FALSE`). The LHS is popped off the
+ * stack and compared against the constant. Used by the superinstruction pass.
+ */
+export const CONST_CMP_JF_MAP = new Map<Op, Op>([
+	[Op.LT, Op.CONST_LT_JF],
+	[Op.LTE, Op.CONST_LTE_JF],
+	[Op.GT, Op.CONST_GT_JF],
+	[Op.GTE, Op.CONST_GTE_JF],
+	[Op.SEQ, Op.CONST_SEQ_JF],
+	[Op.SNEQ, Op.CONST_SNEQ_JF],
+]);
+
+/**
+ * Push-then-pop strength-reduction map: a stack-pushing register op directly
+ * followed by POP (statement-form `i++`, `s += x`, etc.) reduces to a variant
+ * that omits the dead push. POST_INC/DEC_REG reuse the existing no-push
+ * INC/DEC_REG; the compound-assign forms map to dedicated `*_VOID` opcodes.
+ * Used by the peephole pass. The operand (register index) is preserved.
+ */
+export const PUSH_POP_VOID_MAP = new Map<Op, Op>([
+	[Op.POST_INC_REG, Op.INC_REG],
+	[Op.POST_DEC_REG, Op.DEC_REG],
+	[Op.ADD_ASSIGN_REG, Op.REG_ADD_ASSIGN_VOID],
+	[Op.SUB_ASSIGN_REG, Op.REG_SUB_ASSIGN_VOID],
+	[Op.MUL_ASSIGN_REG, Op.REG_MUL_ASSIGN_VOID],
+	[Op.DIV_ASSIGN_REG, Op.REG_DIV_ASSIGN_VOID],
+	[Op.MOD_ASSIGN_REG, Op.REG_MOD_ASSIGN_VOID],
 ]);
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -215,6 +215,48 @@ function REG_GET_PROP(ctx: HandlerCtx): JsNode[] {
 }
 registry.set(Op.REG_GET_PROP, REG_GET_PROP);
 
+/**
+ * REG_GET_PROP_DYN: dynamic (computed) property get from two registers.
+ *
+ * Fuses `LOAD_REG(a) + LOAD_REG(b) + GET_PROP_DYNAMIC` — pushes `R[a][R[b]]`.
+ * Pure read; no receiver/`this`/write semantics. Operand: a (low 16) | b (high 16).
+ * Encoding-aware: the result is pushed via `ctx.push`.
+ */
+function REG_GET_PROP_DYN(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl(ctx.local("regA"), lo16(ctx)),
+		varDecl(ctx.local("regB"), hi16(ctx)),
+		exprStmt(
+			ctx.push(
+				index(
+					index(id(ctx.R), id(ctx.local("regA"))),
+					index(id(ctx.R), id(ctx.local("regB")))
+				)
+			)
+		),
+		breakStmt(),
+	];
+}
+registry.set(Op.REG_GET_PROP_DYN, REG_GET_PROP_DYN);
+
+/**
+ * IDX_REG: index the top-of-stack object by a register value.
+ *
+ * Fuses `LOAD_REG(r) + GET_PROP_DYNAMIC` — replaces TOS `obj` with `obj[R[r]]`
+ * (object stays on stack, consumed in place). Operand: r.
+ *
+ * Encoding-aware: reads the top via `ctx.peek()` (decoded) and overwrites it
+ * via `ctx.setTop(...)` — NOT `assign(ctx.peek(), …)`, which is invalid under
+ * stackEncoding (there `peek()` is a `stkDec(...)` call and cannot be an lvalue).
+ */
+function IDX_REG(ctx: HandlerCtx): JsNode[] {
+	return [
+		exprStmt(ctx.setTop(index(ctx.peek(), index(id(ctx.R), id(ctx.O))))),
+		breakStmt(),
+	];
+}
+registry.set(Op.IDX_REG, IDX_REG);
+
 // --- Conditional jump operations ---
 
 /**
@@ -314,3 +356,55 @@ registry.set(Op.REG_GT_REG_JF, regRegCmpJf(BOp.Gt));
 registry.set(Op.REG_GTE_REG_JF, regRegCmpJf(BOp.Gte));
 registry.set(Op.REG_SEQ_REG_JF, regRegCmpJf(BOp.Seq));
 registry.set(Op.REG_SNEQ_REG_JF, regRegCmpJf(BOp.Sneq));
+
+/**
+ * Build a fused "compare TOS vs constant, jump if false" handler.
+ *
+ * Fuses `PUSH_CONST(c) + <cmp> + JMP_FALSE(t)`. The comparison LHS is the value
+ * already on top of the stack (the elided PUSH_CONST would have pushed the RHS),
+ * so it is popped and compared against `C[ci]` — operand order preserved (popped
+ * LHS on the left, constant on the right), matching the cmp handler's
+ * `S[top] <op> S.pop()` semantics.
+ *
+ * Operand packing: ci=low 16 bits, tgt=bits 16-31.
+ *
+ * Pattern:
+ * ```
+ * var ci=O&0xFFFF;var tgt=(O>>>16)&0xFFFF;
+ * if(!(S.pop() <op> C[ci]))IP=tgt*2;break;
+ * ```
+ *
+ * Encoding-aware: the LHS is read via `ctx.pop()` (decoded under stackEncoding).
+ *
+ * @param op - The JS comparison operator (e.g. BOp.Lt, BOp.Seq)
+ * @returns Handler function producing the case body
+ */
+function constCmpJf(op: BOpKind): HandlerFn {
+	return (ctx) => [
+		varDecl(ctx.local("constIdx"), lo16(ctx)),
+		varDecl(ctx.local("target"), hi16(ctx)),
+		ifStmt(
+			un(
+				UOp.Not,
+				bin(op, ctx.pop(), index(id(ctx.C), id(ctx.local("constIdx"))))
+			),
+			[
+				exprStmt(
+					assign(
+						id(ctx.IP),
+						bin(BOp.Mul, id(ctx.local("target")), lit(2))
+					)
+				),
+			]
+		),
+		breakStmt(),
+	];
+}
+
+// Constant-vs-TOS compare-and-branch (jump if false).
+registry.set(Op.CONST_LT_JF, constCmpJf(BOp.Lt));
+registry.set(Op.CONST_LTE_JF, constCmpJf(BOp.Lte));
+registry.set(Op.CONST_GT_JF, constCmpJf(BOp.Gt));
+registry.set(Op.CONST_GTE_JF, constCmpJf(BOp.Gte));
+registry.set(Op.CONST_SEQ_JF, constCmpJf(BOp.Seq));
+registry.set(Op.CONST_SNEQ_JF, constCmpJf(BOp.Sneq));
