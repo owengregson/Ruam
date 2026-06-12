@@ -287,6 +287,19 @@ export interface BytecodeUnit {
 	/** Whether the source function was an arrow function. */
 	isArrow: boolean;
 
+	/**
+	 * Whether the unit's per-call scope object can be elided.
+	 *
+	 * `true` when the compiled body never adds an own property to its scope
+	 * object, never reassigns the scope (push/pop block/catch/with), and never
+	 * captures the scope into a closure — i.e. it contains none of the
+	 * scope-dependent opcodes and has no dynamic scope (`eval`/`with`).  For
+	 * such units the runtime uses `SC = OS` (the outer scope) directly instead
+	 * of `SC = Object.create(OS)`, saving an allocation and a prototype hop on
+	 * every call.  Reads/writes/global-fallbacks are semantically identical.
+	 */
+	scopeless: boolean;
+
 	/** Constant pool index for the function's name (`-1` if anonymous). */
 	nameConstIndex: number;
 

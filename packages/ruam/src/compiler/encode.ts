@@ -235,6 +235,7 @@ export function serializeUnitToJson(
 		s: unit.isAsync,
 		st: unit.isStrict,
 		a: unit.isArrow || false,
+		el: unit.scopeless || false,
 	});
 }
 
@@ -306,7 +307,8 @@ function serializeUnit(
 		(unit.isGenerator ? 1 : 0) |
 		(unit.isAsync ? 2 : 0) |
 		(unit.isStrict ? 4 : 0) |
-		(unit.isArrow ? 8 : 0);
+		(unit.isArrow ? 8 : 0) |
+		(unit.scopeless ? 16 : 0);
 
 	writeU8(1); // format version
 	writeU16(flags);

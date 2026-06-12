@@ -1135,12 +1135,19 @@ function buildScaffoldAST(
 	tryBody.push(declOrAssign(HPE, lit(false)));
 	tryBody.push(declOrAssign(CT, lit(0)));
 	tryBody.push(declOrAssign(CV, un(UOp.Void, lit(0))));
+	// Scope-object elision: units whose compiled body never mutates, reassigns,
+	// or captures their scope (`U.el`) can reuse the outer scope directly,
+	// avoiding a per-call `Object.create` allocation + a prototype-chain hop.
+	// A missing/false flag falls back to the always-correct `Object.create`.
+	const osRef = (): JsNode => (hoistHandlers ? id(paramOS) : id(OS));
 	tryBody.push(
 		declOrAssign(
 			SC,
-			call(member(id("Object"), "create"), [
-				hoistHandlers ? id(paramOS) : id(OS),
-			])
+			ternary(
+				member(id(U), "el"),
+				osRef(),
+				call(member(id("Object"), "create"), [osRef()])
+			)
 		)
 	);
 	// Stack pointer (P) eliminated — stack uses Array.push/pop/length

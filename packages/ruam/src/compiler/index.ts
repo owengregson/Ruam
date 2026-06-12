@@ -29,6 +29,96 @@ import {
 import { optimizeInstructions } from "./optimizer.js";
 
 // ---------------------------------------------------------------------------
+// Scope-object elision
+// ---------------------------------------------------------------------------
+
+/**
+ * Opcodes that make a unit NON-elidable for per-call scope-object elision.
+ *
+ * Ruam's scope chain is prototypal: each call normally does
+ * `SC = Object.create(OS)` and scoped variables become own properties on `SC`.
+ * A unit only needs its own `SC` layer if at runtime it can:
+ *
+ *  - **add an own property to `SC`** — variable/function/class declarations
+ *    (`DECLARE_VAR/LET/CONST`) and a named catch binding (`CATCH_BIND` writes
+ *    `SC[name]`); or
+ *  - **reassign `SC`** to a fresh child / parent — `PUSH_SCOPE`,
+ *    `PUSH_BLOCK_SCOPE`, `PUSH_CATCH_SCOPE`, `PUSH_WITH_SCOPE`, `POP_SCOPE`; or
+ *  - **capture `SC`** into a closure as the child's outer scope — every
+ *    closure/function-creating opcode forwards `SC`.
+ *
+ * Opcodes that only READ free variables up the chain, ASSIGN to existing or
+ * global bindings, or modify a found binding in place (`LOAD_SCOPED`,
+ * `STORE_SCOPED`, `TYPEOF_GLOBAL`, `LOAD/STORE_GLOBAL`, the compound
+ * `*_SCOPED` ops, `PUSH/STORE_CLOSURE_VAR`, etc.) never create a property on
+ * `SC`, so they are SAFE and absent from this set — for those, `SC = OS` is
+ * observationally identical.
+ *
+ * This set is intentionally CONSERVATIVE: it also lists `TDZ_MARK` and
+ * `DELETE_SCOPED` (which only ever co-occur with declarations) and the
+ * currently-unused Tier-4 indexed-scope opcodes, because including a safe
+ * opcode here can only suppress an elision — never cause incorrectness.  The
+ * optimizer never fuses or rewrites any of these opcodes into a different
+ * opcode, so scanning the final (post-optimization) logical instruction
+ * stream is exact.
+ */
+const SCOPE_DEPENDENT_OPS: ReadonlySet<Op> = new Set<Op>([
+	// Add an own property to the current scope object.
+	Op.DECLARE_VAR,
+	Op.DECLARE_LET,
+	Op.DECLARE_CONST,
+	Op.CATCH_BIND,
+	// Reassign the scope to a child (push) or parent (pop).
+	Op.PUSH_SCOPE,
+	Op.PUSH_BLOCK_SCOPE,
+	Op.PUSH_CATCH_SCOPE,
+	Op.PUSH_WITH_SCOPE,
+	Op.POP_SCOPE,
+	// Conservative: only emitted alongside declarations, but listed anyway.
+	Op.TDZ_MARK,
+	Op.DELETE_SCOPED,
+	// Capture the scope into a closure (forwarded as the child's outer scope).
+	Op.NEW_CLOSURE,
+	Op.NEW_FUNCTION,
+	Op.NEW_ARROW,
+	Op.NEW_ASYNC,
+	Op.NEW_GENERATOR,
+	Op.NEW_ASYNC_GENERATOR,
+	// Tier-4 indexed scope (currently never emitted; future-proof — any use of
+	// an indexed scope frame makes the unit non-elidable).
+	Op.LOAD_SLOT,
+	Op.STORE_SLOT,
+	Op.DECLARE_SLOT,
+	Op.INC_SLOT,
+	Op.DEC_SLOT,
+	Op.POST_INC_SLOT,
+	Op.POST_DEC_SLOT,
+	Op.ADD_ASSIGN_SLOT,
+	Op.SUB_ASSIGN_SLOT,
+	Op.MUL_ASSIGN_SLOT,
+	Op.PUSH_INDEXED_SCOPE,
+	Op.POP_INDEXED_SCOPE,
+]);
+
+/**
+ * Determine whether a unit's per-call scope object can be elided (`SC = OS`).
+ *
+ * @param instructions - The unit's FINAL (post-optimization) logical instructions.
+ * @param hasDynamicScope - Whether the source used `eval`/`with` (forces a real scope).
+ * @returns `true` when no scope-dependent opcode is present and scope is static.
+ */
+function computeScopeless(
+	instructions: { opcode: number }[],
+	hasDynamicScope: boolean
+): boolean {
+	if (hasDynamicScope) return false;
+	for (const ins of instructions) {
+		if (SCOPE_DEPENDENT_OPS.has(ins.opcode as Op)) return false;
+	}
+	return true;
+}
+
+// ---------------------------------------------------------------------------
 // Unit ID generation
 // ---------------------------------------------------------------------------
 
@@ -268,6 +358,16 @@ function compileFunctionInner(
 	// -- Optimization passes (Tiers 2 & 3) ----------------------------------
 	optimizeInstructions(emitter);
 
+	// -- Scope-object elision -----------------------------------------------
+	// Scan the FINAL opcodes (still logical here, before the per-file shuffle)
+	// for any scope-dependent opcode.  When none are present and the function
+	// has no dynamic scope, the per-call `Object.create(OS)` layer is provably
+	// redundant and the runtime can use `SC = OS` directly.
+	const scopeless = computeScopeless(
+		emitter.instructions,
+		captureResult.hasDynamicScope
+	);
+
 	return {
 		id: genUnitId(),
 		constants: emitter.constants,
@@ -281,6 +381,7 @@ function compileFunctionInner(
 		isGenerator,
 		isAsync,
 		isArrow,
+		scopeless,
 		nameConstIndex,
 		outerNames: scope.outerNames,
 		childUnits: [],
