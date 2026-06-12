@@ -75,6 +75,8 @@ export const RUNTIME_POST_TEMP_KEYS = [
 	"strCache",
 	"strAcc",
 	"btDecode",
+	"stkEnc",
+	"stkDec",
 ] as const;
 
 // --- Temp Names (from naming/claims.ts TEMP_NAME_KEYS) ---
@@ -241,4 +243,6 @@ export const SHARED_RUNTIME_KEYS = [
 	"strCache",
 	"strAcc",
 	"btDecode",
+	"stkEnc",
+	"stkDec",
 ] as const;

@@ -138,6 +138,8 @@ function buildRuntimeNames(tokens: Map<string, NameToken>): RuntimeNames {
 		strCache: get("strCache"),
 		strAcc: get("strAcc"),
 		btDecode: get("btDecode"),
+		stkEnc: get("stkEnc"),
+		stkDec: get("stkDec"),
 	};
 }
 

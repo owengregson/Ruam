@@ -175,7 +175,7 @@ function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			assign(ctx.peek(), bin(BOp.Add, un(UOp.Pos, ctx.peek()), id(ctx.O)))
+			ctx.setTop(bin(BOp.Add, un(UOp.Pos, ctx.peek()), id(ctx.O)))
 		),
 		breakStmt(),
 	];
@@ -185,7 +185,7 @@ function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			assign(ctx.peek(), bin(BOp.Sub, un(UOp.Pos, ctx.peek()), id(ctx.O)))
+			ctx.setTop(bin(BOp.Sub, un(UOp.Pos, ctx.peek()), id(ctx.O)))
 		),
 		breakStmt(),
 	];

@@ -24,7 +24,7 @@ import { registry } from "./registry.js";
  * `S[P]=!S[P];break;`
  */
 registry.set(Op.NOT, (ctx: HandlerCtx) => [
-	exprStmt(assign(ctx.peek(), un(UOp.Not, ctx.peek()))),
+	exprStmt(ctx.setTop(un(UOp.Not, ctx.peek()))),
 	breakStmt(),
 ]);
 

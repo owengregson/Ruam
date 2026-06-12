@@ -202,6 +202,11 @@ export function buildInterpreterFunctions(
 		names.ho,
 		T("_g"),
 	];
+	// Stack-encoding key slot — declared at IIFE scope so hoisted sync handlers
+	// (which reference `_sek` via stkDec/stkEnc) can see it; set per exec call.
+	if (effectiveOpts.stackEncoding) {
+		slotNames.push(T("_sek"));
+	}
 	for (const name of slotNames) {
 		iifeDecls.push(varDecl(name, un(UOp.Void, lit(0))));
 	}
@@ -586,7 +591,13 @@ function buildCasesForMode(
 	// gets further transformed by those passes.
 	if (interpOpts.observationResistance) {
 		const witnessResult = buildWitnessCounter(names, temps, seed, split);
-		const probeResult = buildStackProbe(names, seed, split);
+		const probeResult = buildStackProbe(
+			names,
+			temps,
+			seed,
+			split,
+			interpOpts.stackEncoding
+		);
 
 		// PRNG for witness check selection
 		let witnessSeed = deriveSeed(seed, "witnessCheck") >>> 0;
@@ -728,7 +739,13 @@ function buildCasesForModeInternal(
 	debug: boolean,
 	handlerIndices: number[]
 ): CaseClause[] {
-	const ctx = makeHandlerCtx(names, temps, isAsync, debug);
+	const ctx = makeHandlerCtx(
+		names,
+		temps,
+		isAsync,
+		debug,
+		interpOpts.stackEncoding
+	);
 
 	// Build raw cases from the handler registry
 	const rawCases: CaseClause[] = [];
@@ -813,7 +830,13 @@ function buildExecFunction(
 		registry?: NameRegistry;
 	}
 ): { fnNode: JsNode; iifeDecls: JsNode[] } {
-	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
+	const ctx = makeHandlerCtx(
+		names,
+		temps,
+		opts.isAsync,
+		opts.debug,
+		opts.interpOpts.stackEncoding
+	);
 	const htName = temps["_ht"];
 	if (htName === undefined) throw new Error("Missing temp: _ht");
 
@@ -1024,6 +1047,10 @@ function buildScaffoldAST(
 				T("_g"),
 		  ]
 		: [];
+	// The stack-encoding key `_sek` is a slot too (hoisted handlers read it).
+	if (hoistHandlers && interpOpts.stackEncoding) {
+		slotNames.push(T("_sek"));
+	}
 
 	// When hoisting, use distinct parameter names so they don't shadow
 	// the IIFE-scope slot variables. These names (length >= 3, no _ prefix)
@@ -1213,9 +1240,13 @@ function buildScaffoldAST(
 		);
 	}
 
-	// Optional: stack encoding proxy
+	// Optional: stack encoding — bind the per-exec key to the `_sek` slot (it is
+	// a save/restored IIFE-scope slot so hoisted handler closures can see it; the
+	// stkEnc/stkDec helpers are defined once at IIFE scope; the stack stays plain).
 	if (interpOpts.stackEncoding) {
-		tryBody.push(...buildStackEncodingProxyAST(n, temps, split));
+		tryBody.push(
+			declOrAssign(T("_sek"), buildStackEncodingKeyExpr(n, split))
+		);
 	}
 
 	// --- Decode-once execution cache (Phase 1) ---
@@ -1705,8 +1736,22 @@ function buildScaffoldAST(
 	catchRouteBody.push(
 		exprStmt(assign(member(id(S), "length"), member(id(T("_h")), T("_sp"))))
 	);
-	// Push error onto stack: S.push(e)
-	catchRouteBody.push(exprStmt(call(member(id(S), "push"), [id("e")])));
+	// Push error onto stack: S.push(stkEnc?(e, S.length, _sek))
+	// (scaffold-level push — must encode like ctx.push when stackEncoding, or a
+	// handler peek would decode a raw Error as e[1] === undefined.)
+	catchRouteBody.push(
+		exprStmt(
+			call(member(id(S), "push"), [
+				interpOpts.stackEncoding
+					? call(id(n.stkEnc), [
+							id("e"),
+							member(id(S), "length"),
+							id(T("_sek")),
+					  ])
+					: id("e"),
+			])
+		)
+	);
 	// IP=_h._ci*2
 	catchRouteBody.push(
 		exprStmt(
@@ -2527,197 +2572,127 @@ function buildObjectLookupDispatch(
 	return { preLoopDecls, iifeDecls, dispatchNodes };
 }
 
-// --- Stack encoding proxy (AST) ---
+// --- Stack encoding (AST) ---
 
 /**
- * Build the Proxy-based stack encoding wrapper as AST nodes.
+ * Build the per-exec stack-encoding key expression: `(U.i.length ^ U.r ^ const) >>> 0`.
  *
- * Wraps the raw stack array in a Proxy that XOR-encodes numeric values
- * on set and decodes on get. Transparent to all opcode handlers.
+ * This is the per-unit key base folded into the position-dependent XOR mask.
+ * The caller binds it to the `_sek` slot via `declOrAssign` (so it is an
+ * IIFE-scope slot variable, saved/restored per exec for recursion safety, just
+ * like `S`/`C`/`O` — hoisted handler closures reference it directly). The stack
+ * array itself stays a plain `Array`; values are encoded/decoded via the
+ * IIFE-scope `stkEnc`/`stkDec` helpers ({@link buildStackEncodingHelpers})
+ * instead of a `Proxy`. Far faster (no per-access trap, V8 keeps the array's
+ * fast element path) while preserving the exact in-memory representation
+ * (`[tag,payload]` entries with int32s position-XOR-masked) — so at-rest
+ * stack-memory secrecy is identical.
  *
  * @param n - Runtime identifier names
- * @param temps - Temp name mapping
  * @param split - Optional constant splitter for numeric obfuscation
- * @returns Array of JsNode statements to insert into the function body
+ * @returns The `_sek` key expression node
  */
-function buildStackEncodingProxyAST(
+function buildStackEncodingKeyExpr(n: RuntimeNames, split?: SplitFn): JsNode {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
+	const U = n.unit;
+	// (U.i.length^U.r^0x5A3C96E1)>>>0
+	return bin(
+		BOp.Ushr,
+		bin(
+			BOp.BitXor,
+			bin(
+				BOp.BitXor,
+				member(member(id(U), "i"), "length"),
+				member(id(U), "r")
+			),
+			L(0x5a3c96e1)
+		),
+		lit(0)
+	);
+}
+
+/**
+ * Build the IIFE-scope stack-encoding helper functions `stkEnc` / `stkDec`.
+ *
+ * These replace the legacy `Proxy` get/set traps with plain function calls:
+ *
+ *   stkEnc(v, i, k) -> the stored entry for value v at slot i (key base k):
+ *     int32  -> [0, v ^ ((k ^ (i*GR))>>>0)]   (position-XOR-masked)
+ *     bool   -> [1, v?1:0]
+ *     string -> [2, v]
+ *     else   -> [3, v]                          (floats, objects, undefined: raw)
+ *   stkDec(e, i, k) -> the decoded value from entry e at slot i (inverse).
+ *
+ * The representation and key formula are byte-identical to the old Proxy, so
+ * encode/decode remain exact inverses (and position re-keying on stack moves is
+ * preserved by callers passing the destination index to stkEnc). Defined once at
+ * IIFE scope and shared across all exec calls; the per-unit key is passed in as
+ * `k` (a per-exec local) rather than captured, so recursion with differing units
+ * stays correct.
+ *
+ * @param n - Runtime identifier names (provides stkEnc/stkDec)
+ * @param split - Optional constant splitter for numeric obfuscation
+ * @returns Two `var stkEnc = function(...){}` / `var stkDec = ...` declarations
+ */
+export function buildStackEncodingHelpers(
 	n: RuntimeNames,
-	temps: TempNames,
 	split?: SplitFn
 ): JsNode[] {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
-	const S = n.stk;
-	const U = n.unit;
-	const SEK = temps["_sek"]!;
-	const SERAW = temps["_seRaw"]!;
+	const ENC = n.stkEnc;
+	const DEC = n.stkDec;
 
-	// var _sek=(U.i.length^U.r^0x5A3C96E1)>>>0
-	const sekInit = varDecl(
-		SEK,
+	// (k^(i*0x9E3779B9))>>>0 — position key, k is the per-unit base param.
+	const xorKey = (iVar: JsNode): JsNode =>
 		bin(
 			BOp.Ushr,
-			bin(
-				BOp.BitXor,
-				bin(
-					BOp.BitXor,
-					member(member(id(U), "i"), "length"),
-					member(id(U), "r")
-				),
-				L(0x5a3c96e1)
-			),
-			lit(0)
-		)
-	);
-
-	// var _seRaw=[]
-	const seRawInit = varDecl(SERAW, arr());
-
-	// Helper: (_sek^(i*0x9E3779B9))>>>0
-	const xorKey = (iVar: JsNode) =>
-		bin(
-			BOp.Ushr,
-			bin(BOp.BitXor, id(SEK), bin(BOp.Mul, iVar, L(0x9e3779b9))),
+			bin(BOp.BitXor, id("k"), bin(BOp.Mul, iVar, L(0x9e3779b9))),
 			lit(0)
 		);
 
-	// set handler function body
-	const setBody: JsNode[] = [
-		// var i=+k
-		varDecl("i", un(UOp.Pos, id("k"))),
-		// if(i===i&&i>=0){...}else{_seRaw[k]=v;}
+	// stkEnc(v,i,k)
+	const encBody: JsNode[] = [
+		// var t=typeof v
+		varDecl("t", un(UOp.Typeof, id("v"))),
+		// if(t==='number'&&(v|0)===v)return[0,v^key]
 		ifStmt(
 			bin(
 				BOp.And,
-				bin(BOp.Seq, id("i"), id("i")),
-				bin(BOp.Gte, id("i"), lit(0))
+				bin(BOp.Seq, id("t"), lit("number")),
+				bin(BOp.Seq, bin(BOp.BitOr, id("v"), lit(0)), id("v"))
 			),
-			[
-				// var t=typeof v
-				varDecl("t", un(UOp.Typeof, id("v"))),
-				// if(t==='number'&&(v|0)===v){_seRaw[i]=[0,v^((_sek^(i*0x9E3779B9))>>>0)];}
-				ifStmt(
-					bin(
-						BOp.And,
-						bin(BOp.Seq, id("t"), lit("number")),
-						bin(BOp.Seq, bin(BOp.BitOr, id("v"), lit(0)), id("v"))
-					),
-					[
-						exprStmt(
-							assign(
-								index(id(SERAW), id("i")),
-								arr(
-									lit(0),
-									bin(BOp.BitXor, id("v"), xorKey(id("i")))
-								)
-							)
-						),
-					],
-					[
-						// else if(t==='boolean'){_seRaw[i]=[1,v?1:0];}
-						ifStmt(
-							bin(BOp.Seq, id("t"), lit("boolean")),
-							[
-								exprStmt(
-									assign(
-										index(id(SERAW), id("i")),
-										arr(
-											lit(1),
-											ternary(id("v"), lit(1), lit(0))
-										)
-									)
-								),
-							],
-							[
-								// else if(t==='string'){_seRaw[i]=[2,v];}
-								ifStmt(
-									bin(BOp.Seq, id("t"), lit("string")),
-									[
-										exprStmt(
-											assign(
-												index(id(SERAW), id("i")),
-												arr(lit(2), id("v"))
-											)
-										),
-									],
-									[
-										// else{_seRaw[i]=[3,v];}
-										exprStmt(
-											assign(
-												index(id(SERAW), id("i")),
-												arr(lit(3), id("v"))
-											)
-										),
-									]
-								),
-							]
-						),
-					]
-				),
-			],
-			[
-				// else{_seRaw[k]=v;}
-				exprStmt(assign(index(id(SERAW), id("k")), id("v"))),
-			]
+			[returnStmt(arr(lit(0), bin(BOp.BitXor, id("v"), xorKey(id("i")))))]
 		),
-		// return true
-		returnStmt(lit(true)),
-	];
-
-	// get handler function body
-	const getBody: JsNode[] = [
-		// var i=+k
-		varDecl("i", un(UOp.Pos, id("k"))),
-		// if(i===i&&i>=0){...}
-		ifStmt(
-			bin(
-				BOp.And,
-				bin(BOp.Seq, id("i"), id("i")),
-				bin(BOp.Gte, id("i"), lit(0))
-			),
-			[
-				// var e=_seRaw[i]
-				varDecl("e", index(id(SERAW), id("i"))),
-				// if(!e)return void 0
-				ifStmt(un(UOp.Not, id("e")), [
-					returnStmt(un(UOp.Void, lit(0))),
-				]),
-				// if(e[0]===0)return e[1]^((_sek^(i*0x9E3779B9))>>>0)
-				ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(0)), [
-					returnStmt(
-						bin(BOp.BitXor, index(id("e"), lit(1)), xorKey(id("i")))
-					),
-				]),
-				// if(e[0]===1)return !!e[1]
-				ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(1)), [
-					returnStmt(
-						un(UOp.Not, un(UOp.Not, index(id("e"), lit(1))))
-					),
-				]),
-				// return e[1]
-				returnStmt(index(id("e"), lit(1))),
-			]
-		),
-		// if(k==='length')return _seRaw.length
-		ifStmt(bin(BOp.Seq, id("k"), lit("length")), [
-			returnStmt(member(id(SERAW), "length")),
+		// if(t==='boolean')return[1,v?1:0]
+		ifStmt(bin(BOp.Seq, id("t"), lit("boolean")), [
+			returnStmt(arr(lit(1), ternary(id("v"), lit(1), lit(0)))),
 		]),
-		// return _seRaw[k]
-		returnStmt(index(id(SERAW), id("k"))),
+		// if(t==='string')return[2,v]
+		ifStmt(bin(BOp.Seq, id("t"), lit("string")), [
+			returnStmt(arr(lit(2), id("v"))),
+		]),
+		// return[3,v]
+		returnStmt(arr(lit(3), id("v"))),
 	];
 
-	// S=new Proxy(_seRaw,{set:function(_,k,v){...},get:function(_,k){...}})
-	const proxyAssign = exprStmt(
-		assign(
-			id(S),
-			newExpr(id("Proxy"), [
-				id(SERAW),
-				obj(
-					["set", fnExpr(undefined, ["_", "k", "v"], setBody)],
-					["get", fnExpr(undefined, ["_", "k"], getBody)]
-				),
-			])
-		)
-	);
+	// stkDec(e,i,k)
+	const decBody: JsNode[] = [
+		// if(!e)return void 0
+		ifStmt(un(UOp.Not, id("e")), [returnStmt(un(UOp.Void, lit(0)))]),
+		// if(e[0]===0)return e[1]^key
+		ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(0)), [
+			returnStmt(bin(BOp.BitXor, index(id("e"), lit(1)), xorKey(id("i")))),
+		]),
+		// if(e[0]===1)return !!e[1]
+		ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(1)), [
+			returnStmt(un(UOp.Not, un(UOp.Not, index(id("e"), lit(1))))),
+		]),
+		// return e[1]
+		returnStmt(index(id("e"), lit(1))),
+	];
 
-	return [sekInit, seRawInit, proxyAssign];
+	return [
+		varDecl(ENC, fnExpr(undefined, ["v", "i", "k"], encBody)),
+		varDecl(DEC, fnExpr(undefined, ["e", "i", "k"], decBody)),
+	];
 }

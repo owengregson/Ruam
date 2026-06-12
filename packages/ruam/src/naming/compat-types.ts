@@ -73,6 +73,10 @@ export interface RuntimeNames {
 	strCache: string;
 	strAcc: string;
 	btDecode: string;
+	/** Stack-encoding helper: encode a value into a `[tag,payload]` entry (IIFE scope). */
+	stkEnc: string;
+	/** Stack-encoding helper: decode a `[tag,payload]` entry back to a value (IIFE scope). */
+	stkDec: string;
 }
 
 /**

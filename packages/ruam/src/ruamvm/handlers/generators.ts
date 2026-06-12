@@ -65,11 +65,11 @@ function AWAIT(ctx: HandlerCtx): JsNode[] {
 					ctx.peek()
 				)
 			),
-			exprStmt(assign(ctx.peek(), awaitExpr(ctx.peek()))),
+			exprStmt(ctx.setTop(awaitExpr(ctx.peek()))),
 			breakStmt(),
 		];
 	}
-	return [exprStmt(assign(ctx.peek(), un(UOp.Void, lit(0)))), breakStmt()];
+	return [exprStmt(ctx.setTop(un(UOp.Void, lit(0)))), breakStmt()];
 }
 
 // --- Stub handlers (no-op, just break) ---
