@@ -116,3 +116,37 @@ export function preprocessIdentifiers(
 		usedNames: generatedNames,
 	};
 }
+
+/**
+ * Collect every identifier name that appears in the source.
+ *
+ * When identifier preprocessing is OFF, user identifiers (function names,
+ * top-level bindings, free references) remain LIVE in the emitted output. The
+ * NameRegistry must therefore reserve them so a generated VM identifier can
+ * never collide with one (which would silently overwrite the user binding —
+ * a rare, seed-dependent miscompile). Returns a superset (binding, reference,
+ * and property-key identifiers) — over-reserving is harmless, it only narrows
+ * the generated-name pool slightly.
+ *
+ * @param source - JavaScript source code.
+ * @returns The set of all identifier names present in the source.
+ */
+export function collectIdentifiers(source: string): Set<string> {
+	const names = new Set<string>();
+	let ast: ReturnType<typeof parse>;
+	try {
+		ast = parse(source, {
+			sourceType: "unambiguous",
+			plugins: [...BABEL_PARSER_PLUGINS],
+		});
+	} catch {
+		// Unparseable input — the main compile pass surfaces the error later.
+		return names;
+	}
+	traverse(ast, {
+		Identifier(path: { node: { name: string } }) {
+			names.add(path.node.name);
+		},
+	});
+	return names;
+}
