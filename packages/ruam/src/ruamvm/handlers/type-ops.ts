@@ -48,20 +48,20 @@ import { registry, type HandlerCtx } from "./registry.js";
 /** `S[P]=typeof S[P];break;` */
 function TYPEOF(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), un(UOp.Typeof, ctx.peek()))),
+		exprStmt(ctx.setTop(un(UOp.Typeof, ctx.peek()))),
 		breakStmt(),
 	];
 }
 
 /** `S[P]=void 0;break;` */
 function VOID(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(assign(ctx.peek(), un(UOp.Void, lit(0)))), breakStmt()];
+	return [exprStmt(ctx.setTop(un(UOp.Void, lit(0)))), breakStmt()];
 }
 
 /** `S[P]=Number(S[P]);break;` */
 function TO_NUMBER(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), call(id("Number"), [ctx.peek()]))),
+		exprStmt(ctx.setTop(call(id("Number"), [ctx.peek()]))),
 		breakStmt(),
 	];
 }
@@ -69,7 +69,7 @@ function TO_NUMBER(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=String(S[P]);break;` */
 function TO_STRING(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), call(id("String"), [ctx.peek()]))),
+		exprStmt(ctx.setTop(call(id("String"), [ctx.peek()]))),
 		breakStmt(),
 	];
 }
@@ -77,7 +77,7 @@ function TO_STRING(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=Boolean(S[P]);break;` */
 function TO_BOOLEAN(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), call(id("Boolean"), [ctx.peek()]))),
+		exprStmt(ctx.setTop(call(id("Boolean"), [ctx.peek()]))),
 		breakStmt(),
 	];
 }
@@ -85,7 +85,7 @@ function TO_BOOLEAN(ctx: HandlerCtx): JsNode[] {
 /** `S[P]=Object(S[P]);break;` */
 function TO_OBJECT(ctx: HandlerCtx): JsNode[] {
 	return [
-		exprStmt(assign(ctx.peek(), call(id("Object"), [ctx.peek()]))),
+		exprStmt(ctx.setTop(call(id("Object"), [ctx.peek()]))),
 		breakStmt(),
 	];
 }
@@ -99,8 +99,7 @@ function TO_PROPERTY_KEY(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("value"), ctx.peek()),
 		exprStmt(
-			assign(
-				ctx.peek(),
+			ctx.setTop(
 				ternary(
 					bin(
 						BOp.Seq,
@@ -123,8 +122,7 @@ function TO_NUMERIC(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("value"), ctx.peek()),
 		exprStmt(
-			assign(
-				ctx.peek(),
+			ctx.setTop(
 				ternary(
 					bin(
 						BOp.Seq,

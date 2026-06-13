@@ -103,16 +103,18 @@ function DUP(ctx: HandlerCtx): JsNode[] {
 	return [exprStmt(ctx.push(ctx.peek())), breakStmt()];
 }
 
+/** Fresh `S.length - k` AST (a new node each call — required by slotRead/slotWrite). */
+function depth(ctx: HandlerCtx, k: number): () => JsNode {
+	return () => bin(BOp.Sub, member(id(ctx.S), "length"), lit(k));
+}
+
 /** DUP2: duplicate top two elements. */
 function DUP2(ctx: HandlerCtx): JsNode[] {
 	return [
-		// var _a=S[S.length-2], _b=S[S.length-1]
-		varDecl(
-			ctx.t("_a"),
-			index(id(ctx.S), bin(BOp.Sub, member(id(ctx.S), "length"), lit(2)))
-		),
+		// var _a=S[S.length-2], _b=S[S.length-1]  (decoded reads)
+		varDecl(ctx.t("_a"), ctx.slotRead(depth(ctx, 2))),
 		varDecl(ctx.t("_b"), ctx.peek()),
-		// S.push(_a); S.push(_b)
+		// S.push(_a); S.push(_b)  (re-encoded at the new positions)
 		exprStmt(ctx.push(id(ctx.t("_a")))),
 		exprStmt(ctx.push(id(ctx.t("_b")))),
 		breakStmt(),
@@ -120,36 +122,17 @@ function DUP2(ctx: HandlerCtx): JsNode[] {
 }
 
 // --- Swap / rotate handlers ---
+// Under stackEncoding, slotRead decodes at the source index and slotWrite
+// re-encodes at the destination index, so every rotated value is correctly
+// re-keyed to its new position (the legacy Proxy did this via get/set traps).
 
 /** SWAP: swap top two elements via direct index access (no pop/push). */
 function SWAP(ctx: HandlerCtx): JsNode[] {
-	// Direct index swap: var _t=S[S.length-1]; S[S.length-1]=S[S.length-2]; S[S.length-2]=_t;
-	const sLen = member(id(ctx.S), "length");
-	const top = index(id(ctx.S), bin(BOp.Sub, sLen, lit(1)));
-	const second = index(id(ctx.S), bin(BOp.Sub, sLen, lit(2)));
+	// var _t=S[len-1]; S[len-1]=S[len-2]; S[len-2]=_t;
 	return [
-		varDecl(ctx.local("swapTemp"), top),
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(1))
-				),
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))
-				)
-			)
-		),
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))
-				),
-				id(ctx.local("swapTemp"))
-			)
-		),
+		varDecl(ctx.local("swapTemp"), ctx.slotRead(depth(ctx, 1))),
+		exprStmt(ctx.slotWrite(depth(ctx, 1), ctx.slotRead(depth(ctx, 2)))),
+		exprStmt(ctx.slotWrite(depth(ctx, 2), id(ctx.local("swapTemp")))),
 		breakStmt(),
 	];
 }
@@ -157,40 +140,13 @@ function SWAP(ctx: HandlerCtx): JsNode[] {
 /** ROT3: rotate top 3 elements (abc -> cab) via direct index access. */
 function ROT3(ctx: HandlerCtx): JsNode[] {
 	// abc -> cab: S[top-2]=c, S[top-1]=a, S[top]=b
-	const sLen = member(id(ctx.S), "length");
-	const s = (offset: number) =>
-		index(id(ctx.S), bin(BOp.Sub, sLen, lit(offset)));
 	return [
-		varDecl(ctx.local("rotC"), s(1)), // _c = S[S.length-1] (top)
-		varDecl(ctx.local("rotB"), s(2)), // _b = S[S.length-2]
-		varDecl(ctx.local("rotA"), s(3)), // _a = S[S.length-3]
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(3))
-				),
-				id(ctx.local("rotC"))
-			)
-		),
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))
-				),
-				id(ctx.local("rotA"))
-			)
-		),
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(1))
-				),
-				id(ctx.local("rotB"))
-			)
-		),
+		varDecl(ctx.local("rotC"), ctx.slotRead(depth(ctx, 1))), // _c = top
+		varDecl(ctx.local("rotB"), ctx.slotRead(depth(ctx, 2))), // _b
+		varDecl(ctx.local("rotA"), ctx.slotRead(depth(ctx, 3))), // _a
+		exprStmt(ctx.slotWrite(depth(ctx, 3), id(ctx.local("rotC")))),
+		exprStmt(ctx.slotWrite(depth(ctx, 2), id(ctx.local("rotA")))),
+		exprStmt(ctx.slotWrite(depth(ctx, 1), id(ctx.local("rotB")))),
 		breakStmt(),
 	];
 }
@@ -198,60 +154,15 @@ function ROT3(ctx: HandlerCtx): JsNode[] {
 /** ROT4: rotate top 4 elements (abcd -> dabc) via direct index access. */
 function ROT4(ctx: HandlerCtx): JsNode[] {
 	// abcd -> dabc
-	const sLen = member(id(ctx.S), "length");
 	return [
-		varDecl(
-			ctx.local("rotD"),
-			index(id(ctx.S), bin(BOp.Sub, sLen, lit(1)))
-		),
-		varDecl(
-			ctx.local("rotC"),
-			index(id(ctx.S), bin(BOp.Sub, sLen, lit(2)))
-		),
-		varDecl(
-			ctx.local("rotB"),
-			index(id(ctx.S), bin(BOp.Sub, sLen, lit(3)))
-		),
-		varDecl(
-			ctx.local("rotA"),
-			index(id(ctx.S), bin(BOp.Sub, sLen, lit(4)))
-		),
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(4))
-				),
-				id(ctx.local("rotD"))
-			)
-		),
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(3))
-				),
-				id(ctx.local("rotA"))
-			)
-		),
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(2))
-				),
-				id(ctx.local("rotB"))
-			)
-		),
-		exprStmt(
-			assign(
-				index(
-					id(ctx.S),
-					bin(BOp.Sub, member(id(ctx.S), "length"), lit(1))
-				),
-				id(ctx.local("rotC"))
-			)
-		),
+		varDecl(ctx.local("rotD"), ctx.slotRead(depth(ctx, 1))),
+		varDecl(ctx.local("rotC"), ctx.slotRead(depth(ctx, 2))),
+		varDecl(ctx.local("rotB"), ctx.slotRead(depth(ctx, 3))),
+		varDecl(ctx.local("rotA"), ctx.slotRead(depth(ctx, 4))),
+		exprStmt(ctx.slotWrite(depth(ctx, 4), id(ctx.local("rotD")))),
+		exprStmt(ctx.slotWrite(depth(ctx, 3), id(ctx.local("rotA")))),
+		exprStmt(ctx.slotWrite(depth(ctx, 2), id(ctx.local("rotB")))),
+		exprStmt(ctx.slotWrite(depth(ctx, 1), id(ctx.local("rotC")))),
 		breakStmt(),
 	];
 }
@@ -260,20 +171,15 @@ function ROT4(ctx: HandlerCtx): JsNode[] {
 
 /** PICK: copy element at depth O onto top of stack. */
 function PICK(ctx: HandlerCtx): JsNode[] {
-	// S.push(S[S.length-1-O])
+	// S.push(S[S.length-1-O])  — read at depth (1+O), re-encoded onto the top.
+	const pickIdx = (): JsNode =>
+		bin(
+			BOp.Sub,
+			bin(BOp.Sub, member(id(ctx.S), "length"), lit(1)),
+			id(ctx.O)
+		);
 	return [
-		exprStmt(
-			ctx.push(
-				index(
-					id(ctx.S),
-					bin(
-						BOp.Sub,
-						bin(BOp.Sub, member(id(ctx.S), "length"), lit(1)),
-						id(ctx.O)
-					)
-				)
-			)
-		),
+		exprStmt(ctx.push(ctx.slotRead(pickIdx))),
 		breakStmt(),
 	];
 }

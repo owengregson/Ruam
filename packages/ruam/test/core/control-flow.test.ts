@@ -968,6 +968,435 @@ describe("comprehensive control flow – try/catch/finally", () => {
 	});
 });
 
+// ─── 14b. abrupt completion through finally ─────────────────────────────────
+
+describe("comprehensive control flow – break/continue/return through finally", () => {
+	it("continue runs the iteration's finally", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        for (var i = 0; i < 4; i++) {
+          try {
+            if (i === 2) continue;
+            log.push("body" + i);
+          } finally {
+            log.push("fin" + i);
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("break runs the finally before exiting the loop", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        for (var i = 0; i < 4; i++) {
+          try {
+            if (i === 2) break;
+            log.push("body" + i);
+          } finally {
+            log.push("fin" + i);
+          }
+        }
+        log.push("after");
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("labeled continue runs the inner finally", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        outer: for (var i = 0; i < 3; i++) {
+          for (var j = 0; j < 3; j++) {
+            try {
+              if (j === 1) continue outer;
+              log.push("b" + i + j);
+            } finally {
+              log.push("f" + i + j);
+            }
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("labeled break runs the inner finally", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        outer: for (var i = 0; i < 3; i++) {
+          for (var j = 0; j < 3; j++) {
+            try {
+              if (j === 1) break outer;
+              log.push("b" + i + j);
+            } finally {
+              log.push("f" + i + j);
+            }
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("continue runs multiple nested finallys in order", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        for (var i = 0; i < 3; i++) {
+          try {
+            try {
+              if (i === 1) continue;
+              log.push("inner" + i);
+            } finally {
+              log.push("infin" + i);
+            }
+          } finally {
+            log.push("outfin" + i);
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("labeled continue crosses two finally levels", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        L: for (var i = 0; i < 2; i++) {
+          for (var j = 0; j < 2; j++) {
+            try {
+              try {
+                if (j === 0) continue L;
+                log.push("x" + i + j);
+              } finally {
+                log.push("inf" + i + j);
+              }
+            } finally {
+              log.push("ouf" + i + j);
+            }
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("break runs finally in while loop", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        var i = 0;
+        while (i < 5) {
+          i++;
+          try {
+            if (i === 3) break;
+            log.push("b" + i);
+          } finally {
+            log.push("f" + i);
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("continue runs finally in do-while loop", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        var i = 0;
+        do {
+          i++;
+          try {
+            if (i === 2) continue;
+            log.push("b" + i);
+          } finally {
+            log.push("f" + i);
+          }
+        } while (i < 4);
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("break runs finally in for-of loop", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        for (var x of [1, 2, 3, 4]) {
+          try {
+            if (x === 3) break;
+            log.push("b" + x);
+          } finally {
+            log.push("f" + x);
+          }
+        }
+        log.push("z");
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("continue runs finally in for-in loop", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        var o = { a: 1, b: 2, c: 3 };
+        for (var k in o) {
+          try {
+            if (k === "b") continue;
+            log.push("b" + k);
+          } finally {
+            log.push("f" + k);
+          }
+        }
+        return log.sort().join(",");
+      }
+      test();
+    `);
+	});
+
+	it("try with catch and finally: continue runs finally", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        for (var i = 0; i < 3; i++) {
+          try {
+            if (i === 1) continue;
+            throw new Error("e" + i);
+          } catch (e) {
+            log.push("c" + i);
+          } finally {
+            log.push("f" + i);
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("break from catch clause runs the finally", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        for (var i = 0; i < 3; i++) {
+          try {
+            throw new Error("e" + i);
+          } catch (e) {
+            if (i === 1) break;
+            log.push("c" + i);
+          } finally {
+            log.push("f" + i);
+          }
+        }
+        log.push("done");
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("finally that returns overrides a continue", () => {
+		assertEquivalent(`
+      function test() {
+        function inner() {
+          var log = [];
+          for (var i = 0; i < 3; i++) {
+            try {
+              if (i === 1) continue;
+              log.push("b" + i);
+            } finally {
+              log.push("f" + i);
+              if (i === 1) return "early:" + log.join(",");
+            }
+          }
+          return "end:" + log.join(",");
+        }
+        return inner();
+      }
+      test();
+    `);
+	});
+
+	it("finally that throws overrides a continue", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        for (var i = 0; i < 3; i++) {
+          try {
+            try {
+              if (i === 1) continue;
+              log.push("b" + i);
+            } finally {
+              log.push("f" + i);
+              if (i === 1) throw new Error("x");
+            }
+          } catch (e) {
+            log.push("caught" + i);
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("switch inside loop: continue runs the finally", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        for (var i = 0; i < 4; i++) {
+          try {
+            switch (i) {
+              case 1:
+                continue;
+              default:
+                log.push("d" + i);
+            }
+          } finally {
+            log.push("f" + i);
+          }
+        }
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("return runs multiple nested finallys in order", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        function inner() {
+          try {
+            try {
+              log.push("a");
+              return 1;
+            } finally {
+              log.push("inner");
+            }
+          } finally {
+            log.push("outer");
+          }
+        }
+        var r = inner();
+        log.push("r" + r);
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("return crosses three finally levels", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        function inner() {
+          try {
+            try {
+              try {
+                return 7;
+              } finally {
+                log.push("f1");
+              }
+            } finally {
+              log.push("f2");
+            }
+          } finally {
+            log.push("f3");
+          }
+        }
+        var r = inner();
+        return log.join(",") + ":" + r;
+      }
+      test();
+    `);
+	});
+
+	it("return crosses a catch-only try to reach an outer finally", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        function inner() {
+          try {
+            try {
+              return "v";
+            } catch (e) {
+              log.push("c");
+            }
+          } finally {
+            log.push("fin");
+          }
+        }
+        return inner() + ":" + log.join(",");
+      }
+      test();
+    `);
+	});
+
+	it("inner finally return propagates through outer finally side effects", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        function inner() {
+          try {
+            try {
+              return "x";
+            } finally {
+              log.push("i");
+            }
+          } finally {
+            log.push("o");
+            return "y" + log.join(",");
+          }
+        }
+        return inner();
+      }
+      test();
+    `);
+	});
+
+	it("return-void runs nested finallys", () => {
+		assertEquivalent(`
+      function test() {
+        var log = [];
+        function inner() {
+          try {
+            try {
+              return;
+            } finally {
+              log.push("i");
+            }
+          } finally {
+            log.push("o");
+          }
+        }
+        var r = inner();
+        log.push("r" + (r === undefined));
+        return log.join(",");
+      }
+      test();
+    `);
+	});
+});
+
 // ─── 15. throw custom errors ────────────────────────────────────────────────
 
 describe("comprehensive control flow – throw", () => {

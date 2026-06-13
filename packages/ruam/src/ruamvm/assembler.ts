@@ -44,7 +44,10 @@ import { buildDebugProtection } from "./builders/debug-protection.js";
 import { buildDebugLogging } from "./builders/debug-logging.js";
 import { buildRollingCipherSource } from "./builders/rolling-cipher.js";
 import { buildIncrementalCipherSource } from "./builders/incremental-cipher.js";
-import { buildInterpreterFunctions } from "./builders/interpreter.js";
+import {
+	buildInterpreterFunctions,
+	buildStackEncodingHelpers,
+} from "./builders/interpreter.js";
 import { buildRunners, buildRouter } from "./builders/runners.js";
 import { buildLoader } from "./builders/loader.js";
 import { buildDeserializer } from "./builders/deserializer.js";
@@ -335,6 +338,10 @@ export function generateVmRuntime(options: {
 	if (incrementalCipher) {
 		tier2Nodes.push(...buildIncrementalCipherSource(names, split));
 	}
+	// Stack-encoding helpers (stkEnc/stkDec) — IIFE-scope, defined once.
+	if (stackEncoding) {
+		tier2Nodes.push(...buildStackEncodingHelpers(names, split));
+	}
 	// Interpreter function bodies
 	tier2Nodes.push(...interpResult.interpreters);
 
@@ -616,6 +623,12 @@ export function generateShieldedVmRuntime(options: {
 			call(member(id("Object"), "create"), [lit(null)])
 		)
 	);
+
+	// Shared: stack-encoding helpers (stkEnc/stkDec) — defined once; the
+	// per-unit key `_sek` is computed per-exec inside each group's interpreter.
+	if (stackEncoding) {
+		nodes.push(...buildStackEncodingHelpers(sharedNames, sharedSplit));
+	}
 
 	// Shared: packed-integer decoder for bytecode scattering
 	if (bytecodeScattering) {

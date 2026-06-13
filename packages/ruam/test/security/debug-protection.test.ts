@@ -98,13 +98,16 @@ describe("Debug Protection", () => {
 		it("contains escalating response mechanism", () => {
 			// Should reference bytecode table for silent corruption
 			// The bytecode table variable name is randomized, but the response
-			// should access Object.keys on something
-			expect(output).toContain("Object.keys");
+			// should access Object.keys on something (member access may be
+			// rendered in bracket form by the expression-noise transform).
+			expect(output).toMatch(/(\.keys\b|\[\s*["']keys["']\s*\])/);
 		});
 
 		it("contains timer unref for Node.js compatibility", () => {
-			// .unref() prevents timers from keeping the process alive
-			expect(output).toContain(".unref");
+			// .unref() prevents timers from keeping the process alive. The
+			// per-build expression-noise transform may render member access in
+			// bracket form, so accept `.unref` OR `["unref"]`/`['unref']`.
+			expect(output).toMatch(/(\.unref\b|\[\s*["']unref["']\s*\])/);
 		});
 	});
 

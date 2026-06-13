@@ -9,12 +9,13 @@
  * @module ruamvm/handlers/registry
  */
 
-import type { JsNode, StackPush, StackPop, StackPeek, Name } from "../nodes.js";
+import type { JsNode, Name } from "../nodes.js";
 import {
 	stackPush,
 	stackPop,
 	stackPeek,
 	id,
+	lit,
 	index,
 	member,
 	bin,
@@ -24,6 +25,7 @@ import {
 	whileStmt,
 	exprStmt,
 	breakStmt,
+	BOp,
 } from "../nodes.js";
 import type { RuntimeNames, TempNames } from "../../naming/compat-types.js";
 import type { Op } from "../../compiler/opcodes.js";
@@ -81,10 +83,40 @@ export interface HandlerCtx {
 	/** Handler-local variable — returns a Name for a handler-local variable. */
 	local: (key: string) => Name;
 
-	// Stack operation factories — emit directly as S[++P]=expr, S[P--], S[P]
-	push: (value: JsNode) => StackPush;
-	pop: () => StackPop;
-	peek: () => StackPeek;
+	// Stack operation factories. Without stackEncoding these emit plain
+	// `S.push(v)` / `S.pop()` / `S[S.length-1]`. With stackEncoding they route
+	// through the `stkEnc`/`stkDec` helpers so int32 stack values are stored
+	// position-XOR-masked in memory (same representation as the legacy Proxy,
+	// but without the per-access trap cost).
+	push: (value: JsNode) => JsNode;
+	pop: () => JsNode;
+	peek: () => JsNode;
+
+	/**
+	 * Read a stack slot by absolute index, decoded. `idx` is a *thunk* that
+	 * produces a FRESH index AST each call (the index is emitted twice under
+	 * encoding — once for the lookup, once for the position key — and reusing a
+	 * single node object would alias inside the mutating MBA/structural passes).
+	 */
+	slotRead: (idx: () => JsNode) => JsNode;
+
+	/**
+	 * Write `value` to a stack slot by absolute index, encoded for that index.
+	 * `idx` is a fresh-AST thunk (see {@link HandlerCtx.slotRead}). Returns the
+	 * assignment expression (caller wraps in `exprStmt`). Re-keying is automatic:
+	 * a value read at one index via {@link HandlerCtx.slotRead} and written to a
+	 * different index here is decoded with the old key and re-encoded with the new.
+	 */
+	slotWrite: (idx: () => JsNode, value: JsNode) => JsNode;
+
+	/**
+	 * Overwrite the top of stack in place with `value` (encoded if needed).
+	 * Use this instead of `assign(peek(), …)` — under stackEncoding `peek()` is
+	 * a decode *call* and cannot be an assignment target. The read side stays
+	 * `peek()` (decoded); only the write target needs this. Returns the
+	 * assignment expression (caller wraps in `exprStmt`).
+	 */
+	setTop: (value: JsNode) => JsNode;
 
 	// Scope chain helpers — prototypal scope (Object.create chain)
 	/** `s[key]` — scoped variable reference on walk variable (default key: `id("name")`) */
@@ -108,11 +140,64 @@ export function makeHandlerCtx(
 	names: RuntimeNames,
 	temps: TempNames,
 	isAsync: boolean,
-	debug: boolean
+	debug: boolean,
+	stackEncoding = false
 ): HandlerCtx {
 	// Interim pass-through: returns the key as-is (string).
 	// Will be wired to NameScope in Task 6.
 	const localFn = (key: string): Name => key;
+
+	// --- Stack access factories (encoding-aware) ---------------------------
+	// When stackEncoding is on, values are stored as `[tag,payload]` entries
+	// with int32s position-XOR-masked, accessed through the IIFE-scope helpers
+	// `stkEnc(value, index, key)` / `stkDec(entry, index, key)`. The per-unit
+	// key `_sek` is an exec-local computed at entry (see buildStackEncodingKeyInit).
+	const stk = names.stk;
+	const sLen = (): JsNode => member(id(stk), "length");
+	const sLenMinus = (k: number): JsNode => bin(BOp.Sub, sLen(), lit(k));
+
+	let pushFn: (value: JsNode) => JsNode;
+	let popFn: () => JsNode;
+	let peekFn: () => JsNode;
+	let slotReadFn: (idx: () => JsNode) => JsNode;
+	let slotWriteFn: (idx: () => JsNode, value: JsNode) => JsNode;
+
+	if (stackEncoding) {
+		const enc = names.stkEnc;
+		const dec = names.stkDec;
+		const sek = temps["_sek"];
+		if (sek === undefined) {
+			throw new Error("stackEncoding requires temp name _sek");
+		}
+		const encOf = (value: JsNode, idx: JsNode): JsNode =>
+			call(id(enc), [value, idx, id(sek)]);
+		const decOf = (entry: JsNode, idx: JsNode): JsNode =>
+			call(id(dec), [entry, idx, id(sek)]);
+
+		// push: S.push(stkEnc(v, S.length, _sek)) — S.length is read BEFORE the
+		// append, i.e. it equals the target index. Arg evaluated before .push runs.
+		pushFn = (value: JsNode) => stackPush(stk, encOf(value, sLen()));
+		// pop: stkDec(S.pop(), S.length, _sek) — left-to-right eval: pop() first
+		// (length decrements), then S.length reads the just-vacated index.
+		popFn = () => decOf(stackPop(stk), sLen());
+		// peek: stkDec(S[S.length-1], S.length-1, _sek)
+		peekFn = () => decOf(index(id(stk), sLenMinus(1)), sLenMinus(1));
+		// slotRead: stkDec(S[idx], idx, _sek) — idx thunk called twice (fresh AST)
+		slotReadFn = (idx) => decOf(index(id(stk), idx()), idx());
+		// slotWrite: S[idx] = stkEnc(value, idx, _sek)
+		slotWriteFn = (idx, value) =>
+			assign(index(id(stk), idx()), encOf(value, idx()));
+	} else {
+		pushFn = (value: JsNode) => stackPush(stk, value);
+		popFn = () => stackPop(stk);
+		peekFn = () => stackPeek(stk);
+		slotReadFn = (idx) => index(id(stk), idx());
+		slotWriteFn = (idx, value) => assign(index(id(stk), idx()), value);
+	}
+
+	// setTop: write to the top slot (depth 1). Encoding-aware via slotWrite.
+	const setTopFn = (value: JsNode): JsNode =>
+		slotWriteFn(() => sLenMinus(1), value);
 
 	return {
 		S: names.stk,
@@ -153,9 +238,12 @@ export function makeHandlerCtx(
 			return name;
 		},
 		local: localFn,
-		push: (value: JsNode) => stackPush(names.stk, value),
-		pop: () => stackPop(names.stk),
-		peek: () => stackPeek(names.stk),
+		push: pushFn,
+		pop: popFn,
+		peek: peekFn,
+		slotRead: slotReadFn,
+		slotWrite: slotWriteFn,
+		setTop: setTopFn,
 
 		// AST-returning scope helpers — prototypal scope chain
 		sv: (key: JsNode = id(localFn("varName"))) =>

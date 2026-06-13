@@ -50,6 +50,33 @@ function regAssignHandler(op: BOpKind): HandlerFn {
 	];
 }
 
+/**
+ * Build a *void* compound assignment register handler — same as
+ * {@link regAssignHandler} but omits the result push. Fuses
+ * `COMPOUND_ASSIGN_REG + POP` (statement-form `s += x;`), where the pushed
+ * value would be immediately discarded.
+ *
+ * Pattern: `{var val=S[P--];R[O]=R[O] <op> val;break;}`
+ *
+ * Encoding-aware: the stack read uses `ctx.pop()` (decoded under
+ * stackEncoding); there is no stack write, only a register store.
+ *
+ * @param op - JS binary operator string
+ * @returns Handler function producing the case body AST nodes
+ */
+function regAssignVoidHandler(op: BOpKind): HandlerFn {
+	return (ctx) => [
+		varDecl(ctx.local("val"), ctx.pop()),
+		exprStmt(
+			assign(
+				rSlot(ctx),
+				bin(op, index(id(ctx.R), id(ctx.O)), id(ctx.local("val")))
+			)
+		),
+		breakStmt(),
+	];
+}
+
 // --- Register load/store ---
 
 /** LOAD_REG: `S[++P]=R[O];break;` */
@@ -175,7 +202,7 @@ function POST_DEC_REG(ctx: HandlerCtx): JsNode[] {
 function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			assign(ctx.peek(), bin(BOp.Add, un(UOp.Pos, ctx.peek()), id(ctx.O)))
+			ctx.setTop(bin(BOp.Add, un(UOp.Pos, ctx.peek()), id(ctx.O)))
 		),
 		breakStmt(),
 	];
@@ -185,7 +212,7 @@ function FAST_ADD_CONST(ctx: HandlerCtx): JsNode[] {
 function FAST_SUB_CONST(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			assign(ctx.peek(), bin(BOp.Sub, un(UOp.Pos, ctx.peek()), id(ctx.O)))
+			ctx.setTop(bin(BOp.Sub, un(UOp.Pos, ctx.peek()), id(ctx.O)))
 		),
 		breakStmt(),
 	];
@@ -261,6 +288,11 @@ registry.set(Op.SUB_ASSIGN_REG, regAssignHandler(BOp.Sub));
 registry.set(Op.MUL_ASSIGN_REG, regAssignHandler(BOp.Mul));
 registry.set(Op.DIV_ASSIGN_REG, regAssignHandler(BOp.Div));
 registry.set(Op.MOD_ASSIGN_REG, regAssignHandler(BOp.Mod));
+registry.set(Op.REG_ADD_ASSIGN_VOID, regAssignVoidHandler(BOp.Add));
+registry.set(Op.REG_SUB_ASSIGN_VOID, regAssignVoidHandler(BOp.Sub));
+registry.set(Op.REG_MUL_ASSIGN_VOID, regAssignVoidHandler(BOp.Mul));
+registry.set(Op.REG_DIV_ASSIGN_VOID, regAssignVoidHandler(BOp.Div));
+registry.set(Op.REG_MOD_ASSIGN_VOID, regAssignVoidHandler(BOp.Mod));
 registry.set(Op.FAST_ADD_CONST, FAST_ADD_CONST);
 registry.set(Op.FAST_SUB_CONST, FAST_SUB_CONST);
 registry.set(Op.FAST_GET_PROP, FAST_GET_PROP);

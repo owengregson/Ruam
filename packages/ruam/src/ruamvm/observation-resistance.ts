@@ -402,18 +402,29 @@ export interface StackProbeResult {
  *
  * At pseudo-random intervals, pushes a known sentinel value onto the
  * stack, immediately pops it, and verifies it is the same object
- * (identity check). Detects stack proxy replacement or encoding
- * tampering.
+ * (identity check). Detects stack array replacement / encoding tampering.
  *
- * @param names   Runtime identifier mapping.
+ * When `stackEncoding` is on, the push/pop are routed through the
+ * `stkEnc`/`stkDec` helpers (the sentinel object becomes a `[3,sentinel]`
+ * entry and decodes back to the same object). This makes the probe verify
+ * the encode/decode round-trip is intact — tampering with the helpers breaks
+ * identity and triggers corruption — preserving the threat model the Proxy
+ * stack-probe used to cover. Without encoding it uses raw push/pop (detecting
+ * raw stack replacement), exactly as before.
+ *
+ * @param names   Runtime identifier mapping (provides stkEnc/stkDec).
+ * @param temps   Temp name mapping (provides the per-exec key `_sek`).
  * @param seed    Per-build seed for corruption constant derivation.
  * @param split   Optional constant splitter for numeric obfuscation.
+ * @param stackEncoding Whether stack encoding is active for this build.
  * @returns Statement builder function.
  */
 export function buildStackProbe(
 	names: RuntimeNames,
+	temps: TempNames,
 	seed: number,
-	split?: SplitFn
+	split?: SplitFn,
+	stackEncoding = false
 ): StackProbeResult {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 
@@ -421,19 +432,36 @@ export function buildStackProbe(
 	const corruptSeed = deriveSeed(seed, "probeCorrupt");
 	const corruptConst = (corruptSeed || OR_CORRUPT_PROBE) >>> 0;
 
+	const S = names.stk;
+	const sek = temps["_sek"];
+	const encoded = stackEncoding && sek !== undefined;
+
+	// Fresh AST per call (probeStmts is invoked once per injection site;
+	// reusing node objects would alias inside the mutating MBA/structural passes).
+	const buildPushed = (): JsNode =>
+		encoded
+			? call(id(names.stkEnc), [
+					id(names.tdzSentinel),
+					member(id(S), "length"),
+					id(sek!),
+			  ])
+			: id(names.tdzSentinel);
+	const buildPopped = (): JsNode =>
+		encoded
+			? call(id(names.stkDec), [
+					call(member(id(S), "pop"), []),
+					member(id(S), "length"),
+					id(sek!),
+			  ])
+			: call(member(id(S), "pop"), []);
+
 	return {
 		probeStmts: () => [
-			// S.push(tdzSentinel);
-			exprStmt(
-				call(member(id(names.stk), "push"), [id(names.tdzSentinel)])
-			),
-			// if (S.pop() !== tdzSentinel) { rcState = (rcState ^ CORRUPT) >>> 0; }
+			// S.push(stkEnc?(tdzSentinel));
+			exprStmt(call(member(id(S), "push"), [buildPushed()])),
+			// if (stkDec?(S.pop()) !== tdzSentinel) { rcState = (rcState ^ CORRUPT) >>> 0; }
 			ifStmt(
-				bin(
-					BOp.Sneq,
-					call(member(id(names.stk), "pop"), []),
-					id(names.tdzSentinel)
-				),
+				bin(BOp.Sneq, buildPopped(), id(names.tdzSentinel)),
 				[
 					exprStmt(
 						assign(

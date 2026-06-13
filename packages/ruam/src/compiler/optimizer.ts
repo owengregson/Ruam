@@ -21,6 +21,10 @@ import {
 	PURE_PUSH_OPS,
 	REG_BINOP_MAP,
 	REG_CONST_BINOP_MAP,
+	REG_CONST_CMP_JF_MAP,
+	REG_REG_CMP_JF_MAP,
+	CONST_CMP_JF_MAP,
+	PUSH_POP_VOID_MAP,
 } from "./opcodes.js";
 import type { Emitter } from "./emitter.js";
 
@@ -88,6 +92,26 @@ function peepholePass(emitter: Emitter): boolean {
 			if (!jumpTargets.has(i + 1)) {
 				cur.opcode = Op.NOP;
 				cur.operand = 0;
+				instrs[i + 1]!.opcode = Op.NOP;
+				instrs[i + 1]!.operand = 0;
+				changed = true;
+				continue;
+			}
+		}
+
+		// --- Push-then-pop strength reduction ---
+		// A register op whose pushed result is immediately discarded by POP
+		// (statement-form `i++`, `s += x`, etc.) reduces to a no-push variant.
+		// POST_INC/DEC_REG → INC/DEC_REG (reuse); compound assigns → *_VOID.
+		// The operand (register index) is preserved unchanged.
+		if (
+			i + 1 < instrs.length &&
+			instrs[i + 1]!.opcode === Op.POP &&
+			!jumpTargets.has(i + 1)
+		) {
+			const voidOp = PUSH_POP_VOID_MAP.get(cur.opcode);
+			if (voidOp != null) {
+				cur.opcode = voidOp;
 				instrs[i + 1]!.opcode = Op.NOP;
 				instrs[i + 1]!.operand = 0;
 				changed = true;
@@ -231,11 +255,145 @@ function superinstructionPass(emitter: Emitter): boolean {
 			}
 		}
 
+		// LOAD_REG(r) + GET_PROP_DYNAMIC → IDX_REG(r) — index TOS by register.
+		// (Distinct 2nd opcode from every 3-/4-instruction fusion, so eager
+		// fusion here is safe; the LOAD_REG+LOAD_REG+GET_PROP_DYNAMIC form is
+		// caught by REG_GET_PROP_DYN below since its 2nd op is LOAD_REG.)
+		if (a.opcode === Op.LOAD_REG && b.opcode === Op.GET_PROP_DYNAMIC) {
+			a.opcode = Op.IDX_REG;
+			// a.operand already holds the register index — leave unchanged.
+			b.opcode = Op.NOP;
+			b.operand = 0;
+			changed = true;
+			continue;
+		}
+
 		if (i + 2 >= instrs.length) continue;
 		const c = instrs[i + 2]!;
 		if (jumpTargets.has(i + 2)) continue;
 
+		// --- Four-instruction fusions ---
+		//
+		// Attempted BEFORE the three-instruction fusions below: a
+		// compare-and-branch sequence (`LOAD_REG + operand + <cmp> +
+		// JMP_FALSE`) must collapse into a single fused opcode. If the
+		// three-instruction reg-reg / reg-const binop fusions ran first they
+		// would consume the `<cmp>` (e.g. `LOAD_REG + LOAD_REG + LT` →
+		// REG_LT), leaving the JMP_FALSE unfused and the `*_REG_JF`
+		// superinstructions dead. On guard failure these intentionally fall
+		// through to the three-instruction fusions.
+		if (i + 3 < instrs.length && !jumpTargets.has(i + 3)) {
+			const d = instrs[i + 3]!;
+
+			// LOAD_REG(r) + PUSH_CONST(c) + <cmp> + JMP_FALSE(target)
+			//   → REG_<cmp>_CONST_JF(r | c<<8 | target<<16)
+			if (
+				a.opcode === Op.LOAD_REG &&
+				b.opcode === Op.PUSH_CONST &&
+				d.opcode === Op.JMP_FALSE
+			) {
+				const superOp = REG_CONST_CMP_JF_MAP.get(c.opcode);
+				if (superOp != null) {
+					const r = a.operand;
+					const constIdx = b.operand;
+					const target = d.operand;
+					if (r <= 0xff && constIdx <= 0xff && target <= 0xffff) {
+						a.opcode = superOp;
+						a.operand =
+							(r & 0xff) |
+							((constIdx & 0xff) << 8) |
+							((target & 0xffff) << 16);
+						b.opcode = Op.NOP;
+						b.operand = 0;
+						c.opcode = Op.NOP;
+						c.operand = 0;
+						d.opcode = Op.NOP;
+						d.operand = 0;
+						changed = true;
+						continue;
+					}
+				}
+			}
+
+			// LOAD_REG(a) + LOAD_REG(b) + <cmp> + JMP_FALSE(target)
+			//   → REG_<cmp>_REG_JF(a | b<<8 | target<<16)
+			if (
+				a.opcode === Op.LOAD_REG &&
+				b.opcode === Op.LOAD_REG &&
+				d.opcode === Op.JMP_FALSE
+			) {
+				const superOp = REG_REG_CMP_JF_MAP.get(c.opcode);
+				if (superOp != null) {
+					const ra = a.operand;
+					const rb = b.operand;
+					const target = d.operand;
+					if (ra <= 0xff && rb <= 0xff && target <= 0xffff) {
+						a.opcode = superOp;
+						a.operand =
+							(ra & 0xff) |
+							((rb & 0xff) << 8) |
+							((target & 0xffff) << 16);
+						b.opcode = Op.NOP;
+						b.operand = 0;
+						c.opcode = Op.NOP;
+						c.operand = 0;
+						d.opcode = Op.NOP;
+						d.operand = 0;
+						changed = true;
+						continue;
+					}
+				}
+			}
+
+			// LOAD_REG(r) + PUSH_CONST(c) + ADD + STORE_REG(r) → REG_ADD_CONST
+			if (
+				a.opcode === Op.LOAD_REG &&
+				b.opcode === Op.PUSH_CONST &&
+				c.opcode === Op.ADD &&
+				d.opcode === Op.STORE_REG &&
+				d.operand === a.operand
+			) {
+				const r = a.operand;
+				const constIdx = b.operand;
+				if (r <= 0xffff && constIdx <= 0xffff) {
+					a.opcode = Op.REG_ADD_CONST;
+					a.operand = (r & 0xffff) | ((constIdx & 0xffff) << 16);
+					b.opcode = Op.NOP;
+					b.operand = 0;
+					c.opcode = Op.NOP;
+					c.operand = 0;
+					d.opcode = Op.NOP;
+					d.operand = 0;
+					changed = true;
+					continue;
+				}
+			}
+		}
+
 		// --- Three-instruction fusions ---
+
+		// LOAD_REG(a) + LOAD_REG(b) + GET_PROP_DYNAMIC → REG_GET_PROP_DYN
+		//   → push R[a][R[b]] (a | b<<16). Pure read; no receiver/`this`/write.
+		// Attempted before the reg-reg binop fusion (different 3rd op, so no
+		// conflict, but kept adjacent to its LOAD_REG+LOAD_REG sibling).
+		if (
+			a.opcode === Op.LOAD_REG &&
+			b.opcode === Op.LOAD_REG &&
+			c.opcode === Op.GET_PROP_DYNAMIC
+		) {
+			const ra = a.operand;
+			const rb = b.operand;
+			if (ra <= 0xffff && rb <= 0xffff) {
+				a.opcode = Op.REG_GET_PROP_DYN;
+				a.operand = (ra & 0xffff) | ((rb & 0xffff) << 16);
+				b.opcode = Op.NOP;
+				b.operand = 0;
+				c.opcode = Op.NOP;
+				c.operand = 0;
+				changed = true;
+				continue;
+			}
+		}
 
 		// LOAD_REG(a) + LOAD_REG(b) + <binop> → REG_<binop>(a | b<<16)
 		if (a.opcode === Op.LOAD_REG && b.opcode === Op.LOAD_REG) {
@@ -275,87 +433,26 @@ function superinstructionPass(emitter: Emitter): boolean {
 			}
 		}
 
-		if (i + 3 >= instrs.length) continue;
-		const d = instrs[i + 3]!;
-		if (jumpTargets.has(i + 3)) continue;
-
-		// --- Four-instruction fusions ---
-
-		// LOAD_REG(r) + PUSH_CONST(c) + LT + JMP_FALSE(target) → REG_LT_CONST_JF
-		if (
-			a.opcode === Op.LOAD_REG &&
-			b.opcode === Op.PUSH_CONST &&
-			c.opcode === Op.LT &&
-			d.opcode === Op.JMP_FALSE
-		) {
-			const r = a.operand;
-			const constIdx = b.operand;
-			const target = d.operand;
-			if (r <= 0xff && constIdx <= 0xff) {
-				a.opcode = Op.REG_LT_CONST_JF;
-				a.operand =
-					(r & 0xff) |
-					((constIdx & 0xff) << 8) |
-					((target & 0xffff) << 16);
-				b.opcode = Op.NOP;
-				b.operand = 0;
-				c.opcode = Op.NOP;
-				c.operand = 0;
-				d.opcode = Op.NOP;
-				d.operand = 0;
-				changed = true;
-				continue;
-			}
-		}
-
-		// LOAD_REG(a) + LOAD_REG(b) + LT + JMP_FALSE(target) → REG_LT_REG_JF
-		if (
-			a.opcode === Op.LOAD_REG &&
-			b.opcode === Op.LOAD_REG &&
-			c.opcode === Op.LT &&
-			d.opcode === Op.JMP_FALSE
-		) {
-			const ra = a.operand;
-			const rb = b.operand;
-			const target = d.operand;
-			if (ra <= 0xff && rb <= 0xff) {
-				a.opcode = Op.REG_LT_REG_JF;
-				a.operand =
-					(ra & 0xff) |
-					((rb & 0xff) << 8) |
-					((target & 0xffff) << 16);
-				b.opcode = Op.NOP;
-				b.operand = 0;
-				c.opcode = Op.NOP;
-				c.operand = 0;
-				d.opcode = Op.NOP;
-				d.operand = 0;
-				changed = true;
-				continue;
-			}
-		}
-
-		// LOAD_REG(r) + PUSH_CONST(c) + ADD + STORE_REG(r) → REG_ADD_CONST
-		if (
-			a.opcode === Op.LOAD_REG &&
-			b.opcode === Op.PUSH_CONST &&
-			c.opcode === Op.ADD &&
-			d.opcode === Op.STORE_REG &&
-			d.operand === a.operand
-		) {
-			const r = a.operand;
-			const constIdx = b.operand;
-			if (r <= 0xffff && constIdx <= 0xffff) {
-				a.opcode = Op.REG_ADD_CONST;
-				a.operand = (r & 0xffff) | ((constIdx & 0xffff) << 16);
-				b.opcode = Op.NOP;
-				b.operand = 0;
-				c.opcode = Op.NOP;
-				c.operand = 0;
-				d.opcode = Op.NOP;
-				d.operand = 0;
-				changed = true;
-				continue;
+		// PUSH_CONST(c) + <cmp> + JMP_FALSE(t) → CONST_<cmp>_JF(c | t<<16)
+		//   → `if (!(pop() <cmp> C[c])) IP = t*2`. TOS is the comparison LHS
+		// (popped), the constant is the RHS — operand order preserved. The
+		// LOAD_REG-prefixed form is already handled by the 4-instruction
+		// REG_<cmp>_CONST_JF fusions above; this is the bare-TOS variant.
+		if (a.opcode === Op.PUSH_CONST && c.opcode === Op.JMP_FALSE) {
+			const superOp = CONST_CMP_JF_MAP.get(b.opcode);
+			if (superOp != null) {
+				const constIdx = a.operand;
+				const target = c.operand;
+				if (constIdx <= 0xffff && target <= 0xffff) {
+					a.opcode = superOp;
+					a.operand = (constIdx & 0xffff) | ((target & 0xffff) << 16);
+					b.opcode = Op.NOP;
+					b.operand = 0;
+					c.opcode = Op.NOP;
+					c.operand = 0;
+					changed = true;
+					continue;
+				}
 			}
 		}
 	}
@@ -397,10 +494,10 @@ function removeNops(emitter: Emitter): void {
 			if (finallyIp !== 0xffff && finallyIp < instrs.length)
 				finallyIp = indexMap[finallyIp]!;
 			instr.operand = ((catchIp & 0xffff) << 16) | (finallyIp & 0xffff);
-		} else if (
-			instr.opcode === Op.REG_LT_CONST_JF ||
-			instr.opcode === Op.REG_LT_REG_JF
-		) {
+		} else if (PACKED_JUMP_OPS.has(instr.opcode)) {
+			// All other packed jumps (the REG_*_CONST_JF / REG_*_REG_JF
+			// compare-and-branch superinstructions) carry a single IP target
+			// in bits 16-31; the low 16 bits hold register/constant indices.
 			const low = instr.operand & 0xffff;
 			let target = (instr.operand >>> 16) & 0xffff;
 			if (target < instrs.length) target = indexMap[target]!;

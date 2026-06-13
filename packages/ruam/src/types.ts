@@ -287,6 +287,39 @@ export interface BytecodeUnit {
 	/** Whether the source function was an arrow function. */
 	isArrow: boolean;
 
+	/**
+	 * Whether the unit's per-call scope object can be elided.
+	 *
+	 * `true` when the compiled body never adds an own property to its scope
+	 * object, never reassigns the scope (push/pop block/catch/with), and never
+	 * captures the scope into a closure — i.e. it contains none of the
+	 * scope-dependent opcodes and has no dynamic scope (`eval`/`with`).  For
+	 * such units the runtime uses `SC = OS` (the outer scope) directly instead
+	 * of `SC = Object.create(OS)`, saving an allocation and a prototype hop on
+	 * every call.  Reads/writes/global-fallbacks are semantically identical.
+	 */
+	scopeless: boolean;
+
+	/**
+	 * Whether the unit uses the exception-completion machinery
+	 * (`PE`/`HPE`/`CT`/`CV` interpreter slots + the dispatch-loop `catch`
+	 * routing). `true` when the (logical) bytecode contains any exception
+	 * opcode (try/catch/finally/rethrow). Drives the per-call save/restore of
+	 * those four hoisted slots: a unit with `false` never reads or writes them,
+	 * so they are neither initialized nor snapshotted on entry. Computed from
+	 * the post-optimization logical opcodes (see compiler/slot-analysis.ts).
+	 */
+	usesExceptions: boolean;
+
+	/**
+	 * Whether the unit reads the this-context interpreter slots `TV`/`NT`/`HO`
+	 * (`this`, `new.target`, lexical-`this` closures, `super`). `true` when the
+	 * (logical) bytecode contains any such opcode. Drives the per-call
+	 * copy-in/save/restore of those three hoisted slots; a `false` unit leaves
+	 * the caller's values untouched.
+	 */
+	usesThisContext: boolean;
+
 	/** Constant pool index for the function's name (`-1` if anonymous). */
 	nameConstIndex: number;
 

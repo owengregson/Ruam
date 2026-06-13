@@ -27,9 +27,9 @@ import {
 	breakStmt,
 	returnStmt,
 	throwStmt,
+	whileStmt,
 	call,
 	member,
-	index,
 	BOp,
 	UOp,
 } from "../nodes.js";
@@ -116,118 +116,108 @@ function JMP_NULLISH_KEEP(ctx: HandlerCtx): JsNode[] {
 // --- Return / throw handlers ---
 
 /**
- * RETURN: pop return value, optionally defer to finally handler, then return.
+ * Unwind the exception-handler stack toward the nearest enclosing `finally`
+ * for a deferred completion (return).
+ *
+ * Pops handler frames (restoring the stack depth saved on each) until either a
+ * frame carrying a `finally` is found — in which case `IP` is set to that
+ * finally and the deferral flag is cleared so control transfers there — or the
+ * stack is exhausted. Catch-only frames in between are popped without running
+ * (a `catch` does not execute during an abrupt return). This makes
+ * `return`-through-`finally` work for arbitrarily nested `try`/`finally`, not
+ * just a single level.
+ *
+ * `completionValue` is the value assigned to `CV` when a finally is found; the
+ * finally's `END_FINALLY` later resumes the deferral. The loop is driven purely
+ * by its condition (no inner `break`/`continue`/`return`) so it survives the
+ * handler-body break/return transforms applied by every dispatch style.
+ */
+function unwindToFinally(ctx: HandlerCtx, completionValue: JsNode): JsNode {
+	const flag = ctx.local("retDefer");
+	return whileStmt(
+		bin(
+			BOp.And,
+			id(flag),
+			bin(
+				BOp.And,
+				id(ctx.EX),
+				bin(BOp.Gt, member(id(ctx.EX), "length"), lit(0))
+			)
+		),
+		[
+			varDecl(ctx.t("_h"), call(member(id(ctx.EX), "pop"), [])),
+			exprStmt(
+				assign(
+					member(id(ctx.S), "length"),
+					member(id(ctx.t("_h")), ctx.t("_sp"))
+				)
+			),
+			ifStmt(
+				bin(BOp.Gte, member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
+				[
+					exprStmt(assign(id(ctx.CT), lit(1))),
+					exprStmt(assign(id(ctx.CV), completionValue)),
+					exprStmt(
+						assign(
+							id(ctx.IP),
+							bin(
+								BOp.Mul,
+								member(id(ctx.t("_h")), ctx.t("_fi")),
+								lit(2)
+							)
+						)
+					),
+					exprStmt(assign(id(flag), lit(0))),
+				]
+			),
+		]
+	);
+}
+
+/**
+ * RETURN: pop return value, run any enclosing `finally` blocks first
+ * (deferring via completion tracking), then return.
  *
  * ```
  * var _rv=S.pop();
  * <debug trace if enabled>
- * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h._fi>=0){CT=1;CV=_rv;EX.pop();S.length=_h._sp;IP=_h._fi*2;break;}}
- * return _rv;
+ * var _df=1;
+ * while(_df&&EX&&EX.length>0){var _h=EX.pop();S.length=_h._sp;if(_h._fi>=0){CT=1;CV=_rv;IP=_h._fi*2;_df=0;}}
+ * if(_df)return _rv;
+ * break;
  * ```
  */
 function RETURN(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.t("_rv"), ctx.pop()),
 		...debugTrace(ctx, "RETURN", lit("value="), id(ctx.t("_rv"))),
-		ifStmt(
-			bin(
-				BOp.And,
-				id(ctx.EX),
-				bin(BOp.Gt, member(id(ctx.EX), "length"), lit(0))
-			),
-			[
-				varDecl(
-					ctx.t("_h"),
-					index(
-						id(ctx.EX),
-						bin(BOp.Sub, member(id(ctx.EX), "length"), lit(1))
-					)
-				),
-				ifStmt(
-					bin(BOp.Gte, member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
-					[
-						exprStmt(assign(id(ctx.CT), lit(1))),
-						exprStmt(assign(id(ctx.CV), id(ctx.t("_rv")))),
-						exprStmt(call(member(id(ctx.EX), "pop"), [])),
-						exprStmt(
-							assign(
-								member(id(ctx.S), "length"),
-								member(id(ctx.t("_h")), ctx.t("_sp"))
-							)
-						),
-						exprStmt(
-							assign(
-								id(ctx.IP),
-								bin(
-									BOp.Mul,
-									member(id(ctx.t("_h")), ctx.t("_fi")),
-									lit(2)
-								)
-							)
-						),
-						breakStmt(),
-					]
-				),
-			]
-		),
-		returnStmt(id(ctx.t("_rv"))),
+		varDecl(ctx.local("retDefer"), lit(1)),
+		unwindToFinally(ctx, id(ctx.t("_rv"))),
+		ifStmt(id(ctx.local("retDefer")), [returnStmt(id(ctx.t("_rv")))]),
+		breakStmt(),
 	];
 }
 
 /**
- * RETURN_VOID: return undefined, deferring to finally if present.
+ * RETURN_VOID: return undefined, running any enclosing `finally` blocks first.
  *
  * ```
  * <debug trace if enabled>
- * if(EX&&EX.length>0){var _h=EX[EX.length-1];if(_h._fi>=0){CT=1;CV=void 0;EX.pop();S.length=_h._sp;IP=_h._fi*2;break;}}
- * return void 0;
+ * var _df=1;
+ * while(_df&&EX&&EX.length>0){var _h=EX.pop();S.length=_h._sp;if(_h._fi>=0){CT=1;CV=void 0;IP=_h._fi*2;_df=0;}}
+ * if(_df)return void 0;
+ * break;
  * ```
  */
 function RETURN_VOID(ctx: HandlerCtx): JsNode[] {
 	return [
 		...debugTrace(ctx, "RETURN_VOID"),
-		ifStmt(
-			bin(
-				BOp.And,
-				id(ctx.EX),
-				bin(BOp.Gt, member(id(ctx.EX), "length"), lit(0))
-			),
-			[
-				varDecl(
-					ctx.t("_h"),
-					index(
-						id(ctx.EX),
-						bin(BOp.Sub, member(id(ctx.EX), "length"), lit(1))
-					)
-				),
-				ifStmt(
-					bin(BOp.Gte, member(id(ctx.t("_h")), ctx.t("_fi")), lit(0)),
-					[
-						exprStmt(assign(id(ctx.CT), lit(1))),
-						exprStmt(assign(id(ctx.CV), un(UOp.Void, lit(0)))),
-						exprStmt(call(member(id(ctx.EX), "pop"), [])),
-						exprStmt(
-							assign(
-								member(id(ctx.S), "length"),
-								member(id(ctx.t("_h")), ctx.t("_sp"))
-							)
-						),
-						exprStmt(
-							assign(
-								id(ctx.IP),
-								bin(
-									BOp.Mul,
-									member(id(ctx.t("_h")), ctx.t("_fi")),
-									lit(2)
-								)
-							)
-						),
-						breakStmt(),
-					]
-				),
-			]
-		),
-		returnStmt(un(UOp.Void, lit(0))),
+		varDecl(ctx.local("retDefer"), lit(1)),
+		unwindToFinally(ctx, un(UOp.Void, lit(0))),
+		ifStmt(id(ctx.local("retDefer")), [
+			returnStmt(un(UOp.Void, lit(0))),
+		]),
+		breakStmt(),
 	];
 }
 

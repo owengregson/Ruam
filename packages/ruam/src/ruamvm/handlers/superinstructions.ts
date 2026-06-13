@@ -1,16 +1,23 @@
 /**
  * Superinstruction opcode handlers in AST node form.
  *
- * Covers 18 fused opcodes that combine register access with arithmetic,
+ * Covers 28 fused opcodes that combine register access with arithmetic,
  * comparison, property access, and conditional jumps:
  *  - Dual-register binary: REG_ADD, REG_SUB, REG_MUL, REG_DIV, REG_MOD,
  *                          REG_LT, REG_LTE, REG_GT, REG_GTE, REG_SEQ, REG_SNEQ
  *  - Register+constant:    REG_ADD_CONST, REG_CONST_SUB, REG_CONST_MUL, REG_CONST_MOD
  *  - Property access:      REG_GET_PROP
- *  - Conditional jumps:    REG_LT_CONST_JF, REG_LT_REG_JF
+ *  - Compare-and-branch (register vs constant, jump if false):
+ *                          REG_LT_CONST_JF, REG_LTE_CONST_JF, REG_GT_CONST_JF,
+ *                          REG_GTE_CONST_JF, REG_SEQ_CONST_JF, REG_SNEQ_CONST_JF
+ *  - Compare-and-branch (register vs register, jump if false):
+ *                          REG_LT_REG_JF, REG_LTE_REG_JF, REG_GT_REG_JF,
+ *                          REG_GTE_REG_JF, REG_SEQ_REG_JF, REG_SNEQ_REG_JF
  *
  * All handlers use pure AST nodes with bit-packing extraction from the operand
- * field and multi-step control flow for conditional jump variants.
+ * field and multi-step control flow for conditional jump variants. The
+ * compare-and-branch handlers are parameterized by operator so every
+ * comparison shares one implementation.
  *
  * @module ruamvm/handlers/superinstructions
  */
@@ -208,20 +215,66 @@ function REG_GET_PROP(ctx: HandlerCtx): JsNode[] {
 }
 registry.set(Op.REG_GET_PROP, REG_GET_PROP);
 
+/**
+ * REG_GET_PROP_DYN: dynamic (computed) property get from two registers.
+ *
+ * Fuses `LOAD_REG(a) + LOAD_REG(b) + GET_PROP_DYNAMIC` — pushes `R[a][R[b]]`.
+ * Pure read; no receiver/`this`/write semantics. Operand: a (low 16) | b (high 16).
+ * Encoding-aware: the result is pushed via `ctx.push`.
+ */
+function REG_GET_PROP_DYN(ctx: HandlerCtx): JsNode[] {
+	return [
+		varDecl(ctx.local("regA"), lo16(ctx)),
+		varDecl(ctx.local("regB"), hi16(ctx)),
+		exprStmt(
+			ctx.push(
+				index(
+					index(id(ctx.R), id(ctx.local("regA"))),
+					index(id(ctx.R), id(ctx.local("regB")))
+				)
+			)
+		),
+		breakStmt(),
+	];
+}
+registry.set(Op.REG_GET_PROP_DYN, REG_GET_PROP_DYN);
+
+/**
+ * IDX_REG: index the top-of-stack object by a register value.
+ *
+ * Fuses `LOAD_REG(r) + GET_PROP_DYNAMIC` — replaces TOS `obj` with `obj[R[r]]`
+ * (object stays on stack, consumed in place). Operand: r.
+ *
+ * Encoding-aware: reads the top via `ctx.peek()` (decoded) and overwrites it
+ * via `ctx.setTop(...)` — NOT `assign(ctx.peek(), …)`, which is invalid under
+ * stackEncoding (there `peek()` is a `stkDec(...)` call and cannot be an lvalue).
+ */
+function IDX_REG(ctx: HandlerCtx): JsNode[] {
+	return [
+		exprStmt(ctx.setTop(index(ctx.peek(), index(id(ctx.R), id(ctx.O))))),
+		breakStmt(),
+	];
+}
+registry.set(Op.IDX_REG, IDX_REG);
+
 // --- Conditional jump operations ---
 
 /**
- * REG_LT_CONST_JF: compare register < constant, jump if false.
+ * Build a fused "compare register vs constant, jump if false" handler.
  *
  * Operand packing: r=low 8 bits, ci=bits 8-15, tgt=bits 16-31.
  *
+ * Pattern:
  * ```
  * var r=O&0xFF;var ci=(O>>>8)&0xFF;var tgt=(O>>>16)&0xFFFF;
- * if(!(R[r]<C[ci]))IP=tgt*2;break;
+ * if(!(R[r] <op> C[ci]))IP=tgt*2;break;
  * ```
+ *
+ * @param op - The JS comparison operator (e.g. BOp.Lt, BOp.Seq)
+ * @returns Handler function producing the case body
  */
-function REG_LT_CONST_JF(ctx: HandlerCtx): JsNode[] {
-	return [
+function regConstCmpJf(op: BOpKind): HandlerFn {
+	return (ctx) => [
 		varDecl(ctx.local("reg"), lo8(ctx)),
 		varDecl(ctx.local("constIdx"), mid8(ctx)),
 		varDecl(ctx.local("target"), hi16(ctx)),
@@ -229,7 +282,7 @@ function REG_LT_CONST_JF(ctx: HandlerCtx): JsNode[] {
 			un(
 				UOp.Not,
 				bin(
-					BOp.Lt,
+					op,
 					index(id(ctx.R), id(ctx.local("reg"))),
 					index(id(ctx.C), id(ctx.local("constIdx")))
 				)
@@ -246,20 +299,23 @@ function REG_LT_CONST_JF(ctx: HandlerCtx): JsNode[] {
 		breakStmt(),
 	];
 }
-registry.set(Op.REG_LT_CONST_JF, REG_LT_CONST_JF);
 
 /**
- * REG_LT_REG_JF: compare register < register, jump if false.
+ * Build a fused "compare register vs register, jump if false" handler.
  *
  * Operand packing: ra=low 8 bits, rb=bits 8-15, tgt=bits 16-31.
  *
+ * Pattern:
  * ```
  * var ra=O&0xFF;var rb=(O>>>8)&0xFF;var tgt=(O>>>16)&0xFFFF;
- * if(!(R[ra]<R[rb]))IP=tgt*2;break;
+ * if(!(R[ra] <op> R[rb]))IP=tgt*2;break;
  * ```
+ *
+ * @param op - The JS comparison operator (e.g. BOp.Lt, BOp.Seq)
+ * @returns Handler function producing the case body
  */
-function REG_LT_REG_JF(ctx: HandlerCtx): JsNode[] {
-	return [
+function regRegCmpJf(op: BOpKind): HandlerFn {
+	return (ctx) => [
 		varDecl(ctx.local("regA"), lo8(ctx)),
 		varDecl(ctx.local("regB"), mid8(ctx)),
 		varDecl(ctx.local("target"), hi16(ctx)),
@@ -267,7 +323,7 @@ function REG_LT_REG_JF(ctx: HandlerCtx): JsNode[] {
 			un(
 				UOp.Not,
 				bin(
-					BOp.Lt,
+					op,
 					index(id(ctx.R), id(ctx.local("regA"))),
 					index(id(ctx.R), id(ctx.local("regB")))
 				)
@@ -284,4 +340,71 @@ function REG_LT_REG_JF(ctx: HandlerCtx): JsNode[] {
 		breakStmt(),
 	];
 }
-registry.set(Op.REG_LT_REG_JF, REG_LT_REG_JF);
+
+// Register-vs-constant compare-and-branch (jump if false).
+registry.set(Op.REG_LT_CONST_JF, regConstCmpJf(BOp.Lt));
+registry.set(Op.REG_LTE_CONST_JF, regConstCmpJf(BOp.Lte));
+registry.set(Op.REG_GT_CONST_JF, regConstCmpJf(BOp.Gt));
+registry.set(Op.REG_GTE_CONST_JF, regConstCmpJf(BOp.Gte));
+registry.set(Op.REG_SEQ_CONST_JF, regConstCmpJf(BOp.Seq));
+registry.set(Op.REG_SNEQ_CONST_JF, regConstCmpJf(BOp.Sneq));
+
+// Register-vs-register compare-and-branch (jump if false).
+registry.set(Op.REG_LT_REG_JF, regRegCmpJf(BOp.Lt));
+registry.set(Op.REG_LTE_REG_JF, regRegCmpJf(BOp.Lte));
+registry.set(Op.REG_GT_REG_JF, regRegCmpJf(BOp.Gt));
+registry.set(Op.REG_GTE_REG_JF, regRegCmpJf(BOp.Gte));
+registry.set(Op.REG_SEQ_REG_JF, regRegCmpJf(BOp.Seq));
+registry.set(Op.REG_SNEQ_REG_JF, regRegCmpJf(BOp.Sneq));
+
+/**
+ * Build a fused "compare TOS vs constant, jump if false" handler.
+ *
+ * Fuses `PUSH_CONST(c) + <cmp> + JMP_FALSE(t)`. The comparison LHS is the value
+ * already on top of the stack (the elided PUSH_CONST would have pushed the RHS),
+ * so it is popped and compared against `C[ci]` — operand order preserved (popped
+ * LHS on the left, constant on the right), matching the cmp handler's
+ * `S[top] <op> S.pop()` semantics.
+ *
+ * Operand packing: ci=low 16 bits, tgt=bits 16-31.
+ *
+ * Pattern:
+ * ```
+ * var ci=O&0xFFFF;var tgt=(O>>>16)&0xFFFF;
+ * if(!(S.pop() <op> C[ci]))IP=tgt*2;break;
+ * ```
+ *
+ * Encoding-aware: the LHS is read via `ctx.pop()` (decoded under stackEncoding).
+ *
+ * @param op - The JS comparison operator (e.g. BOp.Lt, BOp.Seq)
+ * @returns Handler function producing the case body
+ */
+function constCmpJf(op: BOpKind): HandlerFn {
+	return (ctx) => [
+		varDecl(ctx.local("constIdx"), lo16(ctx)),
+		varDecl(ctx.local("target"), hi16(ctx)),
+		ifStmt(
+			un(
+				UOp.Not,
+				bin(op, ctx.pop(), index(id(ctx.C), id(ctx.local("constIdx"))))
+			),
+			[
+				exprStmt(
+					assign(
+						id(ctx.IP),
+						bin(BOp.Mul, id(ctx.local("target")), lit(2))
+					)
+				),
+			]
+		),
+		breakStmt(),
+	];
+}
+
+// Constant-vs-TOS compare-and-branch (jump if false).
+registry.set(Op.CONST_LT_JF, constCmpJf(BOp.Lt));
+registry.set(Op.CONST_LTE_JF, constCmpJf(BOp.Lte));
+registry.set(Op.CONST_GT_JF, constCmpJf(BOp.Gt));
+registry.set(Op.CONST_GTE_JF, constCmpJf(BOp.Gte));
+registry.set(Op.CONST_SEQ_JF, constCmpJf(BOp.Seq));
+registry.set(Op.CONST_SNEQ_JF, constCmpJf(BOp.Sneq));

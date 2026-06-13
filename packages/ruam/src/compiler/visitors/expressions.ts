@@ -1598,8 +1598,12 @@ function compileObjectExpression(
 
 	for (const prop of path.get("properties")) {
 		if (prop.isObjectProperty()) {
-			emitter.emit(Op.DUP, 0);
-
+			// SET_PROP_STATIC / SET_PROP_DYNAMIC peek (not pop) the target
+			// object, leaving it on the stack for the next property. The object
+			// already sits beneath the property value, so the previous
+			// DUP/.../POP bracketing was redundant — emit `<val> SET_PROP` (and
+			// `<key> <val> SET_PROP` for computed) directly. Net stack effect
+			// per property is 0, identical to before, but saves two dispatches.
 			if (prop.node.computed) {
 				compileExpression(
 					prop.get("key") as NodePath<t.Expression>,
@@ -1633,8 +1637,6 @@ function compileObjectExpression(
 				const nameIdx = emitter.addStringConstant(keyName);
 				emitter.emit(Op.SET_PROP_STATIC, nameIdx);
 			}
-
-			emitter.emit(Op.POP, 0);
 		} else if (prop.isObjectMethod()) {
 			emitter.emit(Op.DUP, 0);
 			const method = prop as NodePath<t.ObjectMethod>;

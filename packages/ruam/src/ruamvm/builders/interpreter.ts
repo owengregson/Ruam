@@ -202,6 +202,11 @@ export function buildInterpreterFunctions(
 		names.ho,
 		T("_g"),
 	];
+	// Stack-encoding key slot — declared at IIFE scope so hoisted sync handlers
+	// (which reference `_sek` via stkDec/stkEnc) can see it; set per exec call.
+	if (effectiveOpts.stackEncoding) {
+		slotNames.push(T("_sek"));
+	}
 	for (const name of slotNames) {
 		iifeDecls.push(varDecl(name, un(UOp.Void, lit(0))));
 	}
@@ -586,7 +591,13 @@ function buildCasesForMode(
 	// gets further transformed by those passes.
 	if (interpOpts.observationResistance) {
 		const witnessResult = buildWitnessCounter(names, temps, seed, split);
-		const probeResult = buildStackProbe(names, seed, split);
+		const probeResult = buildStackProbe(
+			names,
+			temps,
+			seed,
+			split,
+			interpOpts.stackEncoding
+		);
 
 		// PRNG for witness check selection
 		let witnessSeed = deriveSeed(seed, "witnessCheck") >>> 0;
@@ -728,7 +739,13 @@ function buildCasesForModeInternal(
 	debug: boolean,
 	handlerIndices: number[]
 ): CaseClause[] {
-	const ctx = makeHandlerCtx(names, temps, isAsync, debug);
+	const ctx = makeHandlerCtx(
+		names,
+		temps,
+		isAsync,
+		debug,
+		interpOpts.stackEncoding
+	);
 
 	// Build raw cases from the handler registry
 	const rawCases: CaseClause[] = [];
@@ -813,7 +830,13 @@ function buildExecFunction(
 		registry?: NameRegistry;
 	}
 ): { fnNode: JsNode; iifeDecls: JsNode[] } {
-	const ctx = makeHandlerCtx(names, temps, opts.isAsync, opts.debug);
+	const ctx = makeHandlerCtx(
+		names,
+		temps,
+		opts.isAsync,
+		opts.debug,
+		opts.interpOpts.stackEncoding
+	);
 	const htName = temps["_ht"];
 	if (htName === undefined) throw new Error("Missing temp: _ht");
 
@@ -822,6 +845,27 @@ function buildExecFunction(
 		opts.structuralChoices?.dispatchStyle ?? "function-table";
 	const returnMech = opts.structuralChoices?.returnMechanism ?? "sentinel";
 	const returnTag = opts.structuralChoices?.returnTag ?? 1;
+
+	// --- Decode-once execution cache (Phase 1) ---
+	// When enabled, the unit's instruction stream is materialized once into a
+	// per-unit Int32Array of [resolved handler index, decrypted operand], cached
+	// on the unit. The steady-state dispatch loop then reads it directly — no
+	// per-instruction `_ht` indirection and (under rolling cipher) no
+	// per-iteration re-decryption. Gated OFF for the features whose threat model
+	// is runtime-memory instruction secrecy / tamper response (caching would
+	// defeat them). At-rest bytecode security is fully preserved (the serialized
+	// string and key derivation are untouched); this trades only runtime-memory
+	// instruction secrecy, consistent with the already-cached plaintext pool U.c.
+	// Gated to rolling-cipher builds: that is where the cache is a decisive win
+	// (it amortizes the per-instruction keystream derivation the slow path repeats
+	// every loop iteration). Without rolling cipher the operand stream is already
+	// plaintext, so caching would only duplicate memory for a marginal saving.
+	const io = opts.interpOpts;
+	const decodeCache =
+		opts.rollingCipher &&
+		!io.incrementalCipher &&
+		!io.opcodeMutation &&
+		!io.observationResistance;
 
 	let ftResult: {
 		preLoopDecls: JsNode[];
@@ -837,7 +881,8 @@ function buildExecFunction(
 			ctx.PH as string,
 			opts.isAsync,
 			returnMech,
-			returnTag
+			returnTag,
+			decodeCache
 		);
 	} else if (dispatchStyle === "object-lookup") {
 		ftResult = buildObjectLookupDispatch(
@@ -847,7 +892,8 @@ function buildExecFunction(
 			ctx.PH as string,
 			opts.isAsync,
 			returnMech,
-			returnTag
+			returnTag,
+			decodeCache
 		);
 	} else {
 		// "function-table" — the original grouped dispatch
@@ -857,7 +903,8 @@ function buildExecFunction(
 			htName,
 			ctx.PH as string,
 			opts.isAsync,
-			opts.asyncGroupOffset
+			opts.asyncGroupOffset,
+			decodeCache
 		);
 	}
 
@@ -876,7 +923,8 @@ function buildExecFunction(
 		ftResult.preLoopDecls,
 		opts.split,
 		hoistHandlers,
-		opts.seed
+		opts.seed,
+		decodeCache
 	);
 
 	// Apply tree-based obfuscation of local variable names.
@@ -938,7 +986,8 @@ function buildScaffoldAST(
 	htInit?: JsNode[],
 	split?: SplitFn,
 	hoistHandlers = false,
-	seed = 0
+	seed = 0,
+	decodeCache = false
 ): JsNode {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
 	const fnName = isAsync ? n.execAsync : n.exec;
@@ -998,6 +1047,58 @@ function buildScaffoldAST(
 				T("_g"),
 		  ]
 		: [];
+	// The stack-encoding key `_sek` is a slot too (hoisted handlers read it).
+	if (hoistHandlers && interpOpts.stackEncoding) {
+		slotNames.push(T("_sek"));
+	}
+
+	// --- Per-unit minimal save/restore partition ---
+	// The per-call slot snapshot/restore is the dominant overhead under deep
+	// recursion. Most units touch only a subset of slots, so two groups are
+	// saved/restored only when the unit actually uses them (flags packed on U
+	// at compile time — see compiler/slot-analysis.ts):
+	//   • EXC group {PE,HPE,CT,CV} — gated on `U.xh` (exception machinery).
+	//   • TC  group {TV,NT,HO}     — gated on `U.tc` (this/super/new.target/closure).
+	// Everything else (incl. EX, which RETURN reads on every return, and A,
+	// read by ordinary param loads) is CORE — always saved. The snapshot uses
+	// scalar locals (not a per-call array) to avoid an allocation each call.
+	const EXC_SET = new Set([PE, HPE, CT, CV]);
+	const TC_SET = new Set([n.tVal, n.nTgt, n.ho]);
+	const coreSlots = slotNames.filter(
+		(s) => !EXC_SET.has(s) && !TC_SET.has(s)
+	);
+	const excSlots = slotNames.filter((s) => EXC_SET.has(s));
+	const tcSlots = slotNames.filter((s) => TC_SET.has(s));
+	// Snapshot-local name per slot (renamed to a short name by obfuscateLocals).
+	const snapName = new Map<string, string>();
+	slotNames.forEach((s, i) => snapName.set(s, "vmSnap" + i));
+	const snap = (s: string): JsNode => id(snapName.get(s)!);
+	// Runtime flag locals (read once from U). `unitP` is the unit param.
+	const fXh = "vmUsesXh";
+	const fTc = "vmUsesTc";
+	/** Partitioned slot restore (used by the recursion guard + the outer finally). */
+	const buildSlotRestore = (): JsNode[] => {
+		const out: JsNode[] = coreSlots.map((s) =>
+			exprStmt(assign(id(s), snap(s)))
+		);
+		if (excSlots.length > 0) {
+			out.push(
+				ifStmt(
+					id(fXh),
+					excSlots.map((s) => exprStmt(assign(id(s), snap(s))))
+				)
+			);
+		}
+		if (tcSlots.length > 0) {
+			out.push(
+				ifStmt(
+					id(fTc),
+					tcSlots.map((s) => exprStmt(assign(id(s), snap(s))))
+				)
+			);
+		}
+		return out;
+	};
 
 	// When hoisting, use distinct parameter names so they don't shadow
 	// the IIFE-scope slot variables. These names (length >= 3, no _ prefix)
@@ -1015,18 +1116,53 @@ function buildScaffoldAST(
 	// depth++
 	outerBody.push(exprStmt(update(UpOp.Inc, false, id(n.depth))));
 
-	// When hoisting, save current IIFE-scope slot values and copy params
+	// When hoisting, snapshot current IIFE-scope slot values and copy params.
 	if (hoistHandlers) {
-		// var saved = [S, R, IP, C, O, SC, EX, PE, HPE, CT, CV, U, A, TV, NT, HO, _g]
-		outerBody.push(
-			varDecl("saved", arr(...slotNames.map((name) => id(name))))
-		);
-		// Copy params to IIFE-scope slots
+		// Read the per-unit slot-usage flags once (packed on U at compile time).
+		outerBody.push(varDecl(fXh, member(id(paramU), "xh")));
+		outerBody.push(varDecl(fTc, member(id(paramU), "tc")));
+		// CORE snapshot — scalar locals (no per-call array allocation).
+		for (const s of coreSlots) {
+			outerBody.push(varDecl(snapName.get(s)!, id(s)));
+		}
+		// EXC + TC snapshot vars are declared unconditionally (so the finally
+		// restore can reference them) but only assigned when the unit uses them.
+		for (const s of [...excSlots, ...tcSlots]) {
+			outerBody.push(varDecl(snapName.get(s)!));
+		}
+		if (excSlots.length > 0) {
+			outerBody.push(
+				ifStmt(
+					id(fXh),
+					excSlots.map((s) =>
+						exprStmt(assign(id(snapName.get(s)!), id(s)))
+					)
+				)
+			);
+		}
+		if (tcSlots.length > 0) {
+			outerBody.push(
+				ifStmt(
+					id(fTc),
+					tcSlots.map((s) =>
+						exprStmt(assign(id(snapName.get(s)!), id(s)))
+					)
+				)
+			);
+		}
+		// Copy params to IIFE-scope slots. U/A are CORE (always). The
+		// this-context params are copied only when the unit reads them.
 		outerBody.push(exprStmt(assign(id(U), id(paramU))));
 		outerBody.push(exprStmt(assign(id(A), id(paramA))));
-		outerBody.push(exprStmt(assign(id(n.tVal), id(paramTV))));
-		outerBody.push(exprStmt(assign(id(n.nTgt), id(paramNT))));
-		outerBody.push(exprStmt(assign(id(n.ho), id(paramHO))));
+		if (tcSlots.length > 0) {
+			outerBody.push(
+				ifStmt(id(fTc), [
+					exprStmt(assign(id(n.tVal), id(paramTV))),
+					exprStmt(assign(id(n.nTgt), id(paramNT))),
+					exprStmt(assign(id(n.ho), id(paramHO))),
+				])
+			);
+		}
 	}
 
 	// callStack tracking — only in debug mode (avoids per-call array push/pop)
@@ -1052,12 +1188,8 @@ function buildScaffoldAST(
 		guardBody.push(exprStmt(call(member(id(n.callStack), "pop"), [])));
 	}
 	if (hoistHandlers) {
-		// Restore slot values before throwing (save array is still in scope)
-		for (let i = 0; i < slotNames.length; i++) {
-			guardBody.push(
-				exprStmt(assign(id(slotNames[i]!), index(id("saved"), lit(i))))
-			);
-		}
+		// Restore snapshot values before throwing (snapshot locals still in scope)
+		guardBody.push(...buildSlotRestore());
 	}
 	guardBody.push(
 		throwStmt(
@@ -1099,18 +1231,44 @@ function buildScaffoldAST(
 	);
 	tryBody.push(declOrAssign(IP, lit(0)));
 	tryBody.push(declOrAssign(C, member(id(U), "c")));
-	tryBody.push(varDecl(I, member(id(U), "i"))); // I is not a slot (dispatch-only)
+	// I is not a slot (dispatch-only). With the decode-once cache, I instead
+	// points at the materialized stream (built below, after rcState init).
+	if (!decodeCache) {
+		tryBody.push(varDecl(I, member(id(U), "i")));
+	}
 	tryBody.push(declOrAssign(EX, lit(null)));
-	tryBody.push(declOrAssign(PE, lit(null)));
-	tryBody.push(declOrAssign(HPE, lit(false)));
-	tryBody.push(declOrAssign(CT, lit(0)));
-	tryBody.push(declOrAssign(CV, un(UOp.Void, lit(0))));
+	if (hoistHandlers) {
+		// PE/HPE/CT/CV are touched only by exception units; initialize them
+		// (and save/restore them) only when `U.xh` is set. A non-exception unit
+		// never reads or writes them, so the caller's values pass through
+		// untouched and need no snapshot.
+		tryBody.push(
+			ifStmt(id(fXh), [
+				exprStmt(assign(id(PE), lit(null))),
+				exprStmt(assign(id(HPE), lit(false))),
+				exprStmt(assign(id(CT), lit(0))),
+				exprStmt(assign(id(CV), un(UOp.Void, lit(0)))),
+			])
+		);
+	} else {
+		tryBody.push(declOrAssign(PE, lit(null)));
+		tryBody.push(declOrAssign(HPE, lit(false)));
+		tryBody.push(declOrAssign(CT, lit(0)));
+		tryBody.push(declOrAssign(CV, un(UOp.Void, lit(0))));
+	}
+	// Scope-object elision: units whose compiled body never mutates, reassigns,
+	// or captures their scope (`U.el`) can reuse the outer scope directly,
+	// avoiding a per-call `Object.create` allocation + a prototype-chain hop.
+	// A missing/false flag falls back to the always-correct `Object.create`.
+	const osRef = (): JsNode => (hoistHandlers ? id(paramOS) : id(OS));
 	tryBody.push(
 		declOrAssign(
 			SC,
-			call(member(id("Object"), "create"), [
-				hoistHandlers ? id(paramOS) : id(OS),
-			])
+			ternary(
+				member(id(U), "el"),
+				osRef(),
+				call(member(id("Object"), "create"), [osRef()])
+			)
 		)
 	);
 	// Stack pointer (P) eliminated — stack uses Array.push/pop/length
@@ -1146,9 +1304,23 @@ function buildScaffoldAST(
 		);
 	}
 
-	// Optional: rolling cipher init — var rcState=rcDeriveKey(U)
+	// Optional: rolling cipher init. rcDeriveKey(U) is a pure function of the
+	// unit's constant metadata (folded with the closure key anchor), so it is
+	// invariant across every exec() of a given unit — memoize it on U.k to avoid
+	// recomputing the FNV derivation per call (a hot cost under recursion). Only
+	// the per-exec LOCAL rcState is ever poisoned (observation resistance); the
+	// memoized U.k stays the clean master key, so tamper response is unaffected.
 	if (rollingCipher) {
-		tryBody.push(varDecl(n.rcState, call(id(n.rcDeriveKey), [id(U)])));
+		tryBody.push(
+			varDecl(
+				n.rcState,
+				ternary(
+					bin(BOp.Sneq, member(id(U), "k"), un(UOp.Void, lit(0))),
+					member(id(U), "k"),
+					assign(member(id(U), "k"), call(id(n.rcDeriveKey), [id(U)]))
+				)
+			)
+		);
 	}
 
 	// Optional: incremental cipher init
@@ -1162,9 +1334,163 @@ function buildScaffoldAST(
 		);
 	}
 
-	// Optional: stack encoding proxy
+	// Optional: stack encoding — bind the per-exec key to the `_sek` slot (it is
+	// a save/restored IIFE-scope slot so hoisted handler closures can see it; the
+	// stkEnc/stkDec helpers are defined once at IIFE scope; the stack stays plain).
 	if (interpOpts.stackEncoding) {
-		tryBody.push(...buildStackEncodingProxyAST(n, temps, split));
+		tryBody.push(
+			declOrAssign(T("_sek"), buildStackEncodingKeyExpr(n, split))
+		);
+	}
+
+	// --- Decode-once execution cache (Phase 1) ---
+	// Materialize, once per unit, an Int32Array holding [resolved handler index,
+	// decrypted operand] for every instruction, cached on U.d. The keystream is a
+	// pure function of instruction index (position-keyed), so a single forward
+	// pass yields the correct plaintext for EVERY position regardless of how the
+	// loop later reaches it (sequential, jump, or exception route). I then points
+	// at the cache; the dispatch loop reads handler index + operand directly.
+	if (decodeCache) {
+		const HT = T("_ht");
+		const DI = "d"; // unit-object property holding the decoded stream
+		const SRC = "mvSrc",
+			LEN = "mvLen",
+			ARR = "mvArr",
+			POS = "mvPos",
+			IDX = "mvIdx",
+			KS = "mvKs";
+
+		// Per-instruction body: resolve handler index + decode operand.
+		const loopBody: JsNode[] = [];
+		if (rollingCipher) {
+			// var mvIdx = mvPos >>> 1;  (instruction index = keystream position)
+			loopBody.push(varDecl(IDX, bin(BOp.Ushr, id(POS), lit(1))));
+			// Inline rcMix(rcState, mvIdx, mvIdx ^ GOLDEN): byte-identical to the
+			// per-instruction decrypt the slow path performs.
+			loopBody.push(varDecl(KS, id(n.rcState)));
+			loopBody.push(
+				exprStmt(
+					assign(
+						id(KS),
+						bin(
+							BOp.Ushr,
+							call(id(n.imul), [
+								bin(BOp.BitXor, id(KS), id(IDX)),
+								L(0x85ebca6b),
+							]),
+							lit(0)
+						)
+					)
+				)
+			);
+			loopBody.push(
+				exprStmt(
+					assign(
+						id(KS),
+						bin(
+							BOp.Ushr,
+							call(id(n.imul), [
+								bin(
+									BOp.BitXor,
+									id(KS),
+									bin(BOp.BitXor, id(IDX), L(0x9e3779b9))
+								),
+								L(0xc2b2ae35),
+							]),
+							lit(0)
+						)
+					)
+				)
+			);
+			loopBody.push(
+				exprStmt(
+					assign(
+						id(KS),
+						bin(BOp.BitXor, id(KS), bin(BOp.Ushr, id(KS), lit(16)))
+					)
+				)
+			);
+			loopBody.push(
+				exprStmt(assign(id(KS), bin(BOp.Ushr, id(KS), lit(0))))
+			);
+			// mvArr[mvPos] = _ht[ (mvSrc[mvPos] ^ (mvKs & 0xFFFF)) & 0xFFFF ];
+			loopBody.push(
+				exprStmt(
+					assign(
+						index(id(ARR), id(POS)),
+						index(
+							id(HT),
+							bin(
+								BOp.BitAnd,
+								bin(
+									BOp.BitXor,
+									index(id(SRC), id(POS)),
+									bin(BOp.BitAnd, id(KS), lit(0xffff))
+								),
+								lit(0xffff)
+							)
+						)
+					)
+				)
+			);
+			// mvArr[mvPos+1] = (mvSrc[mvPos+1] ^ mvKs) | 0;
+			loopBody.push(
+				exprStmt(
+					assign(
+						index(id(ARR), bin(BOp.Add, id(POS), lit(1))),
+						bin(
+							BOp.BitOr,
+							bin(
+								BOp.BitXor,
+								index(id(SRC), bin(BOp.Add, id(POS), lit(1))),
+								id(KS)
+							),
+							lit(0)
+						)
+					)
+				)
+			);
+		} else {
+			// Light variant (no rolling cipher): pre-resolve handler indices,
+			// operand passthrough. mvSrc is already plaintext, so the cache
+			// exposes nothing new — purely removes the _ht indirection.
+			loopBody.push(
+				exprStmt(
+					assign(
+						index(id(ARR), id(POS)),
+						index(id(HT), index(id(SRC), id(POS)))
+					)
+				)
+			);
+			loopBody.push(
+				exprStmt(
+					assign(
+						index(id(ARR), bin(BOp.Add, id(POS), lit(1))),
+						index(id(SRC), bin(BOp.Add, id(POS), lit(1)))
+					)
+				)
+			);
+		}
+
+		// if (!U.d) { var mvSrc=U.i; var mvLen=mvSrc.length; var mvArr=new
+		//   Int32Array(mvLen); for(var mvPos=0; mvPos<mvLen; mvPos+=2){ ... }
+		//   U.d = mvArr; }
+		tryBody.push(
+			ifStmt(un(UOp.Not, member(id(U), DI)), [
+				varDecl(SRC, member(id(U), "i")),
+				varDecl(LEN, member(id(SRC), "length")),
+				varDecl(ARR, newExpr(id("Int32Array"), [id(LEN)])),
+				forStmt(
+					varDecl(POS, lit(0)),
+					bin(BOp.Lt, id(POS), id(LEN)),
+					assign(id(POS), lit(2), AOp.Add),
+					loopBody
+				),
+				exprStmt(assign(member(id(U), DI), id(ARR))),
+			])
+		);
+		// var I = U.d;
+		tryBody.push(varDecl(I, member(id(U), DI)));
 	}
 
 	// var _il=I.length
@@ -1180,8 +1506,9 @@ function buildScaffoldAST(
 	whileBody.push(declOrAssign(O, index(id(I), bin(BOp.Add, id(IP), lit(1)))));
 	whileBody.push(exprStmt(assign(id(IP), lit(2), AOp.Add)));
 
-	// Compute instruction index (shared by incremental cipher + rolling cipher)
-	if (rollingCipher) {
+	// Compute instruction index (shared by incremental cipher + rolling cipher).
+	// Skipped under the decode cache — operands are already decrypted in U.d.
+	if (rollingCipher && !decodeCache) {
 		// var _ri=(IP-2)>>>1
 		whileBody.push(
 			varDecl(
@@ -1346,8 +1673,9 @@ function buildScaffoldAST(
 		);
 	}
 
-	// Optional: rolling cipher decrypt (inlined rcMix for performance)
-	if (rollingCipher) {
+	// Optional: rolling cipher decrypt (inlined rcMix for performance).
+	// Skipped under the decode cache — the materialized stream is already decrypted.
+	if (rollingCipher && !decodeCache) {
 		// Inline rcMix(rcState, _ri, _ri ^ 0x9E3779B9):
 		// var _ks = rcState;
 		whileBody.push(varDecl(T("_ks"), id(n.rcState)));
@@ -1473,11 +1801,17 @@ function buildScaffoldAST(
 		);
 	}
 
+	// The exception-completion machinery (PE/HPE/CT/CV resets + EX routing) is
+	// collected here so it can be gated on `U.xh` when hoisting: a non-exception
+	// unit never touches these slots, so its caught native exceptions must
+	// propagate via the bare `throw e` below without disturbing them.
+	const excCatch: JsNode[] = [];
+
 	// HPE=false; PE=null; CT=0; CV=void 0;
-	catchBody.push(exprStmt(assign(id(HPE), lit(false))));
-	catchBody.push(exprStmt(assign(id(PE), lit(null))));
-	catchBody.push(exprStmt(assign(id(CT), lit(0))));
-	catchBody.push(exprStmt(assign(id(CV), un(UOp.Void, lit(0)))));
+	excCatch.push(exprStmt(assign(id(HPE), lit(false))));
+	excCatch.push(exprStmt(assign(id(PE), lit(null))));
+	excCatch.push(exprStmt(assign(id(CT), lit(0))));
+	excCatch.push(exprStmt(assign(id(CV), un(UOp.Void, lit(0)))));
 
 	// if(EX&&EX.length>0){...}
 	const exHandlerBody: JsNode[] = [];
@@ -1502,8 +1836,22 @@ function buildScaffoldAST(
 	catchRouteBody.push(
 		exprStmt(assign(member(id(S), "length"), member(id(T("_h")), T("_sp"))))
 	);
-	// Push error onto stack: S.push(e)
-	catchRouteBody.push(exprStmt(call(member(id(S), "push"), [id("e")])));
+	// Push error onto stack: S.push(stkEnc?(e, S.length, _sek))
+	// (scaffold-level push — must encode like ctx.push when stackEncoding, or a
+	// handler peek would decode a raw Error as e[1] === undefined.)
+	catchRouteBody.push(
+		exprStmt(
+			call(member(id(S), "push"), [
+				interpOpts.stackEncoding
+					? call(id(n.stkEnc), [
+							id("e"),
+							member(id(S), "length"),
+							id(T("_sek")),
+					  ])
+					: id("e"),
+			])
+		)
+	);
 	// IP=_h._ci*2
 	catchRouteBody.push(
 		exprStmt(
@@ -1556,12 +1904,21 @@ function buildScaffoldAST(
 		)
 	);
 
-	catchBody.push(
+	excCatch.push(
 		ifStmt(
 			bin(BOp.And, id(EX), bin(BOp.Gt, member(id(EX), "length"), lit(0))),
 			exHandlerBody
 		)
 	);
+
+	// Emit the exception machinery: gated on `U.xh` when hoisting (so
+	// non-exception units leave PE/HPE/CT/CV — which they never save — alone),
+	// inline otherwise (async path uses per-call locals, always needed).
+	if (hoistHandlers) {
+		catchBody.push(ifStmt(id(fXh), excCatch));
+	} else {
+		catchBody.push(...excCatch);
+	}
 
 	// Optional: debug uncaught logging
 	if (debug) {
@@ -1601,13 +1958,10 @@ function buildScaffoldAST(
 	if (debug) {
 		finallyBody.push(exprStmt(call(member(id(n.callStack), "pop"), [])));
 	}
-	// Restore saved slot values when hoisting
+	// Restore snapshot slot values when hoisting (partitioned: CORE always,
+	// EXC/TC only when the unit uses them — matching what was snapshotted).
 	if (hoistHandlers) {
-		for (let i = 0; i < slotNames.length; i++) {
-			finallyBody.push(
-				exprStmt(assign(id(slotNames[i]!), index(id("saved"), lit(i))))
-			);
-		}
+		finallyBody.push(...buildSlotRestore());
 	}
 
 	// Outer try-finally wrapping the whole body
@@ -1870,7 +2224,8 @@ function buildFunctionTableDispatch(
 	htName: string,
 	phName: string,
 	isAsync: boolean,
-	groupCountOffset = 0
+	groupCountOffset = 0,
+	decodeCache = false
 ): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
 	const FRS = temps["_frs"];
 	const FRV = temps["_frv"];
@@ -1966,7 +2321,14 @@ function buildFunctionTableDispatch(
 	const dispatchNodes: JsNode[] = [];
 
 	// var _fdi = _ht[PH]
-	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+	// Under the decode cache, PH already holds the resolved handler index
+	// (pre-computed during materialization); otherwise resolve via _ht.
+	dispatchNodes.push(
+		varDecl(
+			FDI,
+			decodeCache ? id(phName) : index(id(htName), id(phName))
+		)
+	);
 
 	// Build if-else routing tree with grouped dispatch calls.
 	// Each branch: if (_fgN[_fdi - offset]() === _frs) return _frv;
@@ -2075,7 +2437,8 @@ function buildDirectArrayDispatch(
 	phName: string,
 	isAsync: boolean,
 	returnMech: string,
-	returnTag: number
+	returnTag: number,
+	decodeCache = false
 ): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
 	const FRS = temps["_frs"];
 	const FRV = temps["_frv"];
@@ -2141,7 +2504,14 @@ function buildDirectArrayDispatch(
 
 	// Dispatch nodes
 	const dispatchNodes: JsNode[] = [];
-	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+	// Under the decode cache, PH already holds the resolved handler index
+	// (pre-computed during materialization); otherwise resolve via _ht.
+	dispatchNodes.push(
+		varDecl(
+			FDI,
+			decodeCache ? id(phName) : index(id(htName), id(phName))
+		)
+	);
 
 	const awaitNode = (expr: JsNode): JsNode =>
 		({ type: "AwaitExpr", expr } as JsNode);
@@ -2198,7 +2568,8 @@ function buildObjectLookupDispatch(
 	phName: string,
 	isAsync: boolean,
 	returnMech: string,
-	returnTag: number
+	returnTag: number,
+	decodeCache = false
 ): { preLoopDecls: JsNode[]; iifeDecls: JsNode[]; dispatchNodes: JsNode[] } {
 	const FRS = temps["_frs"];
 	const FRV = temps["_frv"];
@@ -2262,7 +2633,14 @@ function buildObjectLookupDispatch(
 
 	// Dispatch nodes
 	const dispatchNodes: JsNode[] = [];
-	dispatchNodes.push(varDecl(FDI, index(id(htName), id(phName))));
+	// Under the decode cache, PH already holds the resolved handler index
+	// (pre-computed during materialization); otherwise resolve via _ht.
+	dispatchNodes.push(
+		varDecl(
+			FDI,
+			decodeCache ? id(phName) : index(id(htName), id(phName))
+		)
+	);
 
 	const awaitNode = (expr: JsNode): JsNode =>
 		({ type: "AwaitExpr", expr } as JsNode);
@@ -2300,197 +2678,123 @@ function buildObjectLookupDispatch(
 	return { preLoopDecls, iifeDecls, dispatchNodes };
 }
 
-// --- Stack encoding proxy (AST) ---
+// --- Stack encoding (AST) ---
 
 /**
- * Build the Proxy-based stack encoding wrapper as AST nodes.
+ * Build the per-exec stack-encoding key expression: `(U.i.length ^ U.r ^ const) >>> 0`.
  *
- * Wraps the raw stack array in a Proxy that XOR-encodes numeric values
- * on set and decodes on get. Transparent to all opcode handlers.
+ * This is the per-unit key base folded into the position-dependent XOR mask.
+ * The caller binds it to the `_sek` slot via `declOrAssign` (so it is an
+ * IIFE-scope slot variable, saved/restored per exec for recursion safety, just
+ * like `S`/`C`/`O` — hoisted handler closures reference it directly). The stack
+ * array itself stays a plain `Array`; values are encoded/decoded via the
+ * IIFE-scope `stkEnc`/`stkDec` helpers ({@link buildStackEncodingHelpers})
+ * instead of a `Proxy`. Far faster (no per-access trap, V8 keeps the array's
+ * fast element path) while preserving the exact in-memory representation
+ * (`[tag,payload]` entries with int32s position-XOR-masked) — so at-rest
+ * stack-memory secrecy is identical.
  *
  * @param n - Runtime identifier names
- * @param temps - Temp name mapping
  * @param split - Optional constant splitter for numeric obfuscation
- * @returns Array of JsNode statements to insert into the function body
+ * @returns The `_sek` key expression node
  */
-function buildStackEncodingProxyAST(
+function buildStackEncodingKeyExpr(n: RuntimeNames, split?: SplitFn): JsNode {
+	const L = (v: number): JsNode => (split ? split(v) : lit(v));
+	const U = n.unit;
+	// (U.i.length^U.r^0x5A3C96E1)>>>0
+	return bin(
+		BOp.Ushr,
+		bin(
+			BOp.BitXor,
+			bin(
+				BOp.BitXor,
+				member(member(id(U), "i"), "length"),
+				member(id(U), "r")
+			),
+			L(0x5a3c96e1)
+		),
+		lit(0)
+	);
+}
+
+/**
+ * Build the IIFE-scope stack-encoding helper functions `stkEnc` / `stkDec`.
+ *
+ * These replace the legacy `Proxy` get/set traps with plain function calls and
+ * use an allocation-free representation on the int32 hot path:
+ *
+ *   stkEnc(v, i, k) -> the stored entry for value v at slot i (key base k):
+ *     int32  -> v ^ ((k ^ (i*GR))>>>0)   (BARE masked number — NO allocation)
+ *     else   -> [v]                       (boxed: floats, bool, string, object,
+ *                                          null, undefined, function, symbol, …)
+ *   stkDec(e, i, k) -> the decoded value from entry e at slot i (inverse):
+ *     typeof e === 'number' -> e ^ ((k ^ (i*GR))>>>0)   (masked int, incl. 0)
+ *     else                  -> e[0]                      (unbox)
+ *
+ * The ONLY bare numbers on the stack are masked int32s, so a `typeof` test
+ * unambiguously distinguishes them from boxed values. A float is also
+ * `typeof === 'number'` but is NOT an int32 ((v|0)===v fails), so it is boxed —
+ * never bare — preventing stkDec from wrongly unmasking it. -0 masks-as-int and
+ * round-trips to +0 (`-0 ^ k === k`, `k ^ k === 0`), matching JS `-0|0===0` and
+ * the old `[tag,payload]` scheme exactly. NaN/Infinity/2^31..2^32 are boxed.
+ *
+ * The key formula and per-unit `_sek` key are byte-identical to the old Proxy,
+ * so int32 stack values remain position-XOR-masked with the same keystream;
+ * non-ints remain exposed (boxed, unmasked) exactly as before. The eliminated
+ * allocation is the per-push `[tag,payload]` array, which dominated push/pop.
+ * Defined once at IIFE scope and shared across all exec calls; the per-unit key
+ * is passed in as `k` (a per-exec local) rather than captured, so recursion with
+ * differing units stays correct.
+ *
+ * @param n - Runtime identifier names (provides stkEnc/stkDec)
+ * @param split - Optional constant splitter for numeric obfuscation
+ * @returns Two `var stkEnc = function(...){}` / `var stkDec = ...` declarations
+ */
+export function buildStackEncodingHelpers(
 	n: RuntimeNames,
-	temps: TempNames,
 	split?: SplitFn
 ): JsNode[] {
 	const L = (v: number): JsNode => (split ? split(v) : lit(v));
-	const S = n.stk;
-	const U = n.unit;
-	const SEK = temps["_sek"]!;
-	const SERAW = temps["_seRaw"]!;
+	const ENC = n.stkEnc;
+	const DEC = n.stkDec;
 
-	// var _sek=(U.i.length^U.r^0x5A3C96E1)>>>0
-	const sekInit = varDecl(
-		SEK,
+	// (k^(i*0x9E3779B9))>>>0 — position key, k is the per-unit base param.
+	const xorKey = (iVar: JsNode): JsNode =>
 		bin(
 			BOp.Ushr,
-			bin(
-				BOp.BitXor,
-				bin(
-					BOp.BitXor,
-					member(member(id(U), "i"), "length"),
-					member(id(U), "r")
-				),
-				L(0x5a3c96e1)
-			),
-			lit(0)
-		)
-	);
-
-	// var _seRaw=[]
-	const seRawInit = varDecl(SERAW, arr());
-
-	// Helper: (_sek^(i*0x9E3779B9))>>>0
-	const xorKey = (iVar: JsNode) =>
-		bin(
-			BOp.Ushr,
-			bin(BOp.BitXor, id(SEK), bin(BOp.Mul, iVar, L(0x9e3779b9))),
+			bin(BOp.BitXor, id("k"), bin(BOp.Mul, iVar, L(0x9e3779b9))),
 			lit(0)
 		);
 
-	// set handler function body
-	const setBody: JsNode[] = [
-		// var i=+k
-		varDecl("i", un(UOp.Pos, id("k"))),
-		// if(i===i&&i>=0){...}else{_seRaw[k]=v;}
+	// stkEnc(v,i,k)
+	const encBody: JsNode[] = [
+		// if(typeof v==='number'&&(v|0)===v)return v^key  — bare masked int, no alloc
 		ifStmt(
 			bin(
 				BOp.And,
-				bin(BOp.Seq, id("i"), id("i")),
-				bin(BOp.Gte, id("i"), lit(0))
+				bin(BOp.Seq, un(UOp.Typeof, id("v")), lit("number")),
+				bin(BOp.Seq, bin(BOp.BitOr, id("v"), lit(0)), id("v"))
 			),
-			[
-				// var t=typeof v
-				varDecl("t", un(UOp.Typeof, id("v"))),
-				// if(t==='number'&&(v|0)===v){_seRaw[i]=[0,v^((_sek^(i*0x9E3779B9))>>>0)];}
-				ifStmt(
-					bin(
-						BOp.And,
-						bin(BOp.Seq, id("t"), lit("number")),
-						bin(BOp.Seq, bin(BOp.BitOr, id("v"), lit(0)), id("v"))
-					),
-					[
-						exprStmt(
-							assign(
-								index(id(SERAW), id("i")),
-								arr(
-									lit(0),
-									bin(BOp.BitXor, id("v"), xorKey(id("i")))
-								)
-							)
-						),
-					],
-					[
-						// else if(t==='boolean'){_seRaw[i]=[1,v?1:0];}
-						ifStmt(
-							bin(BOp.Seq, id("t"), lit("boolean")),
-							[
-								exprStmt(
-									assign(
-										index(id(SERAW), id("i")),
-										arr(
-											lit(1),
-											ternary(id("v"), lit(1), lit(0))
-										)
-									)
-								),
-							],
-							[
-								// else if(t==='string'){_seRaw[i]=[2,v];}
-								ifStmt(
-									bin(BOp.Seq, id("t"), lit("string")),
-									[
-										exprStmt(
-											assign(
-												index(id(SERAW), id("i")),
-												arr(lit(2), id("v"))
-											)
-										),
-									],
-									[
-										// else{_seRaw[i]=[3,v];}
-										exprStmt(
-											assign(
-												index(id(SERAW), id("i")),
-												arr(lit(3), id("v"))
-											)
-										),
-									]
-								),
-							]
-						),
-					]
-				),
-			],
-			[
-				// else{_seRaw[k]=v;}
-				exprStmt(assign(index(id(SERAW), id("k")), id("v"))),
-			]
+			[returnStmt(bin(BOp.BitXor, id("v"), xorKey(id("i"))))]
 		),
-		// return true
-		returnStmt(lit(true)),
+		// return[v]  — box everything else (floats/bool/string/object/null/…)
+		returnStmt(arr(id("v"))),
 	];
 
-	// get handler function body
-	const getBody: JsNode[] = [
-		// var i=+k
-		varDecl("i", un(UOp.Pos, id("k"))),
-		// if(i===i&&i>=0){...}
-		ifStmt(
-			bin(
-				BOp.And,
-				bin(BOp.Seq, id("i"), id("i")),
-				bin(BOp.Gte, id("i"), lit(0))
-			),
-			[
-				// var e=_seRaw[i]
-				varDecl("e", index(id(SERAW), id("i"))),
-				// if(!e)return void 0
-				ifStmt(un(UOp.Not, id("e")), [
-					returnStmt(un(UOp.Void, lit(0))),
-				]),
-				// if(e[0]===0)return e[1]^((_sek^(i*0x9E3779B9))>>>0)
-				ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(0)), [
-					returnStmt(
-						bin(BOp.BitXor, index(id("e"), lit(1)), xorKey(id("i")))
-					),
-				]),
-				// if(e[0]===1)return !!e[1]
-				ifStmt(bin(BOp.Seq, index(id("e"), lit(0)), lit(1)), [
-					returnStmt(
-						un(UOp.Not, un(UOp.Not, index(id("e"), lit(1))))
-					),
-				]),
-				// return e[1]
-				returnStmt(index(id("e"), lit(1))),
-			]
-		),
-		// if(k==='length')return _seRaw.length
-		ifStmt(bin(BOp.Seq, id("k"), lit("length")), [
-			returnStmt(member(id(SERAW), "length")),
+	// stkDec(e,i,k)
+	const decBody: JsNode[] = [
+		// if(typeof e==='number')return e^key  — masked int (incl. 0)
+		ifStmt(bin(BOp.Seq, un(UOp.Typeof, id("e")), lit("number")), [
+			returnStmt(bin(BOp.BitXor, id("e"), xorKey(id("i")))),
 		]),
-		// return _seRaw[k]
-		returnStmt(index(id(SERAW), id("k"))),
+		// if(!e)return void 0  — empty/undefined slot (e is not a number here)
+		ifStmt(un(UOp.Not, id("e")), [returnStmt(un(UOp.Void, lit(0)))]),
+		// return e[0]  — unbox
+		returnStmt(index(id("e"), lit(0))),
 	];
 
-	// S=new Proxy(_seRaw,{set:function(_,k,v){...},get:function(_,k){...}})
-	const proxyAssign = exprStmt(
-		assign(
-			id(S),
-			newExpr(id("Proxy"), [
-				id(SERAW),
-				obj(
-					["set", fnExpr(undefined, ["_", "k", "v"], setBody)],
-					["get", fnExpr(undefined, ["_", "k"], getBody)]
-				),
-			])
-		)
-	);
-
-	return [sekInit, seRawInit, proxyAssign];
+	return [
+		varDecl(ENC, fnExpr(undefined, ["v", "i", "k"], encBody)),
+		varDecl(DEC, fnExpr(undefined, ["e", "i", "k"], decBody)),
+	];
 }

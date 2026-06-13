@@ -204,6 +204,18 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 		}
 	}
 
+	// Map a single packed 16-bit IP half through the permutation.
+	// Preserves the 0xFFFF sentinel (TRY_PUSH's "no catch" / "no finally"
+	// marker) and folds fall-off-end targets to one past the last
+	// instruction, matching the simple-jump handling above.
+	const mapPackedIp = (v: number): number => {
+		if (v === 0xffff) return 0xffff;
+		const mapped = origToPermuted.get(v);
+		if (mapped != null) return mapped;
+		if (v >= oldInstrs.length) return newInstrs.length;
+		return v;
+	};
+
 	// Patch jump targets in new instruction array.
 	// Operands are still ORIGINAL IPs (no in-place Phase 1 mutation).
 	// Use origToPermuted for direct original→permuted mapping.
@@ -223,13 +235,30 @@ export function permuteBlocks(unit: BytecodeUnit, seed: number): void {
 		}
 
 		if (PACKED_JUMP_OPS.has(instr.opcode)) {
-			const target = instr.operand >>> 16;
-			const lower = instr.operand & 0xffff;
-			const newTarget = origToPermuted.get(target);
-			if (newTarget != null) {
-				instr.operand = (newTarget << 16) | lower;
-			} else if (target >= oldInstrs.length && target !== 0xffff) {
-				instr.operand = (newInstrs.length << 16) | lower;
+			if (instr.opcode === Op.TRY_PUSH) {
+				// TRY_PUSH packs TWO IP targets: catchIp in the upper 16
+				// bits and finallyIp in the lower 16 bits (see
+				// encodeTryTarget in visitors/statements.ts). BOTH must be
+				// remapped through the permutation — patching only the
+				// catch target leaves finallyIp pointing at a stale
+				// pre-permutation IP, corrupting return-through-finally and
+				// nested try/catch/finally control flow.
+				const newCatch = mapPackedIp(instr.operand >>> 16);
+				const newFinally = mapPackedIp(instr.operand & 0xffff);
+				instr.operand =
+					((newCatch & 0xffff) << 16) | (newFinally & 0xffff);
+			} else {
+				// REG_LT_CONST_JF / REG_LT_REG_JF: only the upper 16 bits
+				// are an IP target; the lower 16 bits hold register and
+				// constant indices, which must be preserved untouched.
+				const target = instr.operand >>> 16;
+				const lower = instr.operand & 0xffff;
+				const newTarget = origToPermuted.get(target);
+				if (newTarget != null) {
+					instr.operand = (newTarget << 16) | lower;
+				} else if (target >= oldInstrs.length && target !== 0xffff) {
+					instr.operand = (newInstrs.length << 16) | lower;
+				}
 			}
 		}
 	}

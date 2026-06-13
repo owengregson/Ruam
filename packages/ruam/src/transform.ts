@@ -41,7 +41,7 @@ import type { NameRegistry } from "./naming/index.js";
 import { resolveOptions } from "./presets.js";
 import type { ResolvedOptions } from "./presets.js";
 import type { VmObfuscationOptions, BytecodeUnit } from "./types.js";
-import { preprocessIdentifiers } from "./preprocess.js";
+import { preprocessIdentifiers, collectIdentifiers } from "./preprocess.js";
 import {
 	BABEL_PARSER_PLUGINS,
 	FNV_OFFSET_BASIS,
@@ -137,6 +137,12 @@ export function obfuscateCode(
 		const ppResult = preprocessIdentifiers(code, shuffleSeed);
 		code = ppResult.code;
 		preprocessUsedNames = ppResult.usedNames;
+	} else {
+		// Preprocessing off: user identifiers stay LIVE in the output, so the
+		// NameRegistry must reserve them — otherwise a generated VM identifier
+		// can collide with a kept user identifier and silently overwrite it
+		// (a rare, seed-dependent miscompile).
+		preprocessUsedNames = collectIdentifiers(code);
 	}
 
 	// -- Generate per-file opcode shuffle ------------------------------------

@@ -469,7 +469,7 @@ function SPREAD_ARGS(ctx: HandlerCtx): JsNode[] {
 				lit(true)
 			)
 		),
-		exprStmt(assign(ctx.peek(), id(ctx.local("spreadArr")))),
+		exprStmt(ctx.setTop(id(ctx.local("spreadArr")))),
 		breakStmt(),
 	];
 }

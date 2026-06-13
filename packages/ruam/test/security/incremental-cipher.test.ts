@@ -60,6 +60,7 @@ function makeUnit(
 		isGenerator: false,
 		isAsync: false,
 		isArrow: false,
+		scopeless: false,
 		nameConstIndex: -1,
 		outerNames: [],
 		childUnits: [],

@@ -37,7 +37,7 @@ import { registry, type HandlerCtx, type HandlerFn } from "./registry.js";
 function binaryHandler(op: BOpKind): HandlerFn {
 	return (ctx) => [
 		varDecl(ctx.local("rhs"), ctx.pop()),
-		exprStmt(assign(ctx.peek(), bin(op, ctx.peek(), id(ctx.local("rhs"))))),
+		exprStmt(ctx.setTop(bin(op, ctx.peek(), id(ctx.local("rhs"))))),
 		breakStmt(),
 	];
 }
@@ -50,7 +50,7 @@ function binaryHandler(op: BOpKind): HandlerFn {
  */
 function unaryHandler(op: UOpKind): HandlerFn {
 	return (ctx) => [
-		exprStmt(assign(ctx.peek(), un(op, ctx.peek()))),
+		exprStmt(ctx.setTop(un(op, ctx.peek()))),
 		breakStmt(),
 	];
 }
@@ -69,13 +69,13 @@ registry.set(Op.UNARY_PLUS, unaryHandler(UOp.Pos));
 
 /** INC: `S[P]=+S[P]+1;break;` -- unary `+` for ToNumber coercion */
 registry.set(Op.INC, (ctx) => [
-	exprStmt(assign(ctx.peek(), bin(BOp.Add, un(UOp.Pos, ctx.peek()), lit(1)))),
+	exprStmt(ctx.setTop(bin(BOp.Add, un(UOp.Pos, ctx.peek()), lit(1)))),
 	breakStmt(),
 ]);
 
 /** DEC: `S[P]=+S[P]-1;break;` -- unary `+` for ToNumber coercion */
 registry.set(Op.DEC, (ctx) => [
-	exprStmt(assign(ctx.peek(), bin(BOp.Sub, un(UOp.Pos, ctx.peek()), lit(1)))),
+	exprStmt(ctx.setTop(bin(BOp.Sub, un(UOp.Pos, ctx.peek()), lit(1)))),
 	breakStmt(),
 ]);
 

@@ -417,7 +417,7 @@ export function buildDeserializer(
 
 	// --- Return object ---
 
-	// return {c:cs,i:ins,r:rc,sl:0,p:pc,g:!!(fl&1),s:!!(fl&2),st:!!(fl&4),a:!!(fl&8),bl:_dblm};
+	// return {c:cs,i:ins,r:rc,sl:0,p:pc,g:!!(fl&1),s:!!(fl&2),st:!!(fl&4),a:!!(fl&8),el:!!(fl&16),bl:_dblm};
 	const band = (v: JsNode, mask: number): JsNode =>
 		un(UOp.Not, un(UOp.Not, bin(BOp.BitAnd, v, lit(mask))));
 	body.push(
@@ -432,6 +432,9 @@ export function buildDeserializer(
 				["s", band(flags, 2)],
 				["st", band(flags, 4)],
 				["a", band(flags, 8)],
+				["el", band(flags, 16)],
+				["xh", band(flags, 32)],
+				["tc", band(flags, 64)],
 				["bl", id(DBLM)]
 			)
 		)

@@ -50,7 +50,7 @@ import { superProto, superKey } from "./helpers.js";
 function GET_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			assign(ctx.peek(), index(ctx.peek(), index(id(ctx.C), id(ctx.O))))
+			ctx.setTop(index(ctx.peek(), index(id(ctx.C), id(ctx.O))))
 		),
 		breakStmt(),
 	];
@@ -94,7 +94,7 @@ function GET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("propKey"), ctx.pop()),
 		exprStmt(
-			assign(ctx.peek(), index(ctx.peek(), id(ctx.local("propKey"))))
+			ctx.setTop(index(ctx.peek(), id(ctx.local("propKey"))))
 		),
 		breakStmt(),
 	];
@@ -120,8 +120,7 @@ function SET_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 function DELETE_PROP_STATIC(ctx: HandlerCtx): JsNode[] {
 	return [
 		exprStmt(
-			assign(
-				ctx.peek(),
+			ctx.setTop(
 				un(UOp.Delete, index(ctx.peek(), index(id(ctx.C), id(ctx.O))))
 			)
 		),
@@ -134,8 +133,7 @@ function DELETE_PROP_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("propKey"), ctx.pop()),
 		exprStmt(
-			assign(
-				ctx.peek(),
+			ctx.setTop(
 				un(UOp.Delete, index(ctx.peek(), id(ctx.local("propKey"))))
 			)
 		),
@@ -149,8 +147,7 @@ function OPT_CHAIN_GET(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.local("propKey"), index(id(ctx.C), id(ctx.O))),
 		varDecl(ctx.local("object"), ctx.peek()),
 		exprStmt(
-			assign(
-				ctx.peek(),
+			ctx.setTop(
 				ternary(
 					bin(BOp.Eq, id(ctx.local("object")), lit(null)),
 					un(UOp.Void, lit(0)),
@@ -168,8 +165,7 @@ function OPT_CHAIN_DYNAMIC(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.local("propKey"), ctx.pop()),
 		varDecl(ctx.local("object"), ctx.peek()),
 		exprStmt(
-			assign(
-				ctx.peek(),
+			ctx.setTop(
 				ternary(
 					bin(BOp.Eq, id(ctx.local("object")), lit(null)),
 					un(UOp.Void, lit(0)),
@@ -188,7 +184,7 @@ function IN_OP(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("object"), ctx.pop()),
 		exprStmt(
-			assign(ctx.peek(), bin(BOp.In, ctx.peek(), id(ctx.local("object"))))
+			ctx.setTop(bin(BOp.In, ctx.peek(), id(ctx.local("object"))))
 		),
 		breakStmt(),
 	];
@@ -199,8 +195,7 @@ function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("ctor"), ctx.pop()),
 		exprStmt(
-			assign(
-				ctx.peek(),
+			ctx.setTop(
 				bin(BOp.Instanceof, ctx.peek(), id(ctx.local("ctor")))
 			)
 		),
