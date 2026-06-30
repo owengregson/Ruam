@@ -1,8 +1,19 @@
 # Anti-AI-Decompilation Hardening — Design
 
 **Date:** 2026-06-30
-**Status:** Approved direction (two product decisions locked, see §6)
+**Status:** Partially shipped on `anti-ai-hardening` (two product decisions locked, see §6).
 **Branch:** `anti-ai-hardening`
+
+**Shipped in this PR** (each tested across many random seeds + full suite green):
+- W0 — source-map / cleartext-leak gate (default-on; `--keep-source-maps` opt-out).
+- W4-L1 — cross-file cohort tangle + `obfuscateBundle()` API (the mandated cross-file feature; work-factor).
+- W5 — `externalKeyBinding` off-device necessary secret (opt-in; the one cryptographic / human-forcing lever).
+- W1 (safe slice) — hole-tolerant slow-path dispatch (`_ht[PH] | 0`) killing the undefined-opcode oracle.
+
+**Deferred** (designed + red-teamed; require their own correctness spikes before shipping, per the all-seeds / never-silent-garbage principle):
+- W2 — per-unit decode heterogeneity (no clean non-amortizable win within no-size-bloat / no-hot-path-branch; spike).
+- W3 — trace-coupled decode impurity (silent-miscompile failure mode; ship ONLY behind the mandatory all-seeds+all-engines build gate, after a clean symmetry spike).
+- W4-L2 — opt-in runtime co-residence link (lowest priority; co-resident linking collapses to work-factor like W4-L1).
 
 ## 1. Context & goal
 
