@@ -14,6 +14,7 @@
  */
 
 import { obfuscateFile } from "./index.js";
+import { gateSourceMaps } from "./source-map-gate.js";
 import type {
 	VmObfuscationOptions,
 	PresetName,
@@ -64,6 +65,7 @@ interface CliArgs {
 	options: VmObfuscationOptions;
 	include: string[];
 	exclude: string[];
+	keepSourceMaps: boolean;
 	help: boolean;
 	version: boolean;
 	interactive: boolean;
@@ -223,6 +225,7 @@ function parseArgs(argv: string[]): CliArgs {
 		options: {},
 		include: ["**/*.js"],
 		exclude: ["**/node_modules/**"],
+		keepSourceMaps: false,
 		help: false,
 		version: false,
 		interactive: false,
@@ -336,6 +339,9 @@ function parseArgs(argv: string[]): CliArgs {
 				break;
 			case "--exclude":
 				result.exclude = [nextArg(arg)];
+				break;
+			case "--keep-source-maps":
+				result.keepSourceMaps = true;
 				break;
 			default:
 				if (arg.startsWith("-")) {
@@ -510,6 +516,11 @@ function printHelp(version: string): void {
 	console.log(
 		`    ${f("--exclude")} ${a("<glob>")}          Exclude glob ${d(
 			'(default: "**/node_modules/**")'
+		)}`
+	);
+	console.log(
+		`    ${f("--keep-source-maps")}        Keep .map files in directory output ${d(
+			"(default: strip)"
 		)}`
 	);
 	console.log();
@@ -806,6 +817,7 @@ async function runInteractive(version: string): Promise<void> {
 		options,
 		include: ["**/*.js"],
 		exclude: ["**/node_modules/**"],
+		keepSourceMaps: false,
 		help: false,
 		version: false,
 		interactive: false,
@@ -963,6 +975,19 @@ async function obfuscateDirectoryWithProgress(
 		}
 	}
 
+	// Cleartext-leak gate: remove copied source maps (and any surviving
+	// sourceMappingURL annotations) so the original source never ships
+	// alongside the obfuscated output. On by default; --keep-source-maps opts out.
+	let mapsRemoved = 0;
+	try {
+		mapsRemoved = await gateSourceMaps(outputDir, {
+			keepSourceMaps: args.keepSourceMaps,
+		});
+	} catch {
+		// Never fail a build over the gate; leave a note instead.
+		mapsRemoved = 0;
+	}
+
 	const elapsed = Date.now() - startTime;
 	const successCount = files.length - errorCount;
 	const ratio =
@@ -998,6 +1023,15 @@ async function obfuscateDirectoryWithProgress(
 	console.log(
 		`  ${chalk.dim("Time:")}     ${chalk.white(formatTime(elapsed))}`
 	);
+	if (mapsRemoved > 0) {
+		console.log(
+			`  ${chalk.dim("Maps:")}     ${chalk.white(
+				`${mapsRemoved} source map${
+					mapsRemoved === 1 ? "" : "s"
+				} stripped`
+			)}`
+		);
+	}
 
 	if (errors.length > 0) {
 		console.log();
