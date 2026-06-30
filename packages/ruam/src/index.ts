@@ -34,7 +34,12 @@ export type {
 export { obfuscateBundle } from "./transform.js";
 export type { BundleFile } from "./transform.js";
 export { createCohort } from "./compiler/cohort.js";
-export type { CohortContext, CohortFile } from "./compiler/cohort.js";
+export type {
+	CohortContext,
+	CohortFile,
+	CohortLink,
+	ResolvedLink,
+} from "./compiler/cohort.js";
 
 // --- Single-Source Obfuscation ---
 
@@ -49,9 +54,10 @@ export type { CohortContext, CohortFile } from "./compiler/cohort.js";
 export function obfuscateCode(
 	source: string,
 	options?: VmObfuscationOptions,
-	cohort?: CohortContext
+	cohort?: CohortContext,
+	filePath?: string
 ): string {
-	return transformCode(source, options, cohort);
+	return transformCode(source, options, cohort, filePath);
 }
 
 // --- File-Level Obfuscation ---

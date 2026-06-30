@@ -14,7 +14,7 @@
  */
 
 import { obfuscateFile, obfuscateCode, createCohort } from "./index.js";
-import type { CohortContext } from "./index.js";
+import type { CohortContext, CohortLink } from "./index.js";
 import { gateSourceMaps } from "./source-map-gate.js";
 import { randomBytes } from "node:crypto";
 import type {
@@ -68,6 +68,7 @@ interface CliArgs {
 	include: string[];
 	exclude: string[];
 	keepSourceMaps: boolean;
+	link?: CohortLink;
 	help: boolean;
 	version: boolean;
 	interactive: boolean;
@@ -236,6 +237,8 @@ function parseArgs(argv: string[]): CliArgs {
 	let i = 0;
 	let extKeyValue: string | undefined;
 	let extKeyAccessor: string | undefined;
+	let linkProvider: string | undefined;
+	let linkConsumers: string[] | undefined;
 
 	/** Consume the next argument or exit with an error. */
 	function nextArg(flag: string): string {
@@ -353,6 +356,15 @@ function parseArgs(argv: string[]): CliArgs {
 			case "--external-key-accessor":
 				extKeyAccessor = nextArg(arg);
 				break;
+			case "--link-provider":
+				linkProvider = nextArg(arg);
+				break;
+			case "--link-consumers":
+				linkConsumers = nextArg(arg)
+					.split(",")
+					.map((s) => s.trim())
+					.filter(Boolean);
+				break;
 			default:
 				if (arg.startsWith("-")) {
 					console.error(chalk.red(`  Unknown option: ${arg}`));
@@ -382,6 +394,23 @@ function parseArgs(argv: string[]): CliArgs {
 			value: extKeyValue,
 			accessor: extKeyAccessor,
 		};
+	}
+
+	// Cross-file runtime link requires a provider and at least one consumer.
+	if (linkProvider !== undefined || linkConsumers !== undefined) {
+		if (
+			linkProvider === undefined ||
+			linkConsumers === undefined ||
+			linkConsumers.length === 0
+		) {
+			console.error(
+				chalk.red(
+					"  --link-provider and --link-consumers must be used together (consumers comma-separated)"
+				)
+			);
+			process.exit(1);
+		}
+		result.link = { provider: linkProvider, consumers: linkConsumers };
 	}
 
 	return result;
@@ -581,6 +610,17 @@ function printHelp(version: string): void {
 	console.log(
 		`      ${d(
 			"Binds decryption to an absent secret; breaks offline use of the asset."
+		)}`
+	);
+	console.log(
+		`    ${f("--link-provider")} ${a("<file>")}        Cross-file link provider (dir mode)`
+	);
+	console.log(
+		`    ${f("--link-consumers")} ${a("<a,b>")}        Consumers that require the provider`
+	);
+	console.log(
+		`      ${d(
+			"Consumers cannot run without the provider co-resident + loaded first."
 		)}`
 	);
 	console.log();
@@ -1005,13 +1045,14 @@ async function obfuscateDirectoryWithProgress(
 		}
 	}
 	const cohort: CohortContext | undefined =
-		files.length >= 2
+		files.length >= 2 || args.link
 			? createCohort(
 					files.map((file, i) => ({
 						path: path.join(outputDir, file),
 						code: fileSources[i] ?? "",
 					})),
-					randomBytes(4).readUInt32LE(0)
+					randomBytes(4).readUInt32LE(0),
+					args.link
 			  )
 			: undefined;
 
@@ -1025,7 +1066,12 @@ async function obfuscateDirectoryWithProgress(
 		spinner.text = `${renderBar(i, files.length)} ${chalk.dim(file)}`;
 
 		try {
-			const obfuscated = obfuscateCode(source, args.options, cohort);
+			const obfuscated = obfuscateCode(
+				source,
+				args.options,
+				cohort,
+				filePath
+			);
 			await fs.writeFile(filePath, obfuscated, "utf-8");
 			totalOutputSize += Buffer.byteLength(obfuscated, "utf-8");
 		} catch (err) {

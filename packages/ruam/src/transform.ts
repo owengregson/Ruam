@@ -27,7 +27,11 @@ import {
 } from "./compiler/opcodes.js";
 import { encodeBytecodeUnit } from "./compiler/encode.js";
 import { createCohort } from "./compiler/cohort.js";
-import type { CohortContext, CohortFile } from "./compiler/cohort.js";
+import type {
+	CohortContext,
+	CohortFile,
+	CohortLink,
+} from "./compiler/cohort.js";
 import {
 	generateVmRuntime,
 	generateShieldedVmRuntime,
@@ -96,7 +100,8 @@ function generateCryptoSeed(): number {
 export function obfuscateCode(
 	source: string,
 	options: VmObfuscationOptions = {},
-	cohort?: CohortContext
+	cohort?: CohortContext,
+	filePath?: string
 ): string {
 	const resolved = resolveOptions(options);
 	const {
@@ -127,6 +132,16 @@ export function obfuscateCode(
 		externalKeyBinding = undefined,
 		wrapOutput = false,
 	} = resolved;
+
+	// -- Cross-file link provider write (W4-L2) ------------------------------
+	// If this file is a declared link provider, every return path must prepend
+	// a top-level write of the per-cohort secret to a shared global so it runs
+	// at load (before any consumer on the same page/realm derives its key) —
+	// including the early returns for shielded / no-unit files.
+	const providerLink =
+		cohort && filePath ? cohort.providerLink(filePath) : undefined;
+	const withProviderWrite = (out: string): string =>
+		providerLink ? buildProviderWrite(providerLink) + "\n" + out : out;
 
 	// -- Compute tuning profile from preset intensity -------------------------
 	const tuning = getTuningProfile(presetToIntensity(resolved.preset));
@@ -175,7 +190,8 @@ export function obfuscateCode(
 
 	// -- VM Shielding path ---------------------------------------------------
 	if (vmShielding) {
-		return assembleShielded(ast, targetPaths, {
+		return withProviderWrite(
+			assembleShielded(ast, targetPaths, {
 			encryptBytecode,
 			debugProtection,
 			debugLogging,
@@ -197,7 +213,8 @@ export function obfuscateCode(
 			wrapOutput,
 			preprocessUsedNames,
 			tuning,
-		});
+			})
+		);
 	}
 
 	// -- Generate per-build cipher salt (if rolling cipher is enabled) --------
@@ -210,16 +227,32 @@ export function obfuscateCode(
 	const cohortTerm =
 		cohort && rollingCipher ? cohort.digestAll() : undefined;
 
-	// -- External (off-device) key binding term ------------------------------
-	// fnv1a of the build-time secret value. Folded into the key anchor; the
-	// runtime recomputes fnv1a over the value read from the accessor path and
+	// -- External / cross-file key binding terms -----------------------------
+	// Each binding folds fnv1a(secret) into the key anchor at build, while the
+	// runtime recomputes fnv1a over the value read from an accessor path and
 	// folds it identically. The secret value is NEVER embedded — only the
-	// accessor path is. Without the correct runtime secret, the key is wrong
-	// and the bytecode cannot be decrypted. Requires rolling cipher.
-	const externalTerm =
-		externalKeyBinding && rollingCipher
-			? fnv1a(externalKeyBinding.value)
-			: undefined;
+	// accessor path. Two channels may both apply:
+	//   (W5) externalKeyBinding — off-device secret read from a host global.
+	//   (W4-L2) cross-file link consumer — secret written by a sibling provider
+	//           file to a shared global at runtime.
+	// Both require rolling cipher.
+	const externalKeyAccessors: string[] = [];
+	let externalAnchorTerm = 0;
+	let hasExternalFold = false;
+	if (externalKeyBinding && rollingCipher) {
+		externalKeyAccessors.push(externalKeyBinding.accessor);
+		externalAnchorTerm = (externalAnchorTerm ^
+			fnv1a(externalKeyBinding.value)) >>> 0;
+		hasExternalFold = true;
+	}
+	const consumerLink =
+		cohort && filePath ? cohort.consumerLink(filePath) : undefined;
+	if (consumerLink && rollingCipher) {
+		externalKeyAccessors.push(`globalThis.${consumerLink.slot}`);
+		externalAnchorTerm = (externalAnchorTerm ^
+			fnv1a(consumerLink.secret)) >>> 0;
+		hasExternalFold = true;
+	}
 
 	// -- Compile each target (no encoding yet — need keyAnchor first) -------
 	const compiledUnits = compileTargetsOnly(
@@ -233,7 +266,7 @@ export function obfuscateCode(
 		tuning
 	);
 
-	if (compiledUnits.size === 0) return code;
+	if (compiledUnits.size === 0) return withProviderWrite(code);
 
 	// -- Detect async units (for conditional async interpreter emit) --------
 	let hasAsyncUnits = false;
@@ -324,10 +357,9 @@ export function obfuscateCode(
 		structuralChoices,
 		registry,
 		cohortTerm,
-		externalKeyAccessor:
-			externalKeyBinding && rollingCipher
-				? externalKeyBinding.accessor
-				: undefined,
+		externalKeyAccessors: externalKeyAccessors.length
+			? externalKeyAccessors
+			: undefined,
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
@@ -337,8 +369,8 @@ export function obfuscateCode(
 	if (keyAnchor !== undefined && cohortTerm !== undefined) {
 		keyAnchor = (keyAnchor ^ cohortTerm) >>> 0;
 	}
-	if (keyAnchor !== undefined && externalTerm !== undefined) {
-		keyAnchor = (keyAnchor ^ externalTerm) >>> 0;
+	if (keyAnchor !== undefined && hasExternalFold) {
+		keyAnchor = (keyAnchor ^ externalAnchorTerm) >>> 0;
 	}
 	const encodedUnits = encodeAllUnits(
 		compiledUnits,
@@ -355,7 +387,7 @@ export function obfuscateCode(
 	);
 
 	// -- Assemble output -----------------------------------------------------
-	return assembleOutputFromParts(
+	const output = assembleOutputFromParts(
 		ast,
 		encodedUnits,
 		names,
@@ -367,6 +399,22 @@ export function obfuscateCode(
 		tuning,
 		registry
 	);
+
+	// Prepend the cross-file link provider write (if any) — see top of fn.
+	return withProviderWrite(output);
+}
+
+/**
+ * Build the provider-side global write for a cross-file runtime link.
+ *
+ * Emits `globalThis[<slot>] = String.fromCharCode(...);` — the secret as char
+ * codes (CSP-safe, no `eval`, no plaintext string literal). Runs at load.
+ */
+function buildProviderWrite(link: { slot: string; secret: string }): string {
+	const codes = Array.from(link.secret, (c) => c.charCodeAt(0)).join(",");
+	return `globalThis[${JSON.stringify(
+		link.slot
+	)}]=String.fromCharCode(${codes});`;
 }
 
 /** A file to obfuscate as part of a bundle. */
@@ -400,15 +448,18 @@ export interface BundleFile {
  */
 export function obfuscateBundle(
 	files: BundleFile[],
-	options: VmObfuscationOptions = {}
+	options: VmObfuscationOptions = {},
+	link?: CohortLink
 ): BundleFile[] {
+	// A cohort is created when there are 2+ files OR a runtime link is declared
+	// (a link needs a shared cohort even if the provider/consumer set is small).
 	const cohort: CohortContext | undefined =
-		files.length >= 2
-			? createCohort(files as CohortFile[], generateCryptoSeed())
+		files.length >= 2 || link
+			? createCohort(files as CohortFile[], generateCryptoSeed(), link)
 			: undefined;
 	return files.map((f) => ({
 		path: f.path,
-		code: obfuscateCode(f.code, options, cohort),
+		code: obfuscateCode(f.code, options, cohort, f.path),
 	}));
 }
 

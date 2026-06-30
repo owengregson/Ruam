@@ -105,8 +105,8 @@ export function generateVmRuntime(options: {
 	cipherSalt?: number;
 	/** Cross-file cohort term, XOR-folded into the key anchor like integrityHash. */
 	cohortTerm?: number;
-	/** Off-device key binding: dotted accessor path read + folded at runtime. */
-	externalKeyAccessor?: string;
+	/** Off-device / cross-file key bindings: dotted accessor paths read + folded at runtime. */
+	externalKeyAccessors?: string[];
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
 	/** Generate per-build polymorphic decoder chain for string constants. */
@@ -156,7 +156,7 @@ export function generateVmRuntime(options: {
 		usedOpcodes,
 		cipherSalt,
 		cohortTerm,
-		externalKeyAccessor,
+		externalKeyAccessors,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
 		polymorphicDecoder = false,
@@ -351,19 +351,19 @@ export function generateVmRuntime(options: {
 			)
 		);
 	}
-	// Off-device key binding: read the secret from the accessor at runtime,
-	// hash it, and fold into the key anchor. Mirrors the build-side
-	// `keyAnchor ^= fnv1a(secretValue)`. Without the correct runtime secret
-	// the key is wrong and decryption produces garbage (the intended denial).
-	if (rollingCipher && externalKeyAccessor) {
-		tier2Nodes.push(
-			...buildExternalKeyFold(
-				names,
-				externalKeyAccessor,
-				registry.createDynamicGenerator("externalKey"),
-				split
-			)
-		);
+	// Off-device / cross-file key binding: read each secret from its accessor at
+	// runtime, hash it, and fold into the key anchor. Mirrors the build-side
+	// `keyAnchor ^= fnv1a(secretValue)`. Without the correct runtime secret the
+	// key is wrong and decryption produces garbage (the intended denial). One
+	// fold per accessor: externalKeyBinding (off-device secret) and/or a
+	// cross-file runtime link (sibling-supplied secret) may both be present.
+	if (rollingCipher && externalKeyAccessors && externalKeyAccessors.length) {
+		const ekGen = registry.createDynamicGenerator("externalKey");
+		for (const accessor of externalKeyAccessors) {
+			tier2Nodes.push(
+				...buildExternalKeyFold(names, accessor, ekGen, split)
+			);
+		}
 	}
 	// Rolling cipher helpers (must come after handler table + key anchor)
 	if (rollingCipher) {
