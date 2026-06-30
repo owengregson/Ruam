@@ -2322,11 +2322,19 @@ function buildFunctionTableDispatch(
 
 	// var _fdi = _ht[PH]
 	// Under the decode cache, PH already holds the resolved handler index
-	// (pre-computed during materialization); otherwise resolve via _ht.
+	// (pre-computed during materialization); otherwise resolve via _ht with
+	// `| 0` hole-tolerance: an out-of-range/hole index (only reachable under a
+	// WRONG decryption key) coerces undefined -> handler 0 instead of throwing,
+	// so a wrong key produces plausible-but-wrong dispatch rather than an
+	// "undefined opcode" oracle. `| 0` is identity on every valid handler index,
+	// so legitimate execution is byte-for-byte unchanged. Matches the decode
+	// cache, where Int32Array storage already coerces undefined -> 0.
 	dispatchNodes.push(
 		varDecl(
 			FDI,
-			decodeCache ? id(phName) : index(id(htName), id(phName))
+			decodeCache
+				? id(phName)
+				: bin(BOp.BitOr, index(id(htName), id(phName)), lit(0))
 		)
 	);
 
@@ -2505,11 +2513,19 @@ function buildDirectArrayDispatch(
 	// Dispatch nodes
 	const dispatchNodes: JsNode[] = [];
 	// Under the decode cache, PH already holds the resolved handler index
-	// (pre-computed during materialization); otherwise resolve via _ht.
+	// (pre-computed during materialization); otherwise resolve via _ht with
+	// `| 0` hole-tolerance: an out-of-range/hole index (only reachable under a
+	// WRONG decryption key) coerces undefined -> handler 0 instead of throwing,
+	// so a wrong key produces plausible-but-wrong dispatch rather than an
+	// "undefined opcode" oracle. `| 0` is identity on every valid handler index,
+	// so legitimate execution is byte-for-byte unchanged. Matches the decode
+	// cache, where Int32Array storage already coerces undefined -> 0.
 	dispatchNodes.push(
 		varDecl(
 			FDI,
-			decodeCache ? id(phName) : index(id(htName), id(phName))
+			decodeCache
+				? id(phName)
+				: bin(BOp.BitOr, index(id(htName), id(phName)), lit(0))
 		)
 	);
 
@@ -2634,11 +2650,19 @@ function buildObjectLookupDispatch(
 	// Dispatch nodes
 	const dispatchNodes: JsNode[] = [];
 	// Under the decode cache, PH already holds the resolved handler index
-	// (pre-computed during materialization); otherwise resolve via _ht.
+	// (pre-computed during materialization); otherwise resolve via _ht with
+	// `| 0` hole-tolerance: an out-of-range/hole index (only reachable under a
+	// WRONG decryption key) coerces undefined -> handler 0 instead of throwing,
+	// so a wrong key produces plausible-but-wrong dispatch rather than an
+	// "undefined opcode" oracle. `| 0` is identity on every valid handler index,
+	// so legitimate execution is byte-for-byte unchanged. Matches the decode
+	// cache, where Int32Array storage already coerces undefined -> 0.
 	dispatchNodes.push(
 		varDecl(
 			FDI,
-			decodeCache ? id(phName) : index(id(htName), id(phName))
+			decodeCache
+				? id(phName)
+				: bin(BOp.BitOr, index(id(htName), id(phName)), lit(0))
 		)
 	);
 
