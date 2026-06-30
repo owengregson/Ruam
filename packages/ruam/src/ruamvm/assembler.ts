@@ -43,6 +43,7 @@ import {
 import { buildDebugProtection } from "./builders/debug-protection.js";
 import { buildDebugLogging } from "./builders/debug-logging.js";
 import { buildRollingCipherSource } from "./builders/rolling-cipher.js";
+import { buildExternalKeyFold } from "./builders/external-key.js";
 import { buildIncrementalCipherSource } from "./builders/incremental-cipher.js";
 import {
 	buildInterpreterFunctions,
@@ -104,6 +105,8 @@ export function generateVmRuntime(options: {
 	cipherSalt?: number;
 	/** Cross-file cohort term, XOR-folded into the key anchor like integrityHash. */
 	cohortTerm?: number;
+	/** Off-device key binding: dotted accessor path read + folded at runtime. */
+	externalKeyAccessor?: string;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
 	/** Generate per-build polymorphic decoder chain for string constants. */
@@ -153,6 +156,7 @@ export function generateVmRuntime(options: {
 		usedOpcodes,
 		cipherSalt,
 		cohortTerm,
+		externalKeyAccessor,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
 		polymorphicDecoder = false,
@@ -344,6 +348,20 @@ export function generateVmRuntime(options: {
 						lit(0)
 					)
 				)
+			)
+		);
+	}
+	// Off-device key binding: read the secret from the accessor at runtime,
+	// hash it, and fold into the key anchor. Mirrors the build-side
+	// `keyAnchor ^= fnv1a(secretValue)`. Without the correct runtime secret
+	// the key is wrong and decryption produces garbage (the intended denial).
+	if (rollingCipher && externalKeyAccessor) {
+		tier2Nodes.push(
+			...buildExternalKeyFold(
+				names,
+				externalKeyAccessor,
+				registry.createDynamicGenerator("externalKey"),
+				split
 			)
 		);
 	}

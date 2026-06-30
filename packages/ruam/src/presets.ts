@@ -18,7 +18,12 @@ import type {
  */
 export const PRESETS: Record<
 	PresetName,
-	Required<Omit<VmObfuscationOptions, "preset" | "debugLogging" | "target">>
+	Required<
+		Omit<
+			VmObfuscationOptions,
+			"preset" | "debugLogging" | "target" | "externalKeyBinding"
+		>
+	>
 > = {
 	low: {
 		targetMode: "root",
@@ -179,6 +184,11 @@ export function resolveOptions(
 
 	// observationResistance requires rollingCipher
 	if (resolved.observationResistance && !resolved.rollingCipher) {
+		resolved.rollingCipher = true;
+	}
+
+	// externalKeyBinding requires rollingCipher (it folds into the implicit key)
+	if (resolved.externalKeyBinding && !resolved.rollingCipher) {
 		resolved.rollingCipher = true;
 	}
 

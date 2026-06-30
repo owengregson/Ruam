@@ -234,6 +234,8 @@ function parseArgs(argv: string[]): CliArgs {
 	};
 
 	let i = 0;
+	let extKeyValue: string | undefined;
+	let extKeyAccessor: string | undefined;
 
 	/** Consume the next argument or exit with an error. */
 	function nextArg(flag: string): string {
@@ -345,6 +347,12 @@ function parseArgs(argv: string[]): CliArgs {
 			case "--keep-source-maps":
 				result.keepSourceMaps = true;
 				break;
+			case "--external-key-value":
+				extKeyValue = nextArg(arg);
+				break;
+			case "--external-key-accessor":
+				extKeyAccessor = nextArg(arg);
+				break;
 			default:
 				if (arg.startsWith("-")) {
 					console.error(chalk.red(`  Unknown option: ${arg}`));
@@ -357,6 +365,23 @@ function parseArgs(argv: string[]): CliArgs {
 				break;
 		}
 		i++;
+	}
+
+	// External key binding requires both the build-time value and the runtime
+	// accessor path; one without the other is a usage error.
+	if (extKeyValue !== undefined || extKeyAccessor !== undefined) {
+		if (extKeyValue === undefined || extKeyAccessor === undefined) {
+			console.error(
+				chalk.red(
+					"  --external-key-value and --external-key-accessor must be used together"
+				)
+			);
+			process.exit(1);
+		}
+		result.options.externalKeyBinding = {
+			value: extKeyValue,
+			accessor: extKeyAccessor,
+		};
 	}
 
 	return result;
@@ -541,6 +566,22 @@ function printHelp(version: string): void {
 	);
 	console.log(
 		`      ${chalk.cyan("browser-extension")}  Chrome extension MAIN world`
+	);
+	console.log();
+
+	console.log(h("  ADVANCED"));
+	console.log(
+		`    ${f("--external-key-value")} ${a("<secret>")}     Off-device secret (build-time)`
+	);
+	console.log(
+		`    ${f("--external-key-accessor")} ${a("<path>")}    Runtime path to the secret ${d(
+			'(e.g. "globalThis.__K")'
+		)}`
+	);
+	console.log(
+		`      ${d(
+			"Binds decryption to an absent secret; breaks offline use of the asset."
+		)}`
 	);
 	console.log();
 

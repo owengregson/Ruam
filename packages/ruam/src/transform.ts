@@ -124,6 +124,7 @@ export function obfuscateCode(
 		incrementalCipher = false,
 		semanticOpacity = false,
 		observationResistance = false,
+		externalKeyBinding = undefined,
 		wrapOutput = false,
 	} = resolved;
 
@@ -208,6 +209,17 @@ export function obfuscateCode(
 	// meaningful when the rolling cipher is on (it alters the implicit key).
 	const cohortTerm =
 		cohort && rollingCipher ? cohort.digestAll() : undefined;
+
+	// -- External (off-device) key binding term ------------------------------
+	// fnv1a of the build-time secret value. Folded into the key anchor; the
+	// runtime recomputes fnv1a over the value read from the accessor path and
+	// folds it identically. The secret value is NEVER embedded — only the
+	// accessor path is. Without the correct runtime secret, the key is wrong
+	// and the bytecode cannot be decrypted. Requires rolling cipher.
+	const externalTerm =
+		externalKeyBinding && rollingCipher
+			? fnv1a(externalKeyBinding.value)
+			: undefined;
 
 	// -- Compile each target (no encoding yet — need keyAnchor first) -------
 	const compiledUnits = compileTargetsOnly(
@@ -312,14 +324,21 @@ export function obfuscateCode(
 		structuralChoices,
 		registry,
 		cohortTerm,
+		externalKeyAccessor:
+			externalKeyBinding && rollingCipher
+				? externalKeyBinding.accessor
+				: undefined,
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
-	// Fold the cohort term into the build-side key anchor to mirror the
-	// runtime `_ka ^= cohortTerm` emitted by generateVmRuntime.
+	// Fold the cohort + external-key terms into the build-side key anchor to
+	// mirror the runtime `_ka ^= ...` folds emitted by generateVmRuntime.
 	let keyAnchor = rollingCipher ? runtimeResult.keyAnchorValue : undefined;
 	if (keyAnchor !== undefined && cohortTerm !== undefined) {
 		keyAnchor = (keyAnchor ^ cohortTerm) >>> 0;
+	}
+	if (keyAnchor !== undefined && externalTerm !== undefined) {
+		keyAnchor = (keyAnchor ^ externalTerm) >>> 0;
 	}
 	const encodedUnits = encodeAllUnits(
 		compiledUnits,
