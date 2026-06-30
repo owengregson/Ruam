@@ -1,19 +1,19 @@
 # Anti-AI-Decompilation Hardening — Design
 
 **Date:** 2026-06-30
-**Status:** Partially shipped on `anti-ai-hardening` (two product decisions locked, see §6).
+**Status:** ALL workstreams shipped on `anti-ai-hardening` (two product decisions locked, see §6).
 **Branch:** `anti-ai-hardening`
 
-**Shipped in this PR** (each tested across many random seeds + full suite green):
+**Shipped** (each tested across many random seeds + full suite green, 2381 tests):
 - W0 — source-map / cleartext-leak gate (default-on; `--keep-source-maps` opt-out).
+- W1 — hole-tolerant slow-path dispatch (`_ht[PH] | 0`) killing the undefined-opcode oracle.
+- W2 — per-unit key salt (always-on under rolling cipher): distinct key per unit, closing same-metadata key reuse.
+- W3 — decode impurity (`decodeImpurity`): chained keystream removing random-access decrypt, behind the MANDATORY build-time self-equality gate; incompatible with cache-disabling features (throws). Opt-in.
 - W4-L1 — cross-file cohort tangle + `obfuscateBundle()` API (the mandated cross-file feature; work-factor).
+- W4-L2 — `crossFileLinking` opt-in runtime co-residence link (strict, no fallback): a consumer cannot run without its declared provider present in the same realm. Reuses the externalKey fold.
 - W5 — `externalKeyBinding` off-device necessary secret (opt-in; the one cryptographic / human-forcing lever).
-- W1 (safe slice) — hole-tolerant slow-path dispatch (`_ht[PH] | 0`) killing the undefined-opcode oracle.
 
-**Deferred** (designed + red-teamed; require their own correctness spikes before shipping, per the all-seeds / never-silent-garbage principle):
-- W2 — per-unit decode heterogeneity (no clean non-amortizable win within no-size-bloat / no-hot-path-branch; spike).
-- W3 — trace-coupled decode impurity (silent-miscompile failure mode; ship ONLY behind the mandatory all-seeds+all-engines build gate, after a clean symmetry spike).
-- W4-L2 — opt-in runtime co-residence link (lowest priority; co-resident linking collapses to work-factor like W4-L1).
+**Resolution of the earlier "deferred" items** (the user directed building all): W2 shipped as a per-unit *key salt* (the achievable, real form — closes cross-unit keystream reuse for same-metadata units; per-unit *code* variation remains out of scope as it would bloat size / add per-dispatch branches). W3 shipped scoped to the decode cache's linear forward pass (the only build==runtime-symmetric form of trace-coupling; genuine data-dependent global coupling is mathematically incompatible with build-time encryption and the mandatory gate would reject it), with its headline "corrupt-under-observation" goal honestly unachievable for passive reads (no JS read barrier) — it ships as an anti-automation / anti-random-access lever. W4-L2 shipped as an explicit user-declared strict link (the "proof" of co-residence is the caller's declaration); still work-factor vs a whole-bundle attacker, but delivers the literal cross-file dependency.
 
 ## 1. Context & goal
 
