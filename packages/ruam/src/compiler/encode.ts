@@ -60,6 +60,8 @@ export interface EncodeOptions {
 	incrementalCipher?: boolean;
 	/** Pre-computed cipher blocks (needed when opcode mutation modifies the unit). */
 	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>;
+	/** Per-unit key salt (W2): folded into the key so each unit's key is distinct. */
+	perUnitSalt?: number;
 }
 
 /**
@@ -80,7 +82,8 @@ export function encodeBytecodeUnit(
 		options.keyAnchor,
 		options.stringKey,
 		options.incrementalCipher,
-		options.precomputedCipherBlocks
+		options.precomputedCipherBlocks,
+		options.perUnitSalt
 	);
 	if (options.encrypt) {
 		const key = computeFingerprint().toString(16);
@@ -255,7 +258,8 @@ function serializeUnit(
 	keyAnchor?: number,
 	stringKey?: number,
 	applyIncrementalCipher: boolean = false,
-	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>
+	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>,
+	perUnitSalt: number = 0
 ): Uint8Array {
 	const buf = new ArrayBuffer(estimateSize(unit));
 	const view = new DataView(buf);
@@ -294,6 +298,12 @@ function serializeUnit(
 		if (effectiveAnchor !== undefined && integrityHash !== undefined) {
 			effectiveAnchor = (effectiveAnchor ^ integrityHash) >>> 0;
 		}
+		// Per-unit key salt (W2): fold into the anchor so every unit derives a
+		// distinct key even when metadata collides. Mirrored at runtime by the
+		// `k ^= u.<salt>` fold in rcDeriveKey.
+		if (effectiveAnchor !== undefined) {
+			effectiveAnchor = (effectiveAnchor ^ perUnitSalt) >>> 0;
+		}
 		effectiveStringKey = deriveImplicitKey(
 			unit.instructions.length,
 			unit.registerCount,
@@ -322,6 +332,7 @@ function serializeUnit(
 	writeU16(flags);
 	writeU16(unit.paramCount);
 	writeU16(unit.registerCount);
+	writeU32(perUnitSalt >>> 0); // per-unit key salt (W2)
 
 	// Constants
 	writeU32(unit.constants.length);
@@ -354,6 +365,10 @@ function serializeUnit(
 		let effectiveAnchor = keyAnchor;
 		if (effectiveAnchor !== undefined && integrityHash !== undefined) {
 			effectiveAnchor = (effectiveAnchor ^ integrityHash) >>> 0;
+		}
+		// Per-unit key salt (W2) — see string-key derivation above.
+		if (effectiveAnchor !== undefined) {
+			effectiveAnchor = (effectiveAnchor ^ perUnitSalt) >>> 0;
 		}
 		masterKey = deriveImplicitKey(
 			unit.instructions.length,
@@ -495,7 +510,7 @@ function writeConstant(
  * Over-allocates to avoid reallocation.
  */
 function estimateSize(unit: BytecodeUnit): number {
-	let size = 1 + 2 + 2 + 2; // header
+	let size = 1 + 2 + 2 + 2 + 4; // header (incl. per-unit key salt)
 	size += 4; // constant count
 	for (const c of unit.constants) {
 		size += 1; // type tag

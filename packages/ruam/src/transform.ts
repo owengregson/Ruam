@@ -650,6 +650,14 @@ function encodeAllUnits(
 			  identityMap!)
 			: shuffleMap;
 
+		// Per-unit key salt (W2): a distinct salt per unit so every unit derives
+		// a distinct cipher key even when its metadata (instr/reg/param/const
+		// counts) collides with another unit's. Closes same-metadata key reuse
+		// (which would share the position keystream across units). Derived from
+		// the build seed + unit id; folded into the key at build and mirrored by
+		// rcDeriveKey's `k ^= u.<salt>` at runtime.
+		const perUnitSalt = deriveSeed(stringKey, `unitSalt:${unitId}`) >>> 0;
+
 		const encoded = encodeUnit(
 			unit,
 			effectiveMap,
@@ -661,7 +669,8 @@ function encodeAllUnits(
 			keyAnchor,
 			alphabet!,
 			incrementalCipherOpt,
-			cipherBlocks
+			cipherBlocks,
+			perUnitSalt
 		);
 		result.set(unitId, { unit, encoded });
 	}
@@ -1000,7 +1009,8 @@ function encodeUnit(
 	keyAnchor?: number,
 	alphabet: string = "",
 	incrementalCipher: boolean = false,
-	precomputedCipherBlocks?: CipherBlock[]
+	precomputedCipherBlocks?: CipherBlock[],
+	perUnitSalt: number = 0
 ): string {
 	return encodeBytecodeUnit(unit, {
 		shuffleMap,
@@ -1013,6 +1023,7 @@ function encodeUnit(
 		alphabet,
 		incrementalCipher,
 		precomputedCipherBlocks,
+		perUnitSalt,
 	});
 }
 
