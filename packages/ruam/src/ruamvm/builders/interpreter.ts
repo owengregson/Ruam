@@ -86,6 +86,8 @@ export interface InterpreterBuildOptions {
 	incrementalCipher?: boolean;
 	semanticOpacity?: boolean;
 	observationResistance?: boolean;
+	/** Decode impurity (W3): chained keystream in the decode-cache materialization. */
+	decodeImpurity?: boolean;
 	/** Tuning: probability (0-100) of witness check per handler. */
 	witnessCheckProbability?: number;
 }
@@ -1358,7 +1360,17 @@ function buildScaffoldAST(
 			ARR = "mvArr",
 			POS = "mvPos",
 			IDX = "mvIdx",
-			KS = "mvKs";
+			KS = "mvKs",
+			ACC = "mvAcc",
+			DOP = "mvDop",
+			DOV = "mvDov";
+
+		// Decode impurity (W3): chain the keystream off all prior decrypted
+		// instructions (linear order), removing the position cipher's random
+		// access. Safe only here because the cache decrypts in a single linear
+		// forward pass at both build and runtime, so the accumulator matches.
+		const impure = rollingCipher && !!interpOpts.decodeImpurity;
+		const CHAIN_PRIME = 0x85ebca77;
 
 		// Per-instruction body: resolve handler index + decode operand.
 		const loopBody: JsNode[] = [];
@@ -1393,7 +1405,19 @@ function buildScaffoldAST(
 								bin(
 									BOp.BitXor,
 									id(KS),
-									bin(BOp.BitXor, id(IDX), L(0x9e3779b9))
+									// Position term, with the chained accumulator
+									// folded in under decode impurity: (idx ^ GOLDEN ^ acc).
+									impure
+										? bin(
+												BOp.BitXor,
+												bin(
+													BOp.BitXor,
+													id(IDX),
+													L(0x9e3779b9)
+												),
+												id(ACC)
+										  )
+										: bin(BOp.BitXor, id(IDX), L(0x9e3779b9))
 								),
 								L(0xc2b2ae35),
 							]),
@@ -1413,43 +1437,85 @@ function buildScaffoldAST(
 			loopBody.push(
 				exprStmt(assign(id(KS), bin(BOp.Ushr, id(KS), lit(0))))
 			);
-			// mvArr[mvPos] = _ht[ (mvSrc[mvPos] ^ (mvKs & 0xFFFF)) & 0xFFFF ];
-			loopBody.push(
-				exprStmt(
-					assign(
-						index(id(ARR), id(POS)),
-						index(
-							id(HT),
+			// Decrypted physical opcode: (mvSrc[mvPos] ^ (mvKs & 0xFFFF)) & 0xFFFF
+			const decOpExpr = bin(
+				BOp.BitAnd,
+				bin(
+					BOp.BitXor,
+					index(id(SRC), id(POS)),
+					bin(BOp.BitAnd, id(KS), lit(0xffff))
+				),
+				lit(0xffff)
+			);
+			// Decrypted operand: (mvSrc[mvPos+1] ^ mvKs) | 0
+			const decOperandExpr = bin(
+				BOp.BitOr,
+				bin(
+					BOp.BitXor,
+					index(id(SRC), bin(BOp.Add, id(POS), lit(1))),
+					id(KS)
+				),
+				lit(0)
+			);
+			if (impure) {
+				// var mvDop = decOp; var mvDov = decOperand;
+				loopBody.push(varDecl(DOP, decOpExpr));
+				loopBody.push(varDecl(DOV, decOperandExpr));
+				// mvArr[mvPos] = _ht[mvDop]; mvArr[mvPos+1] = mvDov;
+				loopBody.push(
+					exprStmt(
+						assign(index(id(ARR), id(POS)), index(id(HT), id(DOP)))
+					)
+				);
+				loopBody.push(
+					exprStmt(
+						assign(
+							index(id(ARR), bin(BOp.Add, id(POS), lit(1))),
+							id(DOV)
+						)
+					)
+				);
+				// mvAcc = (imul(mvAcc, CHAIN_PRIME) ^ mvDop ^ mvDov) >>> 0;
+				loopBody.push(
+					exprStmt(
+						assign(
+							id(ACC),
 							bin(
-								BOp.BitAnd,
+								BOp.Ushr,
 								bin(
 									BOp.BitXor,
-									index(id(SRC), id(POS)),
-									bin(BOp.BitAnd, id(KS), lit(0xffff))
+									bin(
+										BOp.BitXor,
+										call(id(n.imul), [
+											id(ACC),
+											L(CHAIN_PRIME),
+										]),
+										id(DOP)
+									),
+									id(DOV)
 								),
-								lit(0xffff)
+								lit(0)
 							)
 						)
 					)
-				)
-			);
-			// mvArr[mvPos+1] = (mvSrc[mvPos+1] ^ mvKs) | 0;
-			loopBody.push(
-				exprStmt(
-					assign(
-						index(id(ARR), bin(BOp.Add, id(POS), lit(1))),
-						bin(
-							BOp.BitOr,
-							bin(
-								BOp.BitXor,
-								index(id(SRC), bin(BOp.Add, id(POS), lit(1))),
-								id(KS)
-							),
-							lit(0)
+				);
+			} else {
+				// mvArr[mvPos] = _ht[decOp];
+				loopBody.push(
+					exprStmt(
+						assign(index(id(ARR), id(POS)), index(id(HT), decOpExpr))
+					)
+				);
+				// mvArr[mvPos+1] = decOperand;
+				loopBody.push(
+					exprStmt(
+						assign(
+							index(id(ARR), bin(BOp.Add, id(POS), lit(1))),
+							decOperandExpr
 						)
 					)
-				)
-			);
+				);
+			}
 		} else {
 			// Light variant (no rolling cipher): pre-resolve handler indices,
 			// operand passthrough. mvSrc is already plaintext, so the cache
@@ -1475,20 +1541,25 @@ function buildScaffoldAST(
 		// if (!U.d) { var mvSrc=U.i; var mvLen=mvSrc.length; var mvArr=new
 		//   Int32Array(mvLen); for(var mvPos=0; mvPos<mvLen; mvPos+=2){ ... }
 		//   U.d = mvArr; }
-		tryBody.push(
-			ifStmt(un(UOp.Not, member(id(U), DI)), [
-				varDecl(SRC, member(id(U), "i")),
-				varDecl(LEN, member(id(SRC), "length")),
-				varDecl(ARR, newExpr(id("Int32Array"), [id(LEN)])),
-				forStmt(
-					varDecl(POS, lit(0)),
-					bin(BOp.Lt, id(POS), id(LEN)),
-					assign(id(POS), lit(2), AOp.Add),
-					loopBody
-				),
-				exprStmt(assign(member(id(U), DI), id(ARR))),
-			])
+		const materializeBody: JsNode[] = [
+			varDecl(SRC, member(id(U), "i")),
+			varDecl(LEN, member(id(SRC), "length")),
+			varDecl(ARR, newExpr(id("Int32Array"), [id(LEN)])),
+		];
+		// var mvAcc = rcState;  (decode-impurity accumulator seed = master key)
+		if (impure) {
+			materializeBody.push(varDecl(ACC, id(n.rcState)));
+		}
+		materializeBody.push(
+			forStmt(
+				varDecl(POS, lit(0)),
+				bin(BOp.Lt, id(POS), id(LEN)),
+				assign(id(POS), lit(2), AOp.Add),
+				loopBody
+			),
+			exprStmt(assign(member(id(U), DI), id(ARR)))
 		);
+		tryBody.push(ifStmt(un(UOp.Not, member(id(U), DI)), materializeBody));
 		// var I = U.d;
 		tryBody.push(varDecl(I, member(id(U), DI)));
 	}

@@ -130,8 +130,29 @@ export function obfuscateCode(
 		semanticOpacity = false,
 		observationResistance = false,
 		externalKeyBinding = undefined,
+		decodeImpurity = false,
 		wrapOutput = false,
 	} = resolved;
+
+	// Decode impurity (W3) requires the decode cache, whose linear forward-pass
+	// decrypt is what makes the chained keystream build==runtime symmetric. It
+	// is therefore incompatible with the features that gate the cache off. Fail
+	// loudly at build time rather than silently emitting a divergent unit.
+	if (decodeImpurity) {
+		const decodeCacheActive =
+			rollingCipher &&
+			!incrementalCipher &&
+			!opcodeMutation &&
+			!observationResistance &&
+			!vmShielding;
+		if (!decodeCacheActive) {
+			throw new Error(
+				"decodeImpurity requires the decode cache and is incompatible " +
+					"with incrementalCipher / opcodeMutation / observationResistance / " +
+					"vmShielding (each of which disables or bypasses the cache)."
+			);
+		}
+	}
 
 	// -- Cross-file link provider write (W4-L2) ------------------------------
 	// If this file is a declared link provider, every return path must prepend
@@ -350,6 +371,7 @@ export function obfuscateCode(
 		incrementalCipher,
 		semanticOpacity,
 		observationResistance,
+		decodeImpurity,
 		identityBindingCount: tuning.identityBindingCount,
 		witnessCheckProbability: tuning.witnessCheckProbability,
 		alphabet,
@@ -383,7 +405,8 @@ export function obfuscateCode(
 		keyAnchor,
 		alphabet,
 		opcodeMutation,
-		incrementalCipher
+		incrementalCipher,
+		decodeImpurity
 	);
 
 	// -- Assemble output -----------------------------------------------------
@@ -624,7 +647,8 @@ function encodeAllUnits(
 	keyAnchor?: number,
 	alphabet?: string,
 	opcodeMutationOpt: boolean = false,
-	incrementalCipherOpt: boolean = false
+	incrementalCipherOpt: boolean = false,
+	decodeImpurityOpt: boolean = false
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
 	const result = new Map<string, { unit: BytecodeUnit; encoded: string }>();
 
@@ -670,7 +694,8 @@ function encodeAllUnits(
 			alphabet!,
 			incrementalCipherOpt,
 			cipherBlocks,
-			perUnitSalt
+			perUnitSalt,
+			decodeImpurityOpt
 		);
 		result.set(unitId, { unit, encoded });
 	}
@@ -1010,7 +1035,8 @@ function encodeUnit(
 	alphabet: string = "",
 	incrementalCipher: boolean = false,
 	precomputedCipherBlocks?: CipherBlock[],
-	perUnitSalt: number = 0
+	perUnitSalt: number = 0,
+	decodeImpurity: boolean = false
 ): string {
 	return encodeBytecodeUnit(unit, {
 		shuffleMap,
@@ -1024,6 +1050,7 @@ function encodeUnit(
 		incrementalCipher,
 		precomputedCipherBlocks,
 		perUnitSalt,
+		decodeImpurity,
 	});
 }
 

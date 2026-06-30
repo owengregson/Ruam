@@ -218,6 +218,24 @@ export interface VmObfuscationOptions {
 	externalKeyBinding?: ExternalKeyBinding;
 
 	/**
+	 * Decode-path impurity (anti-agentic): chain each instruction's decryption
+	 * keystream off every prior decrypted instruction (in linear decode order),
+	 * removing the position cipher's random-access property. An attacker cannot
+	 * decrypt instruction K without first decrypting 0..K-1, forcing full
+	 * sequential simulation of each unit (defeats cheap parallel/random-access
+	 * decrypt and transferable automation).
+	 *
+	 * Requires the decode cache (whose linear forward-pass decrypt makes the
+	 * chain build==runtime symmetric), so it is INCOMPATIBLE with
+	 * `incrementalCipher`, `opcodeMutation`, and `observationResistance` (each
+	 * disables the cache) — combining them throws at build time. Auto-enables
+	 * `rollingCipher`. Every encoded unit passes a mandatory build-time
+	 * self-equality gate (a divergence is a loud build failure, never a silent
+	 * miscompile). Opt-in; not part of any preset.
+	 */
+	decodeImpurity?: boolean;
+
+	/**
 	 * Target execution environment.
 	 *
 	 * Controls environment-specific output settings. Explicit options

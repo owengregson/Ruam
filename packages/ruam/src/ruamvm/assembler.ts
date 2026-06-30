@@ -125,6 +125,8 @@ export function generateVmRuntime(options: {
 	semanticOpacity?: boolean;
 	/** Silently corrupt cipher state when function references are tampered. */
 	observationResistance?: boolean;
+	/** Decode impurity (W3): chained keystream in the decode-cache materialization. */
+	decodeImpurity?: boolean;
 	/** Number of functions to bind for observation resistance (from tuning). */
 	identityBindingCount?: number;
 	/** Tuning: probability (0-100) of witness check per handler. */
@@ -167,6 +169,7 @@ export function generateVmRuntime(options: {
 		incrementalCipher = false,
 		semanticOpacity = false,
 		observationResistance = false,
+		decodeImpurity = false,
 		identityBindingCount = 5,
 		witnessCheckProbability,
 		alphabet,
@@ -300,6 +303,7 @@ export function generateVmRuntime(options: {
 			incrementalCipher,
 			semanticOpacity,
 			observationResistance,
+			decodeImpurity,
 			witnessCheckProbability,
 		},
 		split,
@@ -598,6 +602,8 @@ export function generateShieldedVmRuntime(options: {
 	semanticOpacity?: boolean;
 	/** Silently corrupt cipher state when function references are tampered. */
 	observationResistance?: boolean;
+	/** Decode impurity (W3): chained keystream in the decode-cache materialization. */
+	decodeImpurity?: boolean;
 	/** Number of functions to bind for observation resistance (from tuning). */
 	identityBindingCount?: number;
 	/** Tuning: probability (0-100) of witness check per handler. */
@@ -627,6 +633,7 @@ export function generateShieldedVmRuntime(options: {
 		incrementalCipher = false,
 		semanticOpacity = false,
 		observationResistance = false,
+		decodeImpurity = false,
 		identityBindingCount = 5,
 		witnessCheckProbability,
 		alphabet,
@@ -769,6 +776,7 @@ export function generateShieldedVmRuntime(options: {
 				incrementalCipher,
 				semanticOpacity,
 				observationResistance,
+				decodeImpurity,
 				witnessCheckProbability,
 			},
 			groupSplit,

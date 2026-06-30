@@ -356,6 +356,9 @@ function parseArgs(argv: string[]): CliArgs {
 			case "--external-key-accessor":
 				extKeyAccessor = nextArg(arg);
 				break;
+			case "--decode-impurity":
+				result.options.decodeImpurity = true;
+				break;
 			case "--link-provider":
 				linkProvider = nextArg(arg);
 				break;
@@ -622,6 +625,9 @@ function printHelp(version: string): void {
 		`      ${d(
 			"Consumers cannot run without the provider co-resident + loaded first."
 		)}`
+	);
+	console.log(
+		`    ${f("--decode-impurity")}          Chain decrypt (anti random-access)`
 	);
 	console.log();
 

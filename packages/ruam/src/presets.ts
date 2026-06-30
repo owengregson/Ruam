@@ -21,7 +21,11 @@ export const PRESETS: Record<
 	Required<
 		Omit<
 			VmObfuscationOptions,
-			"preset" | "debugLogging" | "target" | "externalKeyBinding"
+			| "preset"
+			| "debugLogging"
+			| "target"
+			| "externalKeyBinding"
+			| "decodeImpurity"
 		>
 	>
 > = {
@@ -189,6 +193,11 @@ export function resolveOptions(
 
 	// externalKeyBinding requires rollingCipher (it folds into the implicit key)
 	if (resolved.externalKeyBinding && !resolved.rollingCipher) {
+		resolved.rollingCipher = true;
+	}
+
+	// decodeImpurity requires rollingCipher (it chains the cipher keystream)
+	if (resolved.decodeImpurity && !resolved.rollingCipher) {
 		resolved.rollingCipher = true;
 	}
 

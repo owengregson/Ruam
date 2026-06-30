@@ -31,7 +31,12 @@ import {
 	BINARY_TAG_STRING,
 	BINARY_TAG_ENCODED_STRING,
 } from "../constants.js";
-import { deriveImplicitKey, rollingEncrypt } from "./rolling-cipher.js";
+import {
+	deriveImplicitKey,
+	rollingEncrypt,
+	rollingEncryptChained,
+	assertChainedDecryptInverts,
+} from "./rolling-cipher.js";
 import { buildCipherBlocks, incrementalEncrypt } from "./incremental-cipher.js";
 
 // ---------------------------------------------------------------------------
@@ -62,6 +67,8 @@ export interface EncodeOptions {
 	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>;
 	/** Per-unit key salt (W2): folded into the key so each unit's key is distinct. */
 	perUnitSalt?: number;
+	/** Decode impurity (W3): chained keystream removing random-access decrypt. */
+	decodeImpurity?: boolean;
 }
 
 /**
@@ -83,7 +90,8 @@ export function encodeBytecodeUnit(
 		options.stringKey,
 		options.incrementalCipher,
 		options.precomputedCipherBlocks,
-		options.perUnitSalt
+		options.perUnitSalt,
+		options.decodeImpurity
 	);
 	if (options.encrypt) {
 		const key = computeFingerprint().toString(16);
@@ -259,7 +267,8 @@ function serializeUnit(
 	stringKey?: number,
 	applyIncrementalCipher: boolean = false,
 	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>,
-	perUnitSalt: number = 0
+	perUnitSalt: number = 0,
+	decodeImpurity: boolean = false
 ): Uint8Array {
 	const buf = new ArrayBuffer(estimateSize(unit));
 	const view = new DataView(buf);
@@ -378,7 +387,17 @@ function serializeUnit(
 			cipherSalt,
 			effectiveAnchor
 		);
-		rollingEncrypt(flatInstrs, masterKey);
+		if (decodeImpurity) {
+			// Chained keystream (W3): each instruction's decryption depends on
+			// all prior decrypted instructions (linear order), removing
+			// random-access decrypt. Snapshot plaintext, encrypt, then run the
+			// MANDATORY self-equality gate (throws on any divergence).
+			const plaintext = flatInstrs.slice();
+			rollingEncryptChained(flatInstrs, masterKey);
+			assertChainedDecryptInverts(flatInstrs, masterKey, plaintext);
+		} else {
+			rollingEncrypt(flatInstrs, masterKey);
+		}
 	}
 
 	// Apply incremental cipher on top of rolling cipher (outer layer).
