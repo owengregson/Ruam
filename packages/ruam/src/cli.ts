@@ -13,8 +13,10 @@
  * @module cli
  */
 
-import { obfuscateFile } from "./index.js";
+import { obfuscateFile, obfuscateCode, createCohort } from "./index.js";
+import type { CohortContext } from "./index.js";
 import { gateSourceMaps } from "./source-map-gate.js";
+import { randomBytes } from "node:crypto";
 import type {
 	VmObfuscationOptions,
 	PresetName,
@@ -948,24 +950,43 @@ async function obfuscateDirectoryWithProgress(
 		color: "cyan",
 	}).start();
 
+	// Pre-read every source so the cross-file cohort term can depend on the
+	// whole bundle (Layer-1 build-time tangle). Per-file hermeticity is
+	// otherwise preserved — each file keeps its own seed/names/key anchor.
+	const fileSources: string[] = [];
+	for (const file of files) {
+		try {
+			fileSources.push(
+				await fs.readFile(path.join(outputDir, file), "utf-8")
+			);
+		} catch {
+			fileSources.push("");
+		}
+	}
+	const cohort: CohortContext | undefined =
+		files.length >= 2
+			? createCohort(
+					files.map((file, i) => ({
+						path: path.join(outputDir, file),
+						code: fileSources[i] ?? "",
+					})),
+					randomBytes(4).readUInt32LE(0)
+			  )
+			: undefined;
+
 	for (let i = 0; i < files.length; i++) {
 		const file = files[i]!;
 		const filePath = path.join(outputDir, file);
+		const source = fileSources[i] ?? "";
 
-		let inputSize: number;
-		try {
-			inputSize = (await fs.stat(filePath)).size;
-		} catch {
-			inputSize = 0;
-		}
-		totalInputSize += inputSize;
+		totalInputSize += Buffer.byteLength(source, "utf-8");
 
 		spinner.text = `${renderBar(i, files.length)} ${chalk.dim(file)}`;
 
 		try {
-			await obfuscateFile(filePath, filePath, args.options);
-			const outputSize = (await fs.stat(filePath)).size;
-			totalOutputSize += outputSize;
+			const obfuscated = obfuscateCode(source, args.options, cohort);
+			await fs.writeFile(filePath, obfuscated, "utf-8");
+			totalOutputSize += Buffer.byteLength(obfuscated, "utf-8");
 		} catch (err) {
 			errorCount++;
 			errors.push({

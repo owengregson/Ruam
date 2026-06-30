@@ -3,8 +3,14 @@
  * @module index
  */
 
-import { obfuscateCode as transformCode } from "./transform.js";
+import {
+	obfuscateCode as transformCode,
+	obfuscateBundle as transformBundle,
+} from "./transform.js";
+import type { BundleFile } from "./transform.js";
+import type { CohortContext } from "./compiler/cohort.js";
 import type { VmObfuscationOptions } from "./types.js";
+import { gateSourceMaps } from "./source-map-gate.js";
 import fs from "fs-extra";
 import path from "path";
 import { globby } from "globby";
@@ -25,6 +31,10 @@ export type {
 	AutoEnableRule,
 	OptionCategory,
 } from "./option-meta.js";
+export { obfuscateBundle } from "./transform.js";
+export type { BundleFile } from "./transform.js";
+export { createCohort } from "./compiler/cohort.js";
+export type { CohortContext, CohortFile } from "./compiler/cohort.js";
 
 // --- Single-Source Obfuscation ---
 
@@ -38,9 +48,10 @@ export type {
  */
 export function obfuscateCode(
 	source: string,
-	options?: VmObfuscationOptions
+	options?: VmObfuscationOptions,
+	cohort?: CohortContext
 ): string {
-	return transformCode(source, options);
+	return transformCode(source, options, cohort);
 }
 
 // --- File-Level Obfuscation ---
@@ -76,6 +87,8 @@ export async function runVmObfuscation(
 		include?: string[];
 		exclude?: string[];
 		options?: VmObfuscationOptions;
+		/** Keep `.map` files in the output (default: strip — cleartext-leak gate). */
+		keepSourceMaps?: boolean;
 	}
 ): Promise<void> {
 	const include = config?.include ?? ["**/*.js"];
@@ -87,8 +100,19 @@ export async function runVmObfuscation(
 		absolute: false,
 	});
 
+	// Read all sources first so the cohort term can depend on every file
+	// (cross-file Layer-1 tangle). Per-file hermeticity is otherwise preserved.
+	const sources: BundleFile[] = [];
 	for (const file of files) {
 		const filePath = path.join(dir, file);
-		await obfuscateFile(filePath, filePath, config?.options);
+		sources.push({ path: filePath, code: await fs.readFile(filePath, "utf-8") });
 	}
+
+	const results = transformBundle(sources, config?.options ?? {});
+	for (const r of results) {
+		await fs.writeFile(r.path, r.code, "utf-8");
+	}
+
+	// Cleartext-leak gate: strip copied source maps from the output tree.
+	await gateSourceMaps(dir, { keepSourceMaps: config?.keepSourceMaps });
 }

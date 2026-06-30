@@ -26,6 +26,8 @@ import {
 	PACKED_JUMP_OPS,
 } from "./compiler/opcodes.js";
 import { encodeBytecodeUnit } from "./compiler/encode.js";
+import { createCohort } from "./compiler/cohort.js";
+import type { CohortContext, CohortFile } from "./compiler/cohort.js";
 import {
 	generateVmRuntime,
 	generateShieldedVmRuntime,
@@ -93,7 +95,8 @@ function generateCryptoSeed(): number {
  */
 export function obfuscateCode(
 	source: string,
-	options: VmObfuscationOptions = {}
+	options: VmObfuscationOptions = {},
+	cohort?: CohortContext
 ): string {
 	const resolved = resolveOptions(options);
 	const {
@@ -199,6 +202,13 @@ export function obfuscateCode(
 	// -- Generate per-build cipher salt (if rolling cipher is enabled) --------
 	const cipherSalt = rollingCipher ? generateCryptoSeed() : undefined;
 
+	// -- Cross-file cohort term (Layer 1 build-time tangle) ------------------
+	// XOR-folded into the key anchor exactly like the integrity hash, so it
+	// rides the same constant-splitting + build==runtime symmetry path. Only
+	// meaningful when the rolling cipher is on (it alters the implicit key).
+	const cohortTerm =
+		cohort && rollingCipher ? cohort.digestAll() : undefined;
+
 	// -- Compile each target (no encoding yet — need keyAnchor first) -------
 	const compiledUnits = compileTargetsOnly(
 		targetPaths,
@@ -301,10 +311,16 @@ export function obfuscateCode(
 		hasAsyncUnits,
 		structuralChoices,
 		registry,
+		cohortTerm,
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
-	const keyAnchor = rollingCipher ? runtimeResult.keyAnchorValue : undefined;
+	// Fold the cohort term into the build-side key anchor to mirror the
+	// runtime `_ka ^= cohortTerm` emitted by generateVmRuntime.
+	let keyAnchor = rollingCipher ? runtimeResult.keyAnchorValue : undefined;
+	if (keyAnchor !== undefined && cohortTerm !== undefined) {
+		keyAnchor = (keyAnchor ^ cohortTerm) >>> 0;
+	}
 	const encodedUnits = encodeAllUnits(
 		compiledUnits,
 		shuffleMap,
@@ -332,6 +348,49 @@ export function obfuscateCode(
 		tuning,
 		registry
 	);
+}
+
+/** A file to obfuscate as part of a bundle. */
+export interface BundleFile {
+	/** Path/identifier of the file (preserved in the result). */
+	path: string;
+	/** Source text. */
+	code: string;
+}
+
+/**
+ * Obfuscate a set of files together as a *cohort* (cross-file Layer-1 tangle).
+ *
+ * Each file is obfuscated independently (its own seed, names, alphabet, key
+ * anchor — full per-file hermeticity is preserved) EXCEPT that, for cohorts of
+ * two or more files, a single build-time cohort term (an order-independent
+ * digest of every file's source folded with a per-build cohort seed) is folded
+ * into each file's key anchor. This raises the unit of static correlation to
+ * the whole bundle and makes identical source diverge across bundles/builds.
+ *
+ * Honest scope: this is a work-factor tangle (an attacker holding the whole
+ * bundle can recompute the term), not a cryptographic "cannot run alone"
+ * dependency. The cohort term only takes effect for files whose options enable
+ * `rollingCipher`.
+ *
+ * `obfuscateCode`/`obfuscateFile` signatures are unchanged; this is additive.
+ *
+ * @param files   Files to obfuscate together.
+ * @param options Obfuscation options applied to every file.
+ * @returns One `{ path, code }` per input file, in input order.
+ */
+export function obfuscateBundle(
+	files: BundleFile[],
+	options: VmObfuscationOptions = {}
+): BundleFile[] {
+	const cohort: CohortContext | undefined =
+		files.length >= 2
+			? createCohort(files as CohortFile[], generateCryptoSeed())
+			: undefined;
+	return files.map((f) => ({
+		path: f.path,
+		code: obfuscateCode(f.code, options, cohort),
+	}));
 }
 
 // ---------------------------------------------------------------------------

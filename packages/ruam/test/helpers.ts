@@ -87,6 +87,14 @@ export function evalOriginal(source: string): unknown {
 	return runInContext(source, makeContext());
 }
 
+/**
+ * Evaluate already-obfuscated code (e.g. bundle output) in a fresh context.
+ * Returns the value of the script's final expression.
+ */
+export function evalCode(code: string): unknown {
+	return runInContext(code, makeContext());
+}
+
 export function evalObfuscated(
 	source: string,
 	options?: VmObfuscationOptions

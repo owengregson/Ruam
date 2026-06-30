@@ -102,6 +102,8 @@ export function generateVmRuntime(options: {
 	integrityHash?: number;
 	usedOpcodes?: Set<number>;
 	cipherSalt?: number;
+	/** Cross-file cohort term, XOR-folded into the key anchor like integrityHash. */
+	cohortTerm?: number;
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
 	/** Generate per-build polymorphic decoder chain for string constants. */
@@ -150,6 +152,7 @@ export function generateVmRuntime(options: {
 		integrityHash,
 		usedOpcodes,
 		cipherSalt,
+		cohortTerm,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
 		polymorphicDecoder = false,
@@ -316,6 +319,27 @@ export function generateVmRuntime(options: {
 							BOp.BitXor,
 							id(names.keyAnchor),
 							split(integrityHash)
+						),
+						lit(0)
+					)
+				)
+			)
+		);
+	}
+	// Cross-file cohort tangle: fold the cohort term into the key anchor.
+	// Mirrors the build-side `keyAnchor ^= cohortTerm` in transform.ts so
+	// rcDeriveKey reproduces the exact key used to encrypt the bytecode.
+	if (rollingCipher && cohortTerm !== undefined) {
+		tier2Nodes.push(
+			exprStmt(
+				assign(
+					id(names.keyAnchor),
+					bin(
+						BOp.Ushr,
+						bin(
+							BOp.BitXor,
+							id(names.keyAnchor),
+							split(cohortTerm)
 						),
 						lit(0)
 					)
