@@ -84,6 +84,7 @@ export function buildExternalKeyFold(
 	const ekv = nameGen(); // coerced secret string
 	const ekh = nameGen(); // FNV accumulator
 	const eki = nameGen(); // loop index
+	const eke = nameGen(); // catch binding (registry-generated per invariant)
 
 	const accessorExpr = buildAccessorExpr(accessor);
 
@@ -97,7 +98,7 @@ export function buildExternalKeyFold(
 					assign(id(ekv), bin(BOp.Add, lit(""), accessorExpr))
 				),
 			],
-			"_eke",
+			eke,
 			[]
 		),
 		// var <ekh> = FNV_OFFSET_BASIS;
