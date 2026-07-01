@@ -31,7 +31,12 @@ import {
 	BINARY_TAG_STRING,
 	BINARY_TAG_ENCODED_STRING,
 } from "../constants.js";
-import { deriveImplicitKey, rollingEncrypt } from "./rolling-cipher.js";
+import {
+	deriveImplicitKey,
+	rollingEncrypt,
+	rollingEncryptChained,
+	assertChainedDecryptInverts,
+} from "./rolling-cipher.js";
 import { buildCipherBlocks, incrementalEncrypt } from "./incremental-cipher.js";
 
 // ---------------------------------------------------------------------------
@@ -60,6 +65,10 @@ export interface EncodeOptions {
 	incrementalCipher?: boolean;
 	/** Pre-computed cipher blocks (needed when opcode mutation modifies the unit). */
 	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>;
+	/** Per-unit key salt (W2): folded into the key so each unit's key is distinct. */
+	perUnitSalt?: number;
+	/** Decode impurity (W3): chained keystream removing random-access decrypt. */
+	decodeImpurity?: boolean;
 }
 
 /**
@@ -80,7 +89,9 @@ export function encodeBytecodeUnit(
 		options.keyAnchor,
 		options.stringKey,
 		options.incrementalCipher,
-		options.precomputedCipherBlocks
+		options.precomputedCipherBlocks,
+		options.perUnitSalt,
+		options.decodeImpurity
 	);
 	if (options.encrypt) {
 		const key = computeFingerprint().toString(16);
@@ -255,7 +266,9 @@ function serializeUnit(
 	keyAnchor?: number,
 	stringKey?: number,
 	applyIncrementalCipher: boolean = false,
-	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>
+	precomputedCipherBlocks?: ReturnType<typeof buildCipherBlocks>,
+	perUnitSalt: number = 0,
+	decodeImpurity: boolean = false
 ): Uint8Array {
 	const buf = new ArrayBuffer(estimateSize(unit));
 	const view = new DataView(buf);
@@ -294,6 +307,12 @@ function serializeUnit(
 		if (effectiveAnchor !== undefined && integrityHash !== undefined) {
 			effectiveAnchor = (effectiveAnchor ^ integrityHash) >>> 0;
 		}
+		// Per-unit key salt (W2): fold into the anchor so every unit derives a
+		// distinct key even when metadata collides. Mirrored at runtime by the
+		// `k ^= u.<salt>` fold in rcDeriveKey.
+		if (effectiveAnchor !== undefined) {
+			effectiveAnchor = (effectiveAnchor ^ perUnitSalt) >>> 0;
+		}
 		effectiveStringKey = deriveImplicitKey(
 			unit.instructions.length,
 			unit.registerCount,
@@ -322,6 +341,7 @@ function serializeUnit(
 	writeU16(flags);
 	writeU16(unit.paramCount);
 	writeU16(unit.registerCount);
+	writeU32(perUnitSalt >>> 0); // per-unit key salt (W2)
 
 	// Constants
 	writeU32(unit.constants.length);
@@ -355,6 +375,10 @@ function serializeUnit(
 		if (effectiveAnchor !== undefined && integrityHash !== undefined) {
 			effectiveAnchor = (effectiveAnchor ^ integrityHash) >>> 0;
 		}
+		// Per-unit key salt (W2) — see string-key derivation above.
+		if (effectiveAnchor !== undefined) {
+			effectiveAnchor = (effectiveAnchor ^ perUnitSalt) >>> 0;
+		}
 		masterKey = deriveImplicitKey(
 			unit.instructions.length,
 			unit.registerCount,
@@ -363,7 +387,17 @@ function serializeUnit(
 			cipherSalt,
 			effectiveAnchor
 		);
-		rollingEncrypt(flatInstrs, masterKey);
+		if (decodeImpurity) {
+			// Chained keystream (W3): each instruction's decryption depends on
+			// all prior decrypted instructions (linear order), removing
+			// random-access decrypt. Snapshot plaintext, encrypt, then run the
+			// MANDATORY self-equality gate (throws on any divergence).
+			const plaintext = flatInstrs.slice();
+			rollingEncryptChained(flatInstrs, masterKey);
+			assertChainedDecryptInverts(flatInstrs, masterKey, plaintext);
+		} else {
+			rollingEncrypt(flatInstrs, masterKey);
+		}
 	}
 
 	// Apply incremental cipher on top of rolling cipher (outer layer).
@@ -495,7 +529,7 @@ function writeConstant(
  * Over-allocates to avoid reallocation.
  */
 function estimateSize(unit: BytecodeUnit): number {
-	let size = 1 + 2 + 2 + 2; // header
+	let size = 1 + 2 + 2 + 2 + 4; // header (incl. per-unit key salt)
 	size += 4; // constant count
 	for (const c of unit.constants) {
 		size += 1; // type tag

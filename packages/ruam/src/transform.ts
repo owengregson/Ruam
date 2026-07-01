@@ -26,6 +26,12 @@ import {
 	PACKED_JUMP_OPS,
 } from "./compiler/opcodes.js";
 import { encodeBytecodeUnit } from "./compiler/encode.js";
+import { createCohort } from "./compiler/cohort.js";
+import type {
+	CohortContext,
+	CohortFile,
+	CohortLink,
+} from "./compiler/cohort.js";
 import {
 	generateVmRuntime,
 	generateShieldedVmRuntime,
@@ -93,7 +99,9 @@ function generateCryptoSeed(): number {
  */
 export function obfuscateCode(
 	source: string,
-	options: VmObfuscationOptions = {}
+	options: VmObfuscationOptions = {},
+	cohort?: CohortContext,
+	filePath?: string
 ): string {
 	const resolved = resolveOptions(options);
 	const {
@@ -121,8 +129,40 @@ export function obfuscateCode(
 		incrementalCipher = false,
 		semanticOpacity = false,
 		observationResistance = false,
+		externalKeyBinding = undefined,
+		decodeImpurity = false,
 		wrapOutput = false,
 	} = resolved;
+
+	// Decode impurity (W3) requires the decode cache, whose linear forward-pass
+	// decrypt is what makes the chained keystream build==runtime symmetric. It
+	// is therefore incompatible with the features that gate the cache off. Fail
+	// loudly at build time rather than silently emitting a divergent unit.
+	if (decodeImpurity) {
+		const decodeCacheActive =
+			rollingCipher &&
+			!incrementalCipher &&
+			!opcodeMutation &&
+			!observationResistance &&
+			!vmShielding;
+		if (!decodeCacheActive) {
+			throw new Error(
+				"decodeImpurity requires the decode cache and is incompatible " +
+					"with incrementalCipher / opcodeMutation / observationResistance / " +
+					"vmShielding (each of which disables or bypasses the cache)."
+			);
+		}
+	}
+
+	// -- Cross-file link provider write (W4-L2) ------------------------------
+	// If this file is a declared link provider, every return path must prepend
+	// a top-level write of the per-cohort secret to a shared global so it runs
+	// at load (before any consumer on the same page/realm derives its key) —
+	// including the early returns for shielded / no-unit files.
+	const providerLink =
+		cohort && filePath ? cohort.providerLink(filePath) : undefined;
+	const withProviderWrite = (out: string): string =>
+		providerLink ? buildProviderWrite(providerLink) + "\n" + out : out;
 
 	// -- Compute tuning profile from preset intensity -------------------------
 	const tuning = getTuningProfile(presetToIntensity(resolved.preset));
@@ -171,7 +211,8 @@ export function obfuscateCode(
 
 	// -- VM Shielding path ---------------------------------------------------
 	if (vmShielding) {
-		return assembleShielded(ast, targetPaths, {
+		return withProviderWrite(
+			assembleShielded(ast, targetPaths, {
 			encryptBytecode,
 			debugProtection,
 			debugLogging,
@@ -193,11 +234,46 @@ export function obfuscateCode(
 			wrapOutput,
 			preprocessUsedNames,
 			tuning,
-		});
+			})
+		);
 	}
 
 	// -- Generate per-build cipher salt (if rolling cipher is enabled) --------
 	const cipherSalt = rollingCipher ? generateCryptoSeed() : undefined;
+
+	// -- Cross-file cohort term (Layer 1 build-time tangle) ------------------
+	// XOR-folded into the key anchor exactly like the integrity hash, so it
+	// rides the same constant-splitting + build==runtime symmetry path. Only
+	// meaningful when the rolling cipher is on (it alters the implicit key).
+	const cohortTerm =
+		cohort && rollingCipher ? cohort.digestAll() : undefined;
+
+	// -- External / cross-file key binding terms -----------------------------
+	// Each binding folds fnv1a(secret) into the key anchor at build, while the
+	// runtime recomputes fnv1a over the value read from an accessor path and
+	// folds it identically. The secret value is NEVER embedded — only the
+	// accessor path. Two channels may both apply:
+	//   (W5) externalKeyBinding — off-device secret read from a host global.
+	//   (W4-L2) cross-file link consumer — secret written by a sibling provider
+	//           file to a shared global at runtime.
+	// Both require rolling cipher.
+	const externalKeyAccessors: string[] = [];
+	let externalAnchorTerm = 0;
+	let hasExternalFold = false;
+	if (externalKeyBinding && rollingCipher) {
+		externalKeyAccessors.push(externalKeyBinding.accessor);
+		externalAnchorTerm = (externalAnchorTerm ^
+			fnv1a(externalKeyBinding.value)) >>> 0;
+		hasExternalFold = true;
+	}
+	const consumerLink =
+		cohort && filePath ? cohort.consumerLink(filePath) : undefined;
+	if (consumerLink && rollingCipher) {
+		externalKeyAccessors.push(`globalThis.${consumerLink.slot}`);
+		externalAnchorTerm = (externalAnchorTerm ^
+			fnv1a(consumerLink.secret)) >>> 0;
+		hasExternalFold = true;
+	}
 
 	// -- Compile each target (no encoding yet — need keyAnchor first) -------
 	const compiledUnits = compileTargetsOnly(
@@ -211,7 +287,7 @@ export function obfuscateCode(
 		tuning
 	);
 
-	if (compiledUnits.size === 0) return code;
+	if (compiledUnits.size === 0) return withProviderWrite(code);
 
 	// -- Detect async units (for conditional async interpreter emit) --------
 	let hasAsyncUnits = false;
@@ -295,16 +371,29 @@ export function obfuscateCode(
 		incrementalCipher,
 		semanticOpacity,
 		observationResistance,
+		decodeImpurity,
 		identityBindingCount: tuning.identityBindingCount,
 		witnessCheckProbability: tuning.witnessCheckProbability,
 		alphabet,
 		hasAsyncUnits,
 		structuralChoices,
 		registry,
+		cohortTerm,
+		externalKeyAccessors: externalKeyAccessors.length
+			? externalKeyAccessors
+			: undefined,
 	});
 
 	// -- Encode all units (now that we have the key anchor) -----------------
-	const keyAnchor = rollingCipher ? runtimeResult.keyAnchorValue : undefined;
+	// Fold the cohort + external-key terms into the build-side key anchor to
+	// mirror the runtime `_ka ^= ...` folds emitted by generateVmRuntime.
+	let keyAnchor = rollingCipher ? runtimeResult.keyAnchorValue : undefined;
+	if (keyAnchor !== undefined && cohortTerm !== undefined) {
+		keyAnchor = (keyAnchor ^ cohortTerm) >>> 0;
+	}
+	if (keyAnchor !== undefined && hasExternalFold) {
+		keyAnchor = (keyAnchor ^ externalAnchorTerm) >>> 0;
+	}
 	const encodedUnits = encodeAllUnits(
 		compiledUnits,
 		shuffleMap,
@@ -316,11 +405,12 @@ export function obfuscateCode(
 		keyAnchor,
 		alphabet,
 		opcodeMutation,
-		incrementalCipher
+		incrementalCipher,
+		decodeImpurity
 	);
 
 	// -- Assemble output -----------------------------------------------------
-	return assembleOutputFromParts(
+	const output = assembleOutputFromParts(
 		ast,
 		encodedUnits,
 		names,
@@ -332,6 +422,68 @@ export function obfuscateCode(
 		tuning,
 		registry
 	);
+
+	// Prepend the cross-file link provider write (if any) — see top of fn.
+	return withProviderWrite(output);
+}
+
+/**
+ * Build the provider-side global write for a cross-file runtime link.
+ *
+ * Emits `globalThis[<slot>] = String.fromCharCode(...);` — the secret as char
+ * codes (CSP-safe, no `eval`, no plaintext string literal). Runs at load.
+ */
+function buildProviderWrite(link: { slot: string; secret: string }): string {
+	const codes = Array.from(link.secret, (c) => c.charCodeAt(0)).join(",");
+	return `globalThis[${JSON.stringify(
+		link.slot
+	)}]=String.fromCharCode(${codes});`;
+}
+
+/** A file to obfuscate as part of a bundle. */
+export interface BundleFile {
+	/** Path/identifier of the file (preserved in the result). */
+	path: string;
+	/** Source text. */
+	code: string;
+}
+
+/**
+ * Obfuscate a set of files together as a *cohort* (cross-file Layer-1 tangle).
+ *
+ * Each file is obfuscated independently (its own seed, names, alphabet, key
+ * anchor — full per-file hermeticity is preserved) EXCEPT that, for cohorts of
+ * two or more files, a single build-time cohort term (an order-independent
+ * digest of every file's source folded with a per-build cohort seed) is folded
+ * into each file's key anchor. This raises the unit of static correlation to
+ * the whole bundle and makes identical source diverge across bundles/builds.
+ *
+ * Honest scope: this is a work-factor tangle (an attacker holding the whole
+ * bundle can recompute the term), not a cryptographic "cannot run alone"
+ * dependency. The cohort term only takes effect for files whose options enable
+ * `rollingCipher`.
+ *
+ * `obfuscateCode`/`obfuscateFile` signatures are unchanged; this is additive.
+ *
+ * @param files   Files to obfuscate together.
+ * @param options Obfuscation options applied to every file.
+ * @returns One `{ path, code }` per input file, in input order.
+ */
+export function obfuscateBundle(
+	files: BundleFile[],
+	options: VmObfuscationOptions = {},
+	link?: CohortLink
+): BundleFile[] {
+	// A cohort is created when there are 2+ files OR a runtime link is declared
+	// (a link needs a shared cohort even if the provider/consumer set is small).
+	const cohort: CohortContext | undefined =
+		files.length >= 2 || link
+			? createCohort(files as CohortFile[], generateCryptoSeed(), link)
+			: undefined;
+	return files.map((f) => ({
+		path: f.path,
+		code: obfuscateCode(f.code, options, cohort, f.path),
+	}));
 }
 
 // ---------------------------------------------------------------------------
@@ -495,7 +647,8 @@ function encodeAllUnits(
 	keyAnchor?: number,
 	alphabet?: string,
 	opcodeMutationOpt: boolean = false,
-	incrementalCipherOpt: boolean = false
+	incrementalCipherOpt: boolean = false,
+	decodeImpurityOpt: boolean = false
 ): Map<string, { unit: BytecodeUnit; encoded: string }> {
 	const result = new Map<string, { unit: BytecodeUnit; encoded: string }>();
 
@@ -521,6 +674,14 @@ function encodeAllUnits(
 			  identityMap!)
 			: shuffleMap;
 
+		// Per-unit key salt (W2): a distinct salt per unit so every unit derives
+		// a distinct cipher key even when its metadata (instr/reg/param/const
+		// counts) collides with another unit's. Closes same-metadata key reuse
+		// (which would share the position keystream across units). Derived from
+		// the build seed + unit id; folded into the key at build and mirrored by
+		// rcDeriveKey's `k ^= u.<salt>` at runtime.
+		const perUnitSalt = deriveSeed(stringKey, `unitSalt:${unitId}`) >>> 0;
+
 		const encoded = encodeUnit(
 			unit,
 			effectiveMap,
@@ -532,7 +693,9 @@ function encodeAllUnits(
 			keyAnchor,
 			alphabet!,
 			incrementalCipherOpt,
-			cipherBlocks
+			cipherBlocks,
+			perUnitSalt,
+			decodeImpurityOpt
 		);
 		result.set(unitId, { unit, encoded });
 	}
@@ -871,7 +1034,9 @@ function encodeUnit(
 	keyAnchor?: number,
 	alphabet: string = "",
 	incrementalCipher: boolean = false,
-	precomputedCipherBlocks?: CipherBlock[]
+	precomputedCipherBlocks?: CipherBlock[],
+	perUnitSalt: number = 0,
+	decodeImpurity: boolean = false
 ): string {
 	return encodeBytecodeUnit(unit, {
 		shuffleMap,
@@ -884,6 +1049,8 @@ function encodeUnit(
 		alphabet,
 		incrementalCipher,
 		precomputedCipherBlocks,
+		perUnitSalt,
+		decodeImpurity,
 	});
 }
 
