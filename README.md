@@ -10,7 +10,7 @@
 <strong>Virtualization-Based (VM) JavaScript Obfuscator</strong><br>
 
 <p>Compiles JavaScript (JS) functions into custom bytecode executed by an embedded virtual machine.<br>
-No deobfuscator exists for RuamVM bytecode.</p>
+No deobfuscator exists for RuamVM bytecode** <strong>NOTE: Fable 5 is able to deobfuscate single-file Ruam code.</strong></p>
 
 <a href="https://nodejs.org/en/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white&color=1F49AC" alt="Node.js >= 18"></a>
 <img src="https://img.shields.io/badge/license-LGPL--2.1-yellow?style=flat-square&logo=googledocs&logoColor=white&color=3659BD" alt="LGPL-2.1">
