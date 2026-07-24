@@ -5,6 +5,14 @@
 **Parent:** [Traveling Isogloss implementation plan](2026-07-24-traveling-isogloss-implementation-plan.md)  
 **Attacker:** Full artifact and runtime access, chosen inputs, stepping, hooks, heap/closure snapshots, patching, repeated runs, and design knowledge
 
+> **D3 evolution:** The follow-on campaign
+> [Custodied Semantic Holography](2026-07-24-bprf-custodied-semantic-holography.md)
+> adds moving-cover, nonlocal semantic state to BPRF and, in the maximum
+> profile, removes a necessary chart-gluing relation from the client through a
+> stateful custodian/private-function-evaluation boundary. The BPRF spike
+> remains the first implementation gate; D3 is an additional layer, not a
+> reason to revive semantic dispatch.
+
 ## 1. Executive decision
 
 The original Traveling Isogloss design does not materially resist a full-access

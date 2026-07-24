@@ -15,6 +15,9 @@ security-sensitive lattice/runtime sections are held for the BPRF spike
 > below. They are retained temporarily as the reviewed baseline, not as the
 > current target. The ranked redesign and quantitative decision gate are in
 > [Project Kaleidoscope D2 — Dynamic-Instrumentation Ideation Results](2026-07-24-dynamic-instrumentation-ideation-results.md).
+> The maximum-floor evolution—moving-cover state plus an optional custodied
+> relation that never ships to the client—is specified in
+> [Project Kaleidoscope D3 — Custodied Semantic Holography](2026-07-24-bprf-custodied-semantic-holography.md).
 > Deterministic entropy, baselines, test migration, canonical semantic IR,
 > source origins, CFG/effect analysis, and no-legacy-VM cutover work remain
 > current. Security-sensitive implementation resumes only after the Braided
