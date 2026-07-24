@@ -1,8 +1,8 @@
 # Project Kaleidoscope — Ruam Gen-2 Ideation Campaign
 
 **Date:** 2026-07-24
-**Status:** Plan (design complete; not yet run).
-**Type:** Ideation-campaign design. This document is *runnable later* — §11 is a complete `Workflow` script and §12 is the operator guide. A lean paste-and-launch companion lives at `docs/ruam-gen2-ideation-prompt.md`.
+**Status:** Executed once on 2026-07-24; design retained for reruns.
+**Type:** Ideation-campaign design. This document remains runnable — §11 is a complete `Workflow` script and §12 is the operator guide. A lean paste-and-launch companion lives at `docs/ruam-gen2-ideation-prompt.md`. The initial run is recorded in `docs/superpowers/specs/2026-07-24-ruam-gen2-ideation-results.md` with its full structured artifact beside it.
 
 ---
 
