@@ -1,9 +1,24 @@
 # Traveling Isogloss — Rank 1 Implementation Plan
 
 **Date:** 2026-07-24  
-**Status:** Implementation-ready replacement plan  
+**Status:** Partially paused — architecture-neutral compiler work may continue;
+security-sensitive lattice/runtime sections are held for the BPRF spike
 **Source:** Rank 1 in [Project Kaleidoscope — Ruam Gen-2 Ideation Results](2026-07-24-ruam-gen2-ideation-results.md)  
 **Decision:** Replace Ruam's VM bytecode execution model with Traveling Isogloss. The completed product has one execution engine—the Boundary Constraint Machine—and contains no legacy VM runtime, VM fallback, bytecode encoder, or backend selector.
+
+> **Dynamic-instrumentation hold (2026-07-24):** A full-access runtime review
+> found that this plan's `boundary + witness -> SemanticOp/operand -> handler`
+> seam exposes a cheap, reusable semantic trace. Do not implement or freeze the
+> handler candidate masks, unique handler resolver, operand projector,
+> production handler catalog, instruction interpreter, opcode-selecting carrier
+> witness, related certificate fields, or encoded artifact schema described
+> below. They are retained temporarily as the reviewed baseline, not as the
+> current target. The ranked redesign and quantitative decision gate are in
+> [Project Kaleidoscope D2 — Dynamic-Instrumentation Ideation Results](2026-07-24-dynamic-instrumentation-ideation-results.md).
+> Deterministic entropy, baselines, test migration, canonical semantic IR,
+> source origins, CFG/effect analysis, and no-legacy-VM cutover work remain
+> current. Security-sensitive implementation resumes only after the Braided
+> Poly-Ontology Region Fabric spike clears its dynamic-attacker gates.
 
 ## 1. Outcome
 
