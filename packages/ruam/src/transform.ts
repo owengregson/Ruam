@@ -66,18 +66,12 @@ import {
 } from "./compiler/incremental-cipher.js";
 import { getTuningProfile, presetToIntensity } from "./tuning.js";
 import type { TuningProfile } from "./tuning.js";
-
-import { randomBytes } from "node:crypto";
-
-/**
- * Generate a cryptographically strong 32-bit seed.
- *
- * Uses Node.js `crypto.randomBytes` for proper entropy instead of
- * `Date.now() ^ Math.random()` which is predictable.
- */
-function generateCryptoSeed(): number {
-	return randomBytes(4).readUInt32LE(0);
-}
+import {
+	createCryptoEntropy,
+	createSeededRandom,
+	type BuildEntropy,
+	type SeededRandom,
+} from "./random/entropy.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -94,6 +88,20 @@ function generateCryptoSeed(): number {
 export function obfuscateCode(
 	source: string,
 	options: VmObfuscationOptions = {}
+): string {
+	return obfuscateCodeWithEntropy(source, options, createCryptoEntropy());
+}
+
+/**
+ * Internal transform entry point with injectable build entropy.
+ *
+ * Production callers use {@link obfuscateCode}; deterministic test and
+ * failure-reproduction helpers inject a labeled entropy source here.
+ */
+export function obfuscateCodeWithEntropy(
+	source: string,
+	options: VmObfuscationOptions = {},
+	entropy: BuildEntropy
 ): string {
 	const resolved = resolveOptions(options);
 	const {
@@ -128,7 +136,7 @@ export function obfuscateCode(
 	const tuning = getTuningProfile(presetToIntensity(resolved.preset));
 
 	// -- Generate per-file seed (needed for both preprocessing and opcodes) --
-	const shuffleSeed = generateCryptoSeed();
+	const shuffleSeed = entropy.nextUint32("file-seed");
 
 	// -- Optional identifier preprocessing -----------------------------------
 	let code = source;
@@ -167,7 +175,15 @@ export function obfuscateCode(
 	});
 
 	// -- Collect target functions --------------------------------------------
-	const targetPaths = collectTargetFunctions(ast, targetMode, threshold);
+	const targetRandom = createSeededRandom(
+		deriveSeed(shuffleSeed, "target-selection")
+	);
+	const targetPaths = collectTargetFunctions(
+		ast,
+		targetMode,
+		threshold,
+		targetRandom
+	);
 
 	// -- VM Shielding path ---------------------------------------------------
 	if (vmShielding) {
@@ -193,11 +209,14 @@ export function obfuscateCode(
 			wrapOutput,
 			preprocessUsedNames,
 			tuning,
+			entropy,
 		});
 	}
 
 	// -- Generate per-build cipher salt (if rolling cipher is enabled) --------
-	const cipherSalt = rollingCipher ? generateCryptoSeed() : undefined;
+	const cipherSalt = rollingCipher
+		? entropy.nextUint32("cipher-salt")
+		: undefined;
 
 	// -- Compile each target (no encoding yet — need keyAnchor first) -------
 	const compiledUnits = compileTargetsOnly(
@@ -357,23 +376,30 @@ function fnv1a(s: string): number {
 function collectTargetFunctions(
 	ast: t.File,
 	mode: "root" | "comment",
-	threshold: number
+	threshold: number,
+	random: SeededRandom
 ): NodePath<t.Function>[] {
 	const targets: NodePath<t.Function>[] = [];
 
 	traverse(ast, {
 		FunctionDeclaration(path) {
-			if (shouldTarget(path as NodePath<t.Function>, mode, threshold)) {
+			if (
+				shouldTarget(path as NodePath<t.Function>, mode, threshold, random)
+			) {
 				targets.push(path as NodePath<t.Function>);
 			}
 		},
 		FunctionExpression(path) {
-			if (shouldTarget(path as NodePath<t.Function>, mode, threshold)) {
+			if (
+				shouldTarget(path as NodePath<t.Function>, mode, threshold, random)
+			) {
 				targets.push(path as NodePath<t.Function>);
 			}
 		},
 		ArrowFunctionExpression(path) {
-			if (shouldTarget(path as NodePath<t.Function>, mode, threshold)) {
+			if (
+				shouldTarget(path as NodePath<t.Function>, mode, threshold, random)
+			) {
 				targets.push(path as NodePath<t.Function>);
 			}
 		},
@@ -391,7 +417,8 @@ function collectTargetFunctions(
 function shouldTarget(
 	path: NodePath<t.Function>,
 	mode: "root" | "comment",
-	threshold: number
+	threshold: number,
+	random: SeededRandom
 ): boolean {
 	if (mode === "comment") {
 		const leadingComments = path.node.leadingComments;
@@ -406,7 +433,7 @@ function shouldTarget(
 		current = current.parentPath;
 	}
 
-	if (threshold < 1.0 && Math.random() > threshold) return false;
+	if (threshold < 1.0 && random.nextFloat() > threshold) return false;
 	return true;
 }
 
@@ -921,11 +948,14 @@ function assembleShielded(
 		wrapOutput: boolean;
 		preprocessUsedNames: Set<string> | undefined;
 		tuning: Readonly<TuningProfile>;
+		entropy: BuildEntropy;
 	}
 ): string {
 	// Generate per-group seeds (one per root function)
-	const groupSeeds = targetPaths.map(() => generateCryptoSeed());
-	const sharedSeed = generateCryptoSeed();
+	const groupSeeds = targetPaths.map((_path, index) =>
+		opts.entropy.nextUint32(`shield-group-seed:${index}`)
+	);
+	const sharedSeed = opts.entropy.nextUint32("shield-shared-seed");
 
 	// Generate names: shared + per-group via NameRegistry
 	const {
@@ -1008,7 +1038,9 @@ function assembleShielded(
 			unit.isAsync || unit.childUnits.some((c) => c.isAsync);
 
 		// Per-group cipher salt
-		const groupCipherSalt = generateCryptoSeed();
+		const groupCipherSalt = opts.entropy.nextUint32(
+			`shield-group-cipher-salt:${gi}`
+		);
 
 		// Store compiled units (no encoding yet)
 		allCompiledUnits.set(unit.id, { unit });
