@@ -31,6 +31,13 @@ import {
 	type CaptureAnalysisResult,
 } from "./capture-analysis.js";
 import { optimizeInstructions } from "./optimizer.js";
+import { buildCanonicalCfg } from "./cfg.js";
+import type {
+	SemanticRootGroup,
+	SemanticUnit,
+	SourceOrigin,
+} from "./ir.js";
+import type { RootGroupId } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // Scope-object elision
@@ -185,6 +192,8 @@ export interface CompileContext {
 	blockDepth: number;
 }
 
+type SemanticUnitDraft = Omit<SemanticUnit, "rootGroupId">;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -202,6 +211,61 @@ export function compileFunction(fnPath: NodePath<t.Function>): BytecodeUnit {
 	return unit;
 }
 
+/**
+ * Compile one protected root into execution-independent semantic IR.
+ *
+ * This migration API intentionally shares the exact visitor pass used by
+ * {@link compileFunction}, snapshots its canonical stream before optimizer
+ * fusion, and discards the legacy unit. Product output remains unchanged until
+ * the Isogloss pipeline consumes this API.
+ */
+export function compileSemanticFunction(
+	fnPath: NodePath<t.Function>,
+	rootGroupId?: RootGroupId
+): SemanticRootGroup {
+	const legacyChildren: BytecodeUnit[] = [];
+	const drafts: SemanticUnitDraft[] = [];
+	const legacyRoot = compileFunctionInner(fnPath, legacyChildren, drafts);
+	const resolvedRootGroupId = rootGroupId ?? `rg_${legacyRoot.id}`;
+	const draftById = new Map(drafts.map((draft) => [draft.id, draft]));
+	const orderedIds: string[] = [];
+	const visitedIds = new Set<string>();
+	const visitUnit = (id: string): void => {
+		if (visitedIds.has(id)) return;
+		visitedIds.add(id);
+		orderedIds.push(id);
+		const draft = draftById.get(id);
+		if (!draft) throw new Error(`RUAM_MISSING_SEMANTIC_UNIT: ${id}`);
+		for (const childId of draft.childUnitIds) visitUnit(childId);
+	};
+	visitUnit(legacyRoot.id);
+	if (orderedIds.length !== drafts.length) {
+		throw new Error(
+			`RUAM_ORPHANED_SEMANTIC_UNIT: reached ${orderedIds.length} of ${drafts.length}`
+		);
+	}
+	const units = orderedIds.map((id) => {
+		const draft = draftById.get(id);
+		if (!draft) {
+			throw new Error(`RUAM_MISSING_SEMANTIC_UNIT: ${id}`);
+		}
+		return Object.freeze({
+			...draft,
+			rootGroupId: resolvedRootGroupId,
+		}) as SemanticUnit;
+	});
+	const usedSemantics = new Set(units.flatMap((unit) => unit.nodes.map((node) => node.op)));
+
+	return {
+		id: resolvedRootGroupId,
+		entryUnitId: legacyRoot.id,
+		units,
+		usedSemantics,
+		hasAsync: units.some((unit) => unit.isAsync),
+		hasGenerator: units.some((unit) => unit.isGenerator),
+	};
+}
+
 // ---------------------------------------------------------------------------
 // Core compilation logic
 // ---------------------------------------------------------------------------
@@ -214,14 +278,16 @@ export function compileFunction(fnPath: NodePath<t.Function>): BytecodeUnit {
  */
 function compileFunctionInner(
 	fnPath: NodePath<t.Function>,
-	allUnits: BytecodeUnit[]
+	allUnits: BytecodeUnit[],
+	semanticDrafts?: SemanticUnitDraft[]
 ): BytecodeUnit {
 	const node = fnPath.node;
 	const params = fnPath.get("params") as NodePath<t.LVal>[];
 	const paramCount = params.length;
 
-	const emitter = new Emitter();
+	const emitter = new Emitter(sourceOriginFromPath(fnPath));
 	const scope = new ScopeAnalyzer(0);
+	const directChildUnitIds: string[] = [];
 
 	const isStrict = detectStrict(fnPath);
 	const isGenerator = !!node.generator;
@@ -257,56 +323,58 @@ function compileFunctionInner(
 	// -- Declare simple parameters -------------------------------------------
 	for (let i = 0; i < params.length; i++) {
 		const param = params[i]!;
-		if (param.isIdentifier()) {
-			declareAndStoreParam(
-				param.node.name,
-				i,
-				emitter,
-				scope,
-				registerMap,
-				slotMap,
-				captureResult
-			);
-		} else if (param.isAssignmentPattern()) {
-			const left = param.get("left");
-			if (left.isIdentifier()) {
-				scope.declare(left.node.name, "param");
-				const pName = left.node.name;
-				if (registerMap.has(pName)) {
-					// Will be stored via register in compileComplexParams
-				} else if (slotMap.has(pName)) {
-					const slotIdx = slotMap.get(pName)!;
-					const nameIdx = emitter.addStringConstant(pName);
-					emitter.emit(
-						Op.DECLARE_SLOT,
-						(slotIdx & 0xffff) | ((nameIdx & 0xffff) << 16)
-					);
-				} else {
-					const nameIdx = emitter.addStringConstant(pName);
-					emitter.emit(Op.DECLARE_VAR, nameIdx);
+		emitter.withOrigin(sourceOriginFromPath(param), () => {
+			if (param.isIdentifier()) {
+				declareAndStoreParam(
+					param.node.name,
+					i,
+					emitter,
+					scope,
+					registerMap,
+					slotMap,
+					captureResult
+				);
+			} else if (param.isAssignmentPattern()) {
+				const left = param.get("left");
+				if (left.isIdentifier()) {
+					scope.declare(left.node.name, "param");
+					const pName = left.node.name;
+					if (registerMap.has(pName)) {
+						// Will be stored via register in compileComplexParams
+					} else if (slotMap.has(pName)) {
+						const slotIdx = slotMap.get(pName)!;
+						const nameIdx = emitter.addStringConstant(pName);
+						emitter.emit(
+							Op.DECLARE_SLOT,
+							(slotIdx & 0xffff) | ((nameIdx & 0xffff) << 16)
+						);
+					} else {
+						const nameIdx = emitter.addStringConstant(pName);
+						emitter.emit(Op.DECLARE_VAR, nameIdx);
+					}
+				}
+			} else if (param.isRestElement()) {
+				const arg = param.get("argument");
+				if (arg.isIdentifier()) {
+					scope.declare(arg.node.name, "param");
+					const pName = arg.node.name;
+					if (registerMap.has(pName)) {
+						// Will be stored via register in compileComplexParams
+					} else if (slotMap.has(pName)) {
+						const slotIdx = slotMap.get(pName)!;
+						const nameIdx = emitter.addStringConstant(pName);
+						emitter.emit(
+							Op.DECLARE_SLOT,
+							(slotIdx & 0xffff) | ((nameIdx & 0xffff) << 16)
+						);
+					} else {
+						const nameIdx = emitter.addStringConstant(pName);
+						emitter.emit(Op.DECLARE_VAR, nameIdx);
+					}
 				}
 			}
-		} else if (param.isRestElement()) {
-			const arg = param.get("argument");
-			if (arg.isIdentifier()) {
-				scope.declare(arg.node.name, "param");
-				const pName = arg.node.name;
-				if (registerMap.has(pName)) {
-					// Will be stored via register in compileComplexParams
-				} else if (slotMap.has(pName)) {
-					const slotIdx = slotMap.get(pName)!;
-					const nameIdx = emitter.addStringConstant(pName);
-					emitter.emit(
-						Op.DECLARE_SLOT,
-						(slotIdx & 0xffff) | ((nameIdx & 0xffff) << 16)
-					);
-				} else {
-					const nameIdx = emitter.addStringConstant(pName);
-					emitter.emit(Op.DECLARE_VAR, nameIdx);
-				}
-			}
-		}
-		// Destructuring params are handled in the second pass below.
+			// Destructuring params are handled in the second pass below.
+		});
 	}
 
 	// -- Build CompileContext ------------------------------------------------
@@ -316,21 +384,38 @@ function compileFunctionInner(
 		blockDepth: 0,
 
 		compileNestedFunction(innerFnPath, parentEmitter, _parentScope) {
-			const childUnit = compileFunctionInner(innerFnPath, allUnits);
+			const childUnit = compileFunctionInner(
+				innerFnPath,
+				allUnits,
+				semanticDrafts
+			);
 			allUnits.push(childUnit);
+			directChildUnitIds.push(childUnit.id);
 			const idIdx = parentEmitter.addStringConstant(childUnit.id);
-			parentEmitter.emit(Op.NEW_CLOSURE, idIdx);
+			parentEmitter.withOrigin(sourceOriginFromPath(innerFnPath), () => {
+				parentEmitter.emit(Op.NEW_CLOSURE, idIdx);
+			});
 		},
 
 		compileClassExpression(classPath, parentEmitter, parentScope) {
-			compileClassExpr(
-				classPath,
-				parentEmitter,
-				parentScope,
-				this,
-				allUnits,
-				compileFunctionInner
-			);
+			parentEmitter.withOrigin(sourceOriginFromPath(classPath), () => {
+				compileClassExpr(
+					classPath,
+					parentEmitter,
+					parentScope,
+					this,
+					allUnits,
+					(innerFnPath, nestedAllUnits) => {
+						const childUnit = compileFunctionInner(
+							innerFnPath,
+							nestedAllUnits,
+							semanticDrafts
+						);
+						directChildUnitIds.push(childUnit.id);
+						return childUnit;
+					}
+				);
+			});
 		},
 
 		compileDestructuring(pattern, em, sc) {
@@ -343,21 +428,40 @@ function compileFunctionInner(
 
 	// -- Compile the function body -------------------------------------------
 	const bodyPath = fnPath.get("body");
-	if (bodyPath.isBlockStatement()) {
-		const loopStack: LoopContext[] = [];
-		compileBody(bodyPath.get("body"), emitter, scope, ctx, loopStack);
-	} else if (bodyPath.isExpression()) {
-		compileExpression(
-			bodyPath as NodePath<t.Expression>,
-			emitter,
-			scope,
-			ctx
-		);
-		emitter.emit(Op.RETURN, 0);
-	}
+	emitter.withOrigin(sourceOriginFromPath(bodyPath), () => {
+		if (bodyPath.isBlockStatement()) {
+			const loopStack: LoopContext[] = [];
+			compileBody(bodyPath.get("body"), emitter, scope, ctx, loopStack);
+		} else if (bodyPath.isExpression()) {
+			compileExpression(
+				bodyPath as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.RETURN, 0);
+		}
+	});
 
 	// Ensure every code path ends with a return
 	ensureTrailingReturn(emitter);
+
+	// Snapshot the canonical language stream before peephole rewriting and
+	// superinstruction fusion. The legacy optimizer remains untouched.
+	const canonicalCfg = semanticDrafts
+		? buildCanonicalCfg({
+				instructions: emitter.instructions.map((instruction) => ({
+					...instruction,
+				})),
+				originIds: emitter.instructionOriginIds.slice(),
+			})
+		: null;
+	const canonicalConstants = semanticDrafts
+		? emitter.constants.map((constant) => ({ ...constant }))
+		: null;
+	const canonicalOrigins = semanticDrafts
+		? emitter.origins.map((origin) => ({ ...origin }))
+		: null;
 
 	// -- Optimization passes (Tiers 2 & 3) ----------------------------------
 	optimizeInstructions(emitter);
@@ -381,8 +485,9 @@ function compileFunctionInner(
 	const usesExceptions = computeUsesExceptions(emitter.instructions);
 	const usesThisContext = computeUsesThisContext(emitter.instructions);
 
-	return {
-		id: genUnitId(),
+	const id = genUnitId();
+	const unit: BytecodeUnit = {
+		id,
 		constants: emitter.constants,
 		instructions: emitter.instructions,
 		jumpTable: {},
@@ -401,6 +506,37 @@ function compileFunctionInner(
 		outerNames: scope.outerNames,
 		childUnits: [],
 	};
+
+	if (
+		semanticDrafts &&
+		canonicalCfg &&
+		canonicalConstants &&
+		canonicalOrigins
+	) {
+		semanticDrafts.push({
+			id,
+			constants: canonicalConstants,
+			nodes: canonicalCfg.nodes,
+			exits: canonicalCfg.exits,
+			entryNode: canonicalCfg.entryNode,
+			origins: canonicalOrigins,
+			childUnitIds: directChildUnitIds,
+			paramCount,
+			registerCount: scope.totalRegisters,
+			slotCount: slotMap.size,
+			isStrict,
+			isGenerator,
+			isAsync,
+			isArrow,
+			scopeless,
+			usesExceptions,
+			usesThisContext,
+			nameConstIndex,
+			outerNames: scope.outerNames.slice(),
+		});
+	}
+
+	return unit;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,21 +590,22 @@ function compileComplexParams(
 ): void {
 	for (let i = 0; i < params.length; i++) {
 		const param = params[i]!;
-
-		if (param.isAssignmentPattern()) {
-			compileDefaultParam(param, i, emitter, scope, ctx);
-		} else if (param.isRestElement()) {
-			compileRestParam(param, i, emitter, scope, ctx);
-		} else if (!param.isIdentifier()) {
-			// Destructuring param
-			emitter.emit(Op.LOAD_ARG, i);
-			compileDestructuringPattern(
-				param as NodePath<t.LVal>,
-				emitter,
-				scope,
-				ctx
-			);
-		}
+		emitter.withOrigin(sourceOriginFromPath(param), () => {
+			if (param.isAssignmentPattern()) {
+				compileDefaultParam(param, i, emitter, scope, ctx);
+			} else if (param.isRestElement()) {
+				compileRestParam(param, i, emitter, scope, ctx);
+			} else if (!param.isIdentifier()) {
+				// Destructuring param
+				emitter.emit(Op.LOAD_ARG, i);
+				compileDestructuringPattern(
+					param as NodePath<t.LVal>,
+					emitter,
+					scope,
+					ctx
+				);
+			}
+		});
 	}
 }
 
@@ -591,4 +728,31 @@ function ensureTrailingReturn(emitter: Emitter): void {
 	) {
 		emitter.emit(Op.RETURN_VOID, 0);
 	}
+}
+
+/** Convert Babel's nullable location fields into canonical owner metadata. */
+function sourceOriginFromPath(path: NodePath<t.Node>): SourceOrigin {
+	const node = path.node;
+	const location = node.loc as
+		| (t.SourceLocation & { filename?: string | null })
+		| null
+		| undefined;
+	const start = typeof node.start === "number" && node.start >= 0 ? node.start : 0;
+	const end =
+		typeof node.end === "number" && node.end >= start ? node.end : start;
+	const file = location?.filename ?? undefined;
+	return file
+		? {
+				file,
+				start,
+				end,
+				line: location?.start.line ?? 1,
+				column: location?.start.column ?? 0,
+			}
+		: {
+				start,
+				end,
+				line: location?.start.line ?? 1,
+				column: location?.start.column ?? 0,
+			};
 }
