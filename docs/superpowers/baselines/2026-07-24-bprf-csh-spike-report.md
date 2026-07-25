@@ -3,7 +3,8 @@
 **Date:** 2026-07-24  
 **Branch:** `codex/traveling-isogloss-replacement`  
 **Decision state:** Initial local BPRF/CSH and first custody variants are
-**no-go**; statefully masked custody is under a new adversarial gate and product
+**no-go**; statefully masked custody prevents direct internal recovery but
+remains **no-go** under the stricter black-box/overhead gates, and product
 schemas remain unfrozen
 
 ## Purpose
@@ -180,9 +181,43 @@ substitute a new logical input at the next epoch. Missing responses, replay,
 snapshot forks, nonce substitution, signature tampering, and representation
 substitution all fail closed.
 
-This stateful masked evolution has passed focused correctness/protocol tests.
-Its dynamic recovery, cross-session transfer, and black-box learnability gates
-are still in progress; no go decision is recorded yet.
+The statefully masked evolution has now been attacked under full client
+artifact, heap, request, response, and output visibility:
+
+| Measurement | Result |
+|---|---:|
+| Protected logical-coordinate recovery | 0 |
+| Unmasked transition-delta recovery | 0 |
+| Masked state/delta recovery | 1.0 |
+| Compatible logical states per width-three protected observation | 65,521³ |
+| Cross-session masked state/delta transfer | 0 |
+| Foreign/rebound signed response accepted | false / false |
+| Shared service secrets and reused nonce | tested |
+| Final output transfer | 1.0 |
+| Localized client hook families | 2 |
+| Trace / reconstruction / storage proxy | 5.0625× / 3× / 5× |
+
+This clears the central custody property: complete client observation does not
+determine an intermediate logical state or unmasked transition. It does not
+clear the broader experimental no-go report. The chosen-input attacker learns
+the complete degree-nine, three-input final scalar function from **220**
+fresh-session output queries and reaches **1.0** accuracy on held-out inputs.
+That attack uses black-box input/output pairs only and recovers neither hidden
+transition nor intermediate state.
+
+The distinction is architectural:
+
+- stateful masking successfully changes client completeness from true to
+  false for protected internals;
+- exact native-visible outputs remain an unavoidable oracle; and
+- a simple deterministic function can be learned from that oracle regardless
+  of how its internals execute.
+
+Ruam must not describe the first property as black-box nonlearnability. Raising
+the oracle floor further requires an external query-authorization constraint,
+keeping the final value outside the hostile client, or protecting a function
+whose intrinsic query complexity is high. None can be manufactured by a
+semantics-preserving client transform alone.
 
 ## Correctness and build status
 
@@ -234,12 +269,10 @@ Do not freeze artifact, certificate, carrier, or runtime schemas yet.
 
 The next decision requires:
 
-- adversarial scoring of the statefully masked custody transcript and client
-  state;
-- separation of intrinsic black-box I/O learnability from recovery of an
-  internal transition or state;
 - an actively secure, topology-hidden PFE feasibility decision if the private
   profile remains in scope;
+- padded transcript and opaque contract-bucket measurements for direct
+  custody;
 - canonical-operation and patch-collapse measurements on product-shaped
   emitted code;
 - legitimate size/runtime/latency/bandwidth measurements; and
