@@ -68,6 +68,7 @@ export class ReferenceMaskedChartCustodian {
 	readonly #maskSecret: string;
 	readonly #sharingSecret: string;
 	readonly #responseSecret: string;
+	readonly #protocolBinding: string;
 	readonly #privateKey: ReturnType<typeof generateKeyPairSync>["privateKey"];
 	readonly #consumedNonces = new Set<string>();
 	#epoch = 0;
@@ -87,6 +88,10 @@ export class ReferenceMaskedChartCustodian {
 		this.#maskSecret = options.maskSecret;
 		this.#sharingSecret = options.sharingSecret;
 		this.#responseSecret = options.responseSecret;
+		this.#protocolBinding = JSON.stringify([
+			options.sessionId,
+			options.contractId,
+		]);
 		this.#lineageCommitment = options.initialLineageCommitment;
 		this.#mask = Array.from(
 			{ length: options.covers[0]!.width },
@@ -125,6 +130,7 @@ export class ReferenceMaskedChartCustodian {
 		const nextLogical = evaluateHiddenTransition(transition, logical);
 		const nextMask = deriveVector(
 			this.#maskSecret,
+			this.#protocolBinding,
 			this.#epoch,
 			request.nonce,
 			from.width
@@ -140,12 +146,14 @@ export class ReferenceMaskedChartCustodian {
 			mixedDelta,
 			to,
 			this.#sharingSecret,
+			this.#protocolBinding,
 			this.#epoch,
 			request.nonce
 		);
 		const nextEpoch = this.#epoch + 1;
 		const nextLineageCommitment = nextLineage(
 			this.#lineageSecret,
+			this.#protocolBinding,
 			this.#lineageCommitment,
 			request.nonce,
 			chartContributions
@@ -192,6 +200,7 @@ export class ReferenceMaskedChartCustodian {
 		);
 		const projectionOpening = deriveResponseTransform(
 			this.#responseSecret,
+			this.#protocolBinding,
 			this.#epoch,
 			request.nonce
 		);
@@ -202,6 +211,7 @@ export class ReferenceMaskedChartCustodian {
 		const nextEpoch = this.#epoch + 1;
 		const nextLineageCommitment = nextLineage(
 			this.#lineageSecret,
+			this.#protocolBinding,
 			this.#lineageCommitment,
 			request.nonce,
 			encodedProjection
@@ -346,6 +356,7 @@ function createAdditiveShares(
 	constant: readonly number[],
 	cover: ChartCover,
 	secret: string,
+	protocolBinding: string,
 	epoch: number,
 	nonce: string
 ): readonly AdditiveChartContribution[] {
@@ -354,6 +365,7 @@ function createAdditiveShares(
 			deriveFieldElement(
 				secret,
 				"chart-share",
+				protocolBinding,
 				epoch,
 				nonce,
 				lane,
@@ -382,6 +394,7 @@ function createAdditiveShares(
 
 function deriveVector(
 	secret: string,
+	protocolBinding: string,
 	epoch: number,
 	nonce: string,
 	width: number
@@ -392,6 +405,7 @@ function deriveVector(
 			deriveFieldElement(
 				secret,
 				"representation-mask",
+				protocolBinding,
 				epoch,
 				nonce,
 				lane,
@@ -403,6 +417,7 @@ function deriveVector(
 function deriveFieldElement(
 	secret: string,
 	domain: string,
+	protocolBinding: string,
 	epoch: number,
 	nonce: string,
 	lane: number,
@@ -410,6 +425,8 @@ function deriveFieldElement(
 ): number {
 	return createHmac("sha256", secret)
 		.update(domain)
+		.update("|")
+		.update(protocolBinding)
 		.update("|")
 		.update(String(epoch))
 		.update("|")
@@ -424,12 +441,15 @@ function deriveFieldElement(
 
 function nextLineage(
 	secret: string,
+	protocolBinding: string,
 	current: string,
 	nonce: string,
 	value: unknown
 ): string {
 	return createHmac("sha256", secret)
 		.update("lineage")
+		.update("|")
+		.update(protocolBinding)
 		.update("|")
 		.update(current)
 		.update("|")
@@ -441,11 +461,14 @@ function nextLineage(
 
 function deriveResponseTransform(
 	secret: string,
+	protocolBinding: string,
 	epoch: number,
 	nonce: string
 ): ChartCellTransform {
 	const digest = createHmac("sha256", secret)
 		.update("projection-opening")
+		.update("|")
+		.update(protocolBinding)
 		.update("|")
 		.update(String(epoch))
 		.update("|")

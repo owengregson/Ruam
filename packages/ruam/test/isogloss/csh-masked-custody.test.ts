@@ -113,14 +113,14 @@ const coordinate = (width: number, index: number) => ({
 	bias: 0,
 });
 
-const createFixture = () => {
+const createFixture = (sessionId = "masked_session") => {
 	const covers = [0, 1, 2].map((epoch) =>
 		createChartCover({ seed: 4040, epoch, width: 3 })
 	);
 	const input = [2, 3, 5];
 	const charts = encodeIngressCharts(input, covers[0]!, 4041);
 	const custodian = new ReferenceMaskedChartCustodian({
-		sessionId: "masked_session",
+		sessionId,
 		contractId: "masked_crown",
 		covers,
 		transitions,
@@ -322,5 +322,45 @@ describe("statefully masked chart custody", () => {
 		expect(() => custodian.evaluateTransition(second)).toThrow(
 			"RUAM_CSH_MASKED_CUSTODY_STATE_SUBSTITUTION"
 		);
+	});
+
+	it("separates fresh sessions even with one service secret and nonce", () => {
+		const first = createFixture("shared_service_session_a");
+		const second = createFixture("shared_service_session_b");
+		const advance = (fixture: ReturnType<typeof createFixture>) => {
+			const state = createMaskedCustodyClientState(
+				fixture.custodian.clientContract
+			);
+			const request = prepareMaskedTransitionRequest(
+				fixture.custodian.clientContract,
+				state,
+				fixture.charts,
+				"same_client_nonce"
+			);
+			const local = transportAffineCharts(
+				fixture.charts,
+				fixture.covers[0]!,
+				fixture.covers[1]!,
+				identity,
+				8080
+			);
+			const applied = applyMaskedTransitionResponse(
+				fixture.custodian.clientContract,
+				state,
+				local,
+				fixture.covers[1]!,
+				fixture.custodian.evaluateTransition(request),
+				request.nonce
+			);
+			return Array.from({ length: 3 }, (_, coordinateIndex) =>
+				evaluateCertifiedProjection(
+					applied.charts,
+					fixture.covers[1]!,
+					coordinate(3, coordinateIndex)
+				)
+			);
+		};
+
+		expect(advance(first)).not.toEqual(advance(second));
 	});
 });
