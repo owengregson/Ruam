@@ -2,8 +2,9 @@
 
 **Date:** 2026-07-24  
 **Branch:** `codex/traveling-isogloss-replacement`  
-**Decision state:** Go/no-go evaluation in progress; product schemas remain
-unfrozen
+**Decision state:** Initial local BPRF/CSH and first custody variants are
+**no-go**; statefully masked custody is under a new adversarial gate and product
+schemas remain unfrozen
 
 ## Purpose
 
@@ -15,7 +16,11 @@ architecture:
 3. validate multiple BPRF ontologies without runtime semantic dispatch;
 4. validate moving-cover CSH and a necessary custodied relation; and
 5. prove that BPRF polynomial fragments can execute over CSH chart shares
-   without reconstructing a transition frame.
+   without reconstructing a transition frame;
+6. attack the shipped artifacts rather than crediting contextual diversity by
+   inspection; and
+7. evolve custody so every intermediate client-visible state remains
+   independently masked by custodian-held representation state.
 
 The spike is not a product backend. The legacy VM remains only as the current
 behavior oracle while the replacement is incomplete.
@@ -31,6 +36,7 @@ behavior oracle while the replacement is incomplete.
 | Local CSH | Five nonlinear charts, threshold three, changing covers, and scalar certified projections |
 | BPRF over CSH | Degree-four product shares reduced by five contributors into a fresh degree-two cover |
 | Direct custody | Signed response, one-response opening, mandatory remote relation, monotonic lineage, replay/fork rejection |
+| Stateful masked custody | Keyed per-coordinate masks, pinned issued state, mandatory signed transitions, and final-only opening |
 
 All generic BPRF/CSH evaluators are explicitly test/reference-only and are not
 reachable from the package or CLI build entries.
@@ -70,8 +76,31 @@ The bounded pure reference kernel currently proves:
 - serialized artifacts and traces contain no semantic operation, opcode,
   handler, canonical operand, formula tag, or source-node identity.
 
-The generic differential evaluator is not a production runtime. A specialized
-source-emission spike and adversarial recovery measurements are the next gate.
+The generic differential evaluator is not a production runtime. The
+specialized BPRF emitter removes the generic evaluator and artifact walker, but
+all selected-realization algebra remains client-resident and statically
+recoverable.
+
+The artifact-aware attacker obtains:
+
+| Measurement | Result |
+|---|---:|
+| Held-out output recovery from artifact alone | 1.0 |
+| Physical dependency-topology recall | 1.0 |
+| Dynamic primitive observations required | 0 |
+| Artifact-aware unseen-realization recall | 1.0 |
+| Artifact-aware transfer loss | 0 percentage points |
+
+Naive trace-only transfer does fail on an unseen realization. That fact is not
+credited because the shipped artifact enumerates every realization.
+
+The specialized source-emission spike has no runtime artifact walker, generic
+transition loop, semantic selector, frame array, or owner trace. Its remaining
+hook surfaces include the scalar field normalizer, chart-local openings,
+five-way reductions, final projection sites, and public region I/O. The
+measured families emitted approximately **360 KB** and **1.67 MB** of source
+and ran in approximately **415 μs** and **5.8 ms** per call. This is useful
+mechanical evidence but not a production size/runtime shape.
 
 ## CSH structural results
 
@@ -92,6 +121,25 @@ shares. Products raise polynomial degree from two to four, so all five charts
 are required for direct degree reduction into the next threshold-three cover.
 No transition constructs an ordinary BPRF frame.
 
+The stronger artifact-and-metadata-aware attacker changes the decision:
+
+| Measurement | Result |
+|---|---:|
+| C90 | 3 contributions |
+| Recovery with 1 / 2 / 3+ contributions | 0 / 0 / 1.0 |
+| G90 work proxy | 3× plain state |
+| Resident storage proxy | 5× plain state |
+| Fixed-decoder unseen-cover accuracy | 0 |
+| Metadata-aware unseen-cover accuracy | 1.0 |
+| Metadata-aware transfer loss | 0 percentage points |
+| Combined final-frame recovery | 1.0 |
+| Combined full-trace amplification | 5× |
+
+The configured chart threshold is real, but it does not meet the 10× work and
+storage gates. Cover changes do not create genuine transfer loss once the
+shipped cover metadata is admitted to the attack. Local CSH is therefore a
+hard no-go as the maximum-protection architecture.
+
 ## Custody results
 
 The direct-remote control holds one nonlinear projected relation outside the
@@ -111,9 +159,35 @@ Verified properties:
 This is a direct-custody control, not private-function evaluation. The
 custodian learns the declared input projection.
 
+The adversarial gate found both first custody forms insufficient:
+
+- the direct scalar relation is exactly learned from four fresh-session
+  training queries and bypassed at one localized patch site;
+- the chart-relation response exposes a complete unmasked logical delta after
+  correlating three contributions; and
+- the chart relation is likewise learned from four fresh sessions.
+
+Replay and fork protection worked, but those controls did not prevent relation
+learning.
+
+The revised custody spike now carries charts for
+`logicalState + custodianMask(epoch)`. Each signed response advances to
+`F_epoch(logicalState) + custodianMask(epoch + 1)`, and only the terminal
+site-specific scalar projection is opened. Representation masks and sharing
+residuals are derived with keyed, domain-separated hashes. The custodian pins
+the exact masked state it issued, so changing the client-side transport cannot
+substitute a new logical input at the next epoch. Missing responses, replay,
+snapshot forks, nonce substitution, signature tampering, and representation
+substitution all fail closed.
+
+This stateful masked evolution has passed focused correctness/protocol tests.
+Its dynamic recovery, cross-session transfer, and black-box learnability gates
+are still in progress; no go decision is recorded yet.
+
 ## Correctness and build status
 
-At this checkpoint:
+At the last full-suite checkpoint, before the statefully masked and specialized
+source additions:
 
 - Isogloss-focused tests: **42 passed, 0 failed, 12,056 assertions**;
 - full repository tests: **2,373 passed, 0 failed**;
@@ -148,15 +222,27 @@ These are blockers to schema freeze, not deferred documentation:
 
 ## Current decision
 
+The deterministic revised report records **11 failed gates** and **3
+unevaluated gates** for the initial BPRF/CSH/custody composition. The failed
+set includes artifact-aware transfer, full-step BPRF recovery, CSH work and
+storage amplification, metadata-aware cover transfer, localized hook
+collapse, combined client completeness, custody bypass, and chart-delta
+leakage. Canonical operation F1, patch collapse, and topology-hidden PFE remain
+unevaluated.
+
 Do not freeze artifact, certificate, carrier, or runtime schemas yet.
 
 The next decision requires:
 
-- a sound canonical-region-to-bounded-contract lowerer;
-- a specialized emitted BPRF spike with no generic artifact evaluator;
-- O(1)-hook and full-step recovery measurements;
-- C90/G90 and cross-cover transfer measurements;
-- legitimate size/runtime overhead measurements; and
+- adversarial scoring of the statefully masked custody transcript and client
+  state;
+- separation of intrinsic black-box I/O learnability from recovery of an
+  internal transition or state;
+- an actively secure, topology-hidden PFE feasibility decision if the private
+  profile remains in scope;
+- canonical-operation and patch-collapse measurements on product-shaped
+  emitted code;
+- legitimate size/runtime/latency/bandwidth measurements; and
 - zero mismatches within every claimed eligible domain.
 
 Mechanisms that do not beat the legacy one-hook control or whose attacker
