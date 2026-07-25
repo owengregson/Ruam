@@ -180,7 +180,7 @@ Omit the output path to overwrite the input file.
 import { runProtection } from "ruam";
 
 const results = await runProtection("dist", {
-  include: ["**/*.js"],
+  include: ["score.js"],
   exclude: ["**/node_modules/**"],
   options: {
     targetMode: "comment",
