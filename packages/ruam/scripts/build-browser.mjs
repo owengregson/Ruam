@@ -10,7 +10,6 @@
  */
 
 import { build } from "esbuild";
-import { copyFile } from "node:fs/promises";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -56,13 +55,3 @@ await build({
 });
 
 console.log(`✓ Browser worker bundle written to ${outFile}`);
-
-// Copy option manifest to web app public directory
-const manifestSrc = join(root, "dist", "option-manifest.json");
-const manifestDest = join(root, "..", "..", "apps", "web", "public", "option-manifest.json");
-try {
-	await copyFile(manifestSrc, manifestDest);
-	console.log(`✓ Option manifest copied to ${manifestDest}`);
-} catch {
-	console.warn("⚠ option-manifest.json not found — run generate-manifest first");
-}
