@@ -1,0 +1,492 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Isogloss versus frozen pre-PR-6 VM architecture engineering benchmark",
+  "legacyRef": "e8cecb56ba89d47512a16e325d81cf46f64b2ecb",
+  "mode": "full",
+  "parameters": {
+    "buildRounds": 7,
+    "timingRounds": 11,
+    "callsPerRound": 10,
+    "legacyPresets": [
+      "default",
+      "medium",
+      "max"
+    ]
+  },
+  "environment": {
+    "date": "2026-07-25T19:26:42.987Z",
+    "platform": "darwin-arm64",
+    "osRelease": "25.3.0",
+    "cpu": "Apple M5",
+    "logicalCpuCount": 10,
+    "memoryBytes": 25769803776,
+    "node": "v24.3.0",
+    "bun": "1.3.11"
+  },
+  "rows": [
+    {
+      "name": "bprf-arithmetic-hot-loop",
+      "category": "finite-pure",
+      "async": false,
+      "sourceBytes": 281,
+      "native": {
+        "bootstrapMilliseconds": 0.04662500000000591,
+        "runtimeMilliseconds": 0.021904200000000172
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 5.705124999999981,
+        "bootstrapMilliseconds": 0.2749170000000163,
+        "runtimeMilliseconds": 0.9199833000000013,
+        "outputBytes": 15768,
+        "gzipBytes": 4702,
+        "protectedRegions": 1,
+        "nativeRegions": 1,
+        "targetFunctions": 2,
+        "hybridFunctions": 0
+      },
+      "legacy": {
+        "default": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 4.2412499999999795,
+          "bootstrapMilliseconds": 0.3383339999999748,
+          "runtimeMilliseconds": 2.755950000000007,
+          "outputBytes": 15050,
+          "gzipBytes": 4525
+        },
+        "medium": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 6.799458000000072,
+          "bootstrapMilliseconds": 0.5319160000000238,
+          "runtimeMilliseconds": 2.599737500000015,
+          "outputBytes": 19880,
+          "gzipBytes": 6428
+        },
+        "max": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 21.393625000000156,
+          "bootstrapMilliseconds": 1.6317920000001322,
+          "runtimeMilliseconds": 11.49525000000001,
+          "outputBytes": 66323,
+          "gzipBytes": 16402
+        }
+      }
+    },
+    {
+      "name": "arithmetic-control-flow",
+      "category": "native-statements",
+      "async": false,
+      "sourceBytes": 307,
+      "native": {
+        "bootstrapMilliseconds": 0.10579099999995378,
+        "runtimeMilliseconds": 0.06045410000001539
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 0.13850000000002183,
+        "bootstrapMilliseconds": 0.07641599999988102,
+        "runtimeMilliseconds": 0.07111249999998108,
+        "outputBytes": 307,
+        "gzipBytes": 201,
+        "protectedRegions": 0,
+        "nativeRegions": 1,
+        "targetFunctions": 1,
+        "hybridFunctions": 0
+      },
+      "legacy": {
+        "default": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 1.9183749999997417,
+          "bootstrapMilliseconds": 0.433165999999801,
+          "runtimeMilliseconds": 15.091024999999991,
+          "outputBytes": 13809,
+          "gzipBytes": 4198
+        },
+        "medium": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 3.2320410000002084,
+          "bootstrapMilliseconds": 0.7623749999993379,
+          "runtimeMilliseconds": 10.828933300000063,
+          "outputBytes": 19290,
+          "gzipBytes": 6209
+        },
+        "max": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 10.371374999999716,
+          "bootstrapMilliseconds": 1.0295420000002196,
+          "runtimeMilliseconds": 50.31744589999998,
+          "outputBytes": 44587,
+          "gzipBytes": 11194
+        }
+      }
+    },
+    {
+      "name": "recursive-closures",
+      "category": "functions",
+      "async": false,
+      "sourceBytes": 229,
+      "native": {
+        "bootstrapMilliseconds": 0.19991699999991397,
+        "runtimeMilliseconds": 0.29564580000005664
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 0.6695419999996375,
+        "bootstrapMilliseconds": 0.06849999999940337,
+        "runtimeMilliseconds": 0.26932080000005953,
+        "outputBytes": 229,
+        "gzipBytes": 180,
+        "protectedRegions": 0,
+        "nativeRegions": 1,
+        "targetFunctions": 1,
+        "hybridFunctions": 0
+      },
+      "legacy": {
+        "default": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 4.847166999999899,
+          "bootstrapMilliseconds": 0.41287499999998545,
+          "runtimeMilliseconds": 14.747854200000074,
+          "outputBytes": 15469,
+          "gzipBytes": 4649
+        },
+        "medium": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 3.8380420000012236,
+          "bootstrapMilliseconds": 0.8294159999986732,
+          "runtimeMilliseconds": 14.83206250000003,
+          "outputBytes": 20476,
+          "gzipBytes": 6662
+        },
+        "max": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 11.828708000000915,
+          "bootstrapMilliseconds": 1.0195830000011483,
+          "runtimeMilliseconds": 40.89463340000002,
+          "outputBytes": 41539,
+          "gzipBytes": 11171
+        }
+      }
+    },
+    {
+      "name": "strings-arrays-objects",
+      "category": "data-structures",
+      "async": false,
+      "sourceBytes": 306,
+      "native": {
+        "bootstrapMilliseconds": 0.10833300000012969,
+        "runtimeMilliseconds": 0.5988499999999476
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 0.21350000000165892,
+        "bootstrapMilliseconds": 0.0480840000018361,
+        "runtimeMilliseconds": 0.5768582999997307,
+        "outputBytes": 306,
+        "gzipBytes": 248,
+        "protectedRegions": 0,
+        "nativeRegions": 1,
+        "targetFunctions": 1,
+        "hybridFunctions": 0
+      },
+      "legacy": {
+        "default": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 2.396499999998923,
+          "bootstrapMilliseconds": 0.3882080000003043,
+          "runtimeMilliseconds": 10.052012500000274,
+          "outputBytes": 17108,
+          "gzipBytes": 5066
+        },
+        "medium": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 4.35491600000023,
+          "bootstrapMilliseconds": 0.5380420000001322,
+          "runtimeMilliseconds": 9.359420899999895,
+          "outputBytes": 21976,
+          "gzipBytes": 7297
+        },
+        "max": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 13.972999999998137,
+          "bootstrapMilliseconds": 1.157082999998238,
+          "runtimeMilliseconds": 27.405154199999743,
+          "outputBytes": 52215,
+          "gzipBytes": 12645
+        }
+      }
+    },
+    {
+      "name": "classes-private-super",
+      "category": "classes",
+      "async": false,
+      "sourceBytes": 568,
+      "native": {
+        "bootstrapMilliseconds": 0.13550000000032014,
+        "runtimeMilliseconds": 0.662762500000099
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 0.3665000000000873,
+        "bootstrapMilliseconds": 0.04595799999879091,
+        "runtimeMilliseconds": 0.6700749999999971,
+        "outputBytes": 568,
+        "gzipBytes": 325,
+        "protectedRegions": 0,
+        "nativeRegions": 1,
+        "targetFunctions": 1,
+        "hybridFunctions": 0
+      },
+      "legacy": {
+        "default": {
+          "supported": false,
+          "error": "undefined is not an object (evaluating 'c.value.length')"
+        },
+        "medium": {
+          "supported": false,
+          "error": "undefined is not an object (evaluating 'c.value.length')"
+        },
+        "max": {
+          "supported": false,
+          "error": "undefined is not an object (evaluating 'c.value.length')"
+        }
+      }
+    },
+    {
+      "name": "exceptions-proxy-coercion",
+      "category": "effects",
+      "async": false,
+      "sourceBytes": 577,
+      "native": {
+        "bootstrapMilliseconds": 0.12104199999885168,
+        "runtimeMilliseconds": 2.0607041999999636
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 0.22654200000033597,
+        "bootstrapMilliseconds": 0.04179199999998673,
+        "runtimeMilliseconds": 2.0517250000000784,
+        "outputBytes": 577,
+        "gzipBytes": 338,
+        "protectedRegions": 0,
+        "nativeRegions": 1,
+        "targetFunctions": 1,
+        "hybridFunctions": 0
+      },
+      "legacy": {
+        "default": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 0.4423750000023574,
+          "bootstrapMilliseconds": 0.07083399999828544,
+          "runtimeMilliseconds": 2.023962499999834,
+          "outputBytes": 577,
+          "gzipBytes": 338
+        },
+        "medium": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 0.6934579999979178,
+          "bootstrapMilliseconds": 0.10470899999927497,
+          "runtimeMilliseconds": 2.082574999999997,
+          "outputBytes": 592,
+          "gzipBytes": 351
+        },
+        "max": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 0.8058750000018335,
+          "bootstrapMilliseconds": 0.12258400000064285,
+          "runtimeMilliseconds": 2.038641700000153,
+          "outputBytes": 592,
+          "gzipBytes": 350
+        }
+      }
+    },
+    {
+      "name": "generators-iteration",
+      "category": "generators",
+      "async": false,
+      "sourceBytes": 225,
+      "native": {
+        "bootstrapMilliseconds": 0.12274999999863212,
+        "runtimeMilliseconds": 0.05909589999973832
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 0.1282920000012382,
+        "bootstrapMilliseconds": 0.08187499999985448,
+        "runtimeMilliseconds": 0.1454416999997193,
+        "outputBytes": 225,
+        "gzipBytes": 182,
+        "protectedRegions": 0,
+        "nativeRegions": 2,
+        "targetFunctions": 2,
+        "hybridFunctions": 0
+      },
+      "legacy": {
+        "default": {
+          "supported": false,
+          "error": "legacy correctness mismatch: generators-iteration:default"
+        },
+        "medium": {
+          "supported": false,
+          "error": "legacy correctness mismatch: generators-iteration:medium"
+        },
+        "max": {
+          "supported": false,
+          "error": "legacy correctness mismatch: generators-iteration:max"
+        }
+      }
+    },
+    {
+      "name": "async-await",
+      "category": "async",
+      "async": true,
+      "sourceBytes": 164,
+      "native": {
+        "bootstrapMilliseconds": 0.1022080000002461,
+        "runtimeMilliseconds": 0.02124580000017886
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 0.07070799999928568,
+        "bootstrapMilliseconds": 0.029583999999886146,
+        "runtimeMilliseconds": 0.019350000000122235,
+        "outputBytes": 164,
+        "gzipBytes": 156,
+        "protectedRegions": 0,
+        "nativeRegions": 1,
+        "targetFunctions": 1,
+        "hybridFunctions": 0
+      },
+      "legacy": {
+        "default": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 2.4192499999990105,
+          "bootstrapMilliseconds": 0.42383300000074087,
+          "runtimeMilliseconds": 0.6237332999997307,
+          "outputBytes": 19555,
+          "gzipBytes": 5170
+        },
+        "medium": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 4.870875000000524,
+          "bootstrapMilliseconds": 0.5872500000004948,
+          "runtimeMilliseconds": 0.652179199999955,
+          "outputBytes": 25730,
+          "gzipBytes": 7226
+        },
+        "max": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 17.747791000001598,
+          "bootstrapMilliseconds": 1.1530410000013944,
+          "runtimeMilliseconds": 0.9092416999999842,
+          "outputBytes": 61468,
+          "gzipBytes": 12658
+        }
+      }
+    },
+    {
+      "name": "hybrid-pure-effectful",
+      "category": "hybrid",
+      "async": false,
+      "sourceBytes": 287,
+      "native": {
+        "bootstrapMilliseconds": 0.12700000000040745,
+        "runtimeMilliseconds": 0.013916600000084146
+      },
+      "isogloss": {
+        "correct": true,
+        "buildMilliseconds": 1.6132910000014817,
+        "bootstrapMilliseconds": 0.28712499999892316,
+        "runtimeMilliseconds": 0.6908458999998401,
+        "outputBytes": 9026,
+        "gzipBytes": 2961,
+        "protectedRegions": 1,
+        "nativeRegions": 2,
+        "targetFunctions": 2,
+        "hybridFunctions": 1
+      },
+      "legacy": {
+        "default": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 2.0760000000009313,
+          "bootstrapMilliseconds": 0.3736669999998412,
+          "runtimeMilliseconds": 2.4471334000001663,
+          "outputBytes": 15266,
+          "gzipBytes": 4591
+        },
+        "medium": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 3.395457999999053,
+          "bootstrapMilliseconds": 0.565667000002577,
+          "runtimeMilliseconds": 2.5194791999998416,
+          "outputBytes": 19717,
+          "gzipBytes": 6562
+        },
+        "max": {
+          "supported": true,
+          "correct": true,
+          "buildMilliseconds": 17.221582999998645,
+          "bootstrapMilliseconds": 1.6799170000012964,
+          "runtimeMilliseconds": 8.502637500000128,
+          "outputBytes": 69165,
+          "gzipBytes": 16658
+        }
+      }
+    }
+  ],
+  "summary": {
+    "isogloss": {
+      "allCorrect": true,
+      "totalSourceBytes": 2944,
+      "totalOutputBytes": 27170,
+      "medianBuildMilliseconds": 0.22654200000033597,
+      "geometricRuntimeOverheadVsNative": 2.5679496258937395
+    },
+    "legacy": {
+      "default": {
+        "supportedWorkloads": 7,
+        "unsupportedWorkloads": 2,
+        "totalOutputBytes": 96834,
+        "medianBuildMilliseconds": 2.396499999998923,
+        "geometricRuntimeOverheadVsNative": 38.84014823914666,
+        "geometricIsoglossSpeedup": 13.159106137170012
+      },
+      "medium": {
+        "supportedWorkloads": 7,
+        "unsupportedWorkloads": 2,
+        "totalOutputBytes": 127661,
+        "medianBuildMilliseconds": 3.8380420000012236,
+        "geometricRuntimeOverheadVsNative": 36.9266486644341,
+        "geometricIsoglossSpeedup": 12.510809332481351
+      },
+      "max": {
+        "supportedWorkloads": 7,
+        "unsupportedWorkloads": 2,
+        "totalOutputBytes": 335889,
+        "medianBuildMilliseconds": 13.972999999998137,
+        "geometricRuntimeOverheadVsNative": 95.32490529502466,
+        "geometricIsoglossSpeedup": 32.29623477668963
+      }
+    }
+  }
+}

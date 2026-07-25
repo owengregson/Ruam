@@ -55,9 +55,16 @@ describe("product local Isogloss source transform", () => {
 				);
 			}
 		}
-		expect(() => executeFunction(first.code, "crown", [0, 2])).toThrow(
-			"RUAM_BPRF_SCALAR_INPUT_GUARD"
-		);
+		try {
+			executeFunction(first.code, "crown", [0, 2]);
+			throw new Error("expected input guard");
+		} catch (error) {
+			expect(error).toBeInstanceOf(Error);
+			expect((error as Error).name).toBe("Error");
+			expect((error as Error).message).toContain(
+				"RUAM_BPRF_SCALAR_INPUT_GUARD"
+			);
+		}
 	});
 
 	it("keeps unsupported unconfigured effects native and reports them honestly", () => {
@@ -140,9 +147,8 @@ describe("product local Isogloss source transform", () => {
 		expect(executeFunction(result.code, "kernel", [2, 3])).toBe(6);
 	});
 
-	it("fails configured targets closed instead of shipping an original fallback", () => {
-		expect(() =>
-			buildLocalIsoglossSource(
+	it("routes configured general JavaScript to native regions and still catches target typos", () => {
+		const propertyAccess = buildLocalIsoglossSource(
 				`function bad(x,obj){return x + obj.value;}`,
 				resolveRuamOptions({
 					regionDomains: {
@@ -152,8 +158,15 @@ describe("product local Isogloss source transform", () => {
 					},
 				}),
 				1
-			)
-		).toThrow("RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED");
+			);
+		expect(propertyAccess.stats).toMatchObject({
+			languageCoverage: "full-javascript",
+			protectedRegionCount: 0,
+			nativeRegionCount: 1,
+			targetFunctionCount: 1,
+			nativeFunctionCount: 1,
+		});
+		expect(executeFunction(propertyAccess.code, "bad", [2, { value: 5 }])).toBe(7);
 		expect(() =>
 			buildLocalIsoglossSource(
 				`function actual(x){return (x+1)*2;}`,
@@ -167,8 +180,7 @@ describe("product local Isogloss source transform", () => {
 				1
 			)
 		).toThrow("RUAM_ISOGLOSS_CONFIGURED_TARGET_NOT_FOUND");
-		expect(() =>
-			buildLocalIsoglossSource(
+		const sampled = buildLocalIsoglossSource(
 				`function sampled(x){return (x+1)*2;}`,
 				resolveRuamOptions({
 					threshold: 0,
@@ -179,10 +191,11 @@ describe("product local Isogloss source transform", () => {
 					},
 				}),
 				1
-			)
-		).toThrow("RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED");
-		expect(() =>
-			buildLocalIsoglossSource(
+			);
+		expect(sampled.stats.protectedRegionCount).toBe(0);
+		expect(sampled.stats.nativeRegionCount).toBe(1);
+		expect(executeFunction(sampled.code, "sampled", [3])).toBe(8);
+		const lazy = buildLocalIsoglossSource(
 				`function lazy(flag){return flag?1+2:x+2;let x=3;}`,
 				resolveRuamOptions({
 					regionDomains: {
@@ -193,11 +206,14 @@ describe("product local Isogloss source transform", () => {
 					},
 				}),
 				1
-			)
-		).toThrow("RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED");
+			);
+		expect(executeFunction(lazy.code, "lazy", [true])).toBe(3);
+		expect(() => executeFunction(lazy.code, "lazy", [false])).toThrow(
+			ReferenceError
+		);
 	});
 
-	it("rejects nonlocal grafting and top-level intrinsic capture", () => {
+	it("rejects nonlocal grafting but tolerates every top-level intrinsic name", () => {
 		const custodied = resolveRuamOptions({
 			isogloss: {
 				profile: "holographic-custodied",
@@ -219,13 +235,12 @@ describe("product local Isogloss source transform", () => {
 				f: { x: { type: "number", min: 1, max: 4 } },
 			},
 		});
-		expect(() =>
-			buildLocalIsoglossSource(
+		const shadowed = buildLocalIsoglossSource(
 				`const Number={};function f(x){return (x+1)*2;}`,
 				local,
 				1
-			)
-		).toThrow("RUAM_ISOGLOSS_INTRINSIC_SHADOW");
+			);
+		expect(executeFunction(shadowed.code, "f", [3])).toBe(8);
 
 		const untouched = `const Array=1;console.log(Array);`;
 		const untouchedBuild = buildLocalIsoglossSource(

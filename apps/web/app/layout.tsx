@@ -8,7 +8,7 @@ config.autoAddCss = false;
 export const metadata: Metadata = {
 	title: "Ruam: Isogloss JavaScript Protection",
 	description:
-		"Replace guarded pure JavaScript source regions with diversified scalar Isogloss realizations, with explicit local, custody, private-function, and attested deployment profiles.",
+		"Accept the full JavaScript language and replace proven finite source relations with diversified scalar Isogloss realizations, with explicit local, custody, private-function, and attested deployment profiles.",
 	icons: {
 		icon: `${process.env.NEXT_PUBLIC_BASE_PATH}/ruam.svg`,
 	},

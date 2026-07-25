@@ -15,7 +15,7 @@ const layers = [
 		title: "Source-region proof",
 		tag: "Contract 1",
 		description:
-			"Ruam selects a named pure return expression and requires an exact boolean or bounded-number domain for every scalar input. Configured regions fail closed when that proof is incomplete.",
+			"Ruam accepts the full JavaScript language, classifies each selected return independently, and requires exact boolean or bounded-number domains only for inputs that enter the protected BPRF lane.",
 		visual: [
 			{
 				label: "Selected source",
@@ -87,8 +87,8 @@ export default function VsSection() {
 					Three verifiable contracts
 				</h2>
 				<p className="mt-4 max-w-lg text-base text-smoke">
-					The source region, emitted representation, and deployment
-					boundary each carry a separate fail-closed contract.
+						The language lane, emitted representation, and deployment
+						boundary each carry a separate verifiable contract.
 				</p>
 			</motion.div>
 

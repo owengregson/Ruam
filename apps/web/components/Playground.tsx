@@ -951,9 +951,9 @@ export default function Playground() {
 									<code className="text-smoke">
 										{"/* ruam:isogloss */"}
 									</code>{" "}
-									selects this named function. Every input used
-									by its pure return expression needs an exact
-									guard domain.
+									selects this named function. Exact guard domains
+									are required only for inputs that should enter
+									the BPRF lane; all other JavaScript stays native.
 								</p>
 
 								<div className="mt-4 space-y-2">

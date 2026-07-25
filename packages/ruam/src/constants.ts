@@ -3,19 +3,43 @@
  * @module constants
  */
 
+import type { ParserPlugin } from "@babel/parser";
+
 // --- Babel Parser Plugins ---
 
-/** Plugins enabled when parsing input source code with `@babel/parser`. */
+/**
+ * Plugins enabled when parsing input source code with `@babel/parser`.
+ *
+ * Babel parses most finished ECMAScript syntax without an explicit plugin,
+ * but listing the complete standardized surface keeps behavior stable across
+ * Babel 7 releases. TypeScript and JSX remain accepted source extensions.
+ */
 export const BABEL_PARSER_PLUGINS = [
 	"typescript",
 	"jsx",
-	"classProperties",
-	"optionalChaining",
-	"nullishCoalescingOperator",
-	"dynamicImport",
 	"asyncGenerators",
+	"bigInt",
+	"classPrivateMethods",
+	"classPrivateProperties",
+	"classProperties",
+	"classStaticBlock",
+	"dynamicImport",
+	"explicitResourceManagement",
+	"exportNamespaceFrom",
+	["importAttributes", { deprecatedAssertSyntax: true }],
+	"importMeta",
+	"jsonStrings",
+	"logicalAssignment",
+	"moduleStringNames",
+	"nullishCoalescingOperator",
+	"numericSeparator",
 	"objectRestSpread",
-] as const;
+	"optionalCatchBinding",
+	"optionalChaining",
+	"privateIn",
+	"regexpUnicodeSets",
+	"topLevelAwait",
+] satisfies ParserPlugin[];
 
 // --- Global Identifiers ---
 

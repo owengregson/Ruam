@@ -173,9 +173,8 @@ function RegionReplacementCard() {
 			</div>
 
 			<p className="text-[12px] leading-relaxed text-smoke">
-				Effectful and unsupported JavaScript stays native. Ruam fails a
-				configured region closed if its domain or purity proof is
-				incomplete.
+					The full JavaScript language is accepted. Effectful or unbounded
+					behavior stays native, while proven finite relations enter BPRF.
 			</p>
 		</div>
 	);

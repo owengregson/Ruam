@@ -1,7 +1,7 @@
 {
 	"name": "ruam",
 	"version": "2.0.0",
-	"description": "Isogloss JavaScript source protection with explicit local, custodied, private-function, and attested deployment profiles",
+	"description": "Full-language JavaScript compatibility with guarded Isogloss BPRF protection and explicit deployment profiles",
 	"keywords": [
 		"obfuscator",
 		"obfuscation",
@@ -43,6 +43,7 @@
 		"prepublishOnly": "bun run typecheck && bun test && bun run build",
 		"build:browser": "node scripts/build-browser.mjs",
 		"bench": "bun scripts/bench.mjs",
+		"bench:architectures": "bun scripts/bench-architectures.mjs",
 		"typecheck": "tsc --noEmit",
 		"dev": "tsup --watch",
 		"test": "bun test",
