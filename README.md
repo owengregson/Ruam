@@ -7,7 +7,7 @@
  888b "88bo,88    .d888 888   888,888 Y88" 888o
  MMMM   "W"  "YmmMMMM"" YMM   ""` MMM  M'  "MMM</pre>
 
-  <strong>Isogloss execution protection for guarded JavaScript relations</strong>
+  <strong>Full-language JavaScript compatibility with guarded Isogloss relation protection</strong>
 
   <p>
     Ruam replaces explicitly bounded, side-effect-free source relations with
@@ -23,23 +23,28 @@
 
 Ruam's shipped execution architecture is Isogloss. The source transform:
 
-1. Finds an explicitly configured root function or a function marked with
+1. Parses the complete modern JavaScript language, including scripts, modules,
+   classes, private state, async functions, generators, dynamic semantics, and
+   the existing TypeScript/JSX source extensions.
+2. Finds an explicitly configured root function or a function marked with
    `/* ruam:isogloss */`.
-2. Requires an exact declared domain for every local input used by the selected
-   pure return expression.
-3. Rejects calls, effects, unsupported coercions, unsafe numeric ranges, and
-   other expressions it cannot prove safe to lower.
-4. Replaces the accepted relation with a scalarized BPRF closure containing
-   multiple contextual realizations and fragmented relation pieces.
-5. Enforces the declared domains at runtime. Inputs outside those domains throw;
-   the original relation is not retained as a fallback.
+3. Classifies each return site independently. Proven finite pure relations enter
+   the BPRF lane; calls, effects, coercions, property access, exceptions,
+   suspension, unbounded values, and every other JavaScript construct remain in
+   a semantics-preserving native Isogloss lane.
+4. Replaces each accepted finite relation with a scalarized BPRF closure
+   containing multiple contextual realizations and fragmented relation pieces.
+5. Enforces declared domains at BPRF boundaries. Inputs outside those domains
+   throw; the original relation is not retained as a fallback.
 
-Configured targets fail closed. If a function is named in `regionDomains` but
-its selected expression cannot be lowered, protection stops with a structured
-error instead of shipping the configured relation unchanged.
+Configured target names still fail closed when no selected function exists, so
+a misspelling cannot silently pass. A valid target is never rejected merely
+because it uses general JavaScript: it becomes native, BPRF, or hybrid and that
+classification is exposed in diagnostics and build statistics.
 
-Unconfigured or untargeted JavaScript remains ordinary source and is reported
-through build diagnostics. Ruam does not claim whole-language protection.
+Full-language support is a compatibility claim, not a whole-language protection
+claim. Native regions remain ordinary observable JavaScript. Only regions
+reported by `protectedRegionCount` have been replaced by BPRF realizations.
 
 ## Threat-model honesty
 
@@ -146,8 +151,8 @@ const build = protectCode(source, {
 });
 ```
 
-Only `sensitiveScore` is considered. The marked function still must satisfy all
-purity, shape, type, and domain checks.
+Only `sensitiveScore` is considered. Returns satisfying the finite purity,
+shape, type, and domain proof enter BPRF; all other behavior remains native.
 
 ### Protect one file
 
@@ -219,9 +224,10 @@ const options = {
 };
 ```
 
-Ruam never infers a numeric range. Numeric bounds must be safe integers, must
-not be negative zero, and must satisfy `min <= max`. Boolean domains are exact
-and need no additional bounds.
+Ruam never infers a numeric range for BPRF lowering. Numeric bounds must be safe
+integers, must not be negative zero, and must satisfy `min <= max`. Boolean
+domains are exact and need no additional bounds. A configured function may use
+an empty domain object when it is intentionally native-only.
 
 Domain declarations serve two purposes across the architecture:
 
@@ -231,21 +237,21 @@ Domain declarations serve two purposes across the architecture:
 
 A declaration is not permission to coerce values. Runtime types must match.
 
-## Guarded pure-region scope
+## Isogloss language lanes
 
-The current source path accepts bounded expressions built from:
+The BPRF lane accepts bounded expressions built from:
 
 - Local identifiers with matching declared domains
 - Safe integer and boolean literals
 - Numeric `+`, `-`, `*`, and unary negation where signed-zero and overflow
   safety can be proven
-- Boolean `!`, `&&`, and `||`
-- Conditional expressions whose branches have the same proven type
+- Boolean `!`
 
-The configured expression must contain at least one input and enough structure
-to form a meaningful protected region. Calls, property access, mutation,
-suspension, exceptions, unbound values, implicit coercion, and unsupported
-syntax are rejected for configured targets.
+The expression must contain at least one input and enough structure to form a
+meaningful protected region. Calls, property access, mutation, suspension,
+exceptions, unbound values, implicit coercion, unsafe numeric behavior, and
+other syntax stay in the native lane instead of failing the build. A function
+with both kinds of return site is reported as hybrid.
 
 ## Public API
 
@@ -262,11 +268,16 @@ interface IsoglossSourceBuildResult {
     readonly profile: "holographic-local";
     readonly rootGroupCount: number;
     readonly protectedRegionCount: number;
+    readonly nativeRegionCount: number;
+    readonly targetFunctionCount: number;
+    readonly nativeFunctionCount: number;
+    readonly hybridFunctionCount: number;
     readonly realizationCount: number;
     readonly fragmentFunctionCount: number;
     readonly originalBytes: number;
     readonly outputBytes: number;
     readonly expansionRatio: number;
+    readonly languageCoverage: "full-javascript";
     readonly clientCompleteness: "complete";
     readonly hardnessLowerBound: null;
   };
@@ -317,18 +328,29 @@ public security knobs. Unknown options are rejected with structured
 Ruam exposes two structured error families:
 
 - `RuamOptionError` for invalid, unknown, or profile-incompatible options.
-- `IsoglossSourceTransformError` when a configured source target cannot be
-  safely transformed or when a nonlocal profile lacks owner-planned boundary
-  composition.
+- `IsoglossSourceTransformError` when a configured target name does not exist,
+  a resource/emission limit is exceeded, or a nonlocal profile lacks
+  owner-planned boundary composition.
 
-For configured targets, these errors stop the build. Ruam does not silently
-return an unprotected configured relation.
+Language shape is not an error boundary. Diagnostics and lane counts distinguish
+native compatibility from BPRF replacement without overstating protection.
+
+## Architecture benchmark
+
+`bun run bench:architectures` compares this tree with the frozen VM at
+`e8cecb56` (the final pre-PR-6 implementation) across finite-pure, control-flow,
+closure, data-structure, class, effect, generator, async, and hybrid workloads.
+It reports build time, bootstrap/runtime time, raw and gzip output size,
+correctness, lane coverage, and legacy unsupported cases. The checked-in
+[measurement report](docs/superpowers/baselines/2026-07-25-pr8-isogloss-vs-legacy-vm.md)
+explains the security-equivalence caveat: native Isogloss regions are faster and
+smaller partly because they are compatibility regions, not hidden VM programs.
 
 ## Requirements
 
 - Node.js 18 or newer
 - ESM
-- Explicit finite domains for every input used by a configured pure region
+- Explicit finite domains for every input that should enter the BPRF lane
 - Real owner-planned boundaries and no complete local fallback for custodied,
   private, or TEE deployments
 

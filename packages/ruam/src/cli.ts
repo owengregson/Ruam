@@ -432,7 +432,7 @@ function printHelp(version: string): void {
 	console.log(
 		`    ${flag("--region-domains")} ${argument(
 			"<json>"
-		)}          Function/binding runtime-guard domains`
+		)}          Exact BPRF input domains; other JavaScript stays native`
 	);
 	console.log(
 		`    ${flag("--owner-trace")} ${argument(
@@ -759,9 +759,14 @@ async function protectSingleFileWithProgress(
 			}`
 		);
 		console.log(
-			`  ${chalk.dim("Regions:")}    ${chalk.white(
+			`  ${chalk.dim("BPRF:")}      ${chalk.white(
 				result.stats.protectedRegionCount
 			)}`
+		);
+		console.log(
+			`  ${chalk.dim("Native:")}     ${chalk.white(
+				result.stats.nativeRegionCount
+			)} ${chalk.dim(`(${result.stats.hybridFunctionCount} hybrid function${result.stats.hybridFunctionCount === 1 ? "" : "s"})`)}`
 		);
 		console.log(
 			`  ${chalk.dim("Input:")}      ${chalk.white(
@@ -900,6 +905,14 @@ async function protectDirectoryWithProgress(
 		(total, plan) => total + plan.build.stats.protectedRegionCount,
 		0
 	);
+	const nativeRegionCount = plans.reduce(
+		(total, plan) => total + plan.build.stats.nativeRegionCount,
+		0
+	);
+	const hybridFunctionCount = plans.reduce(
+		(total, plan) => total + plan.build.stats.hybridFunctionCount,
+		0
+	);
 	spinner.succeed(
 		chalk.green(
 			`${plans.length} file${plans.length === 1 ? "" : "s"} protected with staged atomic replacement`
@@ -912,7 +925,10 @@ async function protectDirectoryWithProgress(
 			: (totalOutputSize / totalInputSize).toFixed(1);
 	console.log();
 	console.log(
-		`  ${chalk.dim("Regions:")}  ${chalk.white(protectedRegionCount)}`
+		`  ${chalk.dim("BPRF:")}     ${chalk.white(protectedRegionCount)}`
+	);
+	console.log(
+		`  ${chalk.dim("Native:")}   ${chalk.white(nativeRegionCount)} ${chalk.dim(`(${hybridFunctionCount} hybrid function${hybridFunctionCount === 1 ? "" : "s"})`)}`
 	);
 	console.log(
 		`  ${chalk.dim("Input:")}    ${chalk.white(

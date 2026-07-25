@@ -44,12 +44,21 @@ export interface SourcePureRegionSite {
 	readonly origin: SourceRegionOrigin;
 }
 
+/** Coverage classification for every function selected by targetMode. */
+export interface SourceFunctionCoverage {
+	readonly functionName: string | null;
+	readonly origin: SourceRegionOrigin;
+	readonly lane: "bprf" | "hybrid" | "native";
+	readonly bprfRegionCount: number;
+	readonly nativeRegionCount: number;
+}
+
 export type SourceRegionDiscoveryDiagnosticCode =
 	| "RUAM_SOURCE_TARGET_ANONYMOUS"
 	| "RUAM_SOURCE_TARGET_MISSING_DOMAINS"
 	| "RUAM_SOURCE_TARGET_THRESHOLD_SKIPPED"
 	| "RUAM_SOURCE_REGION_TOO_SMALL"
-	| "RUAM_SOURCE_REGION_REJECTED";
+	| "RUAM_SOURCE_REGION_NATIVE";
 
 export interface SourceRegionDiscoveryDiagnostic {
 	readonly code: SourceRegionDiscoveryDiagnosticCode;
@@ -61,6 +70,7 @@ export interface SourceRegionDiscoveryDiagnostic {
 export interface SourceRegionDiscovery {
 	readonly sites: readonly SourcePureRegionSite[];
 	readonly diagnostics: readonly SourceRegionDiscoveryDiagnostic[];
+	readonly functions: readonly SourceFunctionCoverage[];
 }
 
 export function discoverSourcePureRegions(
@@ -79,11 +89,14 @@ export function discoverSourcePureRegions(
 
 	const sites: SourcePureRegionSite[] = [];
 	const diagnostics: SourceRegionDiscoveryDiagnostic[] = [];
+	const functions: SourceFunctionCoverage[] = [];
 	const orderedTargets = targetPaths.sort(compareFunctionPaths);
 	for (let targetOrdinal = 0; targetOrdinal < orderedTargets.length; targetOrdinal++) {
 		const functionPath = orderedTargets[targetOrdinal]!;
 		const functionName = inferFunctionName(functionPath);
 		const functionOrigin = originFor(functionPath.node);
+		let bprfRegionCount = 0;
+		let nativeRegionCount = 0;
 		if (!functionName) {
 			diagnostics.push(
 				diagnostic(
@@ -92,6 +105,7 @@ export function discoverSourcePureRegions(
 					functionOrigin
 				)
 			);
+			functions.push(coverage(null, functionOrigin, 0, 1));
 			continue;
 		}
 		const domains = options.regionDomains[functionName];
@@ -103,6 +117,7 @@ export function discoverSourcePureRegions(
 					functionOrigin
 				)
 			);
+			functions.push(coverage(functionName, functionOrigin, 0, 1));
 			continue;
 		}
 		if (
@@ -120,6 +135,7 @@ export function discoverSourcePureRegions(
 					functionOrigin
 				)
 			);
+			functions.push(coverage(functionName, functionOrigin, 0, 1));
 			continue;
 		}
 
@@ -160,9 +176,10 @@ export function discoverSourcePureRegions(
 				localBindings,
 			});
 			if (!lowering.accepted) {
+				nativeRegionCount++;
 				diagnostics.push(
 					diagnostic(
-						"RUAM_SOURCE_REGION_REJECTED",
+						"RUAM_SOURCE_REGION_NATIVE",
 						functionName,
 						originFor(argumentPath.node),
 						lowering.rejection
@@ -174,6 +191,7 @@ export function discoverSourcePureRegions(
 				lowering.region.contract.inputs.length === 0 ||
 				lowering.region.contract.steps.length < 2
 			) {
+				nativeRegionCount++;
 				diagnostics.push(
 					diagnostic(
 						"RUAM_SOURCE_REGION_TOO_SMALL",
@@ -193,12 +211,23 @@ export function discoverSourcePureRegions(
 					origin: originFor(argumentPath.node),
 				})
 			);
+			bprfRegionCount++;
 		}
+		if (expressionPaths.length === 0) nativeRegionCount = 1;
+		functions.push(
+			coverage(
+				functionName,
+				functionOrigin,
+				bprfRegionCount,
+				nativeRegionCount
+			)
+		);
 	}
 
 	return Object.freeze({
 		sites: Object.freeze(sites),
 		diagnostics: Object.freeze(diagnostics),
+		functions: Object.freeze(functions),
 	});
 }
 
@@ -229,6 +258,25 @@ function hasIsoglossMarker(path: NodePath<t.Function>): boolean {
 
 function inferFunctionName(path: NodePath<t.Function>): string | null {
 	if (
+		(t.isObjectMethod(path.node) || t.isClassMethod(path.node)) &&
+		!path.node.computed &&
+		t.isIdentifier(path.node.key)
+	) {
+		return path.node.key.name;
+	}
+	if (
+		(t.isObjectMethod(path.node) || t.isClassMethod(path.node)) &&
+		(t.isStringLiteral(path.node.key) || t.isNumericLiteral(path.node.key))
+	) {
+		return String(path.node.key.value);
+	}
+	if (
+		t.isClassPrivateMethod(path.node) &&
+		t.isPrivateName(path.node.key)
+	) {
+		return `#${path.node.key.id.name}`;
+	}
+	if (
 		("id" in path.node && t.isIdentifier(path.node.id)) ||
 		t.isFunctionDeclaration(path.node)
 	) {
@@ -240,11 +288,40 @@ function inferFunctionName(path: NodePath<t.Function>): string | null {
 		return parent.id.name;
 	}
 	if (
-		(t.isObjectProperty(parent) || t.isObjectMethod(parent)) &&
+		(t.isObjectProperty(parent) ||
+			t.isObjectMethod(parent) ||
+			t.isClassMethod(parent) ||
+			t.isClassProperty(parent)) &&
 		!parent.computed &&
 		t.isIdentifier(parent.key)
 	) {
 		return parent.key.name;
+	}
+	if (
+		(t.isClassPrivateMethod(parent) || t.isClassPrivateProperty(parent)) &&
+		t.isPrivateName(parent.key)
+	) {
+		return `#${parent.key.id.name}`;
+	}
+	if (
+		(t.isObjectProperty(parent) ||
+			t.isObjectMethod(parent) ||
+			t.isClassMethod(parent) ||
+			t.isClassProperty(parent)) &&
+		!parent.computed &&
+		(t.isStringLiteral(parent.key) || t.isNumericLiteral(parent.key))
+	) {
+		return String(parent.key.value);
+	}
+	if (t.isAssignmentExpression(parent)) {
+		if (t.isIdentifier(parent.left)) return parent.left.name;
+		if (
+			t.isMemberExpression(parent.left) &&
+			!parent.left.computed &&
+			t.isIdentifier(parent.left.property)
+		) {
+			return parent.left.property.name;
+		}
 	}
 	return null;
 }
@@ -303,6 +380,26 @@ function diagnostic(
 		functionName,
 		origin,
 		rejection,
+	});
+}
+
+function coverage(
+	functionName: string | null,
+	origin: SourceRegionOrigin,
+	bprfRegionCount: number,
+	nativeRegionCount: number
+): SourceFunctionCoverage {
+	return Object.freeze({
+		functionName,
+		origin,
+		lane:
+			bprfRegionCount === 0
+				? "native"
+				: nativeRegionCount === 0
+					? "bprf"
+					: "hybrid",
+		bprfRegionCount,
+		nativeRegionCount,
 	});
 }
 

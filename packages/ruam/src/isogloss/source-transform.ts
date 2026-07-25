@@ -1,10 +1,11 @@
 /**
  * Product source-to-source orchestration for local Isogloss regions.
  *
- * Unsupported JavaScript remains ordinary source at distributed native effect
- * sites. A configured pure return region is replaced completely by a
- * scalarized BPRF closure; the original relation is never embedded as a
- * fallback.
+ * Every valid JavaScript construct is accepted. Proven finite pure return
+ * regions are replaced completely by scalarized BPRF closures, while calls,
+ * effects, dynamic coercions, unbounded values, and other general semantics
+ * remain at native Isogloss sites. A BPRF-lowered relation never retains its
+ * original expression as a fallback.
  *
  * Nonlocal profiles are intentionally rejected here. They require an
  * explicitly modeled pre-existing remote-await or attested boundary and are
@@ -31,18 +32,12 @@ import {
 import type { ResolvedRuamOptions } from "./options.js";
 import {
 	discoverSourcePureRegions,
+	type SourceFunctionCoverage,
 	type SourcePureRegionSite,
 	type SourceRegionDiscoveryDiagnostic,
 	type SourceRegionOrigin,
 } from "./source-sites.js";
 
-const REQUIRED_EMITTER_INTRINSICS = Object.freeze([
-	"Array",
-	"Error",
-	"Math",
-	"Number",
-	"Object",
-]);
 const MAX_EMISSION_SEED_ATTEMPTS = 64;
 export const ISOGLOSS_SOURCE_LIMITS = Object.freeze({
 	sourceBytes: 8 * 1024 * 1024,
@@ -52,7 +47,8 @@ export const ISOGLOSS_SOURCE_LIMITS = Object.freeze({
 
 export type IsoglossBuildDiagnosticCode =
 	| SourceRegionDiscoveryDiagnostic["code"]
-	| "RUAM_ISOGLOSS_EMITTER_SEED_REJECTED";
+	| "RUAM_ISOGLOSS_EMITTER_SEED_REJECTED"
+	| "RUAM_ISOGLOSS_IDENTIFIER_PREPROCESS_SKIPPED";
 
 export interface IsoglossBuildDiagnostic {
 	readonly code: IsoglossBuildDiagnosticCode;
@@ -78,11 +74,16 @@ export interface IsoglossSourceBuildStats {
 	readonly profile: "holographic-local";
 	readonly rootGroupCount: number;
 	readonly protectedRegionCount: number;
+	readonly nativeRegionCount: number;
+	readonly targetFunctionCount: number;
+	readonly nativeFunctionCount: number;
+	readonly hybridFunctionCount: number;
 	readonly realizationCount: number;
 	readonly fragmentFunctionCount: number;
 	readonly originalBytes: number;
 	readonly outputBytes: number;
 	readonly expansionRatio: number;
+	readonly languageCoverage: "full-javascript";
 	readonly clientCompleteness: "complete";
 	readonly hardnessLowerBound: null;
 }
@@ -100,8 +101,6 @@ export class IsoglossSourceTransformError extends Error {
 	constructor(
 		readonly code:
 			| "RUAM_ISOGLOSS_SOURCE_PROFILE_REQUIRES_EXTERNAL_BOUNDARY"
-			| "RUAM_ISOGLOSS_INTRINSIC_SHADOW"
-			| "RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED"
 			| "RUAM_ISOGLOSS_CONFIGURED_TARGET_NOT_FOUND"
 			| "RUAM_ISOGLOSS_RESOURCE_LIMIT"
 			| "RUAM_ISOGLOSS_EMISSION_FAILED",
@@ -156,7 +155,7 @@ export function buildLocalIsoglossSource(
 		seed: fileSeed,
 		regionDomains: options.regionDomains,
 	});
-	validateConfiguredTargets(discovery.diagnostics, discovery.sites, options);
+	validateConfiguredTargets(discovery.functions, options);
 	if (
 		discovery.sites.length >
 		ISOGLOSS_SOURCE_LIMITS.protectedRegions
@@ -166,38 +165,26 @@ export function buildLocalIsoglossSource(
 			`protected regions ${discovery.sites.length} exceed ${ISOGLOSS_SOURCE_LIMITS.protectedRegions}`
 		);
 	}
-	if (discovery.sites.length > 0) {
-		const topLevelBindings = collectTopLevelBindings(ast);
-		const shadowedIntrinsic = REQUIRED_EMITTER_INTRINSICS.find((name) =>
-			topLevelBindings.has(name)
-		);
-		if (shadowedIntrinsic) {
-			throw new IsoglossSourceTransformError(
-				"RUAM_ISOGLOSS_INTRINSIC_SHADOW",
-				`top-level binding ${shadowedIntrinsic} shadows a required scalar-emitter intrinsic`
-			);
-		}
-	}
-
 	const occupiedNames = collectIdentifiersFromAst(ast);
 	const helperStatements: t.Statement[] = [];
 	const ownerRegions: IsoglossOwnerRegionTrace[] = [];
-	const diagnostics = discovery.diagnostics.map(buildDiagnostic);
+	const diagnostics: IsoglossBuildDiagnostic[] =
+		discovery.diagnostics.map(buildDiagnostic);
 	let realizationCount = 0;
 	let fragmentFunctionCount = 0;
 
 	for (const site of discovery.sites) {
 		const built = buildSiteEmission(site, fileSeed, occupiedNames);
 		occupiedNames.add(built.wrapperName);
-			helperStatements.push(built.wrapperStatement);
-			site.expressionPath.replaceWith(
-				t.callExpression(
-					t.identifier(built.wrapperName),
-					site.region.ingress.map((input) =>
-						t.identifier(input.name)
-					)
+		helperStatements.push(built.wrapperStatement);
+		site.expressionPath.replaceWith(
+			t.callExpression(
+				t.identifier(built.wrapperName),
+				site.region.ingress.map((input) =>
+					t.identifier(input.name)
 				)
-			);
+			)
+		);
 		realizationCount += built.emission.stats.realizationCount;
 		fragmentFunctionCount +=
 			built.emission.stats.fragmentFunctionCount;
@@ -212,19 +199,31 @@ export function buildLocalIsoglossSource(
 	}
 
 	if (preprocessSeed !== undefined && helperStatements.length > 0) {
-		preprocessIdentifierAst(
-			ast,
-			preprocessSeed,
-			helperStatements.flatMap((statement) =>
-				t.isVariableDeclaration(statement)
-					? statement.declarations.flatMap((declaration) =>
-							t.isIdentifier(declaration.id)
-								? [declaration.id.name]
-								: []
-						)
-					: []
-			)
-		);
+		const dynamicResolution = findDynamicNameResolution(ast);
+		if (dynamicResolution) {
+			diagnostics.push(
+				Object.freeze({
+					code: "RUAM_ISOGLOSS_IDENTIFIER_PREPROCESS_SKIPPED",
+					functionName: null,
+					origin: dynamicResolution.origin,
+					detail: dynamicResolution.detail,
+				})
+			);
+		} else {
+			preprocessIdentifierAst(
+				ast,
+				preprocessSeed,
+				helperStatements.flatMap((statement) =>
+					t.isVariableDeclaration(statement)
+						? statement.declarations.flatMap((declaration) =>
+								t.isIdentifier(declaration.id)
+									? [declaration.id.name]
+									: []
+							)
+						: []
+				)
+			);
+		}
 	}
 	if (helperStatements.length > 0) {
 		const insertionIndex = firstNonImportIndex(ast.program.body);
@@ -251,17 +250,30 @@ export function buildLocalIsoglossSource(
 	const rootGroupCount = new Set(
 		discovery.sites.map((site) => site.functionName)
 	).size;
+	const nativeRegionCount = discovery.functions.reduce(
+		(total, item) => total + item.nativeRegionCount,
+		0
+	);
 	const stats = Object.freeze({
 		engine: "isogloss" as const,
 		profile: "holographic-local" as const,
 		rootGroupCount,
 		protectedRegionCount: discovery.sites.length,
+		nativeRegionCount,
+		targetFunctionCount: discovery.functions.length,
+		nativeFunctionCount: discovery.functions.filter(
+			(item) => item.lane !== "bprf"
+		).length,
+		hybridFunctionCount: discovery.functions.filter(
+			(item) => item.lane === "hybrid"
+		).length,
 		realizationCount,
 		fragmentFunctionCount,
 		originalBytes,
 		outputBytes,
 		expansionRatio:
 			originalBytes === 0 ? 1 : outputBytes / originalBytes,
+		languageCoverage: "full-javascript" as const,
 		clientCompleteness: "complete" as const,
 		hardnessLowerBound: null,
 	});
@@ -378,7 +390,7 @@ function parseWrapper(
 			: `return ${emission.entryName}(a,c)[0];`;
 	const wrapperSource = [
 		`const ${wrapperName}=(()=>{`,
-		`const ${intrinsics.array}=Array,${intrinsics.arrayIsArray}=Array.isArray,${intrinsics.error}=Error,${intrinsics.imul}=Math.imul,${intrinsics.numberIsSafeInteger}=Number.isSafeInteger,${intrinsics.objectIs}=Object.is;`,
+		`const ${intrinsics.array}=[].constructor,${intrinsics.arrayIsArray}=[].constructor.isArray,${intrinsics.error}=(()=>{try{null.__ruam}catch(e){return e.constructor.__proto__}})(),${intrinsics.imul}=(a,b)=>{const ah=(a>>>16)&65535,al=a&65535,bh=(b>>>16)&65535,bl=b&65535;return(al*bl+((ah*bl+al*bh)<<16))|0},${intrinsics.numberIsSafeInteger}=(0).constructor.isSafeInteger,${intrinsics.objectIs}=({}).constructor.is;`,
 		intrinsicSafeEmission,
 		`const ap=[],cp=[];let epoch=0,lineage=${initialLineage >>> 0};`,
 		`return function(${parameters.join(",")}){`,
@@ -407,31 +419,15 @@ function parseWrapper(
 }
 
 function validateConfiguredTargets(
-	diagnostics: readonly SourceRegionDiscoveryDiagnostic[],
-	sites: readonly SourcePureRegionSite[],
+	functions: readonly SourceFunctionCoverage[],
 	options: ResolvedRuamOptions
 ): void {
 	const configured = new Set(Object.keys(options.regionDomains));
-	const seen = new Set<string>();
-	for (const site of sites) seen.add(site.functionName);
-	for (const diagnostic of diagnostics) {
-		if (diagnostic.functionName) seen.add(diagnostic.functionName);
-		if (
-			diagnostic.functionName &&
-			configured.has(diagnostic.functionName) &&
-			(diagnostic.code === "RUAM_SOURCE_REGION_REJECTED" ||
-				diagnostic.code === "RUAM_SOURCE_REGION_TOO_SMALL" ||
-				diagnostic.code ===
-					"RUAM_SOURCE_TARGET_THRESHOLD_SKIPPED")
-		) {
-			throw new IsoglossSourceTransformError(
-				"RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED",
-				`${diagnostic.functionName}: ${
-					diagnostic.rejection?.code ?? diagnostic.code
-				}`
-			);
-		}
-	}
+	const seen = new Set(
+		functions.flatMap((item) =>
+			item.functionName === null ? [] : [item.functionName]
+		)
+	);
 	for (const functionName of configured) {
 		if (!seen.has(functionName)) {
 			throw new IsoglossSourceTransformError(
@@ -442,15 +438,53 @@ function validateConfiguredTargets(
 	}
 }
 
-function collectTopLevelBindings(ast: t.File): ReadonlySet<string> {
-	const names = new Set<string>();
+function findDynamicNameResolution(
+	ast: t.File
+): { readonly detail: string; readonly origin: SourceRegionOrigin } | null {
+	let found: { detail: string; node: t.Node } | null = null;
 	traverse(ast, {
-		Program(path) {
-			for (const name of Object.keys(path.scope.bindings)) names.add(name);
+		WithStatement(path) {
+			found = { detail: "with statement", node: path.node };
 			path.stop();
 		},
+		Identifier(path) {
+			if (path.node.name === "eval" || path.node.name === "Function") {
+				found = {
+					detail: `${path.node.name} reference`,
+					node: path.node,
+				};
+				path.stop();
+			}
+		},
+		CallExpression(path) {
+			if (
+				t.isIdentifier(path.node.callee) &&
+				(path.node.callee.name === "eval" ||
+					path.node.callee.name === "Function")
+			) {
+				found = {
+					detail: `${path.node.callee.name} call`,
+					node: path.node,
+				};
+				path.stop();
+			}
+		},
+		NewExpression(path) {
+			if (
+				t.isIdentifier(path.node.callee, { name: "Function" })
+			) {
+				found = { detail: "Function constructor", node: path.node };
+				path.stop();
+			}
+		},
 	});
-	return names;
+	const result = found as { detail: string; node: t.Node } | null;
+	return result === null
+		? null
+		: Object.freeze({
+				detail: result.detail,
+				origin: originFor(result.node),
+			});
 }
 
 function buildDiagnostic(
@@ -463,6 +497,15 @@ function buildDiagnostic(
 		detail: diagnostic.rejection
 			? `${diagnostic.rejection.code}:${diagnostic.rejection.detail}`
 			: null,
+	});
+}
+
+function originFor(node: t.Node): SourceRegionOrigin {
+	return Object.freeze({
+		line: node.loc?.start.line ?? null,
+		column: node.loc?.start.column ?? null,
+		start: node.start ?? null,
+		end: node.end ?? null,
 	});
 }
 

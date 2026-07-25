@@ -91,12 +91,20 @@ describe("source Isogloss region discovery", () => {
 		expect(discovery.sites).toEqual([]);
 		expect(discovery.diagnostics).toEqual([
 			expect.objectContaining({
-				code: "RUAM_SOURCE_REGION_REJECTED",
+				code: "RUAM_SOURCE_REGION_NATIVE",
 				functionName: "target",
 				rejection: {
 					code: "RUAM_SOURCE_REGION_UNBOUND_IDENTIFIER",
 					detail: "globalValue",
 				},
+			}),
+		]);
+		expect(discovery.functions).toEqual([
+			expect.objectContaining({
+				functionName: "target",
+				lane: "native",
+				bprfRegionCount: 0,
+				nativeRegionCount: 1,
 			}),
 		]);
 	});
@@ -136,6 +144,41 @@ describe("source Isogloss region discovery", () => {
 			"oldMarker",
 			"marked",
 		]);
+	});
+
+	it("names object, class, private, computed-literal, and field functions", () => {
+		const discovery = discoverSourcePureRegions(
+			parseFile(`
+				const object = {
+					method(value) { return value.item; },
+					["literal"]() { return 1; },
+				};
+				class Example {
+					method(value) { return value.item; }
+					#private(value) { return value.item; }
+					static ["literal"]() { return 2; }
+					field = (value) => value.item;
+				}
+			`),
+			{
+				targetMode: "root",
+				threshold: 1,
+				seed: 3,
+				regionDomains: {
+					method: {},
+					literal: {},
+					"#private": {},
+					field: {},
+				},
+			}
+		);
+
+		expect(
+			discovery.functions.map((item) => item.functionName)
+		).toEqual(["method", "literal", "method", "#private", "literal", "field"]);
+		expect(discovery.functions.every((item) => item.lane === "native")).toBe(
+			true
+		);
 	});
 
 	it("records missing domains, small regions, and deterministic threshold skips", () => {

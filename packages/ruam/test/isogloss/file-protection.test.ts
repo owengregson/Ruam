@@ -52,16 +52,16 @@ describe("contained two-phase file protection", () => {
 	it("plans every transform before publishing any file", async () => {
 		const root = await temporaryDirectory();
 		const goodPath = path.join(root, "good.js");
-		const rejectedPath = path.join(root, "rejected.js");
+		const rejectedPath = path.join(root, "mistyped-target.js");
 		const good = "function guarded(x) { return x + 1; }\n";
 		const rejected =
-			"function guarded(x) { return externallyObservable(x); }\n";
+			"function differentlyNamed(x) { return externallyObservable(x); }\n";
 		await fs.writeFile(goodPath, good, "utf8");
 		await fs.writeFile(rejectedPath, rejected, "utf8");
 
 		await expect(
 			runProtection(root, { options: guardedOptions })
-		).rejects.toThrow("RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED");
+		).rejects.toThrow("RUAM_ISOGLOSS_CONFIGURED_TARGET_NOT_FOUND");
 		expect(await fs.readFile(goodPath, "utf8")).toBe(good);
 		expect(await fs.readFile(rejectedPath, "utf8")).toBe(rejected);
 	});

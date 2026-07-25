@@ -115,7 +115,7 @@ describe("public Isogloss execution cutover", () => {
 		expect(executeFunction(build.code, "unmarked", [8])).toBe(91);
 	});
 
-	it("ships no configured relation fallback and rejects outside declared domains", () => {
+	it("ships no BPRF fallback, guards its domain, and keeps general JavaScript native", () => {
 		const build = protectCode(ROOT_SOURCE, ROOT_OPTIONS);
 
 		expect(build.code).not.toContain("return x * y + (x - 7)");
@@ -125,8 +125,7 @@ describe("public Isogloss execution cutover", () => {
 		expect(() =>
 			executeFunction(build.code, "guardedProduct", [4, 16])
 		).toThrow("RUAM_BPRF_SCALAR_INPUT_GUARD");
-		expect(() =>
-			protectCode(
+		const general = protectCode(
 				`function unsupported(x, object) {
 					return x + object.value;
 				}`,
@@ -137,8 +136,22 @@ describe("public Isogloss execution cutover", () => {
 						},
 					},
 				}
-			)
-		).toThrow("RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED");
+			);
+		expect(general.stats).toMatchObject({
+			languageCoverage: "full-javascript",
+			protectedRegionCount: 0,
+			nativeRegionCount: 1,
+			nativeFunctionCount: 1,
+		});
+		expect(general.diagnostics).toEqual([
+			expect.objectContaining({
+				code: "RUAM_SOURCE_REGION_NATIVE",
+				functionName: "unsupported",
+			}),
+		]);
+		expect(
+			executeFunction(general.code, "unsupported", [2, { value: 5 }])
+		).toBe(7);
 
 		try {
 			protectCode(ROOT_SOURCE, {
