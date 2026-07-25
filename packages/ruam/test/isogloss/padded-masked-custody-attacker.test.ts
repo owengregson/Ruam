@@ -85,6 +85,9 @@ describe("fixed-bucket masked custody attacker gates", () => {
 			expect(report.failedClaims).toEqual([]);
 			expect(report.classifierCaveat).toContain("not a proof");
 		},
-		15_000
+		// This deterministic statistical gate constructs hundreds of complete
+		// padded custody transcripts. Slower shared CI runners need more than
+		// Bun's default 5s and have occasionally crossed the former 15s cap.
+		60_000
 	);
 });
