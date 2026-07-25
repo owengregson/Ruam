@@ -3,8 +3,7 @@
  *
  * Node identities and typed exits replace instruction-pointer control flow.
  * This IR is the contract between JavaScript compilation and Isogloss lattice
- * lowering; it must never contain shuffled/physical opcodes or encoded
- * bytecode offsets.
+ * lowering; it must never contain physical encoding or backend offsets.
  *
  * @module compiler/ir
  */

@@ -1,35 +1,25 @@
 /**
- * Migration-safe names for Ruam's language-level operations.
+ * Canonical names for Ruam's language-level source operations.
  *
- * The current compiler still emits the logical {@link Op} enum consumed by
- * the legacy VM.  Isogloss treats those values as semantic operation
- * identities instead of physical bytecode.  Keeping a runtime alias here lets
- * new compiler stages use Isogloss terminology without changing numeric
- * values or disturbing the existing encoder and interpreter during the
- * migration.
- *
- * This file is intentionally the only compatibility seam new Isogloss
- * compiler code should import.  Once the legacy VM is removed, the enum can be
- * moved here without changing downstream semantic-IR imports.
+ * The visitor catalog is private compiler vocabulary. Isogloss consumers use
+ * these names only after canonical validation has excluded temporary markers
+ * and obsolete fused forms.
  *
  * @module compiler/semantic-ops
  */
 
-import { Op } from "./opcodes.js";
+import { Op } from "./operations.js";
 
 /**
- * Runtime semantic-operation catalog.
- *
- * This is the exact same enum object as {@link Op}; it does not allocate,
- * translate, or renumber operations.
+ * Semantic-operation catalog shared by the visitor and analysis stages.
  */
 export const SemanticOp = Op;
 
 /**
  * A real language-level operation.
  *
- * The legacy enum includes `__COUNT` as a numeric sentinel.  Excluding it from
- * the semantic type prevents the sentinel from entering canonical IR.
+ * The enum includes `__COUNT` as a numeric sentinel. Excluding it from the
+ * semantic type prevents the sentinel from entering canonical IR.
  */
 export type SemanticOp = Exclude<Op, Op.__COUNT>;
 
@@ -51,13 +41,7 @@ export const ALL_SEMANTIC_OPS: readonly SemanticOp[] = Object.freeze(
 );
 
 /**
- * Migration-era operations that are not legal in canonical semantic IR.
- *
- * The signature catalog remains total for these values so the legacy compiler
- * can be used as a differential oracle during replacement. Isogloss lowering,
- * however, must only receive source-language operations. Compile-time markers,
- * optimizer fusions, and VM handler-table mutation are representation details,
- * not JavaScript semantics.
+ * Temporary or obsolete operations that are not legal in canonical IR.
  */
 export const NON_CANONICAL_SEMANTIC_OPS: ReadonlySet<SemanticOp> = new Set([
 	// Patched or consumed before canonical IR is finalized.
@@ -109,7 +93,7 @@ export const NON_CANONICAL_SEMANTIC_OPS: ReadonlySet<SemanticOp> = new Set([
 	Op.CONST_SEQ_JF,
 	Op.CONST_SNEQ_JF,
 
-	// Changes a physical VM dispatch table and has no language-level meaning.
+	// Retired physical-dispatch marker; never emitted or executed.
 	Op.MUTATE,
 ]);
 
@@ -141,7 +125,3 @@ export function assertCanonicalSemanticOp(
 export function semanticOpName(op: SemanticOp): string {
 	return Op[op];
 }
-
-// Preserve access to the old spelling for migration adapters that need to
-// state explicitly that they are crossing back into legacy VM code.
-export { Op as LegacyOp };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { Op } from "../../src/compiler/opcodes.js";
+import { Op } from "../../src/compiler/operations.js";
 import {
 	ALL_CANONICAL_SEMANTIC_OPS,
 	ALL_SEMANTIC_OPS,
@@ -22,8 +22,8 @@ import {
 	type SemanticInstruction,
 } from "../../src/compiler/ir.js";
 
-describe("semantic operation migration alias", () => {
-	it("is the existing logical enum without translation or renumbering", () => {
+describe("semantic operation catalog", () => {
+	it("shares one exact catalog across visitor and analysis stages", () => {
 		expect(SemanticOp).toBe(Op);
 		expect(SemanticOp.ADD).toBe(Op.ADD);
 		expect(SemanticOp.MUTATE).toBe(Op.MUTATE);

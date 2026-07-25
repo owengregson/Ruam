@@ -1,17 +1,17 @@
 /**
  * Statement compilation visitors.
  *
- * Each JS statement type has a dedicated compiler function that emits the
- * corresponding bytecode sequence.  Control flow (if, while, for, switch,
+ * Each accepted statement has a compiler function that emits temporary source
+ * operations. Control flow (if, while, for, switch,
  * try/catch, break/continue, labeled statements) is handled via jump
- * instructions and a loop-stack mechanism.
+ * target markers and a loop-stack mechanism.
  *
  * @module compiler/visitors/statements
  */
 
 import type { NodePath } from "@babel/traverse";
 import type * as t from "@babel/types";
-import { Op } from "../opcodes.js";
+import { Op } from "../operations.js";
 import type { Emitter } from "../emitter.js";
 import type { ScopeAnalyzer } from "../scope.js";
 import type { CompileContext } from "../index.js";

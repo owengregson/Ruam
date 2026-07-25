@@ -12,7 +12,7 @@ import {
 	createSemanticInstruction,
 	type SemanticUnit,
 } from "../../src/compiler/ir.js";
-import { Op } from "../../src/compiler/opcodes.js";
+import { Op } from "../../src/compiler/operations.js";
 import {
 	buildEffectRegionGraph,
 	validateEffectRegionGraph,

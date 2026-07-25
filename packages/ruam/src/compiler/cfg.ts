@@ -8,7 +8,7 @@
  * @module compiler/cfg
  */
 
-import type { Instruction } from "../types.js";
+import type { EmittedSemanticInstruction } from "./types.js";
 import {
 	createSemanticInstruction,
 	type SemanticExit,
@@ -26,7 +26,7 @@ import { getSemanticSignature } from "./semantic-signatures.js";
 
 /** Input needed to create canonical nodes and typed exits for one unit. */
 export interface CanonicalCfgInput {
-	instructions: readonly Instruction[];
+	instructions: readonly EmittedSemanticInstruction[];
 	originIds: readonly SourceOriginId[];
 }
 

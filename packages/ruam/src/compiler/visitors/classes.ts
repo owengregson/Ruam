@@ -2,7 +2,7 @@
  * Class expression and declaration compilation.
  *
  * Handles the `class` keyword by emitting `NEW_CLASS`, then compiling each
- * method / property as a child bytecode unit.  Instance field initialisers
+ * method / property as a child semantic unit. Instance field initialisers
  * are injected into the constructor body before compilation.
  *
  * @module compiler/visitors/classes
@@ -10,11 +10,11 @@
 
 import type { NodePath } from "@babel/traverse";
 import type * as t from "@babel/types";
-import { Op } from "../opcodes.js";
+import { Op } from "../operations.js";
 import type { Emitter } from "../emitter.js";
 import type { ScopeAnalyzer } from "../scope.js";
 import type { CompileContext } from "../index.js";
-import type { BytecodeUnit } from "../../types.js";
+import type { SemanticCompileUnit } from "../types.js";
 import { compileExpression } from "./expressions.js";
 
 /**
@@ -28,11 +28,11 @@ export function compileClassExpr(
 	emitter: Emitter,
 	scope: ScopeAnalyzer,
 	ctx: CompileContext,
-	allUnits: BytecodeUnit[],
+	allUnits: SemanticCompileUnit[],
 	compileFunctionInner: (
 		fnPath: NodePath<t.Function>,
-		allUnits: BytecodeUnit[]
-	) => BytecodeUnit
+		allUnits: SemanticCompileUnit[]
+	) => SemanticCompileUnit
 ): void {
 	const classNode = classPath.node;
 
@@ -176,11 +176,11 @@ function compileClassMethod(
 	emitter: Emitter,
 	scope: ScopeAnalyzer,
 	ctx: CompileContext,
-	allUnits: BytecodeUnit[],
+	allUnits: SemanticCompileUnit[],
 	compileFunctionInner: (
 		fnPath: NodePath<t.Function>,
-		allUnits: BytecodeUnit[]
-	) => BytecodeUnit
+		allUnits: SemanticCompileUnit[]
+	) => SemanticCompileUnit
 ): void {
 	emitter.emit(Op.DUP, 0);
 

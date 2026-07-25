@@ -1,14 +1,17 @@
 /**
- * Bytecode emitter and constant pool manager.
+ * Temporary semantic emitter and literal-pool manager.
  *
- * The {@link Emitter} accumulates instructions and constants during
- * compilation.  It also provides helpers for jump-patching and
- * de-duplication of constant pool entries.
+ * The {@link Emitter} accumulates source operations and literals during
+ * canonical compilation. It also provides control-target patching and literal
+ * de-duplication.
  *
  * @module compiler/emitter
  */
 
-import type { Instruction, ConstantPoolEntry } from "../types.js";
+import type {
+	ConstantPoolEntry,
+	EmittedSemanticInstruction,
+} from "./types.js";
 import type { SourceOrigin, SourceOriginId } from "./ir.js";
 
 const UNKNOWN_SOURCE_ORIGIN: SourceOrigin = Object.freeze({
@@ -30,7 +33,7 @@ const UNKNOWN_SOURCE_ORIGIN: SourceOrigin = Object.freeze({
  */
 export class Emitter {
 	/** Accumulated instruction stream. */
-	readonly instructions: Instruction[] = [];
+	readonly instructions: EmittedSemanticInstruction[] = [];
 
 	/** Accumulated constant pool. */
 	readonly constants: ConstantPoolEntry[] = [];
@@ -38,7 +41,7 @@ export class Emitter {
 	/**
 	 * Deduplicated source locations referenced by
 	 * {@link instructionOriginIds}. This metadata is deliberately parallel to
-	 * the legacy instruction array so adding it cannot change bytecode output.
+	 * the temporary operation array so origin tracking cannot change semantics.
 	 */
 	readonly origins: SourceOrigin[] = [];
 

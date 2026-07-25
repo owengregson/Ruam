@@ -1,9 +1,9 @@
 /**
- * Main bytecode compiler entry point.
+ * Canonical semantic compiler entry point.
  *
- * {@link compileFunction} is the public API — it takes a Babel
- * `NodePath<Function>` and produces a {@link BytecodeUnit} (plus any
- * child units for nested functions).
+ * Babel visitors emit a temporary source-operation stream which is frozen
+ * into execution-independent semantic IR. No serialized instruction artifact
+ * or executable backend leaves this module.
  *
  * @module compiler
  */
@@ -12,7 +12,7 @@ import type { NodePath } from "@babel/traverse";
 import type * as t from "@babel/types";
 import { Emitter } from "./emitter.js";
 import { ScopeAnalyzer } from "./scope.js";
-import { Op } from "./opcodes.js";
+import { Op } from "./operations.js";
 import { compileExpression } from "./visitors/expressions.js";
 import {
 	compileBody,
@@ -20,24 +20,25 @@ import {
 	type LoopContext,
 } from "./visitors/statements.js";
 import { compileClassExpr } from "./visitors/classes.js";
-import type { BytecodeUnit } from "../types.js";
+import type {
+	RootGroupId,
+	SemanticCompileUnit,
+} from "./types.js";
 import {
 	computeUsesExceptions,
 	computeUsesThisContext,
-} from "./slot-analysis.js";
+} from "./metadata-analysis.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 import {
 	analyzeCapturedVars,
 	type CaptureAnalysisResult,
 } from "./capture-analysis.js";
-import { optimizeInstructions } from "./optimizer.js";
 import { buildCanonicalCfg } from "./cfg.js";
 import type {
 	SemanticRootGroup,
 	SemanticUnit,
 	SourceOrigin,
 } from "./ir.js";
-import type { RootGroupId } from "./types.js";
 
 export { buildCanonicalCallGraphInventory } from "./call-graph.js";
 export type {
@@ -224,7 +225,7 @@ export function resetUnitCounter(seed?: number): void {
 }
 
 /**
- * Generate the next unique bytecode unit ID.
+ * Generate the next unique semantic unit ID.
  * Uses a seeded LCG to produce random-looking alphanumeric IDs
  * (e.g. `"k7m2"`, `"x9fp"`) instead of sequential `u_NNNN`.
  */
@@ -280,34 +281,18 @@ type SemanticUnitDraft = Omit<SemanticUnit, "rootGroupId">;
 // ---------------------------------------------------------------------------
 
 /**
- * Compile a single top-level function into a bytecode unit.
- *
- * Nested functions / classes are recursively compiled into child units
- * that are attached to the returned unit's {@link BytecodeUnit.childUnits}.
- */
-export function compileFunction(fnPath: NodePath<t.Function>): BytecodeUnit {
-	const allUnits: BytecodeUnit[] = [];
-	const unit = compileFunctionInner(fnPath, allUnits);
-	unit.childUnits = allUnits;
-	return unit;
-}
-
-/**
  * Compile one protected root into execution-independent semantic IR.
  *
- * This migration API intentionally shares the exact visitor pass used by
- * {@link compileFunction}, snapshots its canonical stream before optimizer
- * fusion, and discards the legacy unit. Product output remains unchanged until
- * the Isogloss pipeline consumes this API.
+ * Temporary visitor emissions are discarded after the root group is frozen.
  */
 export function compileSemanticFunction(
 	fnPath: NodePath<t.Function>,
 	rootGroupId?: RootGroupId
 ): SemanticRootGroup {
-	const legacyChildren: BytecodeUnit[] = [];
+	const compileChildren: SemanticCompileUnit[] = [];
 	const drafts: SemanticUnitDraft[] = [];
-	const legacyRoot = compileFunctionInner(fnPath, legacyChildren, drafts);
-	const resolvedRootGroupId = rootGroupId ?? `rg_${legacyRoot.id}`;
+	const compileRoot = compileFunctionInner(fnPath, compileChildren, drafts);
+	const resolvedRootGroupId = rootGroupId ?? `rg_${compileRoot.id}`;
 	const draftById = new Map(drafts.map((draft) => [draft.id, draft]));
 	const orderedIds: string[] = [];
 	const visitedIds = new Set<string>();
@@ -319,7 +304,7 @@ export function compileSemanticFunction(
 		if (!draft) throw new Error(`RUAM_MISSING_SEMANTIC_UNIT: ${id}`);
 		for (const childId of draft.childUnitIds) visitUnit(childId);
 	};
-	visitUnit(legacyRoot.id);
+	visitUnit(compileRoot.id);
 	if (orderedIds.length !== drafts.length) {
 		throw new Error(
 			`RUAM_ORPHANED_SEMANTIC_UNIT: reached ${orderedIds.length} of ${drafts.length}`
@@ -339,7 +324,7 @@ export function compileSemanticFunction(
 
 	return {
 		id: resolvedRootGroupId,
-		entryUnitId: legacyRoot.id,
+		entryUnitId: compileRoot.id,
 		units,
 		usedSemantics,
 		hasAsync: units.some((unit) => unit.isAsync),
@@ -352,16 +337,14 @@ export function compileSemanticFunction(
 // ---------------------------------------------------------------------------
 
 /**
- * Inner function compiler — produces a single BytecodeUnit.
- *
- * Called both for top-level functions and recursively for nested
- * functions/closures.
+ * Inner source compiler. Its temporary unit exists only to support recursive
+ * visitor composition and is never serialized or executed.
  */
 function compileFunctionInner(
 	fnPath: NodePath<t.Function>,
-	allUnits: BytecodeUnit[],
+	allUnits: SemanticCompileUnit[],
 	semanticDrafts?: SemanticUnitDraft[]
-): BytecodeUnit {
+): SemanticCompileUnit {
 	const node = fnPath.node;
 	const params = fnPath.get("params") as NodePath<t.LVal>[];
 	const paramCount = params.length;
@@ -527,8 +510,7 @@ function compileFunctionInner(
 	// Ensure every code path ends with a return
 	ensureTrailingReturn(emitter);
 
-	// Snapshot the canonical language stream before peephole rewriting and
-	// superinstruction fusion. The legacy optimizer remains untouched.
+	// Snapshot the canonical language stream before constructing metadata.
 	const canonicalCfg = semanticDrafts
 		? buildCanonicalCfg({
 				instructions: emitter.instructions.map((instruction) => ({
@@ -544,11 +526,8 @@ function compileFunctionInner(
 		? emitter.origins.map((origin) => ({ ...origin }))
 		: null;
 
-	// -- Optimization passes (Tiers 2 & 3) ----------------------------------
-	optimizeInstructions(emitter);
-
 	// -- Scope-object elision -----------------------------------------------
-	// Scan the FINAL opcodes (still logical here, before the per-file shuffle)
+	// Scan the final temporary semantic operations
 	// for any scope-dependent opcode.  When none are present and the function
 	// has no dynamic scope, the per-call `Object.create(OS)` layer is provably
 	// redundant and the runtime can use `SC = OS` directly.
@@ -557,17 +536,12 @@ function compileFunctionInner(
 		captureResult.hasDynamicScope
 	);
 
-	// Per-unit interpreter-slot usage flags. Computed here on the FINAL logical
-	// opcodes (post-optimization, pre-shuffle/mutation) — NOT in encode.ts,
-	// because `adjustEncodingForMutations` rewrites `instructions[].opcode` to
-	// physical values before serialization, which would make a logical-opcode
-	// scan there return seed-dependent garbage. These drive the hoisted-slot
-	// save/restore minimization (see compiler/slot-analysis.ts).
+	// Preserve conservative semantic metadata needed by downstream planning.
 	const usesExceptions = computeUsesExceptions(emitter.instructions);
 	const usesThisContext = computeUsesThisContext(emitter.instructions);
 
 	const id = genUnitId();
-	const unit: BytecodeUnit = {
+	const unit: SemanticCompileUnit = {
 		id,
 		constants: emitter.constants,
 		instructions: emitter.instructions,

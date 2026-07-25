@@ -14,7 +14,7 @@ import {
 	type SemanticRootGroup,
 	type SemanticUnit,
 } from "../../src/compiler/ir.js";
-import { Op } from "../../src/compiler/opcodes.js";
+import { Op } from "../../src/compiler/operations.js";
 import type { ConstantPoolEntry } from "../../src/compiler/types.js";
 
 function getFunctionPath(

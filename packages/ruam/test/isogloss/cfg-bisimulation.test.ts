@@ -5,11 +5,10 @@ import type * as t from "@babel/types";
 import { traverse } from "../../src/babel-compat.js";
 import { buildCanonicalCfg } from "../../src/compiler/cfg.js";
 import {
-	compileFunction,
 	compileSemanticFunction,
 	resetUnitCounter,
 } from "../../src/compiler/index.js";
-import { Op } from "../../src/compiler/opcodes.js";
+import { Op } from "../../src/compiler/operations.js";
 import {
 	NON_CANONICAL_SEMANTIC_OPS,
 	SemanticOp,
@@ -38,11 +37,9 @@ function getFunctionPath(
 }
 
 describe("canonical compiler CFG", () => {
-	it("preserves the unfused semantic stream while leaving legacy output optimized", () => {
+	it("preserves the source semantic stream without a physical backend", () => {
 		const source = `function sum(a, b) { return a + b; }`;
 
-		resetUnitCounter(123);
-		const legacy = compileFunction(getFunctionPath(source, "sum"));
 		resetUnitCounter(123);
 		const semantic = compileSemanticFunction(
 			getFunctionPath(source, "sum"),
@@ -51,10 +48,7 @@ describe("canonical compiler CFG", () => {
 		const root = semantic.units[0]!;
 
 		expect(semantic.id).toBe("root-test");
-		expect(semantic.entryUnitId).toBe(legacy.id);
-		expect(legacy.instructions.some((instruction) =>
-			NON_CANONICAL_SEMANTIC_OPS.has(instruction.opcode as Op)
-		)).toBe(true);
+		expect(semantic.entryUnitId).toBe(root.id);
 		expect(root.nodes.every((node) =>
 			!NON_CANONICAL_SEMANTIC_OPS.has(node.op)
 		)).toBe(true);

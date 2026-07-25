@@ -1,24 +1,34 @@
 /**
- * Compiler-internal types shared by canonical semantic IR and its lowering
- * stages.
+ * Compiler-internal types shared by canonical semantic IR and source lowering.
  *
- * Public configuration remains in `src/types.ts`.  During the Isogloss
- * migration the constant-pool type is aliased from that module so existing VM
- * consumers remain source-compatible; ownership can move here at cutover
- * without changing canonical-IR callers.
+ * These are analysis structures, not a distributable instruction format.
  *
  * @module compiler/types
  */
 
-import type {
-	BytecodeUnit,
-	ConstantPoolEntry as PublicConstantPoolEntry,
-	ExceptionEntry,
-	Instruction,
-} from "../types.js";
-
 /** Literal data referenced by canonical semantic instructions. */
-export type ConstantPoolEntry = PublicConstantPoolEntry;
+export type ConstantPoolEntry =
+	| { type: "null"; value: null }
+	| { type: "undefined"; value: undefined }
+	| { type: "boolean"; value: boolean }
+	| { type: "number"; value: number }
+	| { type: "string"; value: string }
+	| { type: "bigint"; value: string }
+	| { type: "regex"; value: { pattern: string; flags: string } };
+
+/** One temporary visitor emission before canonical CFG construction. */
+export interface EmittedSemanticInstruction {
+	opcode: number;
+	operand: number;
+}
+
+/** Temporary exception range emitted while lowering one source function. */
+export interface SemanticExceptionRange {
+	startIp: number;
+	endIp: number;
+	catchIp: number;
+	finallyIp: number;
+}
 
 /** Opaque identity shared by every semantic unit in one protected root. */
 export type RootGroupId = string;
@@ -30,10 +40,7 @@ export type SemanticUnitId = string;
  * Function-level facts that are independent of the eventual execution
  * representation.
  *
- * These fields intentionally mirror the semantic subset of the current
- * `BytecodeUnit`, providing a structurally compatible migration target while
- * excluding bytecode instructions, instruction-pointer tables, and physical
- * encoding details.
+ * These fields exclude serialization, physical encoding, and dispatch data.
  */
 export interface SemanticFunctionMetadata {
 	/** Number of declared parameters. */
@@ -69,12 +76,14 @@ export interface RootGroupCompatible {
 }
 
 /**
- * Temporary aliases used only by migration adapters.
- *
- * New semantic and Isogloss modules should depend on the canonical types
- * instead.  Keeping the aliases here prevents new code from reaching into the
- * public API module for legacy bytecode structures.
+ * Private result used while recursive Babel visitors assemble a root group.
+ * It is discarded after canonical semantic IR is frozen.
  */
-export type LegacyInstruction = Instruction;
-export type LegacyExceptionEntry = ExceptionEntry;
-export type LegacyBytecodeUnit = BytecodeUnit;
+export interface SemanticCompileUnit extends SemanticFunctionMetadata {
+	id: SemanticUnitId;
+	constants: ConstantPoolEntry[];
+	instructions: EmittedSemanticInstruction[];
+	jumpTable: Record<number, number>;
+	exceptionTable: SemanticExceptionRange[];
+	childUnits: SemanticCompileUnit[];
+}
