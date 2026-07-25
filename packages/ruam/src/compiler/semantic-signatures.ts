@@ -53,6 +53,77 @@ export type SemanticEffect =
 	| "exception"
 	| "async";
 
+/** Whether an operation is safe to move/fuse without crossing observability. */
+export type SemanticPurity = "pure" | "frame-local" | "observable";
+
+/** Throw behavior after the operation's inputs have already been evaluated. */
+export type SemanticThrowBehavior =
+	| "never"
+	| "may-throw"
+	| "always-throws";
+
+/**
+ * Conversion performed by the operation.
+ *
+ * `intrinsic` conversions (for example ToBoolean) cannot invoke user code.
+ * `observable` conversions can invoke proxies or user-defined conversion
+ * hooks. `unknown` deliberately fails closed.
+ */
+export type SemanticCoercion =
+	| "none"
+	| "intrinsic"
+	| "observable"
+	| "unknown";
+
+/** User-code invocation performed directly by the operation. */
+export type SemanticCallKind =
+	| "none"
+	| "invoke"
+	| "construct"
+	| "direct-eval"
+	| "dynamic-import"
+	| "coercion-hook"
+	| "host-protocol"
+	| "unknown";
+
+/** Suspension protocol entered by the operation. */
+export type SemanticSuspensionKind =
+	| "none"
+	| "yield"
+	| "await"
+	| "runtime"
+	| "unknown";
+
+/** Conservative read/write classification for one state domain. */
+export type SemanticAccess =
+	| "none"
+	| "read"
+	| "write"
+	| "read-write"
+	| "unknown";
+
+/** Identity-bearing allocation performed by the operation. */
+export type SemanticAllocation =
+	| "none"
+	| "closure"
+	| "object"
+	| "array"
+	| "arguments"
+	| "iterator"
+	| "promise"
+	| "unknown";
+
+/** Completion shape emitted after the operation executes. */
+export type SemanticCompletion =
+	| "normal"
+	| "conditional"
+	| "jump"
+	| "call"
+	| "return"
+	| "throw"
+	| "yield"
+	| "await";
+
 export type SemanticControl =
 	| "fallthrough"
 	| "conditional"
@@ -94,8 +165,20 @@ export interface SemanticSignature {
 	stackInput: StackArity;
 	stackOutput: StackArity;
 	effect: SemanticEffect;
+	purity: SemanticPurity;
 	control: SemanticControl;
+	completion: SemanticCompletion;
 	mayThrow: boolean;
+	throwBehavior: SemanticThrowBehavior;
+	coercion: SemanticCoercion;
+	callKind: SemanticCallKind;
+	suspension: SemanticSuspensionKind;
+	/** Access to unit-local registers, arguments, or indexed slots. */
+	frameAccess: SemanticAccess;
+	scopeAccess: SemanticAccess;
+	objectAccess: SemanticAccess;
+	globalAccess: SemanticAccess;
+	allocation: SemanticAllocation;
 	readsThis: boolean;
 	readsScope: boolean;
 	/**
@@ -272,6 +355,11 @@ classify(
 		family: "register",
 	}
 );
+// A plain frame read cannot execute JavaScript. Increment/decrement variants
+// perform ToNumeric and retain the conservative throwing classification.
+classify([SemanticOp.LOAD_REG], {
+	mayThrow: false,
+});
 classify([SemanticOp.STORE_REG], {
 	operandKind: "register",
 	stackInput: 1,
@@ -327,6 +415,71 @@ classify([SemanticOp.STORE_ARG], {
 	readsScope: false,
 	family: "argument",
 });
+classify([SemanticOp.LOAD_SLOT], {
+	operandKind: "slot",
+	stackInput: 0,
+	stackOutput: 1,
+	effect: "local",
+	mayThrow: false,
+	readsThis: false,
+	readsScope: true,
+	family: "scope",
+});
+classify([SemanticOp.STORE_SLOT], {
+	operandKind: "slot",
+	stackInput: 1,
+	stackOutput: 0,
+	effect: "local",
+	mayThrow: false,
+	readsThis: false,
+	readsScope: true,
+	family: "scope",
+});
+classify([SemanticOp.DECLARE_SLOT], {
+	operandKind: "slot",
+	stackInput: 0,
+	stackOutput: 0,
+	effect: "local",
+	mayThrow: false,
+	readsThis: false,
+	readsScope: true,
+	family: "scope",
+});
+classify(
+	[
+		SemanticOp.INC_SLOT,
+		SemanticOp.DEC_SLOT,
+		SemanticOp.POST_INC_SLOT,
+		SemanticOp.POST_DEC_SLOT,
+	],
+	{
+		operandKind: "slot",
+		stackInput: 0,
+		stackOutput: 1,
+		effect: "local",
+		mayThrow: true,
+		readsThis: false,
+		readsScope: true,
+		family: "scope",
+	}
+);
+classify(
+	[
+		SemanticOp.ADD_ASSIGN_SLOT,
+		SemanticOp.SUB_ASSIGN_SLOT,
+		SemanticOp.MUL_ASSIGN_SLOT,
+	],
+	{
+		operandKind: "slot",
+		stackInput: 1,
+		stackOutput: 1,
+		effect: "local",
+		mayThrow: true,
+		readsThis: false,
+		readsScope: true,
+		family: "scope",
+	}
+);
 
 // Ordinary value operations.
 classify(
@@ -395,6 +548,11 @@ classify([SemanticOp.BIT_NOT, SemanticOp.NOT], {
 	readsScope: false,
 	family: "logical",
 });
+// ToBoolean is non-observable, while bitwise conversion can invoke
+// Symbol.toPrimitive and can reject Symbols or mixed numeric domains.
+classify([SemanticOp.BIT_NOT], {
+	mayThrow: true,
+});
 classify(
 	[
 		SemanticOp.EQ,
@@ -419,6 +577,10 @@ classify(
 		family: "comparison",
 	}
 );
+// Strict equality performs no conversion and cannot invoke user code.
+classify([SemanticOp.SEQ, SemanticOp.SNEQ], {
+	mayThrow: false,
+});
 
 // Typed control exits.
 classify([SemanticOp.JMP, SemanticOp.BREAK, SemanticOp.CONTINUE], {
@@ -753,6 +915,16 @@ classify(
 		family: "scope",
 	}
 );
+classify([SemanticOp.LOAD_GLOBAL_FAST], {
+	operandKind: "scope-name",
+	stackInput: 0,
+	stackOutput: 1,
+	effect: "scope",
+	mayThrow: true,
+	readsThis: false,
+	readsScope: true,
+	family: "scope",
+});
 classify(
 	[
 		SemanticOp.PUSH_SCOPE,
@@ -912,6 +1084,9 @@ classify(
 		family: "conversion",
 	}
 );
+classify([SemanticOp.TYPEOF, SemanticOp.VOID, SemanticOp.TO_BOOLEAN], {
+	mayThrow: false,
+});
 
 classify(
 	[
@@ -964,6 +1139,503 @@ classify([SemanticOp.MUTATE], {
 	precision: "conservative",
 });
 
+const INTRINSIC_COERCION_OPS = new Set<SemanticOpValue>([
+	SemanticOp.NOT,
+	SemanticOp.TO_BOOLEAN,
+	SemanticOp.JMP_TRUE,
+	SemanticOp.JMP_FALSE,
+	SemanticOp.JMP_TRUE_KEEP,
+	SemanticOp.JMP_FALSE_KEEP,
+	SemanticOp.LOGICAL_AND,
+	SemanticOp.LOGICAL_OR,
+]);
+
+const OBSERVABLE_COERCION_OPS = new Set<SemanticOpValue>([
+	SemanticOp.ADD,
+	SemanticOp.SUB,
+	SemanticOp.MUL,
+	SemanticOp.DIV,
+	SemanticOp.MOD,
+	SemanticOp.POW,
+	SemanticOp.NEG,
+	SemanticOp.UNARY_PLUS,
+	SemanticOp.INC,
+	SemanticOp.DEC,
+	SemanticOp.BIT_AND,
+	SemanticOp.BIT_OR,
+	SemanticOp.BIT_XOR,
+	SemanticOp.BIT_NOT,
+	SemanticOp.SHL,
+	SemanticOp.SHR,
+	SemanticOp.USHR,
+	SemanticOp.EQ,
+	SemanticOp.NEQ,
+	SemanticOp.LT,
+	SemanticOp.LTE,
+	SemanticOp.GT,
+	SemanticOp.GTE,
+	SemanticOp.TO_NUMBER,
+	SemanticOp.TO_STRING,
+	SemanticOp.TO_OBJECT,
+	SemanticOp.TO_PROPERTY_KEY,
+	SemanticOp.TO_NUMERIC,
+	SemanticOp.TEMPLATE_LITERAL,
+	SemanticOp.INC_REG,
+	SemanticOp.DEC_REG,
+	SemanticOp.POST_INC_REG,
+	SemanticOp.POST_DEC_REG,
+	SemanticOp.ADD_ASSIGN_REG,
+	SemanticOp.SUB_ASSIGN_REG,
+	SemanticOp.MUL_ASSIGN_REG,
+	SemanticOp.DIV_ASSIGN_REG,
+	SemanticOp.MOD_ASSIGN_REG,
+	SemanticOp.INC_SLOT,
+	SemanticOp.DEC_SLOT,
+	SemanticOp.POST_INC_SLOT,
+	SemanticOp.POST_DEC_SLOT,
+	SemanticOp.ADD_ASSIGN_SLOT,
+	SemanticOp.SUB_ASSIGN_SLOT,
+	SemanticOp.MUL_ASSIGN_SLOT,
+	SemanticOp.INC_SCOPED,
+	SemanticOp.DEC_SCOPED,
+	SemanticOp.POST_INC_SCOPED,
+	SemanticOp.POST_DEC_SCOPED,
+	SemanticOp.ADD_ASSIGN_SCOPED,
+	SemanticOp.SUB_ASSIGN_SCOPED,
+	SemanticOp.MUL_ASSIGN_SCOPED,
+	SemanticOp.DIV_ASSIGN_SCOPED,
+	SemanticOp.MOD_ASSIGN_SCOPED,
+	SemanticOp.POW_ASSIGN_SCOPED,
+	SemanticOp.BIT_AND_ASSIGN_SCOPED,
+	SemanticOp.BIT_OR_ASSIGN_SCOPED,
+	SemanticOp.BIT_XOR_ASSIGN_SCOPED,
+	SemanticOp.SHL_ASSIGN_SCOPED,
+	SemanticOp.SHR_ASSIGN_SCOPED,
+	SemanticOp.USHR_ASSIGN_SCOPED,
+	SemanticOp.ASSIGN_OP,
+]);
+
+const INVOKE_OPS = new Set<SemanticOpValue>([
+	SemanticOp.CALL,
+	SemanticOp.CALL_METHOD,
+	SemanticOp.CALL_OPTIONAL,
+	SemanticOp.CALL_METHOD_OPTIONAL,
+	SemanticOp.CALL_TAGGED_TEMPLATE,
+	SemanticOp.CALL_SUPER_METHOD,
+	SemanticOp.CALL_0,
+	SemanticOp.CALL_1,
+	SemanticOp.CALL_2,
+	SemanticOp.CALL_3,
+	SemanticOp.TAGGED_TEMPLATE,
+]);
+
+const CONSTRUCT_OPS = new Set<SemanticOpValue>([
+	SemanticOp.CALL_NEW,
+	SemanticOp.SUPER_CALL,
+]);
+
+const HOST_PROTOCOL_OPS = new Set<SemanticOpValue>([
+	SemanticOp.GET_PROP_STATIC,
+	SemanticOp.SET_PROP_STATIC,
+	SemanticOp.GET_PROP_DYNAMIC,
+	SemanticOp.SET_PROP_DYNAMIC,
+	SemanticOp.DELETE_PROP_STATIC,
+	SemanticOp.DELETE_PROP_DYNAMIC,
+	SemanticOp.OPT_CHAIN_GET,
+	SemanticOp.OPT_CHAIN_DYNAMIC,
+	SemanticOp.GET_SUPER_PROP,
+	SemanticOp.SET_SUPER_PROP,
+	SemanticOp.IN_OP,
+	SemanticOp.INSTANCEOF,
+	SemanticOp.SPREAD_ARRAY,
+	SemanticOp.SPREAD_OBJECT,
+	SemanticOp.COPY_DATA_PROPERTIES,
+	SemanticOp.SET_PROTO,
+	SemanticOp.FREEZE_OBJECT,
+	SemanticOp.SEAL_OBJECT,
+	SemanticOp.DEFINE_PROPERTY_DESC,
+	SemanticOp.GET_ITERATOR,
+	SemanticOp.ITER_NEXT,
+	SemanticOp.ITER_CLOSE,
+	SemanticOp.FORIN_INIT,
+	SemanticOp.GET_ASYNC_ITERATOR,
+	SemanticOp.ASYNC_ITER_NEXT,
+	SemanticOp.ASYNC_ITER_CLOSE,
+	SemanticOp.FOR_AWAIT_NEXT,
+]);
+
+const YIELD_OPS = new Set<SemanticOpValue>([
+	SemanticOp.YIELD,
+	SemanticOp.YIELD_DELEGATE,
+	SemanticOp.ASYNC_GENERATOR_YIELD,
+]);
+
+const AWAIT_OPS = new Set<SemanticOpValue>([
+	SemanticOp.AWAIT,
+	SemanticOp.FOR_AWAIT_NEXT,
+]);
+
+const RUNTIME_SUSPENSION_OPS = new Set<SemanticOpValue>([
+	SemanticOp.SUSPEND,
+	SemanticOp.RESUME,
+	SemanticOp.GENERATOR_RESUME,
+	SemanticOp.GENERATOR_RETURN,
+	SemanticOp.GENERATOR_THROW,
+	SemanticOp.ASYNC_GENERATOR_NEXT,
+	SemanticOp.ASYNC_GENERATOR_RETURN,
+	SemanticOp.ASYNC_GENERATOR_THROW,
+]);
+
+const FRAME_READ_OPS = new Set<SemanticOpValue>([
+	SemanticOp.LOAD_REG,
+	SemanticOp.LOAD_ARG,
+	SemanticOp.LOAD_ARG_OR_DEFAULT,
+	SemanticOp.GET_ARG_COUNT,
+	SemanticOp.LOAD_SLOT,
+]);
+
+const FRAME_WRITE_OPS = new Set<SemanticOpValue>([
+	SemanticOp.STORE_REG,
+	SemanticOp.STORE_ARG,
+	SemanticOp.STORE_SLOT,
+	SemanticOp.DECLARE_SLOT,
+]);
+
+const FRAME_READ_WRITE_OPS = new Set<SemanticOpValue>([
+	SemanticOp.INC_REG,
+	SemanticOp.DEC_REG,
+	SemanticOp.POST_INC_REG,
+	SemanticOp.POST_DEC_REG,
+	SemanticOp.ADD_ASSIGN_REG,
+	SemanticOp.SUB_ASSIGN_REG,
+	SemanticOp.MUL_ASSIGN_REG,
+	SemanticOp.DIV_ASSIGN_REG,
+	SemanticOp.MOD_ASSIGN_REG,
+	SemanticOp.INC_SLOT,
+	SemanticOp.DEC_SLOT,
+	SemanticOp.POST_INC_SLOT,
+	SemanticOp.POST_DEC_SLOT,
+	SemanticOp.ADD_ASSIGN_SLOT,
+	SemanticOp.SUB_ASSIGN_SLOT,
+	SemanticOp.MUL_ASSIGN_SLOT,
+]);
+
+const GLOBAL_READ_OPS = new Set<SemanticOpValue>([
+	SemanticOp.LOAD_GLOBAL,
+	SemanticOp.LOAD_GLOBAL_FAST,
+	SemanticOp.TYPEOF_GLOBAL,
+	SemanticOp.PUSH_GLOBAL_THIS,
+]);
+
+const GLOBAL_WRITE_OPS = new Set<SemanticOpValue>([
+	SemanticOp.STORE_GLOBAL,
+]);
+
+const SCOPE_READ_OPS = new Set<SemanticOpValue>([
+	SemanticOp.LOAD_SCOPED,
+	SemanticOp.TDZ_CHECK,
+	SemanticOp.PUSH_CLOSURE_VAR,
+]);
+
+const SCOPE_WRITE_OPS = new Set<SemanticOpValue>([
+	SemanticOp.STORE_SCOPED,
+	SemanticOp.DECLARE_VAR,
+	SemanticOp.DECLARE_LET,
+	SemanticOp.DECLARE_CONST,
+	SemanticOp.TDZ_MARK,
+	SemanticOp.DELETE_SCOPED,
+	SemanticOp.STORE_CLOSURE_VAR,
+]);
+
+const SCOPE_READ_WRITE_OPS = new Set<SemanticOpValue>([
+	SemanticOp.PUSH_SCOPE,
+	SemanticOp.POP_SCOPE,
+	SemanticOp.PUSH_WITH_SCOPE,
+	SemanticOp.PUSH_BLOCK_SCOPE,
+	SemanticOp.PUSH_CATCH_SCOPE,
+	SemanticOp.PUSH_INDEXED_SCOPE,
+	SemanticOp.POP_INDEXED_SCOPE,
+	SemanticOp.CATCH_BIND,
+	SemanticOp.CATCH_BIND_PATTERN,
+	SemanticOp.INC_SCOPED,
+	SemanticOp.DEC_SCOPED,
+	SemanticOp.POST_INC_SCOPED,
+	SemanticOp.POST_DEC_SCOPED,
+	SemanticOp.ADD_ASSIGN_SCOPED,
+	SemanticOp.SUB_ASSIGN_SCOPED,
+	SemanticOp.MUL_ASSIGN_SCOPED,
+	SemanticOp.DIV_ASSIGN_SCOPED,
+	SemanticOp.MOD_ASSIGN_SCOPED,
+	SemanticOp.POW_ASSIGN_SCOPED,
+	SemanticOp.BIT_AND_ASSIGN_SCOPED,
+	SemanticOp.BIT_OR_ASSIGN_SCOPED,
+	SemanticOp.BIT_XOR_ASSIGN_SCOPED,
+	SemanticOp.SHL_ASSIGN_SCOPED,
+	SemanticOp.SHR_ASSIGN_SCOPED,
+	SemanticOp.USHR_ASSIGN_SCOPED,
+	SemanticOp.AND_ASSIGN_SCOPED,
+	SemanticOp.OR_ASSIGN_SCOPED,
+	SemanticOp.NULLISH_ASSIGN_SCOPED,
+]);
+
+const OBJECT_READ_OPS = new Set<SemanticOpValue>([
+	SemanticOp.GET_PROP_STATIC,
+	SemanticOp.GET_PROP_DYNAMIC,
+	SemanticOp.OPT_CHAIN_GET,
+	SemanticOp.OPT_CHAIN_DYNAMIC,
+	SemanticOp.GET_SUPER_PROP,
+	SemanticOp.GET_PRIVATE_FIELD,
+	SemanticOp.HAS_PRIVATE_FIELD,
+	SemanticOp.IN_OP,
+	SemanticOp.INSTANCEOF,
+	SemanticOp.GET_ITERATOR,
+	SemanticOp.ITER_NEXT,
+	SemanticOp.ITER_DONE,
+	SemanticOp.ITER_VALUE,
+	SemanticOp.ITER_RESULT_UNWRAP,
+	SemanticOp.FORIN_INIT,
+	SemanticOp.FORIN_NEXT,
+	SemanticOp.FORIN_DONE,
+	SemanticOp.GET_ASYNC_ITERATOR,
+	SemanticOp.ASYNC_ITER_NEXT,
+	SemanticOp.ASYNC_ITER_DONE,
+	SemanticOp.ASYNC_ITER_VALUE,
+]);
+
+const OBJECT_WRITE_OPS = new Set<SemanticOpValue>([
+	SemanticOp.SET_PROP_STATIC,
+	SemanticOp.SET_PROP_DYNAMIC,
+	SemanticOp.DELETE_PROP_STATIC,
+	SemanticOp.DELETE_PROP_DYNAMIC,
+	SemanticOp.SET_SUPER_PROP,
+	SemanticOp.SET_PRIVATE_FIELD,
+	SemanticOp.DEFINE_OWN_PROPERTY,
+	SemanticOp.ARRAY_PUSH,
+	SemanticOp.ARRAY_HOLE,
+	SemanticOp.SET_PROTO,
+	SemanticOp.FREEZE_OBJECT,
+	SemanticOp.SEAL_OBJECT,
+	SemanticOp.DEFINE_PROPERTY_DESC,
+]);
+
+const OBJECT_READ_WRITE_OPS = new Set<SemanticOpValue>([
+	SemanticOp.SPREAD_ARRAY,
+	SemanticOp.SPREAD_OBJECT,
+	SemanticOp.COPY_DATA_PROPERTIES,
+	SemanticOp.ITER_CLOSE,
+	SemanticOp.ASYNC_ITER_CLOSE,
+]);
+
+const CLOSURE_ALLOCATION_OPS = new Set<SemanticOpValue>([
+	SemanticOp.NEW_CLOSURE,
+	SemanticOp.NEW_FUNCTION,
+	SemanticOp.NEW_ARROW,
+	SemanticOp.NEW_ASYNC,
+	SemanticOp.NEW_GENERATOR,
+	SemanticOp.NEW_ASYNC_GENERATOR,
+]);
+
+const OBJECT_ALLOCATION_OPS = new Set<SemanticOpValue>([
+	SemanticOp.NEW_OBJECT,
+	SemanticOp.NEW_CLASS,
+	SemanticOp.NEW_DERIVED_CLASS,
+	SemanticOp.CREATE_TEMPLATE_OBJECT,
+	SemanticOp.CREATE_RAW_STRINGS,
+	SemanticOp.TO_OBJECT,
+]);
+
+const ARRAY_ALLOCATION_OPS = new Set<SemanticOpValue>([
+	SemanticOp.NEW_ARRAY,
+	SemanticOp.NEW_ARRAY_WITH_SIZE,
+	SemanticOp.CREATE_REST_ARGS,
+]);
+
+const ARGUMENT_ALLOCATION_OPS = new Set<SemanticOpValue>([
+	SemanticOp.PUSH_ARGUMENTS,
+	SemanticOp.CREATE_UNMAPPED_ARGS,
+	SemanticOp.CREATE_MAPPED_ARGS,
+]);
+
+const ITERATOR_ALLOCATION_OPS = new Set<SemanticOpValue>([
+	SemanticOp.CREATE_GENERATOR,
+	SemanticOp.CREATE_ASYNC_FROM_SYNC_ITER,
+]);
+
+function accessFor(
+	op: SemanticOpValue,
+	reads: ReadonlySet<SemanticOpValue>,
+	writes: ReadonlySet<SemanticOpValue>,
+	readWrites: ReadonlySet<SemanticOpValue>
+): SemanticAccess {
+	if (readWrites.has(op)) return "read-write";
+	if (reads.has(op)) return "read";
+	if (writes.has(op)) return "write";
+	return "none";
+}
+
+function completionFor(control: SemanticControl): SemanticCompletion {
+	return control === "fallthrough" ? "normal" : control;
+}
+
+function annotateSignature(signature: SemanticSignature): SemanticSignature {
+	if (signature.precision === "conservative") {
+		return {
+			...signature,
+			purity: "observable",
+			completion: completionFor(signature.control),
+			throwBehavior: signature.mayThrow ? "may-throw" : "never",
+			coercion: "unknown",
+			callKind: "unknown",
+			suspension: "unknown",
+			frameAccess: "unknown",
+			scopeAccess: "unknown",
+			objectAccess: "unknown",
+			globalAccess: "unknown",
+			allocation: "unknown",
+		};
+	}
+
+	const op = signature.op;
+	const coercion: SemanticCoercion = OBSERVABLE_COERCION_OPS.has(op)
+		? "observable"
+		: INTRINSIC_COERCION_OPS.has(op)
+			? "intrinsic"
+			: "none";
+	let callKind: SemanticCallKind = INVOKE_OPS.has(op)
+		? "invoke"
+		: CONSTRUCT_OPS.has(op)
+			? "construct"
+			: op === SemanticOp.DIRECT_EVAL
+				? "direct-eval"
+				: op === SemanticOp.DYNAMIC_IMPORT
+					? "dynamic-import"
+					: HOST_PROTOCOL_OPS.has(op)
+						? "host-protocol"
+						: coercion === "observable"
+							? "coercion-hook"
+							: "none";
+	const suspension: SemanticSuspensionKind = YIELD_OPS.has(op)
+		? "yield"
+		: AWAIT_OPS.has(op)
+			? "await"
+			: RUNTIME_SUSPENSION_OPS.has(op)
+				? "runtime"
+				: "none";
+	const frameAccess = accessFor(
+		op,
+		FRAME_READ_OPS,
+		FRAME_WRITE_OPS,
+		FRAME_READ_WRITE_OPS
+	);
+	let scopeAccess = GLOBAL_READ_OPS.has(op) || GLOBAL_WRITE_OPS.has(op)
+		? "none"
+		: accessFor(op, SCOPE_READ_OPS, SCOPE_WRITE_OPS, SCOPE_READ_WRITE_OPS);
+	let globalAccess = accessFor(
+		op,
+		GLOBAL_READ_OPS,
+		GLOBAL_WRITE_OPS,
+		new Set<SemanticOpValue>()
+	);
+	let objectAccess = accessFor(
+		op,
+		OBJECT_READ_OPS,
+		OBJECT_WRITE_OPS,
+		OBJECT_READ_WRITE_OPS
+	);
+	let allocation: SemanticAllocation = CLOSURE_ALLOCATION_OPS.has(op)
+		? "closure"
+		: OBJECT_ALLOCATION_OPS.has(op)
+			? "object"
+			: ARRAY_ALLOCATION_OPS.has(op)
+				? "array"
+				: ARGUMENT_ALLOCATION_OPS.has(op)
+					? "arguments"
+					: ITERATOR_ALLOCATION_OPS.has(op)
+						? "iterator"
+						: op === SemanticOp.DYNAMIC_IMPORT
+							? "promise"
+							: CONSTRUCT_OPS.has(op)
+								? "unknown"
+								: "none";
+
+	// Calls, host protocols, and observable conversion hooks may execute
+	// arbitrary user code. Their mutation footprint is therefore unknown even
+	// when the operation also has a more specific direct access.
+	if (
+		callKind !== "none" &&
+		callKind !== "construct" &&
+		callKind !== "dynamic-import"
+	) {
+		if (scopeAccess === "none") scopeAccess = "unknown";
+		if (globalAccess === "none") globalAccess = "unknown";
+		if (objectAccess === "none") objectAccess = "unknown";
+	}
+	if (callKind === "construct" || callKind === "dynamic-import") {
+		scopeAccess = "unknown";
+		globalAccess = "unknown";
+		objectAccess = "unknown";
+	}
+	if (signature.effect === "scope" && scopeAccess === "none" && globalAccess === "none") {
+		scopeAccess = "unknown";
+	}
+	if (
+		signature.effect === "object" &&
+		objectAccess === "none" &&
+		allocation === "none"
+	) {
+		objectAccess = "unknown";
+	}
+	if (
+		signature.effect === "async" &&
+		suspension === "none" &&
+		callKind === "none"
+	) {
+		callKind = "unknown";
+	}
+
+	const completion = completionFor(signature.control);
+	const throwBehavior: SemanticThrowBehavior = !signature.mayThrow
+		? "never"
+		: signature.control === "throw" &&
+			  signature.op !== SemanticOp.THROW_IF_NOT_OBJECT
+			? "always-throws"
+			: "may-throw";
+	const observable =
+		throwBehavior !== "never" ||
+		coercion === "observable" ||
+		callKind !== "none" ||
+		suspension !== "none" ||
+		scopeAccess !== "none" ||
+		objectAccess !== "none" ||
+		globalAccess !== "none" ||
+		allocation !== "none" ||
+		completion === "call" ||
+		completion === "return" ||
+		completion === "throw" ||
+		completion === "yield" ||
+		completion === "await";
+	const purity: SemanticPurity = observable
+		? "observable"
+		: frameAccess === "none" && signature.effect !== "local"
+			? "pure"
+			: "frame-local";
+
+	return {
+		...signature,
+		purity,
+		completion,
+		throwBehavior,
+		coercion,
+		callKind,
+		suspension,
+		frameAccess,
+		scopeAccess,
+		objectAccess,
+		globalAccess,
+		allocation,
+	};
+}
+
 function conservativeSignature(op: SemanticOpValue): SemanticSignature {
 	return {
 		op,
@@ -971,8 +1643,19 @@ function conservativeSignature(op: SemanticOpValue): SemanticSignature {
 		stackInput: "dynamic",
 		stackOutput: "dynamic",
 		effect: "object",
+		purity: "observable",
 		control: "fallthrough",
+		completion: "normal",
 		mayThrow: true,
+		throwBehavior: "may-throw",
+		coercion: "unknown",
+		callKind: "unknown",
+		suspension: "unknown",
+		frameAccess: "unknown",
+		scopeAccess: "unknown",
+		objectAccess: "unknown",
+		globalAccess: "unknown",
+		allocation: "unknown",
 		readsThis: true,
 		readsScope: true,
 		syntheticDimensions: 1,
@@ -990,11 +1673,11 @@ function buildSignatureTable(): Readonly<
 	>;
 
 	for (const op of ALL_SEMANTIC_OPS) {
-		const signature = {
+		const signature = annotateSignature({
 			...conservativeSignature(op),
 			...overrides.get(op),
 			op,
-		};
+		});
 		table[op] = Object.freeze(signature);
 	}
 

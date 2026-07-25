@@ -39,6 +39,21 @@ import type {
 } from "./ir.js";
 import type { RootGroupId } from "./types.js";
 
+export {
+	buildEffectRegionGraph,
+	validateEffectRegionGraph,
+} from "./regions.js";
+export type {
+	EffectRegion,
+	EffectRegionExit,
+	EffectRegionGraph,
+	EffectRegionId,
+	RegionBoundaryContract,
+	RegionEffectSummary,
+	RegionStateDomain,
+	RegionStatePort,
+} from "./regions.js";
+
 // ---------------------------------------------------------------------------
 // Scope-object elision
 // ---------------------------------------------------------------------------

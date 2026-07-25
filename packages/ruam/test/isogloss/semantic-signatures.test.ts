@@ -79,6 +79,33 @@ describe("semantic signature catalog", () => {
 			expect(signature.syntheticDimensions, semanticOpName(op)).toBeGreaterThan(
 				0
 			);
+			expect(signature.mayThrow, semanticOpName(op)).toBe(
+				signature.throwBehavior !== "never"
+			);
+			expect(signature.completion, semanticOpName(op)).toBe(
+				signature.control === "fallthrough"
+					? "normal"
+					: signature.control
+			);
+			if (signature.precision === "conservative") {
+				expect(signature.purity, semanticOpName(op)).toBe("observable");
+				expect(signature.coercion, semanticOpName(op)).toBe("unknown");
+				expect(signature.callKind, semanticOpName(op)).toBe("unknown");
+				expect(signature.allocation, semanticOpName(op)).toBe("unknown");
+			}
+			if (signature.purity === "pure") {
+				expect(signature.throwBehavior, semanticOpName(op)).toBe("never");
+				expect(signature.callKind, semanticOpName(op)).toBe("none");
+				expect(signature.suspension, semanticOpName(op)).toBe("none");
+				expect(signature.scopeAccess, semanticOpName(op)).toBe("none");
+				expect(signature.objectAccess, semanticOpName(op)).toBe("none");
+				expect(signature.globalAccess, semanticOpName(op)).toBe("none");
+				expect(signature.allocation, semanticOpName(op)).toBe("none");
+				expect(
+					["none", "intrinsic"].includes(signature.coercion),
+					semanticOpName(op)
+				).toBe(true);
+			}
 		}
 	});
 
@@ -98,6 +125,62 @@ describe("semantic signature catalog", () => {
 		expect(getSemanticSignature(SemanticOp.AWAIT).effect).toBe("async");
 	});
 
+	it("exposes conservative observability dimensions used by region formation", () => {
+		const literal = getSemanticSignature(SemanticOp.PUSH_TRUE);
+		expect(literal.purity).toBe("pure");
+		expect(literal.throwBehavior).toBe("never");
+		expect(literal.coercion).toBe("none");
+
+		const logicalNot = getSemanticSignature(SemanticOp.NOT);
+		expect(logicalNot.purity).toBe("pure");
+		expect(logicalNot.coercion).toBe("intrinsic");
+		expect(logicalNot.throwBehavior).toBe("never");
+
+		const addition = getSemanticSignature(SemanticOp.ADD);
+		expect(addition.purity).toBe("observable");
+		expect(addition.coercion).toBe("observable");
+		expect(addition.callKind).toBe("coercion-hook");
+		expect(addition.throwBehavior).toBe("may-throw");
+
+		const strictEquality = getSemanticSignature(SemanticOp.SEQ);
+		expect(strictEquality.purity).toBe("pure");
+		expect(strictEquality.coercion).toBe("none");
+		expect(strictEquality.throwBehavior).toBe("never");
+
+		const propertyRead = getSemanticSignature(
+			SemanticOp.GET_PROP_STATIC
+		);
+		expect(propertyRead.objectAccess).toBe("read");
+		expect(propertyRead.callKind).toBe("host-protocol");
+		expect(propertyRead.purity).toBe("observable");
+
+		const globalWrite = getSemanticSignature(SemanticOp.STORE_GLOBAL);
+		expect(globalWrite.globalAccess).toBe("write");
+		expect(globalWrite.scopeAccess).toBe("none");
+
+		const call = getSemanticSignature(SemanticOp.CALL);
+		expect(call.callKind).toBe("invoke");
+		expect(call.scopeAccess).toBe("unknown");
+		expect(call.objectAccess).toBe("unknown");
+		expect(call.globalAccess).toBe("unknown");
+		expect(call.completion).toBe("call");
+
+		const awaitSignature = getSemanticSignature(SemanticOp.AWAIT);
+		expect(awaitSignature.suspension).toBe("await");
+		expect(awaitSignature.completion).toBe("await");
+
+		const allocation = getSemanticSignature(SemanticOp.NEW_OBJECT);
+		expect(allocation.allocation).toBe("object");
+		expect(allocation.purity).toBe("observable");
+
+		expect(getSemanticSignature(SemanticOp.LOAD_SLOT).frameAccess).toBe(
+			"read"
+		);
+		expect(getSemanticSignature(SemanticOp.STORE_SLOT).frameAccess).toBe(
+			"write"
+		);
+	});
+
 	it("resolves operand-dependent stack arity without executing semantics", () => {
 		const call = getSemanticSignature(SemanticOp.CALL);
 		const methodCall = getSemanticSignature(SemanticOp.CALL_METHOD);
@@ -115,6 +198,9 @@ describe("semantic signature catalog", () => {
 		expect(mutation.mayThrow).toBe(true);
 		expect(mutation.readsScope).toBe(true);
 		expect(mutation.readsThis).toBe(true);
+		expect(mutation.purity).toBe("observable");
+		expect(mutation.coercion).toBe("unknown");
+		expect(mutation.frameAccess).toBe("unknown");
 	});
 });
 
