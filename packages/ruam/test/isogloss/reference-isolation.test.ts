@@ -46,6 +46,7 @@ describe("Isogloss reference isolation", () => {
 			"/src/isogloss/csh/reference.ts",
 			"/src/isogloss/csh/testing-bprf-reference.ts",
 			"/src/isogloss/csh/testing-emitter.ts",
+			"/src/isogloss/csh/padded-masked-plan.ts",
 			"/src/isogloss/csh/reference-custodian.ts",
 			"/src/isogloss/csh/reference-chart-custodian.ts",
 			"/src/isogloss/csh/reference-masked-custodian.ts",
