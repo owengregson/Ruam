@@ -145,11 +145,12 @@ export default function GetStarted() {
 					Your code,
 					<br />
 					<span className="text-accent italic">
-						World Class Protection.
+						Explicit Protection Boundaries.
 					</span>
 				</h2>
 				<p className="mx-auto mt-4 max-w-md text-base text-smoke">
-					What are you waiting for?
+					Start with a guarded pure source region and choose the
+					Isogloss profile your deployment can actually enforce.
 				</p>
 
 				{/* Install command */}

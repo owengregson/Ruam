@@ -14,25 +14,25 @@ const useCases = [
 		icon: faPuzzlePiece,
 		title: "Browser Extensions",
 		description:
-			"Extension source is visible to anyone who installs it. Ruam makes your logic unreadable while keeping it fully functional.",
+			"Replace eligible pure extension logic with guarded, diversified source regions while preserving the surrounding browser APIs.",
 	},
 	{
 		icon: faCloud,
 		title: "SaaS & Web Apps",
 		description:
-			"Protect proprietary algorithms, pricing logic, and business rules that run in the browser where anyone can inspect them.",
+			"Move selected pricing and business-rule relations into an Isogloss profile that matches an already-observable deployment boundary.",
 	},
 	{
 		icon: faKey,
 		title: "Licensed Software",
 		description:
-			"Prevent license validation from being bypassed. VM bytecode makes it impractical to locate and patch checks.",
+			"Isolate eligible scalar checks into explicit source regions while leaving surrounding stateful and effectful logic native.",
 	},
 	{
 		icon: faCode,
 		title: "APIs & SDKs",
 		description:
-			"Shield authentication flows, API keys, and protocol implementations in client-side JavaScript.",
+			"Keep effectful API orchestration native while applying Isogloss only to audited pure regions with exact input domains.",
 	},
 ];
 
@@ -49,7 +49,9 @@ export default function PipelineFlow() {
 					Built for real projects
 				</h2>
 				<p className="mx-auto mt-4 max-w-lg text-base text-smoke">
-					You build what matters, and let us handle security.
+					Choose protection boundaries explicitly; unsupported effects
+					remain ordinary JavaScript instead of being silently
+					virtualized.
 				</p>
 			</motion.div>
 

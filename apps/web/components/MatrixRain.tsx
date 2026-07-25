@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback } from "react";
 
-/* Bytecode-themed character set — fits the obfuscation aesthetic */
+/* Scalar-expression character set for the Isogloss source-region aesthetic */
 const CHARS = "0123456789abcdefABCDEF{}[]();:=!+*/&|<>^~_$x";
 const randChar = () => CHARS[Math.floor(Math.random() * CHARS.length)]!;
 

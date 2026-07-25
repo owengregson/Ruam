@@ -6,7 +6,7 @@ import Footer from "@/components/Footer";
 export const metadata: Metadata = {
 	title: "Playground — Ruam",
 	description:
-		"Try Ruam in your browser. Paste JavaScript, pick a preset, and see the obfuscated output instantly.",
+		"Define guarded input domains for a pure JavaScript source region and compile it with Ruam's complete-local Isogloss profile.",
 };
 
 export default function PlaygroundPage() {
