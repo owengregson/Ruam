@@ -53,6 +53,20 @@ export type {
 	RegionStateDomain,
 	RegionStatePort,
 } from "./regions.js";
+export {
+	MAX_PURE_REGION_INTEGER_MAGNITUDE,
+	isPureRegionValueInDomain,
+	lowerEffectRegionsToPureContract,
+} from "./pure-region-lowering.js";
+export type {
+	LoweredPureRegionContract,
+	PureRegionBinding,
+	PureRegionInputAssumption,
+	PureRegionInputBinding,
+	PureRegionLoweringRequest,
+	PureRegionOutputBinding,
+	PureRegionValueDomain,
+} from "./pure-region-lowering.js";
 
 // ---------------------------------------------------------------------------
 // Scope-object elision
