@@ -1,16 +1,15 @@
 /**
  * Deterministic root-group call-boundary and SCC inventory.
  *
- * Canonical IR currently proves the identities of nested closure allocations:
- * a `unit-ref` operand indexes a string constant which must name a direct child
- * unit. It does not prove the target of a call. Invocation operands encode
- * argument shape, and canonical call exits encode only the local resume node.
- * Closure identity and call identity are therefore kept separate here.
+ * Canonical IR proves nested closure allocations through `unit-ref` operands.
+ * Invocation operands still encode argument shape rather than targets, so this
+ * module consumes the proof-only abstract dataflow inventory to connect a call
+ * only when that closure identity reaches the exact runtime callee position.
  *
  * Treating a call operand as a unit reference would be unsound (an argument
- * count can accidentally equal a constant-pool index). Until canonical IR
- * carries an explicit call-target fact, every call, construction, dynamic-code,
- * and reflective user-code boundary is classified as indirect-or-external.
+ * count can accidentally equal a constant-pool index). Any call, construction,
+ * dynamic-code, or reflective boundary without an exact dataflow fact remains
+ * indirect-or-external.
  *
  * @module compiler/call-graph
  */
@@ -23,6 +22,10 @@ import type {
 	SourceOrigin,
 	SourceOriginId,
 } from "./ir.js";
+import {
+	analyzeCanonicalDirectCallTargets,
+	type CanonicalDirectCallTargetFact,
+} from "./direct-call-targets.js";
 import {
 	assertCanonicalSemanticOp,
 	semanticOpName,
@@ -100,7 +103,7 @@ export type CanonicalCallResolution =
 	| {
 			kind: "direct-intra-group";
 			targetUnitId: SemanticUnitId;
-			evidence: "explicit-canonical-call-target";
+			evidence: "exact-canonical-dataflow";
 	  }
 	| {
 			kind: "indirect-or-external";
@@ -127,7 +130,7 @@ export interface CanonicalCallBoundary extends CanonicalCallSource {
 /** A call-graph edge backed by explicit canonical target evidence. */
 export interface CanonicalDirectCallEdge extends CanonicalCallSource {
 	targetUnitId: SemanticUnitId;
-	evidence: "explicit-canonical-call-target";
+	evidence: "exact-canonical-dataflow";
 }
 
 export interface CanonicalCallScc {
@@ -158,13 +161,24 @@ export interface CanonicalCallGraphSummary {
 }
 
 /**
- * Explicitly records why an empty direct-edge set is meaningful rather than
- * evidence that a root group makes no internal calls.
+ * Explicitly records the proof policy used to construct direct edges.
  */
 export interface CanonicalCallTargetPolicy {
 	mode: "canonical-evidence-only";
-	directTargetRepresentation: "absent-from-current-ir";
+	directTargetRepresentation: "unit-ref-plus-exact-dataflow";
 	unprovenBoundaryClassification: "indirect-or-external";
+	supportedValueFlows: readonly [
+		"stack",
+		"register",
+		"argument",
+		"slot",
+	];
+	precisionLossBoundaries: readonly [
+		"scope-chain",
+		"dynamic-stack",
+		"abrupt-control",
+		"unsupported-aliasing",
+	];
 }
 
 export interface CanonicalCallGraphInventory {
@@ -202,10 +216,40 @@ export function buildCanonicalCallGraphInventory(
 					createClosureSite(unit, node, source, units)
 				);
 			}
+		}
+	}
 
+	const targetFacts = analyzeCanonicalDirectCallTargets(group);
+	const targetFactsByUnit = new Map<
+		SemanticUnitId,
+		Map<SemanticNodeId, CanonicalDirectCallTargetFact>
+	>();
+	for (const fact of targetFacts.facts) {
+		let factsByNode = targetFactsByUnit.get(fact.sourceUnitId);
+		if (!factsByNode) {
+			factsByNode = new Map();
+			targetFactsByUnit.set(fact.sourceUnitId, factsByNode);
+		}
+		if (factsByNode.has(fact.sourceNodeId)) {
+			throw new Error(
+				`RUAM_DUPLICATE_DIRECT_CALL_TARGET_FACT: ${fact.sourceUnitId}:${fact.sourceNodeId}`
+			);
+		}
+		factsByNode.set(fact.sourceNodeId, fact);
+	}
+	for (const unitId of unitIds) {
+		const unit = units.get(unitId)!;
+		for (const node of unit.nodes) {
+			const source = sourceFor(unit, node);
+			const signature = getSemanticSignature(node.op);
 			if (signature.callKind !== "none") {
 				boundaries.push(
-					createBoundary(node, source, signature.callKind)
+					createBoundary(
+						node,
+						source,
+						signature.callKind,
+						targetFactsByUnit.get(unit.id)?.get(node.id)
+					)
 				);
 			}
 		}
@@ -240,8 +284,20 @@ export function buildCanonicalCallGraphInventory(
 		unitIds,
 		targetPolicy: Object.freeze({
 			mode: "canonical-evidence-only",
-			directTargetRepresentation: "absent-from-current-ir",
+			directTargetRepresentation: "unit-ref-plus-exact-dataflow",
 			unprovenBoundaryClassification: "indirect-or-external",
+			supportedValueFlows: Object.freeze([
+				"stack",
+				"register",
+				"argument",
+				"slot",
+			] as const),
+			precisionLossBoundaries: Object.freeze([
+				"scope-chain",
+				"dynamic-stack",
+				"abrupt-control",
+				"unsupported-aliasing",
+			] as const),
 		}),
 		closureSites: Object.freeze(closureSites),
 		boundaries: Object.freeze(boundaries),
@@ -394,7 +450,8 @@ function createClosureSite(
 function createBoundary(
 	node: SemanticInstruction,
 	source: CanonicalCallSource,
-	callKind: UserCodeCallKind
+	callKind: UserCodeCallKind,
+	targetFact: CanonicalDirectCallTargetFact | undefined
 ): CanonicalCallBoundary {
 	const signature = getSemanticSignature(node.op);
 	return Object.freeze({
@@ -404,10 +461,16 @@ function createBoundary(
 		boundaryKind: boundaryKindFor(callKind),
 		operand: node.operand,
 		operandKind: signature.operandKind,
-		resolution: Object.freeze({
-			kind: "indirect-or-external",
-			reason: unresolvedReasonFor(callKind),
-		}),
+		resolution: targetFact
+			? Object.freeze({
+					kind: "direct-intra-group",
+					targetUnitId: targetFact.targetUnitId,
+					evidence: targetFact.evidence,
+				})
+			: Object.freeze({
+					kind: "indirect-or-external",
+					reason: unresolvedReasonFor(callKind),
+				}),
 		observability: Object.freeze({
 			callKind,
 			effect: signature.effect,

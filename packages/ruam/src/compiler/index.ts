@@ -54,6 +54,12 @@ export type {
 	CanonicalDirectCallEdge,
 	CanonicalUnresolvedCallReason,
 } from "./call-graph.js";
+export { analyzeCanonicalDirectCallTargets } from "./direct-call-targets.js";
+export type {
+	CanonicalDirectCallConvention,
+	CanonicalDirectCallTargetFact,
+	CanonicalDirectCallTargetInventory,
+} from "./direct-call-targets.js";
 export {
 	buildEffectRegionGraph,
 	validateEffectRegionGraph,
@@ -93,6 +99,26 @@ export type {
 	PureRegionEntryAssumptionSource,
 	PureRegionLoweringRejectionCode,
 } from "./pure-region-planning.js";
+export {
+	analyzePureRegionLearnability,
+	assessMaximumCustodyLearnability,
+	PURE_REGION_LEARNABILITY_NON_CLAIM,
+} from "./pure-region-learnability.js";
+export type {
+	DenseInterpolationAnalysis,
+	DenseInterpolationInapplicability,
+	MaximumCustodyLearnabilityDecision,
+	MaximumCustodyLearnabilityPolicy,
+	MaximumCustodyLearnabilityReason,
+	PureRegionExactAttackMethod,
+	PureRegionExactAttackUpperBound,
+	PureRegionInputDomainAnalysis,
+	PureRegionLearnabilityAnalysis,
+	PureRegionLearnabilityIssue,
+	PureRegionLearnabilityIssueCode,
+	PureRegionOutputLearnabilityAnalysis,
+	PureRegionValueDegreeAnalysis,
+} from "./pure-region-learnability.js";
 
 // ---------------------------------------------------------------------------
 // Scope-object elision

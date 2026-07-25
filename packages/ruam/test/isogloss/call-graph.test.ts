@@ -3,13 +3,14 @@ import { parse } from "@babel/parser";
 import type { NodePath } from "@babel/traverse";
 import type * as t from "@babel/types";
 import { traverse } from "../../src/babel-compat.js";
+import { buildCanonicalCfg } from "../../src/compiler/cfg.js";
 import {
+	analyzeCanonicalDirectCallTargets,
 	buildCanonicalCallGraphInventory,
 	compileSemanticFunction,
 	resetUnitCounter,
 } from "../../src/compiler/index.js";
 import {
-	createSemanticInstruction,
 	type SemanticRootGroup,
 	type SemanticUnit,
 } from "../../src/compiler/ir.js";
@@ -45,23 +46,22 @@ function makeUnit(
 	options: {
 		constants?: ConstantPoolEntry[];
 		childUnitIds?: string[];
+		paramCount?: number;
+		registerCount?: number;
+		slotCount?: number;
 	} = {}
 ): SemanticUnit {
-	const nodes = instructions.map((instruction, index) =>
-		createSemanticInstruction({
-			id: index,
-			op: instruction.opcode,
-			operand: instruction.operand,
-			originId: 0,
-		})
-	);
+	const cfg = buildCanonicalCfg({
+		instructions: instructions.map((instruction) => ({ ...instruction })),
+		originIds: instructions.map(() => 0),
+	});
 	return {
 		id,
 		rootGroupId,
 		constants: options.constants ?? [],
-		nodes,
-		exits: new Map(nodes.map((node) => [node.id, []])),
-		entryNode: 0,
+		nodes: cfg.nodes,
+		exits: cfg.exits,
+		entryNode: cfg.entryNode,
 		origins: [
 			{
 				file: "manual-call-graph-fixture.js",
@@ -72,9 +72,9 @@ function makeUnit(
 			},
 		],
 		childUnitIds: options.childUnitIds ?? [],
-		paramCount: 0,
-		registerCount: 0,
-		slotCount: 0,
+		paramCount: options.paramCount ?? 0,
+		registerCount: options.registerCount ?? 0,
+		slotCount: options.slotCount ?? 0,
 		isStrict: false,
 		isGenerator: false,
 		isAsync: false,
@@ -105,7 +105,7 @@ function makeGroup(
 }
 
 describe("canonical root-group call graph inventory", () => {
-	it("keeps proven closure identity separate from an unproven call target", () => {
+	it("proves an IIFE target by dataflow rather than operand coincidence", () => {
 		const source = `
 			function outer() {
 				return (function child(value) { return value; })(7);
@@ -132,14 +132,26 @@ describe("canonical root-group call graph inventory", () => {
 		expect(closureNode.operand).toBe(callNode.operand);
 
 		const inventory = buildCanonicalCallGraphInventory(group);
+		const reorderedInventory = buildCanonicalCallGraphInventory({
+			...group,
+			units: [...group.units].reverse(),
+		});
 		const invoke = inventory.boundaries.find(
 			(boundary) => boundary.nodeId === callNode.id
 		)!;
 
+		expect(reorderedInventory).toEqual(inventory);
 		expect(inventory.targetPolicy).toEqual({
 			mode: "canonical-evidence-only",
-			directTargetRepresentation: "absent-from-current-ir",
+			directTargetRepresentation: "unit-ref-plus-exact-dataflow",
 			unprovenBoundaryClassification: "indirect-or-external",
+			supportedValueFlows: ["stack", "register", "argument", "slot"],
+			precisionLossBoundaries: [
+				"scope-chain",
+				"dynamic-stack",
+				"abrupt-control",
+				"unsupported-aliasing",
+			],
 		});
 		expect(inventory.closureSites).toEqual([
 			expect.objectContaining({
@@ -156,26 +168,367 @@ describe("canonical root-group call graph inventory", () => {
 				operand: 1,
 				operandKind: "argc",
 				resolution: {
-					kind: "indirect-or-external",
-					reason: "callee-identity-not-represented",
+					kind: "direct-intra-group",
+					targetUnitId: child.id,
+					evidence: "exact-canonical-dataflow",
 				},
 			})
 		);
 		expect(invoke.origin.file).toBe("call-graph-fixture.js");
-		expect(inventory.directEdges).toEqual([]);
+		expect(inventory.directEdges).toEqual([
+			expect.objectContaining({
+				unitId: root.id,
+				nodeId: callNode.id,
+				targetUnitId: child.id,
+				evidence: "exact-canonical-dataflow",
+			}),
+		]);
 		expect(inventory.summary.hasProvenRecursion).toBe(false);
-		expect(inventory.summary.hasUnresolvedRecursionRisk).toBe(true);
-		expect(inventory.summary.hasUnresolvedMutualRecursionRisk).toBe(true);
+		expect(inventory.summary.hasUnresolvedRecursionRisk).toBe(false);
+		expect(inventory.summary.hasUnresolvedMutualRecursionRisk).toBe(false);
+		const rootScc = inventory.sccs.find((scc) =>
+			scc.unitIds.includes(root.id)
+		)!;
+		const childScc = inventory.sccs.find((scc) =>
+			scc.unitIds.includes(child.id)
+		)!;
+		expect(rootScc.outgoingSccIds).toEqual([childScc.id]);
+		expect(childScc.incomingSccIds).toEqual([rootScc.id]);
+	});
+
+	it("never treats argc or a constant-pool index as target evidence", () => {
+		const child = makeUnit("child", "operand-root", [
+			{ opcode: Op.RETURN_VOID, operand: 0 },
+		]);
+		const root = makeUnit(
+			"root",
+			"operand-root",
+			[
+				{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+				{ opcode: Op.CALL, operand: 0 },
+				{ opcode: Op.RETURN, operand: 0 },
+			],
+			{
+				constants: [{ type: "string", value: child.id }],
+				childUnitIds: [child.id],
+			}
+		);
+		const inventory = buildCanonicalCallGraphInventory(
+			makeGroup("operand-root", root.id, [root, child])
+		);
+
+		expect(inventory.directEdges).toEqual([]);
+		expect(inventory.boundaries[0]!.operand).toBe(0);
+		expect(inventory.boundaries[0]!.resolution).toEqual({
+			kind: "indirect-or-external",
+			reason: "callee-identity-not-represented",
+		});
+	});
+
+	it("propagates nested bindings through canonical registers", () => {
+		const source = `
+			function outer() {
+				function inner() { return 1; }
+				return inner();
+			}
+		`;
+		resetUnitCounter(112);
+		const group = compileSemanticFunction(
+			getFunctionPath(source, "outer"),
+			"register-binding-root"
+		);
+		const root = group.units.find(
+			(unit) => unit.id === group.entryUnitId
+		)!;
+		const child = group.units.find(
+			(unit) => unit.id !== group.entryUnitId
+		)!;
+		const callNode = root.nodes.find((node) => node.op === Op.CALL)!;
+		const analysis = analyzeCanonicalDirectCallTargets(group);
+		const inventory = buildCanonicalCallGraphInventory(group);
+
+		expect(
+			root.nodes.map((node) => node.op).slice(0, 4)
+		).toEqual([Op.NEW_CLOSURE, Op.STORE_REG, Op.LOAD_REG, Op.CALL]);
+		expect(analysis.facts).toEqual([
+			{
+				rootGroupId: "register-binding-root",
+				sourceUnitId: root.id,
+				sourceNodeId: callNode.id,
+				targetUnitId: child.id,
+				convention: "plain",
+				evidence: "exact-canonical-dataflow",
+			},
+		]);
+		expect(inventory.directEdges).toEqual([
+			expect.objectContaining({
+				unitId: root.id,
+				nodeId: callNode.id,
+				targetUnitId: child.id,
+			}),
+		]);
+	});
+
+	it("retains equal branch targets and rejects disagreeing branch targets", () => {
+		const equalSource = `
+			function outer(flag) {
+				function inner() { return 1; }
+				const selected = flag ? inner : inner;
+				return selected();
+			}
+		`;
+		resetUnitCounter(113);
+		const equalGroup = compileSemanticFunction(
+			getFunctionPath(equalSource, "outer"),
+			"equal-join-root"
+		);
+		const equalRoot = equalGroup.units.find(
+			(unit) => unit.id === equalGroup.entryUnitId
+		)!;
+		const equalChild = equalGroup.units.find(
+			(unit) => unit.id !== equalGroup.entryUnitId
+		)!;
+		const equalCall = equalRoot.nodes.find((node) => node.op === Op.CALL)!;
+		const equalInventory = buildCanonicalCallGraphInventory(equalGroup);
+
+		expect(equalInventory.directEdges).toContainEqual(
+			expect.objectContaining({
+				unitId: equalRoot.id,
+				nodeId: equalCall.id,
+				targetUnitId: equalChild.id,
+			})
+		);
+
+		const disagreeingSource = `
+			function outer(flag) {
+				function left() { return 1; }
+				function right() { return 2; }
+				const selected = flag ? left : right;
+				return selected();
+			}
+		`;
+		resetUnitCounter(114);
+		const disagreeingGroup = compileSemanticFunction(
+			getFunctionPath(disagreeingSource, "outer"),
+			"disagreeing-join-root"
+		);
+		const disagreeingRoot = disagreeingGroup.units.find(
+			(unit) => unit.id === disagreeingGroup.entryUnitId
+		)!;
+		const disagreeingCall = disagreeingRoot.nodes.find(
+			(node) => node.op === Op.CALL
+		)!;
+		const disagreeingInventory =
+			buildCanonicalCallGraphInventory(disagreeingGroup);
+		const boundary = disagreeingInventory.boundaries.find(
+			(candidate) =>
+				candidate.unitId === disagreeingRoot.id &&
+				candidate.nodeId === disagreeingCall.id
+		)!;
+
+		expect(
+			disagreeingInventory.directEdges.some(
+				(edge) =>
+					edge.unitId === disagreeingRoot.id &&
+					edge.nodeId === disagreeingCall.id
+			)
+		).toBe(false);
+		expect(boundary.resolution).toEqual({
+			kind: "indirect-or-external",
+			reason: "callee-identity-not-represented",
+		});
+	});
+
+	it("uses the VM method, constructor, fast-call, and slot conventions", () => {
+		const child = makeUnit("child", "convention-root", [
+			{ opcode: Op.RETURN_VOID, operand: 0 },
+		]);
+		const root = makeUnit(
+			"root",
+			"convention-root",
+			[
+				{ opcode: Op.NEW_CLOSURE, operand: 0 },
+				{ opcode: Op.STORE_SLOT, operand: 0 },
+				{ opcode: Op.LOAD_SLOT, operand: 0 },
+				{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+				{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+				{ opcode: Op.CALL_METHOD, operand: 1 },
+				{ opcode: Op.POP, operand: 0 },
+				{ opcode: Op.NEW_CLOSURE, operand: 0 },
+				{ opcode: Op.STORE_SLOT, operand: 0 },
+				{ opcode: Op.LOAD_SLOT, operand: 0 },
+				{ opcode: Op.CALL_NEW, operand: 0 },
+				{ opcode: Op.POP, operand: 0 },
+				{ opcode: Op.NEW_CLOSURE, operand: 0 },
+				{ opcode: Op.STORE_SLOT, operand: 0 },
+				{ opcode: Op.LOAD_SLOT, operand: 0 },
+				{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+				{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+				{ opcode: Op.CALL_2, operand: 999 },
+				{ opcode: Op.POP, operand: 0 },
+				{ opcode: Op.NEW_CLOSURE, operand: 0 },
+				{ opcode: Op.STORE_SLOT, operand: 0 },
+				{ opcode: Op.LOAD_SLOT, operand: 0 },
+				{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+				{ opcode: Op.CALL, operand: -1 },
+				{ opcode: Op.POP, operand: 0 },
+				{ opcode: Op.NEW_CLOSURE, operand: 0 },
+				{ opcode: Op.STORE_SLOT, operand: 0 },
+				{ opcode: Op.LOAD_SLOT, operand: 0 },
+				{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+				{ opcode: Op.CALL_TAGGED_TEMPLATE, operand: 1 },
+				{ opcode: Op.RETURN, operand: 0 },
+			],
+			{
+				constants: [{ type: "string", value: child.id }],
+				childUnitIds: [child.id],
+				slotCount: 1,
+			}
+		);
+		const analysis = analyzeCanonicalDirectCallTargets(
+			makeGroup("convention-root", root.id, [root, child])
+		);
+
+		expect(
+			analysis.facts.map((fact) => ({
+				nodeId: fact.sourceNodeId,
+				target: fact.targetUnitId,
+				convention: fact.convention,
+			}))
+		).toEqual([
+			{ nodeId: 5, target: child.id, convention: "method" },
+			{ nodeId: 10, target: child.id, convention: "construct" },
+			{ nodeId: 17, target: child.id, convention: "fast-2" },
+			{ nodeId: 23, target: child.id, convention: "plain" },
+			{
+				nodeId: 29,
+				target: child.id,
+				convention: "tagged-template",
+			},
+		]);
+	});
+
+	it("leaves aliased and scope-loaded calls unresolved", () => {
+		const source = `
+			function outer(callback) {
+				function inner() { return 1; }
+				callback(inner);
+				let selected = inner;
+				selected = callback;
+				return selected();
+			}
+		`;
+		resetUnitCounter(115);
+		const group = compileSemanticFunction(
+			getFunctionPath(source, "outer"),
+			"alias-root"
+		);
+		const root = group.units.find(
+			(unit) => unit.id === group.entryUnitId
+		)!;
+		const inventory = buildCanonicalCallGraphInventory(group);
+		const rootInvokes = inventory.boundaries.filter(
+			(boundary) =>
+				boundary.unitId === root.id &&
+				boundary.observability.callKind === "invoke"
+		);
+
+		expect(rootInvokes).toHaveLength(2);
+		expect(
+			rootInvokes.every(
+				(boundary) =>
+					boundary.resolution.kind === "indirect-or-external"
+			)
+		).toBe(true);
+		expect(
+			inventory.directEdges.some((edge) => edge.unitId === root.id)
+		).toBe(false);
+	});
+
+	it("drops argument-held targets across super calls and suspension", () => {
+		const child = makeUnit("child", "escape-root", [
+			{ opcode: Op.RETURN_VOID, operand: 0 },
+		]);
+		const superRoot = makeUnit(
+			"super-root",
+			"escape-root",
+			[
+				{ opcode: Op.NEW_CLOSURE, operand: 0 },
+				{ opcode: Op.STORE_ARG, operand: 0 },
+				{ opcode: Op.SUPER_CALL, operand: 0 },
+				{ opcode: Op.POP, operand: 0 },
+				{ opcode: Op.LOAD_ARG, operand: 0 },
+				{ opcode: Op.CALL_0, operand: 0 },
+				{ opcode: Op.RETURN, operand: 0 },
+			],
+			{
+				constants: [{ type: "string", value: child.id }],
+				childUnitIds: [child.id],
+				paramCount: 1,
+			}
+		);
+		const awaitRoot = makeUnit(
+			"await-root",
+			"await-escape-root",
+			[
+				{ opcode: Op.NEW_CLOSURE, operand: 0 },
+				{ opcode: Op.STORE_ARG, operand: 0 },
+				{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+				{ opcode: Op.AWAIT, operand: 0 },
+				{ opcode: Op.POP, operand: 0 },
+				{ opcode: Op.LOAD_ARG, operand: 0 },
+				{ opcode: Op.CALL_0, operand: 0 },
+				{ opcode: Op.RETURN, operand: 0 },
+			],
+			{
+				constants: [{ type: "string", value: child.id }],
+				childUnitIds: [child.id],
+				paramCount: 1,
+			}
+		);
+		const awaitChild = { ...child, rootGroupId: "await-escape-root" };
+
+		expect(
+			analyzeCanonicalDirectCallTargets(
+				makeGroup("escape-root", superRoot.id, [superRoot, child])
+			).facts
+		).toEqual([]);
+		expect(
+			analyzeCanonicalDirectCallTargets(
+				makeGroup("await-escape-root", awaitRoot.id, [
+					awaitRoot,
+					awaitChild,
+				])
+			).facts
+		).toEqual([]);
 	});
 
 	it("reports source and observability for invoke, construct, dynamic, and reflection boundaries", () => {
 		const unit = makeUnit("entry", "boundary-root", [
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
 			{ opcode: Op.CALL_METHOD, operand: 2 },
+			{ opcode: Op.POP, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
 			{ opcode: Op.CALL_NEW, operand: 1 },
-			{ opcode: Op.DIRECT_EVAL, operand: 1 },
+			{ opcode: Op.POP, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+			{ opcode: Op.DIRECT_EVAL, operand: 0 },
+			{ opcode: Op.POP, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
 			{ opcode: Op.DYNAMIC_IMPORT, operand: 0 },
+			{ opcode: Op.POP, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
 			{ opcode: Op.GET_PROP_DYNAMIC, operand: 0 },
+			{ opcode: Op.POP, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
+			{ opcode: Op.PUSH_UNDEFINED, operand: 0 },
 			{ opcode: Op.ADD, operand: 0 },
+			{ opcode: Op.POP, operand: 0 },
 			{ opcode: Op.RETURN_VOID, operand: 0 },
 		]);
 		const inventory = buildCanonicalCallGraphInventory(
@@ -193,32 +546,32 @@ describe("canonical root-group call graph inventory", () => {
 			}))
 		).toEqual([
 			{
-				nodeId: 0,
+				nodeId: 4,
 				kind: "invoke",
 				reason: "callee-identity-not-represented",
 			},
 			{
-				nodeId: 1,
+				nodeId: 8,
 				kind: "construct",
 				reason: "constructor-identity-not-represented",
 			},
 			{
-				nodeId: 2,
+				nodeId: 11,
 				kind: "dynamic-code",
 				reason: "runtime-generated-code",
 			},
 			{
-				nodeId: 3,
+				nodeId: 14,
 				kind: "dynamic-module",
 				reason: "runtime-module-resolution",
 			},
 			{
-				nodeId: 4,
+				nodeId: 18,
 				kind: "reflection",
 				reason: "runtime-hook-dispatch",
 			},
 			{
-				nodeId: 5,
+				nodeId: 22,
 				kind: "reflection",
 				reason: "runtime-hook-dispatch",
 			},
@@ -290,6 +643,37 @@ describe("canonical root-group call graph inventory", () => {
 		);
 	});
 
+	it("keeps captured-scope mutual recursion unresolved", () => {
+		const source = `
+			function outer() {
+				function left() { return right(); }
+				function right() { return left(); }
+				return left();
+			}
+		`;
+		resetUnitCounter(223);
+		const group = compileSemanticFunction(
+			getFunctionPath(source, "outer"),
+			"mutual-scope-root"
+		);
+		const inventory = buildCanonicalCallGraphInventory(group);
+		const invokes = inventory.boundaries.filter(
+			(boundary) => boundary.observability.callKind === "invoke"
+		);
+
+		expect(invokes).toHaveLength(3);
+		expect(
+			invokes.every(
+				(boundary) =>
+					boundary.resolution.kind === "indirect-or-external"
+			)
+		).toBe(true);
+		expect(inventory.directEdges).toEqual([]);
+		expect(inventory.summary.hasProvenRecursion).toBe(false);
+		expect(inventory.summary.hasProvenMutualRecursion).toBe(false);
+		expect(inventory.summary.hasUnresolvedMutualRecursionRisk).toBe(true);
+	});
+
 	it("fails closed on malformed nested unit identity", () => {
 		const child = makeUnit("child", "malformed-root", [
 			{ opcode: Op.RETURN_VOID, operand: 0 },
@@ -312,5 +696,29 @@ describe("canonical root-group call graph inventory", () => {
 				makeGroup("malformed-root", root.id, [root, child])
 			)
 		).toThrow("RUAM_INVALID_CANONICAL_UNIT_REF");
+	});
+
+	it("fails closed on malformed reachable stack and frame facts", () => {
+		const underflow = makeUnit("underflow", "underflow-root", [
+			{ opcode: Op.CALL, operand: 1 },
+			{ opcode: Op.RETURN, operand: 0 },
+		]);
+		expect(() =>
+			analyzeCanonicalDirectCallTargets(
+				makeGroup("underflow-root", underflow.id, [underflow])
+			)
+		).toThrow("RUAM_DIRECT_TARGET_STACK_UNDERFLOW");
+
+		const invalidRegister = makeUnit("bad-reg", "bad-reg-root", [
+			{ opcode: Op.LOAD_REG, operand: 0 },
+			{ opcode: Op.RETURN, operand: 0 },
+		]);
+		expect(() =>
+			analyzeCanonicalDirectCallTargets(
+				makeGroup("bad-reg-root", invalidRegister.id, [
+					invalidRegister,
+				])
+			)
+		).toThrow("RUAM_DIRECT_TARGET_INVALID_REGISTER_INDEX");
 	});
 });
