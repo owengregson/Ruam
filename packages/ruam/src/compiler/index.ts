@@ -39,6 +39,21 @@ import type {
 } from "./ir.js";
 import type { RootGroupId } from "./types.js";
 
+export { buildCanonicalCallGraphInventory } from "./call-graph.js";
+export type {
+	CanonicalBoundaryKind,
+	CanonicalBoundaryObservability,
+	CanonicalCallBoundary,
+	CanonicalCallGraphInventory,
+	CanonicalCallGraphSummary,
+	CanonicalCallResolution,
+	CanonicalCallScc,
+	CanonicalCallSource,
+	CanonicalCallTargetPolicy,
+	CanonicalClosureSite,
+	CanonicalDirectCallEdge,
+	CanonicalUnresolvedCallReason,
+} from "./call-graph.js";
 export {
 	buildEffectRegionGraph,
 	validateEffectRegionGraph,
@@ -67,6 +82,17 @@ export type {
 	PureRegionOutputBinding,
 	PureRegionValueDomain,
 } from "./pure-region-lowering.js";
+export { planPureRegionCandidates } from "./pure-region-planning.js";
+export type {
+	PlannedPureRegionCandidate,
+	PureRegionCandidatePlan,
+	PureRegionCandidateRejection,
+	PureRegionCandidateRejectionCode,
+	PureRegionEntryAssumptionMap,
+	PureRegionEntryAssumptionProvider,
+	PureRegionEntryAssumptionSource,
+	PureRegionLoweringRejectionCode,
+} from "./pure-region-planning.js";
 
 // ---------------------------------------------------------------------------
 // Scope-object elision
