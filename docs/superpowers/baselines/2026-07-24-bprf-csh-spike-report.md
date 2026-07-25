@@ -220,23 +220,65 @@ whose intrinsic query complexity is high. None can be manufactured by a
 semantics-preserving client transform alone.
 
 To remove transition-count and stage-position leakage from the remote
-transcript, the owner/server planner now places real transitions, in order,
-among mask-refreshing identity epochs in one of four fixed epoch buckets:
+transcript, the owner/server planner places real transitions, in order, among
+mask-refreshing identity epochs in one of four fixed epoch buckets:
 **4, 8, 16, or 32**. Every slot changes cover and representation mask and
 returns the same signed chart shape. Different secret placements produce the
 same client cover path and exact final output. The owner schedule and padding
 count are reference/server-only and are kept unreachable from package entries.
-Adversarial placement/stage classification is the next transcript gate.
+
+The first planner failed this gate. Its 32-bit LCG/Fisher-Yates placement was
+not uniform: over 10,000 bucket-eight, two-stage plans the per-slot real counts
+were **3,093 / 2,978 / 3,101 / 2,893 / 2,627 / 2,016 / 2,495 / 797**, and a
+held-out classifier reached **69.79%** balanced placement accuracy against a
+50% baseline. The planner was replaced with a server-secret HMAC word stream
+and rejection-sampled Fisher-Yates selection.
+
+The corrected fixed-bucket attacker reports:
+
+| Measurement | Result |
+|---|---:|
+| Corrected maximum slot-rate deviation, 10,000 plans | 1.10 percentage points |
+| Full-feature real-slot classification | 46.35% (50% chance) |
+| Epoch-prior real-slot classification | 52.60% (50% chance) |
+| Payload-only real-slot classification | 49.87% (50% chance) |
+| Four-way hidden stage-count classification | 25.78% (25% chance) |
+| Placement/stage/per-epoch structural shape match | true / true / true |
+| Declared bucket classification | 100% |
+| Foreign/rebound response accepted | false / false |
+| Padded-state substitution accepted at next boundary | false |
+| Bucket-eight/two-stage transition work | 4x |
+| Trace / resident-storage proxy | 3.22x / 5x |
+| Localized client hook families | 2 |
+
+This supports only the fixed-bucket transcript claim for the tested corpus.
+It is not a proof of PRF security, global session uniqueness, or resistance to
+every adaptive classifier. It does not reverse the overall black-box-output or
+localized-hook no-go findings.
+
+The compiler now also computes constructive exact black-box attack upper
+bounds before maximum-custody eligibility. It combines exact finite-domain
+enumeration with dense polynomial interpolation and keeps all arithmetic in
+`bigint`. The current degree-nine, three-input fixture is learnable in
+**220 queries** by dense interpolation versus **1,000** by enumeration.
+The gate rejects a region whenever its cheapest known exact attack falls below
+the configured threshold or the analysis is incomplete. An eligible result is
+explicitly not a hardness lower bound.
 
 ## Correctness and build status
 
-At the current branch checkpoint:
+At the last full-branch checkpoint:
 
 - full repository tests: **2,421 passed, 0 failed, 28,998 assertions**;
 - TypeScript typecheck: passed;
 - package build: passed; and
 - reference custodian/evaluator identifiers are absent from built package
   output.
+
+The corrected padding and transcript tranche adds eleven focused passing tests
+across the padded planner, masked protocol, and both attacker suites. A new
+full-branch qualification is required after the remaining compiler analysis
+lands.
 
 The same run measured the still-legacy VM control at **43.0× weighted average
 runtime overhead** across its ten-workload performance suite. That is a
@@ -278,12 +320,11 @@ unevaluated.
 
 Do not freeze artifact, certificate, carrier, or runtime schemas yet.
 
-The next decision requires:
+The corrected fixed-bucket planner clears its narrow transcript gate, but the
+next product decision still requires:
 
 - an actively secure, topology-hidden PFE feasibility decision if the private
   profile remains in scope;
-- padded transcript and opaque contract-bucket measurements for direct
-  custody;
 - canonical-operation and patch-collapse measurements on product-shaped
   emitted code;
 - legitimate size/runtime/latency/bandwidth measurements; and
