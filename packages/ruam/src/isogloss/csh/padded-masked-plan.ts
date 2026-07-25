@@ -9,8 +9,8 @@
  * @module isogloss/csh/padded-masked-plan
  */
 
+import { createHmac } from "node:crypto";
 import { deriveSeed } from "../../naming/scope.js";
-import { createSeededRandom } from "../../random/entropy.js";
 import {
 	createChartCover,
 	type ChartCover,
@@ -26,7 +26,8 @@ export interface PaddedMaskedCustodyPlanOptions {
 	readonly width: number;
 	readonly bucketSize: (typeof MASKED_CUSTODY_TRANSCRIPT_BUCKETS)[number];
 	readonly coverSeed: number;
-	readonly placementSeed: number;
+	/** Server-only high-entropy key; never included in the client contract. */
+	readonly placementSecret: string;
 }
 
 /**
@@ -50,10 +51,8 @@ export function createPaddedMaskedCustodyPlan(
 	const realTransitionSlots = selectOrderedSlots(
 		options.bucketSize,
 		options.realTransitions.length,
-		deriveSeed(
-			options.placementSeed >>> 0,
-			`${transcriptClassId}:placement`
-		)
+		options.placementSecret,
+		transcriptClassId
 	);
 	const realBySlot = new Map(
 		realTransitionSlots.map((slot, index) => [
@@ -108,25 +107,57 @@ function validateOptions(options: PaddedMaskedCustodyPlanOptions): void {
 	) {
 		throw new Error("RUAM_CSH_PADDED_PLAN_TRANSITION_COUNT");
 	}
-	for (const value of [options.coverSeed, options.placementSeed]) {
-		if (!Number.isSafeInteger(value)) {
-			throw new Error("RUAM_CSH_PADDED_PLAN_INVALID_SEED");
-		}
+	if (!Number.isSafeInteger(options.coverSeed)) {
+		throw new Error("RUAM_CSH_PADDED_PLAN_INVALID_SEED");
+	}
+	if (options.placementSecret.length < 16) {
+		throw new Error("RUAM_CSH_PADDED_PLAN_WEAK_PLACEMENT_SECRET");
 	}
 }
 
 function selectOrderedSlots(
 	bucketSize: number,
 	realCount: number,
-	seed: number
+	secret: string,
+	transcriptClassId: string
 ): number[] {
-	const random = createSeededRandom(seed);
+	const nextWord = createKeyedWordStream(
+		secret,
+		`${transcriptClassId}:real-count:${realCount}:placement`
+	);
 	const slots = Array.from({ length: bucketSize }, (_, index) => index);
 	for (let index = slots.length - 1; index > 0; index--) {
-		const target = random.nextUint32() % (index + 1);
+		const target = uniformBelow(nextWord, index + 1);
 		[slots[index], slots[target]] = [slots[target]!, slots[index]!];
 	}
 	return slots.slice(0, realCount).sort((left, right) => left - right);
+}
+
+function createKeyedWordStream(
+	secret: string,
+	domain: string
+): () => number {
+	let counter = 0;
+	return () =>
+		createHmac("sha256", secret)
+			.update(domain)
+			.update("|")
+			.update(String(counter++))
+			.digest()
+			.readUInt32LE(0);
+}
+
+function uniformBelow(
+	nextWord: () => number,
+	upperExclusive: number
+): number {
+	const wordRange = 0x1_0000_0000;
+	const limit =
+		wordRange - (wordRange % upperExclusive);
+	for (;;) {
+		const word = nextWord();
+		if (word < limit) return word % upperExclusive;
+	}
 }
 
 function createIdentityTransition(

@@ -159,7 +159,7 @@ function createPlan(placementSeed: number): PaddedMaskedCustodyPlan {
 		width: WIDTH,
 		bucketSize: 4,
 		coverSeed: 4242,
-		placementSeed,
+		placementSecret: `test-placement-secret-${placementSeed}`,
 	});
 }
 
@@ -250,7 +250,7 @@ describe("fixed-bucket statefully masked custody planning", () => {
 				width: WIDTH,
 				bucketSize: 3 as 4,
 				coverSeed: 1,
-				placementSeed: 2,
+				placementSecret: "invalid-bucket-secret",
 			})
 		).toThrow("RUAM_CSH_PADDED_PLAN_INVALID_BUCKET");
 		expect(() =>
@@ -262,9 +262,18 @@ describe("fixed-bucket statefully masked custody planning", () => {
 				width: WIDTH,
 				bucketSize: 4,
 				coverSeed: 1,
-				placementSeed: 2,
+				placementSecret: "too-many-stages-secret",
 			})
 		).toThrow("RUAM_CSH_PADDED_PLAN_TRANSITION_COUNT");
+		expect(() =>
+			createPaddedMaskedCustodyPlan({
+				realTransitions,
+				width: WIDTH,
+				bucketSize: 4,
+				coverSeed: 1,
+				placementSecret: "weak",
+			})
+		).toThrow("RUAM_CSH_PADDED_PLAN_WEAK_PLACEMENT_SECRET");
 	});
 });
 
