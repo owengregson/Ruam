@@ -136,6 +136,12 @@ export function lowerSourcePureExpression(
 		options,
 	};
 	try {
+		// Value references address `[all inputs, then all steps]`. Discover the
+		// complete ingress prefix before emitting any step so a later first use
+		// of an input cannot shift already-emitted step references.
+		if (isSupportedSourceExpressionShape(expression)) {
+			predeclareSourceInputs(expression, state);
+		}
 		const output = lowerExpression(expression, state, null);
 		const contract: PureRegionContract = Object.freeze({
 			inputs: Object.freeze(
@@ -181,6 +187,95 @@ export function lowerSourcePureExpression(
 				detail: error.message,
 			}),
 		});
+	}
+}
+
+function isSupportedSourceExpressionShape(expression: t.Expression): boolean {
+	if (
+		t.isIdentifier(expression) ||
+		t.isNumericLiteral(expression) ||
+		t.isBooleanLiteral(expression)
+	) {
+		return true;
+	}
+	if (t.isParenthesizedExpression(expression)) {
+		return isSupportedSourceExpressionShape(expression.expression);
+	}
+	if (
+		t.isUnaryExpression(expression) &&
+		(expression.operator === "-" || expression.operator === "!") &&
+		t.isExpression(expression.argument)
+	) {
+		return isSupportedSourceExpressionShape(expression.argument);
+	}
+	if (
+		t.isBinaryExpression(expression) &&
+		(expression.operator === "+" ||
+			expression.operator === "-" ||
+			expression.operator === "*") &&
+		t.isExpression(expression.left) &&
+		t.isExpression(expression.right)
+	) {
+		return (
+			isSupportedSourceExpressionShape(expression.left) &&
+			isSupportedSourceExpressionShape(expression.right)
+		);
+	}
+	if (
+		t.isLogicalExpression(expression) &&
+		(expression.operator === "&&" || expression.operator === "||")
+	) {
+		return (
+			isSupportedSourceExpressionShape(expression.left) &&
+			isSupportedSourceExpressionShape(expression.right)
+		);
+	}
+	if (t.isConditionalExpression(expression)) {
+		return (
+			isSupportedSourceExpressionShape(expression.test) &&
+			isSupportedSourceExpressionShape(expression.consequent) &&
+			isSupportedSourceExpressionShape(expression.alternate)
+		);
+	}
+	return false;
+}
+
+function predeclareSourceInputs(
+	expression: t.Expression,
+	state: LoweringState
+): void {
+	if (t.isIdentifier(expression)) {
+		lowerIdentifier(expression, state, null);
+		return;
+	}
+	if (
+		t.isNumericLiteral(expression) ||
+		t.isBooleanLiteral(expression)
+	) {
+		return;
+	}
+	if (t.isParenthesizedExpression(expression)) {
+		predeclareSourceInputs(expression.expression, state);
+		return;
+	}
+	if (t.isUnaryExpression(expression) && t.isExpression(expression.argument)) {
+		predeclareSourceInputs(expression.argument, state);
+		return;
+	}
+	if (
+		(t.isBinaryExpression(expression) ||
+			t.isLogicalExpression(expression)) &&
+		t.isExpression(expression.left) &&
+		t.isExpression(expression.right)
+	) {
+		predeclareSourceInputs(expression.left, state);
+		predeclareSourceInputs(expression.right, state);
+		return;
+	}
+	if (t.isConditionalExpression(expression)) {
+		predeclareSourceInputs(expression.test, state);
+		predeclareSourceInputs(expression.consequent, state);
+		predeclareSourceInputs(expression.alternate, state);
 	}
 }
 

@@ -82,6 +82,37 @@ describe("product local Isogloss source transform", () => {
 		expect(executeFunction(result.code, "plain", [9])).toBe(9);
 	});
 
+	it("preserves multi-stage expressions whose last input appears late", () => {
+		const source = `
+			function guardedKernel(x, y, z) {
+				return (x * y) + (z * z) + (x * z) + (y * 2) + 17;
+			}
+		`;
+		const result = buildLocalIsoglossSource(
+			source,
+			resolveRuamOptions({
+				regionDomains: {
+					guardedKernel: {
+						x: { type: "number", min: 1, max: 31 },
+						y: { type: "number", min: 1, max: 31 },
+						z: { type: "number", min: 1, max: 31 },
+					},
+				},
+			}),
+			7002
+		);
+
+		for (const [x, y, z] of [
+			[1, 1, 12],
+			[7, 11, 19],
+			[31, 31, 31],
+		]) {
+			expect(
+				executeFunction(result.code, "guardedKernel", [x, y, z])
+			).toBe(x * y + z * z + x * z + y * 2 + 17);
+		}
+	});
+
 	it("emits an owner-only sidecar without adding runtime tracing", () => {
 		const source = `function flag(a,b){return a && !b;}`;
 		const result = buildLocalIsoglossSource(

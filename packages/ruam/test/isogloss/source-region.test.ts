@@ -76,6 +76,54 @@ describe("source pure-region lowering", () => {
 		}
 	});
 
+	it("freezes the complete input prefix before assigning step references", () => {
+		const result = lowerSourcePureExpression(
+			expression("(x * y) + (z * z) + (x * z) + (y * 2) + 17"),
+			{
+				domains: {
+					x: { type: "number", min: 1, max: 31 },
+					y: { type: "number", min: 1, max: 31 },
+					z: { type: "number", min: 1, max: 31 },
+				},
+				localBindings: new Set(["x", "y", "z"]),
+			}
+		);
+
+		expect(result.accepted).toBe(true);
+		if (!result.accepted) return;
+		expect(result.region.ingress.map((input) => input.name)).toEqual([
+			"x",
+			"y",
+			"z",
+		]);
+		expect(result.region.contract.steps[2]?.formula).toEqual({
+			tag: "sum",
+			left: 3,
+			right: 4,
+		});
+
+		const artifact = generateBprfArtifact(result.region.contract, {
+			seed: 902,
+			realizationCount: 3,
+			fragmentCount: 3,
+		});
+		for (const [x, y, z] of [
+			[1, 1, 12],
+			[7, 11, 19],
+			[31, 31, 31],
+		]) {
+			expect(
+				evaluateBprfReference(artifact, [x, y, z], {
+					caller: "late-ingress",
+					epoch: x,
+					lineage: y + z,
+				}).outputs
+			).toEqual([
+				x * y + z * z + x * z + y * 2 + 17,
+			]);
+		}
+	});
+
 	it("lowers boolean short-circuit syntax only under boolean guards", () => {
 		const result = lowerSourcePureExpression(
 			expression("flag && (!other || flag)"),
