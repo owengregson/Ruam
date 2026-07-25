@@ -1191,7 +1191,17 @@ function compileTryStatement(
 	}
 }
 
-function encodeTryTarget(catchIp: number, finallyIp: number): number {
+export function encodeTryTarget(catchIp: number, finallyIp: number): number {
+	for (const [label, ip] of [
+		["catch", catchIp],
+		["finally", finallyIp],
+	] as const) {
+		if (!Number.isInteger(ip) || ip < -1 || ip >= 0xffff) {
+			throw new Error(
+				`RUAM_TRY_TARGET_RANGE: ${label}:${String(ip)}`
+			);
+		}
+	}
 	return ((catchIp & 0xffff) << 16) | (finallyIp & 0xffff);
 }
 

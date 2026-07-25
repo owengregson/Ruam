@@ -23,6 +23,7 @@ import {
 } from "./reference.js";
 import {
 	chartCustodySigningPayload,
+	chartCustodyRequestDigest,
 	type AdditiveChartContribution,
 	type ChartCustodyClientContract,
 	type ChartCustodyRequest,
@@ -106,6 +107,7 @@ export class ReferenceChartRelationCustodian {
 	}
 
 	evaluate(request: ChartCustodyRequest): ChartCustodyResponse {
+		chartCustodyRequestDigest(request);
 		if (
 			request.sessionId !== this.clientContract.sessionId ||
 			request.contractId !== this.clientContract.contractId ||
@@ -168,7 +170,11 @@ export class ReferenceChartRelationCustodian {
 		const unsigned = {
 			sessionId: request.sessionId,
 			contractId: request.contractId,
+			requestFromCoverId: request.fromCoverId,
+			requestToCoverId: request.toCoverId,
 			requestNonce: request.nonce,
+			requestLineageCommitment: request.lineageCommitment,
+			requestDigest: chartCustodyRequestDigest(request),
 			epoch: this.#epoch,
 			nextEpoch,
 			nextLineageCommitment,

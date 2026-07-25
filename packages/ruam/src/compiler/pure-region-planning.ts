@@ -51,6 +51,12 @@ const LOWERING_REJECTION_CODE_SET: ReadonlySet<string> = new Set(
 const NO_ASSUMPTIONS_CODE =
 	"RUAM_PURE_REGION_PLAN_ASSUMPTIONS_UNAVAILABLE" as const;
 
+export const PURE_REGION_PLANNING_LIMITS = Object.freeze({
+	regions: 1_024,
+	loweringAttempts: 4_096,
+	retainedRejections: 512,
+});
+
 export type PureRegionLoweringRejectionCode =
 	(typeof LOWERING_REJECTION_CODES)[number];
 export type PureRegionCandidateRejectionCode =
@@ -104,6 +110,7 @@ export interface PureRegionCandidatePlan {
 	unitId: string;
 	candidates: readonly PlannedPureRegionCandidate[];
 	rejections: readonly PureRegionCandidateRejection[];
+	omittedRejectionCount: number;
 }
 
 /**
@@ -129,9 +136,28 @@ export function planPureRegionCandidates(
 			`RUAM_PURE_REGION_PLAN_UNIT_MISMATCH: ${String(graph.unitId)}:${unit.id}`
 		);
 	}
+	if (graph.regions.length > PURE_REGION_PLANNING_LIMITS.regions) {
+		throw new Error(
+			`RUAM_PURE_REGION_PLAN_RESOURCE_LIMIT: regions:${graph.regions.length}`
+		);
+	}
 
 	const candidates: PlannedPureRegionCandidate[] = [];
 	const rejections: PureRegionCandidateRejection[] = [];
+	let omittedRejectionCount = 0;
+	let loweringAttempts = 0;
+	const recordRejection = (
+		rejection: PureRegionCandidateRejection
+	): void => {
+		if (
+			rejections.length <
+			PURE_REGION_PLANNING_LIMITS.retainedRejections
+		) {
+			rejections.push(freezeRejection(rejection));
+		} else {
+			omittedRejectionCount++;
+		}
+	};
 	let startRegionIndex = 0;
 
 	while (startRegionIndex < graph.regions.length) {
@@ -143,15 +169,15 @@ export function planPureRegionCandidates(
 		);
 
 		if (assumptions === undefined) {
-			rejections.push(
-				freezeRejection({
+			recordRejection(
+				{
 					entryRegionId: entryRegion.id,
 					startRegionIndex,
 					endRegionIndex: startRegionIndex,
 					regionIds: Object.freeze([entryRegion.id]),
 					code: NO_ASSUMPTIONS_CODE,
 					detail: null,
-				})
+				}
 			);
 			startRegionIndex++;
 			continue;
@@ -163,6 +189,15 @@ export function planPureRegionCandidates(
 			endRegionIndex >= startRegionIndex;
 			endRegionIndex--
 		) {
+			loweringAttempts++;
+			if (
+				loweringAttempts >
+				PURE_REGION_PLANNING_LIMITS.loweringAttempts
+			) {
+				throw new Error(
+					`RUAM_PURE_REGION_PLAN_RESOURCE_LIMIT: lowering-attempts:${loweringAttempts}`
+				);
+			}
 			const regionIds = Object.freeze(
 				graph.regions
 					.slice(startRegionIndex, endRegionIndex + 1)
@@ -183,15 +218,15 @@ export function planPureRegionCandidates(
 			} catch (error) {
 				const rejection = classifyOrdinaryRejection(error);
 				if (!rejection) throw error;
-				rejections.push(
-					freezeRejection({
+				recordRejection(
+					{
 						entryRegionId: entryRegion.id,
 						startRegionIndex,
 						endRegionIndex,
 						regionIds,
 						code: rejection.code,
 						detail: rejection.detail,
-					})
+					}
 				);
 			}
 		}
@@ -208,6 +243,7 @@ export function planPureRegionCandidates(
 		unitId: unit.id,
 		candidates: Object.freeze(candidates),
 		rejections: Object.freeze(rejections),
+		omittedRejectionCount,
 	});
 }
 

@@ -40,20 +40,65 @@ interface ContractFacts {
 	depths: number[];
 }
 
+/** Hard ceilings that keep malformed build requests from allocating unbounded IR. */
+export const BPRF_GENERATION_LIMITS = Object.freeze({
+	inputs: 256,
+	steps: 4_096,
+	outputs: 256,
+	realizations: 32,
+	fragments: 32,
+	weightedComplexity: 1_000_000,
+});
+
 /** Generate K semantically equivalent, structurally diverse realizations. */
 export function generateBprfArtifact(
 	contract: PureRegionContract,
 	options: BprfGenerationOptions
 ): BprfArtifact {
-	const facts = validateContract(contract);
+	if (
+		!contract ||
+		typeof contract !== "object" ||
+		!Array.isArray(contract.inputs) ||
+		!Array.isArray(contract.steps) ||
+		!Array.isArray(contract.outputs)
+	) {
+		throw new Error("RUAM_BPRF_INVALID_CONTRACT");
+	}
 	const realizationCount = options.realizationCount ?? 3;
 	const fragmentCount = options.fragmentCount ?? 3;
-	if (!Number.isSafeInteger(realizationCount) || realizationCount < 2) {
-		throw new Error("RUAM_BPRF_REALIZATION_COUNT_MIN_2");
+	if (
+		!Number.isSafeInteger(options.seed) ||
+		options.seed < 0 ||
+		options.seed > 0xffffffff
+	) {
+		throw new Error("RUAM_BPRF_INVALID_SEED");
 	}
-	if (!Number.isSafeInteger(fragmentCount) || fragmentCount < 2) {
-		throw new Error("RUAM_BPRF_FRAGMENT_COUNT_MIN_2");
+	if (
+		!Number.isSafeInteger(realizationCount) ||
+		realizationCount < 2 ||
+		realizationCount > BPRF_GENERATION_LIMITS.realizations
+	) {
+		throw new Error("RUAM_BPRF_REALIZATION_COUNT_RANGE");
 	}
+	if (
+		!Number.isSafeInteger(fragmentCount) ||
+		fragmentCount < 2 ||
+		fragmentCount > BPRF_GENERATION_LIMITS.fragments
+	) {
+		throw new Error("RUAM_BPRF_FRAGMENT_COUNT_RANGE");
+	}
+	if (
+		contract.inputs.length > BPRF_GENERATION_LIMITS.inputs ||
+		contract.steps.length > BPRF_GENERATION_LIMITS.steps ||
+		contract.outputs.length > BPRF_GENERATION_LIMITS.outputs ||
+		(contract.inputs.length + contract.steps.length + contract.outputs.length) *
+			realizationCount *
+			fragmentCount >
+			BPRF_GENERATION_LIMITS.weightedComplexity
+	) {
+		throw new Error("RUAM_BPRF_RESOURCE_LIMIT");
+	}
+	const facts = validateContract(contract);
 
 	const rootRandom = new BprfRandom(options.seed);
 	const realizations = Array.from({ length: realizationCount }, (_, index) =>
@@ -491,9 +536,10 @@ function validateContract(contract: PureRegionContract): ContractFacts {
 		if (
 			step.formula.tag === "literal" &&
 			step.formula.type === "number" &&
-			!Number.isFinite(step.formula.value)
+			(!Number.isSafeInteger(step.formula.value) ||
+				Object.is(step.formula.value, -0))
 		) {
-			throw new Error("RUAM_BPRF_NON_FINITE_LITERAL");
+			throw new Error("RUAM_BPRF_UNSAFE_NUMBER_LITERAL");
 		}
 		types.push(step.type);
 		depths.push(

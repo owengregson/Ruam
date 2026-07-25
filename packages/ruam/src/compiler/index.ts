@@ -40,7 +40,11 @@ import type {
 	SourceOrigin,
 } from "./ir.js";
 
-export { buildCanonicalCallGraphInventory } from "./call-graph.js";
+export {
+	buildCanonicalCallGraphInventory,
+	CALL_GRAPH_LIMITS,
+	isCompilerProducedCallGraphInventory,
+} from "./call-graph.js";
 export type {
 	CanonicalBoundaryKind,
 	CanonicalBoundaryObservability,
@@ -89,7 +93,10 @@ export type {
 	PureRegionOutputBinding,
 	PureRegionValueDomain,
 } from "./pure-region-lowering.js";
-export { planPureRegionCandidates } from "./pure-region-planning.js";
+export {
+	planPureRegionCandidates,
+	PURE_REGION_PLANNING_LIMITS,
+} from "./pure-region-planning.js";
 export type {
 	PlannedPureRegionCandidate,
 	PureRegionCandidatePlan,

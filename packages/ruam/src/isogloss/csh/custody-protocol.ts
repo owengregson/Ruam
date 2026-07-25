@@ -8,7 +8,7 @@
  * @module isogloss/csh/custody-protocol
  */
 
-import { verify } from "node:crypto";
+import { createHash, verify } from "node:crypto";
 import {
 	CSH_FIELD_MODULUS,
 	type ChartCellTransform,
@@ -41,7 +41,10 @@ export interface CustodyRequest {
 export interface CustodyResponse {
 	readonly sessionId: string;
 	readonly contractId: string;
+	readonly requestCoverId: string;
 	readonly requestNonce: string;
+	readonly requestLineageCommitment: string;
+	readonly requestDigest: string;
 	readonly epoch: number;
 	readonly nextEpoch: number;
 	readonly nextLineageCommitment: string;
@@ -71,14 +74,16 @@ export function prepareCustodyRequest(
 	charts: readonly EncodedChart[],
 	nonce: string
 ): CustodyRequest {
-	if (nonce.length < 8) throw new Error("RUAM_CSH_CUSTODY_NONCE_TOO_SHORT");
+	if (typeof nonce !== "string" || nonce.length < 8 || nonce.length > 512) {
+		throw new Error("RUAM_CSH_CUSTODY_INVALID_NONCE");
+	}
 	if (
 		charts.length === 0 ||
 		charts.some((chart) => chart.coverId !== contract.coverId)
 	) {
 		throw new Error("RUAM_CSH_CUSTODY_WRONG_COVER");
 	}
-	return Object.freeze({
+	const request = Object.freeze({
 		sessionId: contract.sessionId,
 		contractId: contract.contractId,
 		coverId: contract.coverId,
@@ -87,6 +92,8 @@ export function prepareCustodyRequest(
 		nonce,
 		charts,
 	});
+	custodyRequestDigest(request);
+	return request;
 }
 
 /**
@@ -97,7 +104,7 @@ export function openCustodiedProjection(
 	contract: CustodyClientContract,
 	state: CustodyClientState,
 	response: CustodyResponse | undefined,
-	expectedNonce: string
+	request: CustodyRequest
 ): OpenedCustodyProjection {
 	if (response === undefined) {
 		throw new Error("RUAM_CSH_CUSTODIAN_REQUIRED");
@@ -105,7 +112,16 @@ export function openCustodiedProjection(
 	if (
 		response.sessionId !== contract.sessionId ||
 		response.contractId !== contract.contractId ||
-		response.requestNonce !== expectedNonce ||
+		request.sessionId !== contract.sessionId ||
+		request.contractId !== contract.contractId ||
+		request.coverId !== contract.coverId ||
+		request.epoch !== state.epoch ||
+		request.lineageCommitment !== state.lineageCommitment ||
+		response.requestCoverId !== contract.coverId ||
+		response.requestNonce !== request.nonce ||
+		response.requestLineageCommitment !==
+			state.lineageCommitment ||
+		response.requestDigest !== custodyRequestDigest(request) ||
 		response.epoch !== state.epoch ||
 		response.nextEpoch !== state.epoch + 1
 	) {
@@ -137,10 +153,41 @@ export function openCustodiedProjection(
 export function custodyResponseSigningPayload(
 	response: Omit<CustodyResponse, "signature"> | CustodyResponse
 ): string {
-	return [
+	assertProtocolString(response.sessionId, "session");
+	assertProtocolString(response.contractId, "contract");
+	assertProtocolString(response.requestCoverId, "cover");
+	assertProtocolString(response.requestNonce, "nonce");
+	assertProtocolString(
+		response.requestLineageCommitment,
+		"request-lineage"
+	);
+	assertProtocolString(response.requestDigest, "request-digest");
+	assertProtocolString(
+		response.nextLineageCommitment,
+		"next-lineage"
+	);
+	for (const [label, value] of [
+		["epoch", response.epoch],
+		["next-epoch", response.nextEpoch],
+		["encoded-projection", response.encodedProjection],
+		["opening-scale", response.projectionOpening.scale],
+		["opening-offset", response.projectionOpening.offset],
+		["opening-exponent", response.projectionOpening.exponent],
+		[
+			"opening-inverse-exponent",
+			response.projectionOpening.inverseExponent,
+		],
+	] as const) {
+		assertProtocolInteger(value, label);
+	}
+	return JSON.stringify([
+		"ruam-csh-custody-response-v2",
 		response.sessionId,
 		response.contractId,
+		response.requestCoverId,
 		response.requestNonce,
+		response.requestLineageCommitment,
+		response.requestDigest,
 		response.epoch,
 		response.nextEpoch,
 		response.nextLineageCommitment,
@@ -148,8 +195,83 @@ export function custodyResponseSigningPayload(
 		response.projectionOpening.scale,
 		response.projectionOpening.offset,
 		response.projectionOpening.exponent,
-		response.projectionOpening.inverseExponent,
-	].join("|");
+		[
+			response.projectionOpening.scale,
+			response.projectionOpening.offset,
+			response.projectionOpening.exponent,
+			response.projectionOpening.inverseExponent,
+		],
+	]);
+}
+
+/** Digest the complete request with a versioned, unambiguous encoding. */
+export function custodyRequestDigest(request: CustodyRequest): string {
+	assertProtocolString(request.sessionId, "session");
+	assertProtocolString(request.contractId, "contract");
+	assertProtocolString(request.coverId, "cover");
+	assertProtocolString(request.lineageCommitment, "lineage");
+	assertProtocolString(request.nonce, "nonce");
+	assertProtocolInteger(request.epoch, "epoch");
+	if (
+		request.charts.length === 0 ||
+		request.charts.length > 256 ||
+		request.charts.some(
+			(chart) =>
+				chart.coverId !== request.coverId ||
+				(typeof chart.chartId !== "string") ||
+				chart.chartId.length === 0 ||
+				chart.chartId.length > 4_096 ||
+				!Number.isSafeInteger(chart.epoch) ||
+				chart.epoch < 0 ||
+				!Array.isArray(chart.cells) ||
+				chart.cells.length === 0 ||
+				chart.cells.length > 4_096 ||
+				chart.cells.some(
+					(cell) => !Number.isSafeInteger(cell)
+				)
+		)
+	) {
+		throw new Error("RUAM_CSH_CUSTODY_INVALID_REQUEST");
+	}
+	return createHash("sha256")
+		.update(
+			JSON.stringify([
+				"ruam-csh-custody-request-v2",
+				request.sessionId,
+				request.contractId,
+				request.coverId,
+				request.epoch,
+				request.lineageCommitment,
+				request.nonce,
+				request.charts.map((chart) => [
+					chart.coverId,
+					chart.epoch,
+					chart.chartId,
+					chart.cells,
+				]),
+			])
+		)
+		.digest("hex");
+}
+
+function assertProtocolString(value: unknown, label: string): void {
+	if (
+		typeof value !== "string" ||
+		value.length === 0 ||
+		value.length > 4_096
+	) {
+		throw new Error(`RUAM_CSH_INVALID_PROTOCOL_STRING: ${label}`);
+	}
+}
+
+function assertProtocolInteger(value: unknown, label: string): void {
+	if (
+		typeof value !== "number" ||
+		!Number.isSafeInteger(value) ||
+		value < 0
+	) {
+		throw new Error(`RUAM_CSH_INVALID_PROTOCOL_INTEGER: ${label}`);
+	}
 }
 
 function unwrapProjection(

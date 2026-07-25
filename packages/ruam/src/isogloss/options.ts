@@ -158,6 +158,13 @@ export const ISOGLOSS_FIXED_LOCAL_BPRF = Object.freeze({
 export const DEFAULT_MINIMUM_EXACT_ATTACK_QUERIES_TEXT = "1000" as const;
 export const DEFAULT_MINIMUM_EXACT_ATTACK_QUERIES = 1000n;
 
+/** Resource ceilings for configuration parsed from untrusted JSON or workers. */
+export const ISOGLOSS_OPTION_LIMITS = Object.freeze({
+	maximumAttackQueryDigits: 256,
+	regionFunctionCount: 1_024,
+	regionBindingsPerFunction: 256,
+});
+
 /** One migration instruction for every key removed with the VM architecture. */
 export const REMOVED_LEGACY_VM_OPTION_HINTS = Object.freeze({
 	preset:
@@ -357,6 +364,12 @@ function resolveMaximumCustody(value: unknown): {
 			"must be a canonical unsigned decimal string"
 		);
 	}
+	if (raw.length > ISOGLOSS_OPTION_LIMITS.maximumAttackQueryDigits) {
+		invalid(
+			"isogloss.maximumCustody.minimumExactAttackQueries",
+			`must not exceed ${ISOGLOSS_OPTION_LIMITS.maximumAttackQueryDigits} decimal digits`
+		);
+	}
 	return Object.freeze({ minimumExactAttackQueries: BigInt(raw) });
 }
 
@@ -549,11 +562,18 @@ function validateProfileCapabilities(
 function resolveRegionDomains(value: unknown): IsoglossRegionDomains {
 	if (value === undefined) return EMPTY_REGION_DOMAINS;
 	const functions = requireRecord(value, "regionDomains");
+	const functionNames = ownStringKeys(functions, "regionDomains");
+	if (functionNames.length > ISOGLOSS_OPTION_LIMITS.regionFunctionCount) {
+		invalid(
+			"regionDomains",
+			`must not contain more than ${ISOGLOSS_OPTION_LIMITS.regionFunctionCount} functions`
+		);
+	}
 	const resolved = Object.create(null) as Record<
 		string,
 		Readonly<Record<string, IsoglossRegionDomain>>
 	>;
-	for (const functionName of ownStringKeys(functions, "regionDomains")) {
+	for (const functionName of functionNames) {
 		requireNonemptyKey(functionName, `regionDomains.${functionName}`);
 		const bindings = requireRecord(
 			functions[functionName],
@@ -563,10 +583,20 @@ function resolveRegionDomains(value: unknown): IsoglossRegionDomains {
 			string,
 			IsoglossRegionDomain
 		>;
-		for (const bindingName of ownStringKeys(
+		const bindingNames = ownStringKeys(
 			bindings,
 			`regionDomains.${functionName}`
-		)) {
+		);
+		if (
+			bindingNames.length >
+			ISOGLOSS_OPTION_LIMITS.regionBindingsPerFunction
+		) {
+			invalid(
+				`regionDomains.${functionName}`,
+				`must not contain more than ${ISOGLOSS_OPTION_LIMITS.regionBindingsPerFunction} bindings`
+			);
+		}
+		for (const bindingName of bindingNames) {
 			requireNonemptyKey(
 				bindingName,
 				`regionDomains.${functionName}.${bindingName}`

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import {
 	createCustodyClientState,
+	custodyResponseSigningPayload,
 	openCustodiedProjection,
 	prepareCustodyRequest,
 } from "../../src/isogloss/csh/custody-protocol.js";
@@ -54,22 +55,55 @@ describe("custodied CSH direct-relation reference", () => {
 		);
 
 		expect(() =>
-			openCustodiedProjection(contract, state, undefined, request.nonce)
+			openCustodiedProjection(contract, state, undefined, request)
 		).toThrow("RUAM_CSH_CUSTODIAN_REQUIRED");
 		const response = custodian.evaluate(request);
 		expect(() =>
 			openCustodiedProjection(
 				contract,
+				{ ...state, lineageCommitment: "unrelated-fork" },
+				response,
+				request
+			)
+		).toThrow("RUAM_CSH_CUSTODY_RESPONSE_MISMATCH");
+		const substitutedRequest = structuredClone(request);
+		(substitutedRequest.charts[0]!.cells as number[])[0] =
+			(substitutedRequest.charts[0]!.cells[0]! + 1) %
+			CSH_FIELD_MODULUS;
+		expect(() =>
+			openCustodiedProjection(
+				contract,
 				state,
 				response,
-				"nonce_wrong_0001"
+				substitutedRequest
+			)
+		).toThrow("RUAM_CSH_CUSTODY_RESPONSE_MISMATCH");
+		expect(() =>
+			openCustodiedProjection(
+				contract,
+				state,
+				response,
+				{ ...request, nonce: "nonce_wrong_0001" }
 			)
 		).toThrow("RUAM_CSH_CUSTODY_RESPONSE_MISMATCH");
 		const opened = openCustodiedProjection(
 			contract,
 			state,
 			response,
-			request.nonce
+			request
+		);
+		expect(
+			custodyResponseSigningPayload({
+				...response,
+				sessionId: "tenant|contract",
+				contractId: "id",
+			})
+		).not.toBe(
+			custodyResponseSigningPayload({
+				...response,
+				sessionId: "tenant",
+				contractId: "contract|id",
+			})
 		);
 		const inputProjection =
 			2 * 7 + 3 * 11 + 5 * 13 + 19;
@@ -112,14 +146,13 @@ describe("custodied CSH direct-relation reference", () => {
 		const { charts, custodian } = createFixture();
 		const contract = custodian.clientContract;
 		const state = createCustodyClientState(contract);
-		const response = custodian.evaluate(
-			prepareCustodyRequest(
-				contract,
-				state,
-				charts,
-				"nonce_tamper_01"
-			)
+		const request = prepareCustodyRequest(
+			contract,
+			state,
+			charts,
+			"nonce_tamper_01"
 		);
+		const response = custodian.evaluate(request);
 		const tampered = {
 			...response,
 			encodedProjection:
@@ -131,7 +164,7 @@ describe("custodied CSH direct-relation reference", () => {
 				contract,
 				state,
 				tampered,
-				"nonce_tamper_01"
+				request
 			)
 		).toThrow("RUAM_CSH_CUSTODY_BAD_SIGNATURE");
 		const serialized = JSON.stringify(contract).toLowerCase();
@@ -169,7 +202,7 @@ describe("custodied CSH direct-relation reference", () => {
 				contract,
 				state,
 				response,
-				request.nonce
+				request
 			);
 			expect(opened.state.epoch).toBe(epoch + 1);
 			state = opened.state;

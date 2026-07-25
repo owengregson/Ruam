@@ -51,10 +51,19 @@ export function prepareMaskedTransitionRequest(
 	contract: MaskedCustodyClientContract,
 	state: CustodyClientState,
 	charts: readonly EncodedChart[],
-	nonce: string
+	nonce: string,
+	localIdentityTransport: readonly EncodedChart[],
+	targetCover: ChartCover
 ): ChartCustodyRequest {
 	const fixed = transitionContract(contract, state.epoch);
-	return prepareChartCustodyRequest(fixed, state, charts, nonce);
+	return prepareChartCustodyRequest(
+		fixed,
+		state,
+		charts,
+		localIdentityTransport,
+		targetCover,
+		nonce
+	);
 }
 
 export function applyMaskedTransitionResponse(
@@ -63,7 +72,7 @@ export function applyMaskedTransitionResponse(
 	localIdentityTransport: readonly EncodedChart[],
 	targetCover: ChartCover,
 	response: ChartCustodyResponse | undefined,
-	expectedNonce: string
+	request: ChartCustodyRequest
 ): {
 	readonly charts: readonly EncodedChart[];
 	readonly state: CustodyClientState;
@@ -75,7 +84,7 @@ export function applyMaskedTransitionResponse(
 		localIdentityTransport,
 		targetCover,
 		response,
-		expectedNonce
+		request
 	);
 }
 
@@ -115,7 +124,7 @@ export function openMaskedCustodyProjection(
 	contract: MaskedCustodyClientContract,
 	state: CustodyClientState,
 	response: CustodyResponse | undefined,
-	expectedNonce: string
+	request: CustodyRequest
 ): OpenedCustodyProjection {
 	const terminalEpoch = contract.coverIds.length - 1;
 	const fixed: CustodyClientContract = Object.freeze({
@@ -129,7 +138,7 @@ export function openMaskedCustodyProjection(
 		fixed,
 		state,
 		response,
-		expectedNonce
+		request
 	);
 }
 

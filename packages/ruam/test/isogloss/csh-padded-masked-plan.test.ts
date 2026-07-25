@@ -98,11 +98,21 @@ function executePlan(
 	let state = createMaskedCustodyClientState(custodian.clientContract);
 	const responseShapes: string[] = [];
 	for (let epoch = 0; epoch < plan.transitions.length; epoch++) {
+		const target = plan.covers[epoch + 1]!;
+		const local = transportAffineCharts(
+			charts,
+			plan.covers[epoch]!,
+			target,
+			identity,
+			6161 + epoch
+		);
 		const request = prepareMaskedTransitionRequest(
 			custodian.clientContract,
 			state,
 			charts,
-			`padded_nonce_${epoch}`
+			`padded_nonce_${epoch}`,
+			local,
+			target
 		);
 		const response = custodian.evaluateTransition(request);
 		responseShapes.push(
@@ -115,21 +125,13 @@ function executePlan(
 				signatureLength: response.signature.length,
 			})
 		);
-		const target = plan.covers[epoch + 1]!;
-		const local = transportAffineCharts(
-			charts,
-			plan.covers[epoch]!,
-			target,
-			identity,
-			6161 + epoch
-		);
 		const applied = applyMaskedTransitionResponse(
 			custodian.clientContract,
 			state,
 			local,
 			target,
 			response,
-			request.nonce
+			request
 		);
 		charts = applied.charts;
 		state = applied.state;
@@ -144,7 +146,7 @@ function executePlan(
 		custodian.clientContract,
 		state,
 		custodian.evaluateExitProjection(request),
-		request.nonce
+		request
 	);
 	return Object.freeze({
 		output: opened.projection,

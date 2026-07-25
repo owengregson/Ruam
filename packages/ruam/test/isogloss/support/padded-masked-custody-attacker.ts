@@ -686,7 +686,7 @@ function measureProtocolSeparation(): {
 			secondPrepared.localCharts,
 			plan.covers[paddingEpoch + 1]!,
 			firstPrepared.response,
-			secondPrepared.request.nonce
+			secondPrepared.request
 		)
 	);
 	const rebound: ChartCustodyResponse = Object.freeze({
@@ -702,7 +702,7 @@ function measureProtocolSeparation(): {
 			secondPrepared.localCharts,
 			plan.covers[paddingEpoch + 1]!,
 			rebound,
-			secondPrepared.request.nonce
+			secondPrepared.request
 		)
 	);
 	const firstApplied = applyPrepared(first, paddingEpoch, firstPrepared);
@@ -770,35 +770,15 @@ function testPaddedStateSubstitution(
 				})
 			: chart
 	);
-	const applied = applyMaskedTransitionResponse(
-		live.custodian.clientContract,
-		live.state,
-		substituted,
-		plan.covers[paddingEpoch + 1]!,
-		prepared.response,
-		prepared.request.nonce
-	);
-	live.charts = applied.charts;
-	live.state = applied.state;
-	if (paddingEpoch + 1 < plan.transitions.length) {
-		const nextRequest = prepareMaskedTransitionRequest(
+	return !doesNotThrow(() =>
+		applyMaskedTransitionResponse(
 			live.custodian.clientContract,
 			live.state,
-			live.charts,
-			sharedNonce(paddingEpoch + 1)
-		);
-		return !doesNotThrow(() =>
-			live.custodian.evaluateTransition(nextRequest)
-		);
-	}
-	const exitRequest = prepareMaskedProjectionRequest(
-		live.custodian.clientContract,
-		live.state,
-		live.charts,
-		sharedExitNonce()
-	);
-	return !doesNotThrow(() =>
-		live.custodian.evaluateExitProjection(exitRequest)
+			substituted,
+			plan.covers[paddingEpoch + 1]!,
+			prepared.response,
+			prepared.request
+		)
 	);
 }
 
@@ -823,7 +803,7 @@ function captureTranscript(
 		live.custodian.clientContract,
 		live.state,
 		projectionResponse,
-		projectionRequest.nonce
+		projectionRequest
 	);
 	const provisional = {
 		contract: live.custodian.clientContract,
@@ -893,13 +873,6 @@ function prepareLiveEpoch(
 	live: LivePaddedSession,
 	epoch: number
 ): PreparedEpoch {
-	const request = prepareMaskedTransitionRequest(
-		live.custodian.clientContract,
-		live.state,
-		live.charts,
-		sharedNonce(epoch)
-	);
-	const response = live.custodian.evaluateTransition(request);
 	const localCharts = transportAffineCharts(
 		live.charts,
 		live.plan.covers[epoch]!,
@@ -907,6 +880,15 @@ function prepareLiveEpoch(
 		IDENTITY_TRANSPORT,
 		800_000 + epoch * 101
 	);
+	const request = prepareMaskedTransitionRequest(
+		live.custodian.clientContract,
+		live.state,
+		live.charts,
+		sharedNonce(epoch),
+		localCharts,
+		live.plan.covers[epoch + 1]!
+	);
+	const response = live.custodian.evaluateTransition(request);
 	return Object.freeze({
 		request,
 		response,
@@ -937,7 +919,7 @@ function applyPrepared(
 		prepared.localCharts,
 		live.plan.covers[epoch + 1]!,
 		prepared.response,
-		prepared.request.nonce
+		prepared.request
 	);
 	live.charts = applied.charts;
 	live.state = applied.state;

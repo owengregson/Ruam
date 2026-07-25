@@ -114,15 +114,15 @@ describe("product local Isogloss source transform", () => {
 	});
 
 	it("emits an owner-only sidecar without adding runtime tracing", () => {
-		const source = `function flag(a,b){return a && !b;}`;
+		const source = `function kernel(a,b){return a+b+1;}`;
 		const result = buildLocalIsoglossSource(
 			source,
 			resolveRuamOptions({
 				isogloss: { ownerTrace: "sidecar" },
 				regionDomains: {
-					flag: {
-						a: { type: "boolean" },
-						b: { type: "boolean" },
+					kernel: {
+						a: { type: "number", min: 0, max: 10 },
+						b: { type: "number", min: 0, max: 10 },
 					},
 				},
 			}),
@@ -137,8 +137,7 @@ describe("product local Isogloss source transform", () => {
 			result.ownerTrace?.regions[0]!.emitterCertificate.ownerTrace
 		).toBe(false);
 		expect(result.code).not.toContain("ownerTrace");
-		expect(executeFunction(result.code, "flag", [true, false])).toBe(true);
-		expect(executeFunction(result.code, "flag", [true, true])).toBe(false);
+		expect(executeFunction(result.code, "kernel", [2, 3])).toBe(6);
 	});
 
 	it("fails configured targets closed instead of shipping an original fallback", () => {
@@ -168,6 +167,34 @@ describe("product local Isogloss source transform", () => {
 				1
 			)
 		).toThrow("RUAM_ISOGLOSS_CONFIGURED_TARGET_NOT_FOUND");
+		expect(() =>
+			buildLocalIsoglossSource(
+				`function sampled(x){return (x+1)*2;}`,
+				resolveRuamOptions({
+					threshold: 0,
+					regionDomains: {
+						sampled: {
+							x: { type: "number", min: 1, max: 4 },
+						},
+					},
+				}),
+				1
+			)
+		).toThrow("RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED");
+		expect(() =>
+			buildLocalIsoglossSource(
+				`function lazy(flag){return flag?1+2:x+2;let x=3;}`,
+				resolveRuamOptions({
+					regionDomains: {
+						lazy: {
+							flag: { type: "boolean" },
+							x: { type: "number", min: 0, max: 3 },
+						},
+					},
+				}),
+				1
+			)
+		).toThrow("RUAM_ISOGLOSS_CONFIGURED_REGION_REJECTED");
 	});
 
 	it("rejects nonlocal grafting and top-level intrinsic capture", () => {
@@ -199,6 +226,15 @@ describe("product local Isogloss source transform", () => {
 				1
 			)
 		).toThrow("RUAM_ISOGLOSS_INTRINSIC_SHADOW");
+
+		const untouched = `const Array=1;console.log(Array);`;
+		const untouchedBuild = buildLocalIsoglossSource(
+			untouched,
+			resolveRuamOptions(),
+			1
+		);
+		expect(untouchedBuild.code).toBe(untouched);
+		expect(untouchedBuild.stats.protectedRegionCount).toBe(0);
 	});
 
 	it("surfaces structured transform errors", () => {

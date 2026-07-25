@@ -22,6 +22,7 @@ import {
 } from "./reference.js";
 import {
 	custodyResponseSigningPayload,
+	custodyRequestDigest,
 	type CustodyClientContract,
 	type CustodyRequest,
 	type CustodyResponse,
@@ -80,6 +81,7 @@ export class ReferenceRelationCustodian {
 	}
 
 	evaluate(request: CustodyRequest): CustodyResponse {
+		custodyRequestDigest(request);
 		if (
 			request.sessionId !== this.clientContract.sessionId ||
 			request.contractId !== this.clientContract.contractId ||
@@ -133,7 +135,10 @@ export class ReferenceRelationCustodian {
 		const unsigned = {
 			sessionId: request.sessionId,
 			contractId: request.contractId,
+			requestCoverId: request.coverId,
 			requestNonce: request.nonce,
+			requestLineageCommitment: request.lineageCommitment,
+			requestDigest: custodyRequestDigest(request),
 			epoch: this.#epoch,
 			nextEpoch,
 			nextLineageCommitment,

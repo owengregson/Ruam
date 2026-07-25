@@ -17,7 +17,7 @@ describe("source Isogloss region discovery", () => {
 				const z = x * y;
 				return z + (x - 1);
 			}
-			const second = (flag, other) => flag && !other;
+			const second = (left, right) => left + right + 1;
 		`;
 		const options = {
 			targetMode: "root" as const,
@@ -30,8 +30,8 @@ describe("source Isogloss region discovery", () => {
 					z: { type: "number" as const, min: 1, max: 400 },
 				},
 				second: {
-					flag: { type: "boolean" as const },
-					other: { type: "boolean" as const },
+					left: { type: "number" as const, min: 0, max: 20 },
+					right: { type: "number" as const, min: 0, max: 20 },
 				},
 			},
 		};
@@ -65,7 +65,7 @@ describe("source Isogloss region discovery", () => {
 			"z",
 			"x",
 		]);
-		expect(first.sites[1]!.region.outputType).toBe("boolean");
+		expect(first.sites[1]!.region.outputType).toBe("number");
 	});
 
 	it("does not treat a global identifier as a guarded local", () => {

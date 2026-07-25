@@ -8,6 +8,7 @@ import {
 	type PureScalar,
 } from "../../src/isogloss/bprf/index.js";
 import {
+	assertBprfScalarArtifactExact,
 	emitBprfScalarSource,
 	type BprfScalarEntry,
 	type BprfScalarInputDomain,
@@ -160,9 +161,7 @@ describe("production-shaped local BPRF scalar source", () => {
 				),
 			0
 		);
-		expect(first.stats.fragmentFunctionCount).toBe(
-			expectedFragmentFunctions
-		);
+		expect(first.stats.fragmentFunctionCount).toBe(0);
 		expect(first.stats.fragmentContributionLocalCount).toBe(
 			expectedFragmentFunctions
 		);
@@ -353,5 +352,38 @@ describe("production-shaped local BPRF scalar source", () => {
 				guardedDomains[3]!,
 			])
 		).toThrow("RUAM_BPRF_SCALAR_INPUT_DOMAIN_TYPE_MISMATCH");
+	});
+
+	it("rejects reassociation that is inexact at a safe-integer boundary", () => {
+		const boundaryArtifact = generateBprfArtifact(
+			{
+				inputs: [{ type: "number" }],
+				steps: [
+					{
+						type: "number",
+						formula: {
+							tag: "literal",
+							type: "number",
+							value: 0,
+						},
+					},
+					{
+						type: "number",
+						formula: { tag: "sum", left: 0, right: 1 },
+					},
+				],
+				outputs: [2],
+			},
+			{ seed: 7, realizationCount: 3, fragmentCount: 3 }
+		);
+		expect(() =>
+			assertBprfScalarArtifactExact(boundaryArtifact, [
+				{
+					type: "number",
+					min: Number.MAX_SAFE_INTEGER,
+					max: Number.MAX_SAFE_INTEGER,
+				},
+			])
+		).toThrow("RUAM_BPRF_SCALAR_ARITHMETIC_NOT_EXACT");
 	});
 });

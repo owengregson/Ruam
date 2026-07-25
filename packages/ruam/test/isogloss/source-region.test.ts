@@ -124,7 +124,7 @@ describe("source pure-region lowering", () => {
 		}
 	});
 
-	it("lowers boolean short-circuit syntax only under boolean guards", () => {
+	it("keeps lazy boolean branches native until lazy ingress is supported", () => {
 		const result = lowerSourcePureExpression(
 			expression("flag && (!other || flag)"),
 			{
@@ -136,14 +136,13 @@ describe("source pure-region lowering", () => {
 			}
 		);
 
-		expect(result.accepted).toBe(true);
-		if (!result.accepted) return;
-		expect(result.region.outputType).toBe("boolean");
-		expect(result.region.contract.steps.map((step) => step.formula.tag)).toEqual([
-			"not",
-			"or",
-			"and",
-		]);
+		expect(result).toEqual({
+			accepted: false,
+			rejection: {
+				code: "RUAM_SOURCE_REGION_UNSUPPORTED_EXPRESSION",
+				detail: "LogicalExpression",
+			},
+		});
 	});
 
 	it("requires explicit local binding and domain evidence", () => {
@@ -199,7 +198,7 @@ describe("source pure-region lowering", () => {
 		expect(mismatch.accepted).toBe(false);
 		if (!mismatch.accepted) {
 			expect(mismatch.rejection.code).toBe(
-				"RUAM_SOURCE_REGION_DOMAIN_TYPE_MISMATCH"
+				"RUAM_SOURCE_REGION_UNSUPPORTED_EXPRESSION"
 			);
 		}
 	});

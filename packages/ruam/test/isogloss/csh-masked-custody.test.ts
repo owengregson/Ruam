@@ -147,12 +147,6 @@ describe("statefully masked chart custody", () => {
 		const observedMaskedStates: number[][] = [];
 
 		for (let epoch = 0; epoch < transitions.length; epoch++) {
-			const request = prepareMaskedTransitionRequest(
-				custodian.clientContract,
-				state,
-				charts,
-				`masked_nonce_${epoch}`
-			);
 			const local = transportAffineCharts(
 				charts,
 				covers[epoch]!,
@@ -160,13 +154,21 @@ describe("statefully masked chart custody", () => {
 				identity,
 				5000 + epoch
 			);
+			const request = prepareMaskedTransitionRequest(
+				custodian.clientContract,
+				state,
+				charts,
+				`masked_nonce_${epoch}`,
+				local,
+				covers[epoch + 1]!
+			);
 			const applied = applyMaskedTransitionResponse(
 				custodian.clientContract,
 				state,
 				local,
 				covers[epoch + 1]!,
 				custodian.evaluateTransition(request),
-				request.nonce
+				request
 			);
 			charts = applied.charts;
 			state = applied.state;
@@ -192,7 +194,7 @@ describe("statefully masked chart custody", () => {
 			custodian.clientContract,
 			state,
 			custodian.evaluateExitProjection(exitRequest),
-			exitRequest.nonce
+			exitRequest
 		);
 		const expected = normalize(
 			ownerState[0]! +
@@ -228,24 +230,28 @@ describe("statefully masked chart custody", () => {
 		const { covers, charts, custodian } = createFixture();
 		const contract = custodian.clientContract;
 		const state = createMaskedCustodyClientState(contract);
-		const first = prepareMaskedTransitionRequest(
-			contract,
-			state,
-			charts,
-			"masked_fork_0001"
-		);
-		const second = prepareMaskedTransitionRequest(
-			contract,
-			state,
-			charts,
-			"masked_fork_0002"
-		);
 		const local = transportAffineCharts(
 			charts,
 			covers[0]!,
 			covers[1]!,
 			identity,
 			6060
+		);
+		const first = prepareMaskedTransitionRequest(
+			contract,
+			state,
+			charts,
+			"masked_fork_0001",
+			local,
+			covers[1]!
+		);
+		const second = prepareMaskedTransitionRequest(
+			contract,
+			state,
+			charts,
+			"masked_fork_0002",
+			local,
+			covers[1]!
 		);
 		const response = custodian.evaluateTransition(first);
 		expect(() => custodian.evaluateTransition(first)).toThrow(
@@ -261,7 +267,7 @@ describe("statefully masked chart custody", () => {
 				local,
 				covers[1]!,
 				undefined,
-				first.nonce
+				first
 			)
 		).toThrow("RUAM_CSH_CUSTODIAN_REQUIRED");
 		expect(() =>
@@ -271,7 +277,7 @@ describe("statefully masked chart custody", () => {
 				local,
 				covers[1]!,
 				response,
-				"masked_wrong_nonce"
+				{ ...first, nonce: "masked_wrong_nonce" }
 			)
 		).toThrow("RUAM_CSH_CHART_CUSTODY_RESPONSE_MISMATCH");
 	});
@@ -280,18 +286,20 @@ describe("statefully masked chart custody", () => {
 		const { covers, charts, custodian } = createFixture();
 		const contract = custodian.clientContract;
 		const state = createMaskedCustodyClientState(contract);
-		const first = prepareMaskedTransitionRequest(
-			contract,
-			state,
-			charts,
-			"substitution_nonce_0001"
-		);
 		const local = transportAffineCharts(
 			charts,
 			covers[0]!,
 			covers[1]!,
 			identity,
 			7070
+		);
+		const first = prepareMaskedTransitionRequest(
+			contract,
+			state,
+			charts,
+			"substitution_nonce_0001",
+			local,
+			covers[1]!
 		);
 		const substituted = local.map((chart, chartIndex) =>
 			chartIndex === 0
@@ -305,23 +313,17 @@ describe("statefully masked chart custody", () => {
 					})
 				: chart
 		);
-		const applied = applyMaskedTransitionResponse(
-			contract,
-			state,
-			substituted,
-			covers[1]!,
-			custodian.evaluateTransition(first),
-			first.nonce
-		);
-		const second = prepareMaskedTransitionRequest(
-			contract,
-			applied.state,
-			applied.charts,
-			"substitution_nonce_0002"
-		);
-		expect(() => custodian.evaluateTransition(second)).toThrow(
-			"RUAM_CSH_MASKED_CUSTODY_STATE_SUBSTITUTION"
-		);
+		const response = custodian.evaluateTransition(first);
+		expect(() =>
+			applyMaskedTransitionResponse(
+				contract,
+				state,
+				substituted,
+				covers[1]!,
+				response,
+				first
+			)
+		).toThrow("RUAM_CSH_CHART_CUSTODY_RESPONSE_MISMATCH");
 	});
 
 	it("separates fresh sessions even with one service secret and nonce", () => {
@@ -331,12 +333,6 @@ describe("statefully masked chart custody", () => {
 			const state = createMaskedCustodyClientState(
 				fixture.custodian.clientContract
 			);
-			const request = prepareMaskedTransitionRequest(
-				fixture.custodian.clientContract,
-				state,
-				fixture.charts,
-				"same_client_nonce"
-			);
 			const local = transportAffineCharts(
 				fixture.charts,
 				fixture.covers[0]!,
@@ -344,13 +340,21 @@ describe("statefully masked chart custody", () => {
 				identity,
 				8080
 			);
+			const request = prepareMaskedTransitionRequest(
+				fixture.custodian.clientContract,
+				state,
+				fixture.charts,
+				"same_client_nonce",
+				local,
+				fixture.covers[1]!
+			);
 			const applied = applyMaskedTransitionResponse(
 				fixture.custodian.clientContract,
 				state,
 				local,
 				fixture.covers[1]!,
 				fixture.custodian.evaluateTransition(request),
-				request.nonce
+				request
 			);
 			return Array.from({ length: 3 }, (_, coordinateIndex) =>
 				evaluateCertifiedProjection(

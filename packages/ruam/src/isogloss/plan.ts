@@ -8,21 +8,24 @@
  * @module isogloss/plan
  */
 
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import type {
 	CanonicalCallBoundary,
 	CanonicalCallGraphInventory,
 	CanonicalDirectCallEdge,
 } from "../compiler/call-graph.js";
+import { isCompilerProducedCallGraphInventory } from "../compiler/call-graph.js";
 import {
 	analyzePureRegionLearnability,
 	assessMaximumCustodyLearnability,
 	PURE_REGION_LEARNABILITY_NON_CLAIM,
 } from "../compiler/pure-region-learnability.js";
 import {
+	BPRF_GENERATION_LIMITS,
 	generateBprfArtifact,
 	type PureRegionContract,
 } from "./bprf/index.js";
+import { assertBprfScalarArtifactExact } from "./bprf/scalar-source.js";
 import {
 	MASKED_CUSTODY_TRANSCRIPT_BUCKETS,
 } from "./csh/transcript-buckets.js";
@@ -47,6 +50,7 @@ import {
 	type IsoglossPlanningAssessment,
 	type IsoglossProductPlanRequest,
 	type IsoglossProductPlanResult,
+	type IsoglossPureInputDomain,
 	type IsoglossPureRegionSource,
 	type IsoglossSourceExpressionCallRiskEvidence,
 	type IsoglossTranscriptBucket,
@@ -69,6 +73,11 @@ const BOUNDARIES = Object.freeze([
 	"existing-remote-await",
 	"in-process-attested",
 ] as const);
+const PRODUCT_PLAN_LIMITS = Object.freeze({
+	stateWidth: 256,
+	queryDigits: 256,
+	protectedUnits: 2_048,
+});
 
 interface NormalizedRegion {
 	readonly id: string;
@@ -122,7 +131,11 @@ export function planIsoglossProduct(
 		completeLocalFallbackPresent:
 			request.completeLocalFallbackPresent,
 	});
-	const callRisk = assessCallEvidence(request.callEvidence, region.id);
+	const callRisk = assessCallEvidence(
+		request.callEvidence,
+		region.id,
+		request.region.kind
+	);
 	const assessment: IsoglossPlanningAssessment = deepFreeze({
 		learnability,
 		learnabilityDecision,
@@ -146,16 +159,30 @@ export function planIsoglossProduct(
 		region.contract,
 		request.policy.bprf
 	);
+	assertBprfScalarArtifactExact(
+		bprfArtifact,
+		inputDomainsForExactness(request.region)
+	);
 	const transcript = createTranscriptClass(request);
 	const policyDigest = digestCanonical(request.policy);
-	const regionCommitment = digestCanonical({
-		region: region.commitment,
-		callEvidence: {
-			evidence: request.callEvidence.evidence,
-			digest: digestCanonical(request.callEvidence),
+	const regionCommitment = hidingCommitment(
+		{
+			region: region.commitment,
+			callEvidence: {
+				evidence: request.callEvidence.evidence,
+				digest: digestCanonical(request.callEvidence),
+			},
 		},
-	});
-	const ownerArtifactDigest = digestCanonical(bprfArtifact);
+		PROTECTED_PROFILES.has(request.profile)
+			? request.ownerSecrets!.placementSecret!
+			: undefined
+	);
+	const ownerArtifactDigest = hidingCommitment(
+		bprfArtifact,
+		PROTECTED_PROFILES.has(request.profile)
+			? request.ownerSecrets!.relationSecret!
+			: undefined
+	);
 	const learnabilitySummary = createLearnabilitySummary(request, assessment);
 	const certificateBody = {
 		format: ISOGLOSS_ELIGIBILITY_CERTIFICATE_FORMAT,
@@ -239,6 +266,8 @@ export function planIsoglossProduct(
  * is deeply frozen so callers cannot alter the proof after eligibility is
  * assessed.
  */
+const compilerIssuedSourceCallEvidence = new WeakSet<object>();
+
 export function createSourceExpressionMacroregionCallRiskEvidence(
 	input: Omit<
 		IsoglossSourceExpressionCallRiskEvidence,
@@ -260,7 +289,7 @@ export function createSourceExpressionMacroregionCallRiskEvidence(
 			"RUAM_ISOGLOSS_PLAN_INVALID_SOURCE_EXPRESSION_PROOF"
 		);
 	}
-	return deepFreeze({
+	const evidence: IsoglossSourceExpressionCallRiskEvidence = deepFreeze({
 		format: "ruam-isogloss-source-call-risk-1",
 		evidence: "source-expression-structural-proof",
 		proofId: input.proofId,
@@ -271,6 +300,8 @@ export function createSourceExpressionMacroregionCallRiskEvidence(
 			input.noInterproceduralBoundaries,
 		noRecursiveOrFissionScc: input.noRecursiveOrFissionScc,
 	});
+	compilerIssuedSourceCallEvidence.add(evidence);
+	return evidence;
 }
 
 function normalizeRegion(
@@ -309,9 +340,31 @@ function normalizeRegion(
 	};
 }
 
+function inputDomainsForExactness(
+	source: IsoglossPureRegionSource
+): readonly IsoglossPureInputDomain[] {
+	if (source.kind === "pure-contract") return source.inputDomains;
+	const byContractInput = new Map(
+		source.lowered.inputBindings.map((binding) => [
+			binding.contractInput,
+			binding.domain,
+		])
+	);
+	return source.lowered.contract.inputs.map((_, index) => {
+		const domain = byContractInput.get(index);
+		if (!domain) {
+			throw new Error(
+				`RUAM_ISOGLOSS_PLAN_INCOMPLETE_DOMAIN_PROOF: ${index}`
+			);
+		}
+		return domain;
+	});
+}
+
 function assessCallEvidence(
 	callEvidence: IsoglossMacroregionCallEvidence,
-	regionId: string
+	regionId: string,
+	regionKind: IsoglossPureRegionSource["kind"]
 ): IsoglossMacroregionCallRisk {
 	if (callEvidence.evidence === "canonical-call-graph") {
 		return deriveIsoglossMacroregionCallRisk(
@@ -345,11 +398,13 @@ function assessCallEvidence(
 			"proofId",
 		].join(",");
 	const proofComplete =
+		regionKind === "pure-contract" &&
+		compilerIssuedSourceCallEvidence.has(callEvidence) &&
 		Object.isFrozen(callEvidence) &&
 		exactProofSchema &&
 		evidence.format === "ruam-isogloss-source-call-risk-1" &&
 		typeof evidence.proofId === "string" &&
-		evidence.proofId.length > 0 &&
+		evidence.proofId === regionId &&
 		noCalls &&
 		noEffects &&
 		noReentrancy &&
@@ -387,15 +442,23 @@ export function deriveIsoglossMacroregionCallRisk(
 ): IsoglossMacroregionCallRisk {
 	const protectedSet = new Set(protectedUnitIds);
 	const graphUnits = new Set(inventory.unitIds);
+	const sccCountByUnit = new Map<string, number>();
+	for (const scc of inventory.sccs) {
+		for (const unitId of scc.unitIds) {
+			sccCountByUnit.set(
+				unitId,
+				(sccCountByUnit.get(unitId) ?? 0) + 1
+			);
+		}
+	}
 	const proofComplete =
+		isCompilerProducedCallGraphInventory(inventory) &&
 		inventory.targetPolicy.mode === "canonical-evidence-only" &&
 		protectedSet.has(loweredUnitId) &&
 		[...protectedSet].every(
 			(unitId) =>
 				graphUnits.has(unitId) &&
-				inventory.sccs.filter((scc) =>
-					scc.unitIds.includes(unitId)
-				).length === 1
+				sccCountByUnit.get(unitId) === 1
 		);
 	const protectedBoundaries = inventory.boundaries.filter((boundary) =>
 		protectedSet.has(boundary.unitId)
@@ -447,28 +510,30 @@ export function deriveIsoglossMacroregionCallRisk(
 }
 
 /**
- * Canonical JSON-compatible serialization used for build and certificate
- * digests. BigInts receive an explicit tagged representation.
+ * Type-injective canonical serialization used for build and certificate
+ * digests. Every value kind is explicitly tagged, so a user object can never
+ * collide with a scalar encoding.
  */
 export function canonicalSerializeIsoglossBuildValue(value: unknown): string {
 	const active = new Set<object>();
 	const serialize = (current: unknown): string => {
-		if (current === null) return "null";
+		if (current === null) return '["null"]';
 		switch (typeof current) {
 			case "string":
+				return `["string",${JSON.stringify(current)}]`;
 			case "boolean":
-				return JSON.stringify(current);
+				return `["boolean",${JSON.stringify(current)}]`;
 			case "number":
 				if (!Number.isFinite(current)) {
 					throw new Error(
 						"RUAM_ISOGLOSS_CANONICAL_NONFINITE_NUMBER"
 					);
 				}
-				return JSON.stringify(
-					Object.is(current, -0) ? 0 : current
-				);
+				return Object.is(current, -0)
+					? '["number","-0"]'
+					: `["number",${JSON.stringify(current)}]`;
 			case "bigint":
-				return `{"$bigint":${JSON.stringify(String(current))}}`;
+				return `["bigint",${JSON.stringify(String(current))}]`;
 			case "object": {
 				if (active.has(current)) {
 					throw new Error(
@@ -489,9 +554,9 @@ export function canonicalSerializeIsoglossBuildValue(value: unknown): string {
 							"RUAM_ISOGLOSS_CANONICAL_SPARSE_ARRAY"
 						);
 					}
-					serialized = `[${current
+					serialized = `["array",[${current
 						.map((entry) => serialize(entry))
-						.join(",")}]`;
+						.join(",")}]]`;
 				} else {
 					const prototype = Object.getPrototypeOf(current);
 					if (
@@ -510,18 +575,33 @@ export function canonicalSerializeIsoglossBuildValue(value: unknown): string {
 						);
 					}
 					for (const key of keys) {
-						if (record[key] === undefined) {
+						const descriptor = Object.getOwnPropertyDescriptor(
+							record,
+							key
+						);
+						if (
+							!descriptor ||
+							!("value" in descriptor) ||
+							descriptor.value === undefined
+						) {
 							throw new Error(
-								"RUAM_ISOGLOSS_CANONICAL_UNDEFINED"
+								descriptor && !("value" in descriptor)
+									? "RUAM_ISOGLOSS_CANONICAL_ACCESSOR"
+									: "RUAM_ISOGLOSS_CANONICAL_UNDEFINED"
 							);
 						}
 					}
-					serialized = `{${keys
+					serialized = `["object",[${keys
 						.map(
 							(key) =>
-								`${JSON.stringify(key)}:${serialize(record[key])}`
+								`[${JSON.stringify(key)},${serialize(
+									Object.getOwnPropertyDescriptor(
+										record,
+										key
+									)!.value
+								)}]`
 						)
-						.join(",")}}`;
+						.join(",")}]]`;
 				}
 				active.delete(current);
 				return serialized;
@@ -733,19 +813,27 @@ function validateRequest(request: IsoglossProductPlanRequest): void {
 		throw new Error("RUAM_ISOGLOSS_PLAN_INVALID_REGION_SOURCE");
 	}
 	if (request.region.kind === "lowered-contract") {
+		const lowered = request.region.lowered;
 		if (
-			!request.region.lowered ||
-			typeof request.region.lowered.unitId !== "string" ||
-			request.region.lowered.unitId.length === 0 ||
-			!Array.isArray(request.region.lowered.regionIds) ||
-			request.region.lowered.regionIds.length === 0 ||
-			!Array.isArray(request.region.lowered.inputBindings) ||
-			!validPureContractShape(request.region.lowered.contract)
+			!lowered ||
+			typeof lowered.unitId !== "string" ||
+			lowered.unitId.length === 0 ||
+			!Array.isArray(lowered.regionIds) ||
+			lowered.regionIds.length === 0 ||
+			!Array.isArray(lowered.inputBindings) ||
+			!Array.isArray(lowered.outputBindings) ||
+			!validPureContractShape(lowered.contract)
 		) {
 			throw new Error(
 				"RUAM_ISOGLOSS_PLAN_INVALID_LOWERED_CONTRACT"
 			);
 		}
+		assertProductRegionResourceLimits(
+			lowered.contract,
+			lowered.inputBindings.length,
+			lowered.outputBindings.length,
+			lowered.regionIds.length
+		);
 	} else if (
 		typeof request.region.id !== "string" ||
 		request.region.id.length === 0 ||
@@ -757,6 +845,14 @@ function validateRequest(request: IsoglossProductPlanRequest): void {
 			request.region.contract.steps.length
 	) {
 		throw new Error("RUAM_ISOGLOSS_PLAN_INVALID_PURE_CONTRACT");
+	}
+	if (request.region.kind === "pure-contract") {
+		assertProductRegionResourceLimits(
+			request.region.contract,
+			request.region.inputDomains.length,
+			request.region.contract.outputs.length,
+			1
+		);
 	}
 	if (!PROFILE_ORDER.includes(request.profile)) {
 		throw new Error("RUAM_ISOGLOSS_PLAN_INVALID_PROFILE");
@@ -779,9 +875,14 @@ function validateRequest(request: IsoglossProductPlanRequest): void {
 		request.policy.format !== ISOGLOSS_PRODUCT_POLICY_FORMAT ||
 		typeof request.policy.minimumExactAttackQueries !== "bigint" ||
 		request.policy.minimumExactAttackQueries < 0n ||
+		request.policy.minimumExactAttackQueries.toString(10).length >
+			PRODUCT_PLAN_LIMITS.queryDigits ||
 		!Number.isSafeInteger(request.policy.stateWidth) ||
 		request.policy.stateWidth < 2 ||
+		request.policy.stateWidth > PRODUCT_PLAN_LIMITS.stateWidth ||
 		!Number.isSafeInteger(request.policy.bprf.seed) ||
+		request.policy.bprf.seed < 0 ||
+		request.policy.bprf.seed > 0xffffffff ||
 		request.policy.allowedProfiles.length === 0 ||
 		request.policy.allowedProfiles.some(
 			(profile) => !PROFILE_ORDER.includes(profile)
@@ -797,10 +898,14 @@ function validateRequest(request: IsoglossProductPlanRequest): void {
 			(!Number.isSafeInteger(
 				request.policy.bprf.realizationCount
 			) ||
-				request.policy.bprf.realizationCount < 2)) ||
+				request.policy.bprf.realizationCount < 2 ||
+				request.policy.bprf.realizationCount >
+					BPRF_GENERATION_LIMITS.realizations)) ||
 		(request.policy.bprf.fragmentCount !== undefined &&
 			(!Number.isSafeInteger(request.policy.bprf.fragmentCount) ||
-				request.policy.bprf.fragmentCount < 2)) ||
+				request.policy.bprf.fragmentCount < 2 ||
+				request.policy.bprf.fragmentCount >
+					BPRF_GENERATION_LIMITS.fragments)) ||
 		typeof request.isGenerator !== "boolean" ||
 		typeof request.completeLocalFallbackPresent !== "boolean" ||
 		typeof request.capabilities.custodianAvailable !== "boolean" ||
@@ -839,6 +944,8 @@ function validateRequest(request: IsoglossProductPlanRequest): void {
 		if (
 			!Array.isArray(protectedUnitIds) ||
 			protectedUnitIds.length === 0 ||
+			protectedUnitIds.length >
+				PRODUCT_PLAN_LIMITS.protectedUnits ||
 			hasDuplicates(protectedUnitIds) ||
 			protectedUnitIds.some(
 				(unitId) =>
@@ -889,6 +996,24 @@ function validPureContractShape(
 	);
 }
 
+function assertProductRegionResourceLimits(
+	contract: PureRegionContract,
+	inputEvidenceCount: number,
+	outputEvidenceCount: number,
+	regionCount: number
+): void {
+	if (
+		contract.inputs.length > BPRF_GENERATION_LIMITS.inputs ||
+		contract.steps.length > BPRF_GENERATION_LIMITS.steps ||
+		contract.outputs.length > BPRF_GENERATION_LIMITS.outputs ||
+		inputEvidenceCount > BPRF_GENERATION_LIMITS.inputs ||
+		outputEvidenceCount > BPRF_GENERATION_LIMITS.outputs ||
+		regionCount > PRODUCT_PLAN_LIMITS.protectedUnits
+	) {
+		throw new Error("RUAM_ISOGLOSS_PLAN_RESOURCE_LIMIT");
+	}
+}
+
 function assertClientManifestSerializable(
 	manifest: IsoglossClientManifest
 ): void {
@@ -918,6 +1043,14 @@ function edgeId(edge: CanonicalDirectCallEdge): string {
 
 function digestCanonical(value: unknown): string {
 	return createHash("sha256")
+		.update(canonicalSerializeIsoglossBuildValue(value))
+		.digest("hex");
+}
+
+function hidingCommitment(value: unknown, secret?: string): string {
+	if (secret === undefined) return digestCanonical(value);
+	return createHmac("sha256", secret)
+		.update("ruam-isogloss-hiding-commitment-v1\0")
 		.update(canonicalSerializeIsoglossBuildValue(value))
 		.digest("hex");
 }

@@ -17,8 +17,36 @@ interface WorkerRequest {
 	options?: RuamOptions;
 }
 
-self.onmessage = (e: MessageEvent<WorkerRequest>) => {
-	const { id, code, options } = e.data;
+const MAX_BROWSER_SOURCE_BYTES = 1_000_000;
+
+self.onmessage = (e: MessageEvent<unknown>) => {
+	const request = e.data;
+	if (
+		!request ||
+		typeof request !== "object" ||
+		!Number.isSafeInteger((request as WorkerRequest).id) ||
+		(request as WorkerRequest).id < 0 ||
+		typeof (request as WorkerRequest).code !== "string" ||
+		((request as WorkerRequest).options !== undefined &&
+			(!(request as WorkerRequest).options ||
+				typeof (request as WorkerRequest).options !== "object" ||
+				Object.getPrototypeOf((request as WorkerRequest).options) !==
+					Object.prototype))
+	) {
+		(self as unknown as Worker).postMessage({
+			id: null,
+			error: "RUAM_BROWSER_INVALID_REQUEST",
+		});
+		return;
+	}
+	const { id, code, options } = request as WorkerRequest;
+	if (new TextEncoder().encode(code).byteLength > MAX_BROWSER_SOURCE_BYTES) {
+		(self as unknown as Worker).postMessage({
+			id,
+			error: "RUAM_BROWSER_SOURCE_LIMIT",
+		});
+		return;
+	}
 	const start = performance.now();
 	try {
 		const build = protectCode(code, options);
@@ -31,7 +59,11 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
 			elapsed,
 		});
 	} catch (err: unknown) {
-		const message = err instanceof Error ? err.message : String(err);
+		const message =
+			err instanceof Error &&
+			/^RUAM_[A-Z0-9_]+(?::|$)/u.test(err.message)
+				? err.message
+				: "RUAM_BROWSER_TRANSFORM_FAILED";
 		(self as unknown as Worker).postMessage({ id, error: message });
 	}
 };

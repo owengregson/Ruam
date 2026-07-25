@@ -12,6 +12,12 @@ import chalk from "chalk";
 import ora from "ora";
 import { protectCode } from "./index.js";
 import {
+	commitDirectoryProtection,
+	planDirectoryProtection,
+	protectFileAtomically,
+	type PlannedFileProtection,
+} from "./file-protection.js";
+import {
 	resolveRuamOptions,
 	type IsoglossDeploymentProfile,
 	type IsoglossRegionDomains,
@@ -118,7 +124,8 @@ class CliUsageError extends Error {
 			| "RUAM_CLI_UNKNOWN_OPTION"
 			| "RUAM_REMOVED_CLI_OPTION"
 			| "RUAM_CLI_INVALID_REGION_DOMAINS_FILE"
-			| "RUAM_CLI_PROFILE_REQUIRES_PRODUCT_PLANNER",
+			| "RUAM_CLI_PROFILE_REQUIRES_PRODUCT_PLANNER"
+			| "RUAM_CLI_OUTPUT_OVERLAP",
 		detail: string
 	) {
 		super(`${code}: ${detail}`);
@@ -179,22 +186,6 @@ class LogoAnimation {
 		console.log(`  ${chalk.dim(`v${version} \u2014 ${TAGLINE}`)}`);
 		console.log();
 	}
-}
-
-function renderBar(current: number, total: number, width = 28): string {
-	const ratio = total > 0 ? current / total : 0;
-	const filled = Math.round(ratio * width);
-	const pct = Math.round(ratio * 100)
-		.toString()
-		.padStart(3);
-	return (
-		chalk.cyan("\u2588".repeat(filled)) +
-		chalk.dim("\u2591".repeat(width - filled)) +
-		" " +
-		chalk.dim(`${pct}%`) +
-		" " +
-		chalk.dim(`(${current}/${total})`)
-	);
 }
 
 function formatBytes(bytes: number): string {
@@ -355,7 +346,7 @@ async function materializeOptions(
 	) {
 		throw new CliUsageError(
 			"RUAM_CLI_PROFILE_REQUIRES_PRODUCT_PLANNER",
-			`${requestedProfile} custody and attestation configuration must use planIsoglossProduct() with an owner-proven execution boundary; the source CLI supports holographic-local only`
+			`${requestedProfile} custody and attestation require the unpublished owner deployment pipeline with an owner-proven execution boundary; the source CLI supports holographic-local only`
 		);
 	}
 
@@ -452,7 +443,7 @@ function printHelp(version: string): void {
 
 	console.log(
 		`    ${detail(
-			"Custodied, private-function, and TEE builds require planIsoglossProduct()"
+			"Custodied, private-function, and TEE deployment remains an unpublished owner integration"
 		)}`
 	);
 	console.log();
@@ -661,36 +652,63 @@ async function protectFile(
 	options: RuamOptions,
 	ownerTracePath?: string
 ): Promise<ProtectionResult> {
-	const source = await fs.readFile(inputPath, "utf-8");
-	const result = protectCode(source, options);
-	await fs.ensureDir(path.dirname(outputPath));
-	await fs.writeFile(outputPath, result.code, "utf-8");
-	if (ownerTracePath !== undefined) {
-		if (result.ownerTrace === undefined) {
-			throw new Error(
-				"RUAM_CLI_OWNER_TRACE_MISSING: protection did not return the requested owner sidecar"
-			);
-		}
-		await writeOwnerTrace(ownerTracePath, result.ownerTrace);
-	}
-	return result;
+	return protectFileAtomically(
+		inputPath,
+		outputPath,
+		options,
+		ownerTracePath
+	);
 }
 
 async function writeOwnerTrace(
 	outputPath: string,
-	trace: OwnerSidecar
+	trace: OwnerSidecar,
+	containmentRoot?: string
 ): Promise<void> {
-	await fs.ensureDir(path.dirname(outputPath));
-	await fs.writeFile(
-		outputPath,
-		JSON.stringify(
-			trace,
-			(_key, value) =>
-				typeof value === "bigint" ? value.toString(10) : value,
-			2
-		) + "\n",
-		"utf-8"
+	const directory = path.dirname(outputPath);
+	if (containmentRoot !== undefined) {
+		await assertOwnerTraceTargetContained(
+			containmentRoot,
+			outputPath
+		);
+	}
+	await fs.ensureDir(directory);
+	if (containmentRoot !== undefined) {
+		await assertOwnerTraceTargetContained(
+			containmentRoot,
+			outputPath
+		);
+	}
+	const stageDirectory = await fs.mkdtemp(
+		path.join(directory, ".ruam-owner-trace-")
 	);
+	const stagedPath = path.join(stageDirectory, "trace.json");
+	try {
+		await fs.writeFile(
+			stagedPath,
+			JSON.stringify(
+				trace,
+				(_key, value) =>
+					typeof value === "bigint"
+						? value.toString(10)
+						: value,
+				2
+			) + "\n",
+			{ encoding: "utf8", mode: 0o600, flag: "wx" }
+		);
+		if (await fs.pathExists(outputPath)) {
+			const stat = await fs.lstat(outputPath);
+			if (stat.isSymbolicLink() || !stat.isFile()) {
+				throw new CliUsageError(
+					"RUAM_CLI_OUTPUT_OVERLAP",
+					"an existing owner trace must be a non-symlink regular file"
+				);
+			}
+		}
+		await fs.rename(stagedPath, outputPath);
+	} finally {
+		await fs.remove(stageDirectory);
+	}
 }
 
 async function protectSingleFileWithProgress(
@@ -710,13 +728,21 @@ async function protectSingleFileWithProgress(
 	const startTime = Date.now();
 
 	try {
+		const ownerTracePath =
+			args.ownerTracePath === undefined
+				? undefined
+				: path.resolve(args.ownerTracePath);
+		if (ownerTracePath !== undefined) {
+			await assertOwnerTraceFileDisjoint(ownerTracePath, [
+				inputPath,
+				outputPath,
+			]);
+		}
 		const result = await protectFile(
 			inputPath,
 			outputPath,
 			materialized.input,
-			args.ownerTracePath === undefined
-				? undefined
-				: path.resolve(args.ownerTracePath)
+			ownerTracePath
 		);
 		const elapsed = Date.now() - startTime;
 		const outputSize = (await fs.stat(outputPath)).size;
@@ -762,82 +788,123 @@ async function protectDirectoryWithProgress(
 	args: CliArgs,
 	materialized: MaterializedCliOptions
 ): Promise<void> {
+	const startTime = Date.now();
 	const outputDirectory = args.output ? path.resolve(args.output) : inputPath;
-	if (outputDirectory !== inputPath) {
-		await fs.copy(inputPath, outputDirectory);
+	const ownerTraceRoot =
+		args.ownerTracePath === undefined
+			? undefined
+			: path.resolve(args.ownerTracePath);
+	if (
+		outputDirectory !== inputPath &&
+		pathsOverlap(inputPath, outputDirectory)
+	) {
+		throw new CliUsageError(
+			"RUAM_CLI_OUTPUT_OVERLAP",
+			"directory output must not contain the input directory or be contained by it"
+		);
+	}
+	if (ownerTraceRoot !== undefined) {
+		await assertOwnerTraceRootDisjoint(ownerTraceRoot, [
+			inputPath,
+			outputDirectory,
+		]);
 	}
 
-	const { globby } = await import("globby");
-	const files = await globby(args.include, {
-		cwd: outputDirectory,
-		ignore: args.exclude,
-		absolute: false,
-	});
-	if (files.length === 0) {
+	const spinner = ora({
+		text: "Planning contained file transformations...",
+		prefixText: " ",
+		color: "cyan",
+	}).start();
+	let plans: readonly PlannedFileProtection[];
+	try {
+		// Transform every file before the first output mutation. A configured
+		// rejection therefore leaves both in-place and copied builds untouched.
+		plans = await planDirectoryProtection(
+			inputPath,
+			args.include,
+			args.exclude,
+			materialized.input
+		);
+	} catch (error) {
+		spinner.fail(chalk.red("Protection planning failed; no files changed"));
+		throw error;
+	}
+	if (plans.length === 0) {
+		spinner.stop();
 		console.log(chalk.yellow("  No matching files found."));
 		return;
+	}
+	for (const plan of plans) {
+		if (
+			ownerTraceRoot !== undefined &&
+			plan.build.ownerTrace === undefined
+		) {
+			spinner.fail(chalk.red("Owner trace planning failed"));
+			throw new Error(
+				"RUAM_CLI_OWNER_TRACE_MISSING: protection did not return the requested owner sidecar"
+			);
+		}
+	}
+
+	// Publish disjoint owner material before client code. A sidecar failure
+	// therefore cannot leave newly protected code without its requested trace.
+	for (const plan of plans) {
+		if (
+			ownerTraceRoot !== undefined &&
+			plan.build.ownerTrace !== undefined
+		) {
+			await writeOwnerTrace(
+				path.join(
+					ownerTraceRoot,
+					`${plan.file}.owner-trace.json`
+				),
+				plan.build.ownerTrace,
+				ownerTraceRoot
+			);
+		}
+	}
+
+	try {
+		if (outputDirectory !== inputPath) {
+			spinner.text = "Staging the validated output tree...";
+			await publishSeparateDirectory(
+				inputPath,
+				outputDirectory,
+				plans
+			);
+		} else {
+			spinner.text = "Publishing staged protected files...";
+			await commitDirectoryProtection(outputDirectory, plans);
+		}
+	} catch (error) {
+		spinner.fail(chalk.red("Protection publish failed"));
+		throw error;
 	}
 
 	console.log(
 		`  ${chalk.dim("Directory:")} ${chalk.white(
 			path.relative(process.cwd(), outputDirectory) || "."
-		)} ${chalk.dim(`(${files.length} file${files.length === 1 ? "" : "s"})`)}`
+		)} ${chalk.dim(`(${plans.length} file${plans.length === 1 ? "" : "s"})`)}`
 	);
 	console.log();
 
-	const startTime = Date.now();
-	let totalInputSize = 0;
-	let totalOutputSize = 0;
-	let protectedRegionCount = 0;
-	const errors: { file: string; message: string }[] = [];
-	const spinner = ora({ text: "", prefixText: " ", color: "cyan" }).start();
-
-	for (let index = 0; index < files.length; index++) {
-		const file = files[index]!;
-		const filePath = path.join(outputDirectory, file);
-		const inputSize = (await fs.stat(filePath)).size;
-		totalInputSize += inputSize;
-		spinner.text = `${renderBar(index, files.length)} ${chalk.dim(file)}`;
-
-		try {
-			const ownerTracePath =
-				args.ownerTracePath === undefined
-					? undefined
-					: path.join(
-							path.resolve(args.ownerTracePath),
-							`${file}.owner-trace.json`
-						);
-			const result = await protectFile(
-				filePath,
-				filePath,
-				materialized.input,
-				ownerTracePath
-			);
-			protectedRegionCount += result.stats.protectedRegionCount;
-			totalOutputSize += (await fs.stat(filePath)).size;
-		} catch (error) {
-			errors.push({
-				file,
-				message:
-					error instanceof Error ? error.message : String(error),
-			});
-		}
-	}
-
-	const successCount = files.length - errors.length;
-	if (errors.length === 0) {
-		spinner.succeed(
-			chalk.green(
-				`${successCount} file${
-					successCount === 1 ? "" : "s"
-				} protected`
-			)
-		);
-	} else {
-		spinner.warn(
-			chalk.yellow(`${successCount} protected, ${errors.length} failed`)
-		);
-	}
+	const totalInputSize = plans.reduce(
+		(total, plan) => total + plan.sourceBytes,
+		0
+	);
+	const totalOutputSize = plans.reduce(
+		(total, plan) => total + plan.build.stats.outputBytes,
+		0
+	);
+	const protectedRegionCount = plans.reduce(
+		(total, plan) => total + plan.build.stats.protectedRegionCount,
+		0
+	);
+	spinner.succeed(
+		chalk.green(
+			`${plans.length} file${plans.length === 1 ? "" : "s"} protected with staged atomic replacement`
+		)
+	);
 
 	const ratio =
 		totalInputSize === 0
@@ -863,19 +930,258 @@ async function protectDirectoryWithProgress(
 		)}`
 	);
 
-	if (errors.length > 0) {
-		console.log();
-		console.log(chalk.red("  Errors:"));
-		for (const error of errors) {
-			console.log(
-				`    ${chalk.red("\u2717")} ${chalk.dim(error.file)}: ${
-					error.message
-				}`
+	console.log();
+}
+
+/**
+ * Build a separate output in a private sibling directory, then switch the
+ * complete tree into place. Existing outputs are retained as a rollback target
+ * until the new tree is visible.
+ */
+async function publishSeparateDirectory(
+	inputDirectory: string,
+	outputDirectory: string,
+	plans: readonly PlannedFileProtection[]
+): Promise<void> {
+	const parent = path.dirname(outputDirectory);
+	await fs.ensureDir(parent);
+	const stage = await fs.mkdtemp(
+		path.join(parent, `.${path.basename(outputDirectory)}.ruam-stage-`)
+	);
+	let backup: string | undefined;
+	try {
+		await fs.copy(inputDirectory, stage, { dereference: false });
+		await commitDirectoryProtection(stage, plans);
+		if (await fs.pathExists(outputDirectory)) {
+			const outputStat = await fs.lstat(outputDirectory);
+			if (outputStat.isSymbolicLink() || !outputStat.isDirectory()) {
+				throw new CliUsageError(
+					"RUAM_CLI_OUTPUT_OVERLAP",
+					"an existing directory output must be a non-symlink directory"
+				);
+			}
+			backup = await fs.mkdtemp(
+				path.join(
+					parent,
+					`.${path.basename(outputDirectory)}.ruam-backup-`
+				)
+			);
+			await fs.remove(backup);
+			await fs.rename(outputDirectory, backup);
+		}
+		try {
+			await fs.rename(stage, outputDirectory);
+		} catch (error) {
+			if (backup !== undefined) {
+				await fs.rename(backup, outputDirectory);
+				backup = undefined;
+			}
+			throw error;
+		}
+		if (backup !== undefined) {
+			await fs.remove(backup);
+			backup = undefined;
+		}
+	} catch (error) {
+		await fs.remove(stage);
+		if (
+			backup !== undefined &&
+			!(await fs.pathExists(outputDirectory))
+		) {
+			await fs.rename(backup, outputDirectory);
+		}
+		throw error;
+	}
+}
+
+async function assertOwnerTraceRootDisjoint(
+	traceRoot: string,
+	guardedRoots: readonly string[]
+): Promise<void> {
+	await assertNoSymlinkDirectoryComponents(
+		traceRoot,
+		commonPathAncestor([traceRoot, ...guardedRoots])
+	);
+	const canonicalTraceRoot = await canonicalizeProspectivePath(traceRoot);
+	for (const guardedRoot of guardedRoots) {
+		const canonicalGuardedRoot =
+			await canonicalizeProspectivePath(guardedRoot);
+		if (pathsOverlap(canonicalGuardedRoot, canonicalTraceRoot)) {
+			throw new CliUsageError(
+				"RUAM_CLI_OUTPUT_OVERLAP",
+				"owner trace directory must be physically disjoint from source and client output trees"
 			);
 		}
-		process.exitCode = 1;
 	}
-	console.log();
+}
+
+async function assertOwnerTraceFileDisjoint(
+	tracePath: string,
+	guardedFiles: readonly string[]
+): Promise<void> {
+	const traceDirectory = path.dirname(tracePath);
+	await assertNoSymlinkDirectoryComponents(
+		traceDirectory,
+		commonPathAncestor([
+			traceDirectory,
+			...guardedFiles.map((file) => path.dirname(file)),
+		])
+	);
+	const canonicalTracePath = await canonicalizeProspectivePath(tracePath);
+	for (const guardedFile of guardedFiles) {
+		if (
+			canonicalTracePath ===
+			(await canonicalizeProspectivePath(guardedFile))
+		) {
+			throw new CliUsageError(
+				"RUAM_CLI_OUTPUT_OVERLAP",
+				"owner trace file must be physically disjoint from source and client output"
+			);
+		}
+	}
+}
+
+async function assertOwnerTraceTargetContained(
+	traceRoot: string,
+	outputPath: string
+): Promise<void> {
+	const root = path.resolve(traceRoot);
+	const target = path.resolve(outputPath);
+	const relative = path.relative(root, target);
+	if (
+		relative === "" ||
+		relative === ".." ||
+		relative.startsWith(`..${path.sep}`) ||
+		path.isAbsolute(relative)
+	) {
+		throw new CliUsageError(
+			"RUAM_CLI_OUTPUT_OVERLAP",
+			"owner trace target escaped its declared root"
+		);
+	}
+	await assertNoSymlinkDirectoryComponents(root, root);
+	await assertNoSymlinkDirectoryComponents(path.dirname(target), root);
+	const canonicalRoot = await canonicalizeProspectivePath(root);
+	const canonicalTarget = await canonicalizeProspectivePath(target);
+	if (!pathsOverlap(canonicalRoot, canonicalTarget)) {
+		throw new CliUsageError(
+			"RUAM_CLI_OUTPUT_OVERLAP",
+			"owner trace target escaped its physical root"
+		);
+	}
+}
+
+async function assertNoSymlinkDirectoryComponents(
+	targetDirectory: string,
+	stopDirectory?: string
+): Promise<void> {
+	const stop =
+		stopDirectory === undefined
+			? path.parse(path.resolve(targetDirectory)).root
+			: path.resolve(stopDirectory);
+	let current = path.resolve(targetDirectory);
+	const relativeToStop = path.relative(stop, current);
+	if (
+		relativeToStop === ".." ||
+		relativeToStop.startsWith(`..${path.sep}`) ||
+		path.isAbsolute(relativeToStop)
+	) {
+		throw new CliUsageError(
+			"RUAM_CLI_OUTPUT_OVERLAP",
+			"owner trace target escaped its declared root"
+		);
+	}
+	for (;;) {
+		try {
+			const stat = await fs.lstat(current);
+			if (stat.isSymbolicLink() || !stat.isDirectory()) {
+				throw new CliUsageError(
+					"RUAM_CLI_OUTPUT_OVERLAP",
+					"owner trace directories and ancestors must be non-symlink directories"
+				);
+			}
+		} catch (error) {
+			if (
+				!(
+					error &&
+					typeof error === "object" &&
+					"code" in error &&
+					(error as NodeJS.ErrnoException).code === "ENOENT"
+				)
+			) {
+				throw error;
+			}
+		}
+		if (current === stop) break;
+		const parent = path.dirname(current);
+		if (parent === current) break;
+		current = parent;
+	}
+}
+
+function commonPathAncestor(paths: readonly string[]): string {
+	if (paths.length === 0) return path.parse(process.cwd()).root;
+	const resolved = paths.map((candidate) => path.resolve(candidate));
+	let common = resolved[0]!;
+	while (
+		resolved.some((candidate) => {
+			const relative = path.relative(common, candidate);
+			return (
+				relative === ".." ||
+				relative.startsWith(`..${path.sep}`) ||
+				path.isAbsolute(relative)
+			);
+		})
+	) {
+		const parent = path.dirname(common);
+		if (parent === common) return common;
+		common = parent;
+	}
+	return common;
+}
+
+async function canonicalizeProspectivePath(filePath: string): Promise<string> {
+	const resolved = path.resolve(filePath);
+	let existing = resolved;
+	for (;;) {
+		try {
+			await fs.lstat(existing);
+			break;
+		} catch (error) {
+			if (
+				!(
+					error &&
+					typeof error === "object" &&
+					"code" in error &&
+					(error as NodeJS.ErrnoException).code === "ENOENT"
+				)
+			) {
+				throw error;
+			}
+			const parent = path.dirname(existing);
+			if (parent === existing) throw error;
+			existing = parent;
+		}
+	}
+	const canonicalExisting = await fs.realpath(existing);
+	return path.resolve(
+		canonicalExisting,
+		path.relative(existing, resolved)
+	);
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+	const leftToRight = path.relative(left, right);
+	const rightToLeft = path.relative(right, left);
+	return (
+		leftToRight === "" ||
+		(!path.isAbsolute(leftToRight) &&
+			leftToRight !== ".." &&
+			!leftToRight.startsWith(`..${path.sep}`)) ||
+		(!path.isAbsolute(rightToLeft) &&
+			rightToLeft !== ".." &&
+			!rightToLeft.startsWith(`..${path.sep}`))
+	);
 }
 
 async function executeProtection(

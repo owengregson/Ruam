@@ -20,7 +20,7 @@ export function randomBytes(size: number): Buffer {
 				(buf[offset + 1]! << 8) |
 				(buf[offset + 2]! << 16) |
 				((buf[offset + 3]! << 24) >>> 0)
-			);
+			) >>> 0;
 		},
 	} as unknown as Buffer;
 }

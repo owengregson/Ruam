@@ -193,6 +193,25 @@ export interface CanonicalCallGraphInventory {
 	summary: CanonicalCallGraphSummary;
 }
 
+export const CALL_GRAPH_LIMITS = Object.freeze({
+	units: 2_048,
+	nodes: 200_000,
+	boundaries: 65_536,
+});
+
+const compilerProducedCallGraphs = new WeakSet<object>();
+
+/** True only for an inventory constructed from canonical IR in this process. */
+export function isCompilerProducedCallGraphInventory(
+	value: unknown
+): value is CanonicalCallGraphInventory {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		compilerProducedCallGraphs.has(value)
+	);
+}
+
 /**
  * Inventory all canonical user-code boundaries and compute SCCs from only
  * direct edges whose target is explicitly represented in canonical IR.
@@ -201,6 +220,18 @@ export function buildCanonicalCallGraphInventory(
 	group: SemanticRootGroup
 ): CanonicalCallGraphInventory {
 	const units = validateAndIndexGroup(group);
+	const totalNodeCount = [...units.values()].reduce(
+		(total, unit) => total + unit.nodes.length,
+		0
+	);
+	if (
+		units.size > CALL_GRAPH_LIMITS.units ||
+		totalNodeCount > CALL_GRAPH_LIMITS.nodes
+	) {
+		throw new Error(
+			`RUAM_CALL_GRAPH_RESOURCE_LIMIT: units:${units.size}:nodes:${totalNodeCount}`
+		);
+	}
 	const unitIds = Object.freeze([...units.keys()].sort(compareStrings));
 	const closureSites: CanonicalClosureSite[] = [];
 	const boundaries: CanonicalCallBoundary[] = [];
@@ -218,7 +249,6 @@ export function buildCanonicalCallGraphInventory(
 			}
 		}
 	}
-
 	const targetFacts = analyzeCanonicalDirectCallTargets(group);
 	const targetFactsByUnit = new Map<
 		SemanticUnitId,
@@ -254,6 +284,11 @@ export function buildCanonicalCallGraphInventory(
 			}
 		}
 	}
+	if (boundaries.length > CALL_GRAPH_LIMITS.boundaries) {
+		throw new Error(
+			`RUAM_CALL_GRAPH_RESOURCE_LIMIT: boundaries:${boundaries.length}`
+		);
+	}
 
 	closureSites.sort(compareSources);
 	boundaries.sort(compareSources);
@@ -278,7 +313,7 @@ export function buildCanonicalCallGraphInventory(
 	const sccs = buildDeterministicSccs(unitIds, directEdges, boundaries);
 	const summary = summarizeSccs(sccs);
 
-	return Object.freeze({
+	const inventory = Object.freeze({
 		rootGroupId: group.id,
 		entryUnitId: group.entryUnitId,
 		unitIds,
@@ -305,6 +340,8 @@ export function buildCanonicalCallGraphInventory(
 		sccs,
 		summary,
 	});
+	compilerProducedCallGraphs.add(inventory);
+	return inventory;
 }
 
 function validateAndIndexGroup(
@@ -533,21 +570,24 @@ function buildDeterministicSccs(
 	edges: readonly CanonicalDirectCallEdge[],
 	boundaries: readonly CanonicalCallBoundary[]
 ): readonly CanonicalCallScc[] {
-	const adjacency = new Map<SemanticUnitId, SemanticUnitId[]>(
-		unitIds.map((unitId) => [unitId, []])
+	const adjacencySets = new Map<SemanticUnitId, Set<SemanticUnitId>>(
+		unitIds.map((unitId) => [unitId, new Set()])
 	);
 	for (const edge of edges) {
-		const targets = adjacency.get(edge.unitId);
-		if (!targets || !adjacency.has(edge.targetUnitId)) {
+		const targets = adjacencySets.get(edge.unitId);
+		if (!targets || !adjacencySets.has(edge.targetUnitId)) {
 			throw new Error(
 				`RUAM_CALL_GRAPH_EDGE_OUTSIDE_GROUP: ${edge.unitId} -> ${edge.targetUnitId}`
 			);
 		}
-		if (!targets.includes(edge.targetUnitId)) {
-			targets.push(edge.targetUnitId);
-			targets.sort(compareStrings);
-		}
+		targets.add(edge.targetUnitId);
 	}
+	const adjacency = new Map<SemanticUnitId, readonly SemanticUnitId[]>(
+		[...adjacencySets].map(([unitId, targets]) => [
+			unitId,
+			Object.freeze([...targets].sort(compareStrings)),
+		])
+	);
 
 	let nextIndex = 0;
 	const indexByUnit = new Map<SemanticUnitId, number>();
@@ -609,41 +649,45 @@ function buildDeterministicSccs(
 		}
 	}
 
+	const incomingByScc = new Map<string, Set<string>>();
+	const outgoingByScc = new Map<string, Set<string>>();
+	const selfEdgeByScc = new Set<string>();
+	const unresolvedByScc = new Set<string>();
+	const reentryByScc = new Set<string>();
+	for (const id of sccIds) {
+		incomingByScc.set(id, new Set());
+		outgoingByScc.set(id, new Set());
+	}
+	for (const edge of edges) {
+		const sourceSccId = sccIdByUnit.get(edge.unitId)!;
+		const targetSccId = sccIdByUnit.get(edge.targetUnitId)!;
+		if (sourceSccId === targetSccId) {
+			if (edge.unitId === edge.targetUnitId) {
+				selfEdgeByScc.add(sourceSccId);
+			}
+			continue;
+		}
+		outgoingByScc.get(sourceSccId)!.add(targetSccId);
+		incomingByScc.get(targetSccId)!.add(sourceSccId);
+	}
+	for (const boundary of boundaries) {
+		const id = sccIdByUnit.get(boundary.unitId)!;
+		if (boundary.resolution.kind === "indirect-or-external") {
+			unresolvedByScc.add(id);
+		}
+		if (boundary.observability.mayReenterRootGroup) {
+			reentryByScc.add(id);
+		}
+	}
+
 	return Object.freeze(
 		components.map((component, index) => {
 			const id = sccIds[index]!;
-			const memberIds = new Set(component);
-			const incoming = new Set<string>();
-			const outgoing = new Set<string>();
-			let hasSelfEdge = false;
-
-			for (const edge of edges) {
-				const sourceSccId = sccIdByUnit.get(edge.unitId)!;
-				const targetSccId = sccIdByUnit.get(edge.targetUnitId)!;
-				if (
-					edge.unitId === edge.targetUnitId &&
-					memberIds.has(edge.unitId)
-				) {
-					hasSelfEdge = true;
-				}
-				if (sourceSccId === id && targetSccId !== id) {
-					outgoing.add(targetSccId);
-				}
-				if (targetSccId === id && sourceSccId !== id) {
-					incoming.add(sourceSccId);
-				}
-			}
-
-			const unresolved = boundaries.some(
-				(boundary) =>
-					memberIds.has(boundary.unitId) &&
-					boundary.resolution.kind === "indirect-or-external"
-			);
-			const reentrancyRelevant = boundaries.some(
-				(boundary) =>
-					memberIds.has(boundary.unitId) &&
-					boundary.observability.mayReenterRootGroup
-			);
+			const incoming = incomingByScc.get(id)!;
+			const outgoing = outgoingByScc.get(id)!;
+			const hasSelfEdge = selfEdgeByScc.has(id);
+			const unresolved = unresolvedByScc.has(id);
+			const reentrancyRelevant = reentryByScc.has(id);
 			const isMutuallyRecursive = component.length > 1;
 			const isRecursive = isMutuallyRecursive || hasSelfEdge;
 			const hasUnresolvedRecursionRisk = unresolved;

@@ -16,7 +16,6 @@ import {
 	resolveRuamOptions,
 	type RuamOptions,
 } from "./isogloss/options.js";
-import { preprocessIdentifiers } from "./preprocess.js";
 import {
 	createCryptoEntropy,
 	type BuildEntropy,
@@ -51,32 +50,15 @@ export function protectCodeWithEntropy(
 ): IsoglossSourceBuildResult {
 	const resolved = resolveRuamOptions(options);
 	const fileSeed = entropy.nextUint32("isogloss-file-seed");
-	const built = buildLocalIsoglossSource(source, resolved, fileSeed);
-	if (!resolved.preprocessIdentifiers || built.stats.protectedRegionCount === 0) {
-		return built;
-	}
-
-	// Region discovery and domain matching use author-written binding names.
-	// Rename only the completed output so configuration can never accidentally
-	// describe a different binding after preprocessing.
-	const preprocessed = preprocessIdentifiers(
-		built.code,
-		entropy.nextUint32("isogloss-identifier-preprocess")
+	const preprocessSeed = resolved.preprocessIdentifiers
+		? entropy.nextUint32("isogloss-identifier-preprocess")
+		: undefined;
+	return buildLocalIsoglossSource(
+		source,
+		resolved,
+		fileSeed,
+		preprocessSeed
 	);
-	const outputBytes = new TextEncoder().encode(preprocessed.code).byteLength;
-	const stats = Object.freeze({
-		...built.stats,
-		outputBytes,
-		expansionRatio:
-			built.stats.originalBytes === 0
-				? 1
-				: outputBytes / built.stats.originalBytes,
-	});
-	return Object.freeze({
-		...built,
-		code: preprocessed.code,
-		stats,
-	});
 }
 
 /** Internal string-only deterministic compatibility for existing test tools. */

@@ -102,6 +102,35 @@ describe("pure BPRF reference kernel", () => {
 
 		expect(JSON.stringify(second)).toBe(JSON.stringify(first));
 		expect(JSON.stringify(different)).not.toBe(JSON.stringify(first));
+		expect(() =>
+			generateBprfArtifact(fixture, {
+				...options,
+				seed: 2 ** 32,
+			})
+		).toThrow("RUAM_BPRF_INVALID_SEED");
+		expect(() =>
+			generateBprfArtifact(
+				{
+					inputs: [{ type: "number" }],
+					steps: [
+						{
+							type: "number",
+							formula: {
+								tag: "literal",
+								type: "number",
+								value: 0.1,
+							},
+						},
+						{
+							type: "number",
+							formula: { tag: "sum", left: 0, right: 1 },
+						},
+					],
+					outputs: [2],
+				},
+				options
+			)
+		).toThrow("RUAM_BPRF_UNSAFE_NUMBER_LITERAL");
 	});
 
 	it("fissions every destination and braids every fragment longitudinally", () => {

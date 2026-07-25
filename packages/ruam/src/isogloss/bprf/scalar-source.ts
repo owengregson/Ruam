@@ -89,6 +89,24 @@ interface FragmentDestination {
 }
 
 /**
+ * Prove that every realization remains exactly equivalent over the declared
+ * input domains. Product planners call this before publishing an artifact,
+ * even when no JavaScript scalar source is emitted at that boundary.
+ */
+export function assertBprfScalarArtifactExact(
+	artifact: BprfArtifact,
+	inputDomains: readonly BprfScalarInputDomain[]
+): void {
+	validateBprfArtifact(artifact);
+	const domains = validateAndFreezeDomains(artifact, inputDomains);
+	validateCrossRealizationAbi(artifact, domains);
+	const exactness = new ExactDyadicProof();
+	for (const realization of artifact.realizations) {
+		proveRealization(realization, domains, exactness);
+	}
+}
+
+/**
  * Emit one deterministic standalone declaration.
  *
  * The returned entry accepts guarded inputs and a caller context and returns an
@@ -374,34 +392,27 @@ function emitRealization(
 		for (const destination of transition.writes) {
 			contributions.set(destination, []);
 		}
-		for (const fragment of realization.fragments) {
-			for (const destination of transition.writes) {
-				const grouped = groupFragmentDestination(
-					fragment,
-					transition,
-					destination
-				);
-				const functionName = names.name(
-					`fragment-function:${realization.id}:${transition.id}:${fragment.id}:${destination}`
-				);
-				const contributionName = names.name(
-					`fragment-contribution:${realization.id}:${transition.id}:${fragment.id}:${destination}`
-				);
-				const expression = grouped.pieces
-					.map((piece) => {
+			for (const fragment of realization.fragments) {
+				for (const destination of transition.writes) {
+					const grouped = groupFragmentDestination(
+						fragment,
+						transition,
+						destination
+					);
+					const contributionName = names.name(
+						`fragment-contribution:${realization.id}:${transition.id}:${fragment.id}:${destination}`
+					);
+					const expression = grouped.pieces
+						.map((piece) => {
 						counters.pieceExpressionCount++;
-						return emitPieceExpression(piece, slotNames);
-					})
-					.join("+");
-				lines.push(
-					`function ${functionName}(){return 0+${expression};}`
-				);
-				lines.push(`const ${contributionName}=${functionName}();`);
-				contributions.get(destination)!.push(contributionName);
-				counters.fragmentFunctionCount++;
-				counters.fragmentContributionLocalCount++;
+							return emitPieceExpression(piece, slotNames);
+						})
+						.join("+");
+					lines.push(`const ${contributionName}=0+${expression};`);
+					contributions.get(destination)!.push(contributionName);
+					counters.fragmentContributionLocalCount++;
+				}
 			}
-		}
 		for (const destination of transition.writes) {
 			const basis = destinationBasis(
 				realization,

@@ -66,7 +66,7 @@ const PROFILES: readonly ProfileDescription[] = [
 	{
 		id: "holographic-custodied",
 		label: "Custodied",
-		availability: "deployment planner",
+		availability: "owner integration (unpublished)",
 		description:
 			"Holds part of the relation behind an existing remote-await boundary. A complete local fallback is forbidden.",
 		playground: false,
@@ -74,7 +74,7 @@ const PROFILES: readonly ProfileDescription[] = [
 	{
 		id: "holographic-private",
 		label: "Private",
-		availability: "deployment planner",
+		availability: "owner integration (unpublished)",
 		description:
 			"Combines custody with an actively secure private-function protocol and a padded universal circuit.",
 		playground: false,
@@ -82,7 +82,7 @@ const PROFILES: readonly ProfileDescription[] = [
 	{
 		id: "holographic-tee",
 		label: "Attested",
-		availability: "deployment planner",
+		availability: "owner integration (unpublished)",
 		description:
 			"Executes the held relation inside an owner-pinned attested trust domain without a complete local fallback.",
 		playground: false,
@@ -342,10 +342,17 @@ function useCodeMirror(
 function useWorker() {
 	const workerRef = useRef<Worker | null>(null);
 	const idRef = useRef(0);
+	const activeIdRef = useRef<number | null>(null);
+	const activeCancelRef = useRef<(() => void) | null>(null);
+	const disposedRef = useRef(false);
 	const [ready, setReady] = useState(false);
 	const [initError, setInitError] = useState<string | null>(null);
 
-	useEffect(() => {
+	const startWorker = useCallback(() => {
+		if (disposedRef.current) return;
+		workerRef.current?.terminate();
+		setReady(false);
+		setInitError(null);
 		const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 		const w = new Worker(`${basePath}/ruam-worker.mjs`, {
 			type: "module",
@@ -357,68 +364,110 @@ function useWorker() {
 			if (e.data.ready) {
 				w.removeEventListener("message", onReady);
 				w.removeEventListener("error", onInitErr);
+				if (disposedRef.current || workerRef.current !== w) {
+					w.terminate();
+					return;
+				}
 				setReady(true);
 			}
 		};
 		const onInitErr = (e: ErrorEvent) => {
 			w.removeEventListener("message", onReady);
 			w.removeEventListener("error", onInitErr);
+			if (disposedRef.current || workerRef.current !== w) return;
 			setInitError(e.message || "Worker failed to load");
 		};
 		w.addEventListener("message", onReady);
 		w.addEventListener("error", onInitErr);
+	}, []);
 
+	useEffect(() => {
+		disposedRef.current = false;
+		startWorker();
 		return () => {
-			w.terminate();
+			disposedRef.current = true;
+			activeCancelRef.current?.();
+			activeCancelRef.current = null;
+			workerRef.current?.terminate();
 			workerRef.current = null;
 		};
-	}, []);
+	}, [startWorker]);
 
 	const transformRegion = useCallback(
 		(code: string, options: IsoglossSourceOptions) =>
-			new Promise<{ result: string; elapsed: number }>(
+			new Promise<{
+				result: string;
+				elapsed: number;
+				outputBytes: number;
+			}>(
 				(resolve, reject) => {
-					if (!workerRef.current) {
+					const worker = workerRef.current;
+					if (!worker || disposedRef.current) {
 						reject(new Error("Worker not ready"));
 						return;
 					}
+					if (activeIdRef.current !== null) {
+						reject(new Error("A transform is already running"));
+						return;
+					}
 					const id = ++idRef.current;
+					activeIdRef.current = id;
+					let timeout: number | null = null;
+					let settled = false;
+					const cleanup = () => {
+						if (timeout !== null) window.clearTimeout(timeout);
+						worker.removeEventListener("message", handler);
+						worker.removeEventListener("error", errHandler);
+						if (activeIdRef.current === id) {
+							activeIdRef.current = null;
+						}
+						if (activeCancelRef.current === cancel) {
+							activeCancelRef.current = null;
+						}
+					};
+					const cancel = () => {
+						if (settled) return;
+						settled = true;
+						cleanup();
+						reject(new Error("Worker was disposed"));
+					};
 					const handler = (e: MessageEvent) => {
 						if (e.data.id !== id) return;
-						workerRef.current?.removeEventListener(
-							"message",
-							handler
-						);
-						workerRef.current?.removeEventListener(
-							"error",
-							errHandler
-						);
+						settled = true;
+						cleanup();
 						if (e.data.error) {
 							reject(new Error(e.data.error));
 						} else {
 							resolve({
 								result: e.data.result,
 								elapsed: e.data.elapsed,
+								outputBytes: e.data.stats.outputBytes,
 							});
 						}
 					};
 					const errHandler = (e: ErrorEvent) => {
-						workerRef.current?.removeEventListener(
-							"message",
-							handler
-						);
-						workerRef.current?.removeEventListener(
-							"error",
-							errHandler
-						);
+						settled = true;
+						cleanup();
 						reject(new Error(e.message || "Worker error"));
 					};
-					workerRef.current.addEventListener("message", handler);
-					workerRef.current.addEventListener("error", errHandler);
-					workerRef.current.postMessage({ id, code, options });
+					timeout = window.setTimeout(() => {
+						if (settled) return;
+						settled = true;
+						cleanup();
+						startWorker();
+						reject(
+							new Error(
+								"Transform exceeded the 15-second browser budget"
+							)
+						);
+					}, 15_000);
+					activeCancelRef.current = cancel;
+					worker.addEventListener("message", handler);
+					worker.addEventListener("error", errHandler);
+					worker.postMessage({ id, code, options });
 				}
 			),
-		[]
+		[startWorker]
 	);
 
 	return { ready, transformRegion, initError };
@@ -441,6 +490,7 @@ export default function Playground() {
 	const [error, setError] = useState<string | null>(null);
 	const [running, setRunning] = useState(false);
 	const [elapsed, setElapsed] = useState<number | null>(null);
+	const [outputBytes, setOutputBytes] = useState<number | null>(null);
 	const [copied, setCopied] = useState(false);
 
 	const inputRef = useRef<HTMLDivElement>(null);
@@ -509,6 +559,7 @@ export default function Playground() {
 		if (running || !allLoaded) return;
 		setError(null);
 		setElapsed(null);
+		setOutputBytes(null);
 
 		const materialized = materializeRegionDomains(regionName, bindings);
 		if (materialized.regionDomains === null) {
@@ -532,9 +583,14 @@ export default function Playground() {
 		const code = codeRef.current;
 
 		try {
-			const { result, elapsed: ms } = await transformRegion(code, options);
+			const {
+				result,
+				elapsed: ms,
+				outputBytes: builtBytes,
+			} = await transformRegion(code, options);
 			setOutput(result);
 			setElapsed(ms);
+			setOutputBytes(builtBytes);
 
 			// Update output editor
 			if (outputViewRef.current) {
@@ -596,8 +652,7 @@ export default function Playground() {
 	}, [output]);
 
 	// --- Format bytes ---
-	const formatSize = (s: string) => {
-		const bytes = new TextEncoder().encode(s).length;
+	const formatSize = (bytes: number) => {
 		if (bytes < 1024) return `${bytes} B`;
 		return `${(bytes / 1024).toFixed(1)} KB`;
 	};
@@ -689,7 +744,7 @@ export default function Playground() {
 						{output && (
 							<span>
 								<span className="text-smoke">
-									{formatSize(output)}
+									{formatSize(outputBytes ?? 0)}
 								</span>
 							</span>
 						)}

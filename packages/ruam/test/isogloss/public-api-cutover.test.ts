@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import * as publicApi from "../../src/index.js";
 import {
 	IsoglossSourceTransformError,
 	RuamOptionError,
@@ -51,6 +52,11 @@ function expectNoLegacyVmRuntime(code: string): void {
 }
 
 describe("public Isogloss execution cutover", () => {
+	it("keeps the unbound nonlocal planner off the published surface", () => {
+		expect("planIsoglossProduct" in publicApi).toBe(false);
+		expect("compileIsoglossCallEvidence" in publicApi).toBe(false);
+	});
+
 	it("protects a guarded root and reports the local profile honestly", () => {
 		const build = protectCode(ROOT_SOURCE, ROOT_OPTIONS);
 

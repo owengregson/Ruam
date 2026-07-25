@@ -84,6 +84,8 @@ describe("custodied chart relation", () => {
 			contract,
 			state,
 			incoming,
+			local,
+			to,
 			"chart_nonce_0001"
 		);
 		expect(() =>
@@ -93,7 +95,7 @@ describe("custodied chart relation", () => {
 				local,
 				to,
 				undefined,
-				request.nonce
+				request
 			)
 		).toThrow("RUAM_CSH_CUSTODIAN_REQUIRED");
 
@@ -105,7 +107,7 @@ describe("custodied chart relation", () => {
 				local,
 				to,
 				response,
-				"chart_nonce_wrong"
+				{ ...request, nonce: "chart_nonce_wrong" }
 			)
 		).toThrow("RUAM_CSH_CHART_CUSTODY_RESPONSE_MISMATCH");
 		const applied = applyCustodiedChartContribution(
@@ -114,7 +116,7 @@ describe("custodied chart relation", () => {
 			local,
 			to,
 			response,
-			request.nonce
+			request
 		);
 		const residual = expectedResidual(values);
 		const expected = [
@@ -138,7 +140,7 @@ describe("custodied chart relation", () => {
 	});
 
 	it("keeps the relation and output direction out of the client contract and response", () => {
-		const { incoming, custodian } = fixture();
+		const { to, incoming, local, custodian } = fixture();
 		const contract = custodian.clientContract;
 		const state = createChartCustodyClientState(contract);
 		const response = custodian.evaluate(
@@ -146,6 +148,8 @@ describe("custodied chart relation", () => {
 				contract,
 				state,
 				incoming,
+				local,
+				to,
 				"chart_nonce_0002"
 			)
 		);
@@ -180,12 +184,16 @@ describe("custodied chart relation", () => {
 			contract,
 			state,
 			incoming,
+			local,
+			to,
 			"chart_fork_00001"
 		);
 		const second = prepareChartCustodyRequest(
 			contract,
 			state,
 			incoming,
+			local,
+			to,
 			"chart_fork_00002"
 		);
 		const response = custodian.evaluate(first);
@@ -195,6 +203,20 @@ describe("custodied chart relation", () => {
 		expect(() => custodian.evaluate(second)).toThrow(
 			"RUAM_CSH_CUSTODY_STALE_LINEAGE"
 		);
+
+		const substitutedLocal = structuredClone(local);
+		(substitutedLocal[0]!.cells as number[])[0] =
+			(substitutedLocal[0]!.cells[0]! + 1) % CSH_FIELD_MODULUS;
+		expect(() =>
+			applyCustodiedChartContribution(
+				contract,
+				state,
+				substitutedLocal,
+				to,
+				response,
+				first
+			)
+		).toThrow("RUAM_CSH_CHART_CUSTODY_RESPONSE_MISMATCH");
 
 		const incomplete = {
 			...response,
@@ -207,7 +229,7 @@ describe("custodied chart relation", () => {
 				local,
 				to,
 				incomplete,
-				first.nonce
+				first
 			)
 		).toThrow("RUAM_CSH_CUSTODY_BAD_SIGNATURE");
 		const tampered = structuredClone(response);
@@ -222,7 +244,7 @@ describe("custodied chart relation", () => {
 				local,
 				to,
 				tampered,
-				first.nonce
+				first
 			)
 		).toThrow("RUAM_CSH_CUSTODY_BAD_SIGNATURE");
 	});

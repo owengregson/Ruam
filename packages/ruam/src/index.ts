@@ -4,12 +4,14 @@
  * @module index
  */
 
-import fs from "fs-extra";
-import { globby } from "globby";
-import path from "node:path";
 import { obfuscateCode, protectCode } from "./transform.js";
 import type { IsoglossSourceBuildResult } from "./isogloss/source-transform.js";
 import type { RuamOptions } from "./isogloss/options.js";
+import {
+	commitDirectoryProtection,
+	planDirectoryProtection,
+	protectFileAtomically,
+} from "./file-protection.js";
 
 export { obfuscateCode, protectCode };
 export {
@@ -24,6 +26,7 @@ export {
 export {
 	DEFAULT_MINIMUM_EXACT_ATTACK_QUERIES,
 	DEFAULT_MINIMUM_EXACT_ATTACK_QUERIES_TEXT,
+	ISOGLOSS_OPTION_LIMITS,
 	ISOGLOSS_FIXED_LOCAL_BPRF,
 	REMOVED_LEGACY_VM_OPTION_HINTS,
 	REMOVED_LEGACY_VM_OPTIONS,
@@ -48,13 +51,12 @@ export {
 	type RuamOptionErrorCode,
 	type RuamOptions,
 } from "./isogloss/options.js";
+export { ISOGLOSS_SOURCE_LIMITS } from "./isogloss/source-transform.js";
 export {
-	createSourceExpressionMacroregionCallRiskEvidence,
-	deriveIsoglossMacroregionCallRisk,
-	digestCanonicalIsoglossBuildValue,
-	planIsoglossProduct,
-} from "./isogloss/plan.js";
-export * from "./isogloss/types.js";
+	FILE_PROTECTION_LIMITS,
+	RuamFileSafetyError,
+	type RuamFileSafetyErrorCode,
+} from "./file-protection.js";
 
 /** Protect one file and return the same honest metadata as {@link protectCode}. */
 export async function protectFile(
@@ -62,10 +64,7 @@ export async function protectFile(
 	outputPath?: string,
 	options: RuamOptions = {}
 ): Promise<IsoglossSourceBuildResult> {
-	const source = await fs.readFile(inputPath, "utf8");
-	const result = protectCode(source, options);
-	await fs.writeFile(outputPath ?? inputPath, result.code, "utf8");
-	return result;
+	return protectFileAtomically(inputPath, outputPath ?? inputPath, options);
 }
 
 /** String-only file alias for callers that do not consume build metadata. */
@@ -93,18 +92,18 @@ export async function runProtection(
 	dir: string,
 	config: RunProtectionConfig = {}
 ): Promise<readonly ProtectedFileResult[]> {
-	const files = await globby(config.include ?? ["**/*.js"], {
-		cwd: dir,
-		ignore: [...(config.exclude ?? ["**/node_modules/**"])],
-		absolute: false,
-	});
-	const results: ProtectedFileResult[] = [];
-	for (const file of files) {
-		const filePath = path.join(dir, file);
-		const build = await protectFile(filePath, filePath, config.options);
-		results.push(Object.freeze({ file, build }));
-	}
-	return Object.freeze(results);
+	const plans = await planDirectoryProtection(
+		dir,
+		config.include ?? ["**/*.js"],
+		config.exclude ?? ["**/node_modules/**"],
+		config.options
+	);
+	await commitDirectoryProtection(dir, plans);
+	return Object.freeze(
+		plans.map((plan) =>
+			Object.freeze({ file: plan.file, build: plan.build })
+		)
+	);
 }
 
 // Keep the function type reachable without exporting implementation internals

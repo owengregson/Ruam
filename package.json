@@ -5,6 +5,11 @@
 		"packages/*",
 		"apps/*"
 	],
+	"overrides": {
+		"esbuild": "^0.28.1",
+		"postcss": "^8.5.23",
+		"sharp": "^0.35.3"
+	},
 	"scripts": {
 		"build": "bun run build:lib && bun run build:worker && bun run build:web",
 		"build:lib": "cd packages/ruam && bun run build",

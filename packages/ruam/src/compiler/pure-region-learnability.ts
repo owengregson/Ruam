@@ -534,7 +534,8 @@ function analyzeFormulaDegree(
 				formula.type === resultType &&
 				((formula.type === "number" &&
 					typeof formula.value === "number" &&
-					Number.isFinite(formula.value)) ||
+					Number.isSafeInteger(formula.value) &&
+					!Object.is(formula.value, -0)) ||
 					(formula.type === "boolean" &&
 						typeof formula.value === "boolean"));
 			if (!validLiteral) {

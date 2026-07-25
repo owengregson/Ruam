@@ -17,7 +17,10 @@ import {
 	transportAffineCharts,
 	type ChartCover,
 } from "../../../src/isogloss/csh/reference.js";
-import type { ChartCustodyResponse } from "../../../src/isogloss/csh/chart-custody-protocol.js";
+import type {
+	ChartCustodyRequest,
+	ChartCustodyResponse,
+} from "../../../src/isogloss/csh/chart-custody-protocol.js";
 
 export const MASKED_CUSTODY_ATTACKER_REPORT_VERSION = 1 as const;
 
@@ -178,7 +181,7 @@ interface FirstTransitionCapture {
 	readonly state: ReturnType<typeof createMaskedCustodyClientState>;
 	readonly localCharts: ReturnType<typeof transportAffineCharts>;
 	readonly response: ChartCustodyResponse;
-	readonly requestNonce: string;
+	readonly request: ChartCustodyRequest;
 }
 
 /**
@@ -209,13 +212,6 @@ function captureSession(
 
 	for (let epoch = 0; epoch < TRANSITION_COUNT; epoch++) {
 		const nonce = transitionNonce(sessionOrdinal, epoch);
-		const request = prepareMaskedTransitionRequest(
-			custodian.clientContract,
-			clientState,
-			charts,
-			nonce
-		);
-		const response = custodian.evaluateTransition(request);
 		const targetCover = COVERS[epoch + 1]!;
 		const localCharts = transportAffineCharts(
 			charts,
@@ -224,6 +220,15 @@ function captureSession(
 			IDENTITY_TRANSITION,
 			transportSeed(sessionOrdinal, epoch)
 		);
+		const request = prepareMaskedTransitionRequest(
+			custodian.clientContract,
+			clientState,
+			charts,
+			nonce,
+			localCharts,
+			targetCover
+		);
+		const response = custodian.evaluateTransition(request);
 		const recoveredMaskedDelta = recoverSignedMaskedDelta(
 			response,
 			targetCover
@@ -234,7 +239,7 @@ function captureSession(
 			localCharts,
 			targetCover,
 			response,
-			nonce
+			request
 		);
 		const nextOwnerState = applyOwnerTransition(
 			HIDDEN_TRANSITIONS[epoch]!,
@@ -267,7 +272,7 @@ function captureSession(
 		custodian.clientContract,
 		clientState,
 		projectionResponse,
-		projectionNonce
+		projectionRequest
 	);
 
 	return Object.freeze({
@@ -317,13 +322,6 @@ function captureFirstTransition(
 		custodian.clientContract
 	);
 	const nonce = transitionNonce(sessionOrdinal, 0);
-	const request = prepareMaskedTransitionRequest(
-		custodian.clientContract,
-		state,
-		charts,
-		nonce
-	);
-	const response = custodian.evaluateTransition(request);
 	const localCharts = transportAffineCharts(
 		charts,
 		COVERS[0]!,
@@ -331,12 +329,21 @@ function captureFirstTransition(
 		IDENTITY_TRANSITION,
 		transportSeed(sessionOrdinal, 0)
 	);
+	const request = prepareMaskedTransitionRequest(
+		custodian.clientContract,
+		state,
+		charts,
+		nonce,
+		localCharts,
+		COVERS[1]!
+	);
+	const response = custodian.evaluateTransition(request);
 	return Object.freeze({
 		contract: custodian.clientContract,
 		state,
 		localCharts,
 		response,
-		requestNonce: nonce,
+		request,
 	});
 }
 
@@ -660,14 +667,14 @@ function measureCrossSessionTransfer(): {
 			secondTransition.localCharts,
 			COVERS[1]!,
 			firstTransition.response,
-			secondTransition.requestNonce
+			secondTransition.request
 		)
 	);
 	const reboundResponse: ChartCustodyResponse = Object.freeze({
 		...firstTransition.response,
 		sessionId: secondTransition.contract.sessionId,
 		contractId: secondTransition.contract.contractId,
-		requestNonce: secondTransition.requestNonce,
+		requestNonce: secondTransition.request.nonce,
 	});
 	const reboundAccepted = doesNotThrow(() =>
 		applyMaskedTransitionResponse(
@@ -676,7 +683,7 @@ function measureCrossSessionTransfer(): {
 			secondTransition.localCharts,
 			COVERS[1]!,
 			reboundResponse,
-			secondTransition.requestNonce
+			secondTransition.request
 		)
 	);
 

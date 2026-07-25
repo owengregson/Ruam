@@ -15,12 +15,14 @@ import {
 } from "node:crypto";
 import {
 	chartCustodySigningPayload,
+	chartCustodyRequestDigest,
 	type AdditiveChartContribution,
 	type ChartCustodyRequest,
 	type ChartCustodyResponse,
 } from "./chart-custody-protocol.js";
 import {
 	custodyResponseSigningPayload,
+	custodyRequestDigest,
 	type CustodyRequest,
 	type CustodyResponse,
 } from "./custody-protocol.js";
@@ -109,6 +111,7 @@ export class ReferenceMaskedChartCustodian {
 	}
 
 	evaluateTransition(request: ChartCustodyRequest): ChartCustodyResponse {
+		chartCustodyRequestDigest(request);
 		this.#assertLiveRequest(request);
 		const transition = this.#transitions[this.#epoch];
 		const from = this.#covers[this.#epoch];
@@ -161,7 +164,11 @@ export class ReferenceMaskedChartCustodian {
 		const unsigned = {
 			sessionId: request.sessionId,
 			contractId: request.contractId,
+			requestFromCoverId: request.fromCoverId,
+			requestToCoverId: request.toCoverId,
 			requestNonce: request.nonce,
+			requestLineageCommitment: request.lineageCommitment,
+			requestDigest: chartCustodyRequestDigest(request),
 			epoch: this.#epoch,
 			nextEpoch,
 			nextLineageCommitment,
@@ -181,6 +188,7 @@ export class ReferenceMaskedChartCustodian {
 	}
 
 	evaluateExitProjection(request: CustodyRequest): CustodyResponse {
+		custodyRequestDigest(request);
 		this.#assertLiveRequest(request);
 		if (this.#epoch !== this.#transitions.length) {
 			throw new Error("RUAM_CSH_MASKED_CUSTODY_NOT_AT_EXIT");
@@ -219,7 +227,10 @@ export class ReferenceMaskedChartCustodian {
 		const unsigned = {
 			sessionId: request.sessionId,
 			contractId: request.contractId,
+			requestCoverId: request.coverId,
 			requestNonce: request.nonce,
+			requestLineageCommitment: request.lineageCommitment,
+			requestDigest: custodyRequestDigest(request),
 			epoch: this.#epoch,
 			nextEpoch,
 			nextLineageCommitment,

@@ -139,9 +139,13 @@ export function lowerSourcePureExpression(
 		// Value references address `[all inputs, then all steps]`. Discover the
 		// complete ingress prefix before emitting any step so a later first use
 		// of an input cannot shift already-emitted step references.
-		if (isSupportedSourceExpressionShape(expression)) {
-			predeclareSourceInputs(expression, state);
+		if (!isSupportedSourceExpressionShape(expression)) {
+			fail(
+				"RUAM_SOURCE_REGION_UNSUPPORTED_EXPRESSION",
+				expression.type
+			);
 		}
+		predeclareSourceInputs(expression, state);
 		const output = lowerExpression(expression, state, null);
 		const contract: PureRegionContract = Object.freeze({
 			inputs: Object.freeze(
@@ -221,22 +225,9 @@ function isSupportedSourceExpressionShape(expression: t.Expression): boolean {
 			isSupportedSourceExpressionShape(expression.right)
 		);
 	}
-	if (
-		t.isLogicalExpression(expression) &&
-		(expression.operator === "&&" || expression.operator === "||")
-	) {
-		return (
-			isSupportedSourceExpressionShape(expression.left) &&
-			isSupportedSourceExpressionShape(expression.right)
-		);
-	}
-	if (t.isConditionalExpression(expression)) {
-		return (
-			isSupportedSourceExpressionShape(expression.test) &&
-			isSupportedSourceExpressionShape(expression.consequent) &&
-			isSupportedSourceExpressionShape(expression.alternate)
-		);
-	}
+	// Lazy branches cannot be scalarized eagerly: collecting both sides as
+	// wrapper inputs can read a TDZ binding from an unselected branch. Leave
+	// these forms native until the source ABI can carry lazy branch thunks.
 	return false;
 }
 
@@ -263,19 +254,13 @@ function predeclareSourceInputs(
 		return;
 	}
 	if (
-		(t.isBinaryExpression(expression) ||
-			t.isLogicalExpression(expression)) &&
+		t.isBinaryExpression(expression) &&
 		t.isExpression(expression.left) &&
 		t.isExpression(expression.right)
 	) {
 		predeclareSourceInputs(expression.left, state);
 		predeclareSourceInputs(expression.right, state);
 		return;
-	}
-	if (t.isConditionalExpression(expression)) {
-		predeclareSourceInputs(expression.test, state);
-		predeclareSourceInputs(expression.consequent, state);
-		predeclareSourceInputs(expression.alternate, state);
 	}
 }
 

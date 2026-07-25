@@ -8,6 +8,10 @@ import {
 	compileSemanticFunction,
 	resetUnitCounter,
 } from "../../src/compiler/index.js";
+import {
+	decodeTryTarget,
+	encodeTryTarget,
+} from "../../src/compiler/visitors/statements.js";
 import { Op } from "../../src/compiler/operations.js";
 import {
 	NON_CANONICAL_SEMANTIC_OPS,
@@ -159,6 +163,13 @@ describe("canonical compiler CFG", () => {
 	});
 
 	it("rejects malformed targets and representation-specific operations", () => {
+		expect(decodeTryTarget(encodeTryTarget(0xfffe, -1))).toEqual({
+			catchIp: 0xfffe,
+			finallyIp: -1,
+		});
+		expect(() => encodeTryTarget(0xffff, -1)).toThrow(
+			"RUAM_TRY_TARGET_RANGE"
+		);
 		expect(() =>
 			buildCanonicalCfg({
 				instructions: [{ opcode: Op.JMP, operand: 2 }],

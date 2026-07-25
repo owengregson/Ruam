@@ -87,6 +87,8 @@ const nativeTiming = measure(native);
 const protectedTiming = measure(protectedKernel);
 const sourceBytes = new TextEncoder().encode(SOURCE).byteLength;
 const outputBytes = new TextEncoder().encode(build.code).byteLength;
+const runtimeOverhead =
+	protectedTiming.milliseconds / nativeTiming.milliseconds;
 
 console.log("Ruam Isogloss local benchmark");
 console.table({
@@ -115,9 +117,7 @@ console.table({
 		unit: `ms / ${ITERATIONS}`,
 	},
 	"runtime overhead": {
-		value: (
-			protectedTiming.milliseconds / nativeTiming.milliseconds
-		).toFixed(2),
+		value: runtimeOverhead.toFixed(2),
 		unit: "x",
 	},
 });
@@ -131,3 +131,26 @@ console.log({
 	checksumAgreement:
 		nativeTiming.checksum === protectedTiming.checksum,
 });
+
+const budgets = {
+	maxBuildMilliseconds: 2_000,
+	maxOutputBytes: 18_000,
+	maxQuickProtectedMilliseconds: 250,
+};
+if (
+	nativeTiming.checksum !== protectedTiming.checksum ||
+	buildMilliseconds > budgets.maxBuildMilliseconds ||
+	outputBytes > budgets.maxOutputBytes ||
+	(QUICK &&
+		protectedTiming.milliseconds >
+			budgets.maxQuickProtectedMilliseconds)
+) {
+	throw new Error(
+		`RUAM_BENCHMARK_BUDGET_EXCEEDED: ${JSON.stringify({
+			buildMilliseconds,
+			outputBytes,
+			protectedMilliseconds: protectedTiming.milliseconds,
+			budgets,
+		})}`
+	);
+}

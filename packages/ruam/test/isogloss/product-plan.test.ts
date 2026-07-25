@@ -1,5 +1,11 @@
 import { describe, expect, it } from "bun:test";
-import type { CanonicalCallGraphInventory } from "../../src/compiler/call-graph.js";
+import {
+	buildCanonicalCallGraphInventory,
+	type CanonicalCallGraphInventory,
+} from "../../src/compiler/call-graph.js";
+import { buildCanonicalCfg } from "../../src/compiler/cfg.js";
+import type { SemanticUnit } from "../../src/compiler/ir.js";
+import { Op } from "../../src/compiler/operations.js";
 import type { LoweredPureRegionContract } from "../../src/compiler/pure-region-lowering.js";
 import {
 	canonicalSerializeIsoglossBuildValue,
@@ -78,53 +84,48 @@ function degreeNineLowered(): LoweredPureRegionContract {
 function cleanCallGraph(
 	unitId = "product-unit"
 ): CanonicalCallGraphInventory {
-	return {
+	const cfg = buildCanonicalCfg({
+		instructions: [{ opcode: Op.RETURN_VOID, operand: 0 }],
+		originIds: [0],
+	});
+	const unit: SemanticUnit = {
+		id: unitId,
 		rootGroupId: "product-root",
-		entryUnitId: unitId,
-		unitIds: [unitId],
-		targetPolicy: {
-			mode: "canonical-evidence-only",
-			directTargetRepresentation: "unit-ref-plus-exact-dataflow",
-			unprovenBoundaryClassification: "indirect-or-external",
-			supportedValueFlows: [
-				"stack",
-				"register",
-				"argument",
-				"slot",
-			],
-			precisionLossBoundaries: [
-				"scope-chain",
-				"dynamic-stack",
-				"abrupt-control",
-				"unsupported-aliasing",
-			],
-		},
-		closureSites: [],
-		boundaries: [],
-		directEdges: [],
-		sccs: [
+		constants: [],
+		nodes: cfg.nodes,
+		exits: cfg.exits,
+		entryNode: cfg.entryNode,
+		origins: [
 			{
-				id: "scc_0",
-				unitIds: [unitId],
-				incomingSccIds: [],
-				outgoingSccIds: [],
-				isRecursive: false,
-				isMutuallyRecursive: false,
-				hasUnresolvedRecursionRisk: false,
-				hasUnresolvedMutualRecursionRisk: false,
-				reentrancyRelevant: false,
-				requiresInterproceduralFission: false,
+				file: "product-plan-fixture.js",
+				start: 0,
+				end: 1,
+				line: 1,
+				column: 0,
 			},
 		],
-		summary: {
-			hasProvenRecursion: false,
-			hasProvenMutualRecursion: false,
-			hasUnresolvedRecursionRisk: false,
-			hasUnresolvedMutualRecursionRisk: false,
-			reentrancyRelevantSccIds: [],
-			interproceduralFissionSccIds: [],
-		},
+		childUnitIds: [],
+		paramCount: 0,
+		registerCount: 0,
+		slotCount: 0,
+		isStrict: false,
+		isGenerator: false,
+		isAsync: false,
+		isArrow: false,
+		scopeless: true,
+		usesExceptions: false,
+		usesThisContext: false,
+		nameConstIndex: -1,
+		outerNames: [],
 	};
+	return buildCanonicalCallGraphInventory({
+		id: "product-root",
+		entryUnitId: unitId,
+		units: [unit],
+		usedSemantics: new Set([Op.RETURN_VOID]),
+		hasAsync: false,
+		hasGenerator: false,
+	});
 }
 
 function localPolicy(
@@ -387,7 +388,7 @@ describe("Isogloss owner product planning and client schema", () => {
 		const lowered = degreeNineLowered();
 		const callEvidence =
 			createSourceExpressionMacroregionCallRiskEvidence({
-				proofId: "ast-product-expression-proof",
+				proofId: "ast-product-expression",
 				noCalls: true,
 				noEffects: true,
 				noReentrancy: true,
@@ -435,7 +436,7 @@ describe("Isogloss owner product planning and client schema", () => {
 	it("produces canonical deterministic plan and certificate digests", () => {
 		const request = protectedRequest();
 		const first = planIsoglossProduct(request);
-		const second = planIsoglossProduct(structuredClone(request));
+		const second = planIsoglossProduct(protectedRequest());
 		expect(first.decision).toBe("eligible");
 		expect(second.decision).toBe("eligible");
 		if (
@@ -465,12 +466,12 @@ describe("Isogloss owner product planning and client schema", () => {
 		});
 		expect(changedSecret.decision).toBe("eligible");
 		if (changedSecret.decision === "eligible") {
-			// No client-visible digest may become an offline verifier for an
-			// owner secret. Only the owner-held material digest changes.
-			expect(changedSecret.ownerPlan.planDigest).toBe(
+			// Protected commitments are owner-keyed, so a client cannot use
+			// them as an offline dictionary oracle for relation candidates.
+			expect(changedSecret.ownerPlan.planDigest).not.toBe(
 				first.ownerPlan.planDigest
 			);
-			expect(changedSecret.ownerPlan.certificateDigest).toBe(
+			expect(changedSecret.ownerPlan.certificateDigest).not.toBe(
 				first.ownerPlan.certificateDigest
 			);
 			expect(changedSecret.ownerPlan.ownerMaterialDigest).not.toBe(
@@ -480,10 +481,35 @@ describe("Isogloss owner product planning and client schema", () => {
 
 		expect(
 			canonicalSerializeIsoglossBuildValue({ z: 1, a: 220n })
-		).toBe('{"a":{"$bigint":"220"},"z":1}');
+		).toBe(
+			'["object",[["a",["bigint","220"]],["z",["number",1]]]]'
+		);
+		expect(
+			canonicalSerializeIsoglossBuildValue(1n)
+		).not.toBe(
+			canonicalSerializeIsoglossBuildValue({ $bigint: "1" })
+		);
 	});
 
 	it("fails closed on incomplete proof, boundary/SCC risk, and malformed inputs", () => {
+		const oversizedLowered = degreeNineLowered();
+		oversizedLowered.contract = {
+			...oversizedLowered.contract,
+			steps: Array.from({ length: 4_097 }, () => ({
+				type: "number" as const,
+				formula: { tag: "constant" as const, value: 1 },
+			})),
+		};
+		expect(() =>
+			planIsoglossProduct({
+				...localRequest(),
+				region: {
+					kind: "lowered-contract",
+					lowered: oversizedLowered,
+				},
+			})
+		).toThrow("RUAM_ISOGLOSS_PLAN_RESOURCE_LIMIT");
+
 		const incompleteDomain = degreeNineLowered();
 		incompleteDomain.inputBindings = incompleteDomain.inputBindings.slice(
 			0,
@@ -503,8 +529,10 @@ describe("Isogloss owner product planning and client schema", () => {
 			])
 		);
 
-		const incompleteGraph = cleanCallGraph();
-		incompleteGraph.sccs = [];
+		const incompleteGraph = {
+			...cleanCallGraph(),
+			sccs: [],
+		};
 		const graphResult = planIsoglossProduct({
 			...localRequest(),
 			callEvidence: {
@@ -518,8 +546,10 @@ describe("Isogloss owner product planning and client schema", () => {
 			detail: "product-unit",
 		});
 
-		const riskyGraph = cleanCallGraph();
-		riskyGraph.boundaries = [
+		const cleanRiskGraph = cleanCallGraph();
+		const riskyGraph = {
+			...cleanRiskGraph,
+			boundaries: [
 			{
 				unitId: "product-unit",
 				nodeId: 7,
@@ -553,10 +583,10 @@ describe("Isogloss owner product planning and client schema", () => {
 					mayReenterRootGroup: true,
 				},
 			},
-		] as CanonicalCallGraphInventory["boundaries"];
-		riskyGraph.sccs = [
+			] as CanonicalCallGraphInventory["boundaries"],
+			sccs: [
 			{
-				...riskyGraph.sccs[0]!,
+				...cleanRiskGraph.sccs[0]!,
 				hasUnresolvedRecursionRisk: true,
 				reentrancyRelevant: true,
 				requiresInterproceduralFission: true,
@@ -573,7 +603,8 @@ describe("Isogloss owner product planning and client schema", () => {
 				reentrancyRelevant: false,
 				requiresInterproceduralFission: false,
 			},
-		];
+			],
+		} as CanonicalCallGraphInventory;
 		riskyGraph.unitIds = ["child-unit", "product-unit"];
 		riskyGraph.directEdges = [
 			{
@@ -617,6 +648,15 @@ describe("Isogloss owner product planning and client schema", () => {
 				noInterproceduralBoundaries: true,
 				noRecursiveOrFissionScc: true,
 			});
+		const sourceProofOnLoweredResult = planIsoglossProduct({
+			...localRequest(),
+			callEvidence: validSourceProof,
+		});
+		expect(sourceProofOnLoweredResult.blockers).toContainEqual({
+			code: "INCOMPLETE_CALL_GRAPH_PROOF",
+			detail: "product-unit",
+		});
+
 		const unfrozenProofResult = planIsoglossProduct({
 			...localRequest(),
 			callEvidence: { ...validSourceProof },

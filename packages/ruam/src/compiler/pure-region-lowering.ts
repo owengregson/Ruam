@@ -505,8 +505,9 @@ function selectAndValidateTopology(
 	if (regionIds.length === 0) {
 		fail("RUAM_PURE_REGION_EMPTY_SELECTION");
 	}
-	const indexes = regionIds.map((regionId) =>
-		graph.regions.findIndex((region) => region.id === regionId)
+	const topology = indexedTopologyFor(graph);
+	const indexes = regionIds.map(
+		(regionId) => topology.indexByRegionId.get(regionId) ?? -1
 	);
 	if (indexes.some((index) => index < 0)) {
 		fail("RUAM_PURE_REGION_UNKNOWN_REGION");
@@ -521,19 +522,7 @@ function selectAndValidateTopology(
 	}
 	const selected = indexes.map((index) => graph.regions[index]!);
 	const selectedIds = new Set(regionIds);
-	const incoming = new Map<
-		EffectRegionId,
-		Array<{ source: EffectRegionId; exit: EffectRegionExit }>
-	>();
-	for (const region of graph.regions) {
-		for (const exit of region.exits) {
-			const target = exitRegionId(exit);
-			if (!target) continue;
-			const entries = incoming.get(target) ?? [];
-			entries.push({ source: region.id, exit });
-			incoming.set(target, entries);
-		}
-	}
+	const incoming = topology.incomingByRegionId;
 
 	for (let index = 0; index < selected.length; index++) {
 		const region = selected[index]!;
@@ -616,6 +605,51 @@ function selectAndValidateTopology(
 		}
 	}
 	return selected;
+}
+
+interface IndexedEffectRegionTopology {
+	readonly indexByRegionId: ReadonlyMap<EffectRegionId, number>;
+	readonly incomingByRegionId: ReadonlyMap<
+		EffectRegionId,
+		readonly { source: EffectRegionId; exit: EffectRegionExit }[]
+	>;
+}
+
+const indexedTopologyCache = new WeakMap<
+	EffectRegionGraph,
+	IndexedEffectRegionTopology
+>();
+
+function indexedTopologyFor(
+	graph: EffectRegionGraph
+): IndexedEffectRegionTopology {
+	const cacheable = Object.isFrozen(graph);
+	const cached = cacheable
+		? indexedTopologyCache.get(graph)
+		: undefined;
+	if (cached) return cached;
+	const indexByRegionId = new Map<EffectRegionId, number>();
+	const incomingByRegionId = new Map<
+		EffectRegionId,
+		Array<{ source: EffectRegionId; exit: EffectRegionExit }>
+	>();
+	for (let index = 0; index < graph.regions.length; index++) {
+		const region = graph.regions[index]!;
+		indexByRegionId.set(region.id, index);
+		for (const exit of region.exits) {
+			const target = exitRegionId(exit);
+			if (!target) continue;
+			const entries = incomingByRegionId.get(target) ?? [];
+			entries.push({ source: region.id, exit });
+			incomingByRegionId.set(target, entries);
+		}
+	}
+	const topology: IndexedEffectRegionTopology = {
+		indexByRegionId,
+		incomingByRegionId,
+	};
+	if (cacheable) indexedTopologyCache.set(graph, topology);
+	return topology;
 }
 
 function buildAssumptionMap(
