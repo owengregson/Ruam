@@ -219,17 +219,28 @@ keeping the final value outside the hostile client, or protecting a function
 whose intrinsic query complexity is high. None can be manufactured by a
 semantics-preserving client transform alone.
 
+To remove transition-count and stage-position leakage from the remote
+transcript, the owner/server planner now places real transitions, in order,
+among mask-refreshing identity epochs in one of four fixed epoch buckets:
+**4, 8, 16, or 32**. Every slot changes cover and representation mask and
+returns the same signed chart shape. Different secret placements produce the
+same client cover path and exact final output. The owner schedule and padding
+count are reference/server-only and are kept unreachable from package entries.
+Adversarial placement/stage classification is the next transcript gate.
+
 ## Correctness and build status
 
-At the last full-suite checkpoint, before the statefully masked and specialized
-source additions:
+At the current branch checkpoint:
 
-- Isogloss-focused tests: **42 passed, 0 failed, 12,056 assertions**;
-- full repository tests: **2,373 passed, 0 failed**;
+- full repository tests: **2,421 passed, 0 failed, 28,998 assertions**;
 - TypeScript typecheck: passed;
 - package build: passed; and
 - reference custodian/evaluator identifiers are absent from built package
   output.
+
+The same run measured the still-legacy VM control at **43.0× weighted average
+runtime overhead** across its ten-workload performance suite. That is a
+replacement ceiling, not an Isogloss result.
 
 ## Explicit spike limitations
 
