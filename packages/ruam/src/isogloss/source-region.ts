@@ -5,8 +5,10 @@
  * accepts only local identifiers, finite integer literals, and arithmetic or
  * Boolean forms whose complete eager evaluation is observationally
  * equivalent to the source form. Every numeric ingress is guarded at runtime
- * by the exact domain recorded here; callers must execute the untouched
- * source expression when that guard fails.
+ * by the exact domain recorded here. Product lowering replaces the source
+ * expression completely and rejects values outside the developer-declared
+ * contract; embedding the original expression as a fallback would hand the
+ * protected relation back to the client.
  *
  * @module isogloss/source-region
  */
@@ -54,7 +56,7 @@ export interface LoweredSourcePureRegion {
 	readonly valueBounds: readonly SourceRegionValueBounds[];
 	readonly outputType: PureValueType;
 	readonly runtimeGuardRequired: true;
-	readonly fallbackPolicy: "execute-original-expression";
+	readonly domainFailurePolicy: "reject-outside-declared-domain";
 }
 
 export type SourceRegionRejectionCode =
@@ -167,7 +169,7 @@ export function lowerSourcePureExpression(
 				valueBounds: Object.freeze(state.bounds.slice()),
 				outputType: output.bounds.type,
 				runtimeGuardRequired: true,
-				fallbackPolicy: "execute-original-expression",
+				domainFailurePolicy: "reject-outside-declared-domain",
 			}),
 		});
 	} catch (error) {
