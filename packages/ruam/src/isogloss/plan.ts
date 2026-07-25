@@ -25,7 +25,7 @@ import {
 } from "./bprf/index.js";
 import {
 	MASKED_CUSTODY_TRANSCRIPT_BUCKETS,
-} from "./csh/padded-masked-plan.js";
+} from "./csh/transcript-buckets.js";
 import {
 	assessIsoglossDeploymentEligibility,
 	type IsoglossDeploymentProfile,

@@ -16,10 +16,11 @@ import {
 	type ChartCover,
 } from "./reference.js";
 import type { HiddenMaskedTransition } from "./reference-masked-custodian.js";
-
-export const MASKED_CUSTODY_TRANSCRIPT_BUCKETS = Object.freeze([
-	4, 8, 16, 32,
-] as const);
+export {
+	MASKED_CUSTODY_TRANSCRIPT_BUCKETS,
+	type MaskedCustodyTranscriptBucket,
+} from "./transcript-buckets.js";
+import { MASKED_CUSTODY_TRANSCRIPT_BUCKETS } from "./transcript-buckets.js";
 
 export interface PaddedMaskedCustodyPlanOptions {
 	readonly realTransitions: readonly HiddenMaskedTransition[];
