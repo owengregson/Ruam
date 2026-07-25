@@ -27,20 +27,24 @@ This creates a private channel visible only to repository maintainers. You shoul
 
 ## Scope
 
-Ruam is a build-time obfuscation tool. Security reports are relevant for:
+Ruam is an Isogloss source-protection compiler. The local profile ships a
+complete executable client and makes no secrecy or hardness claim. Security
+reports are relevant for:
 
--   **Bytecode encryption weaknesses** — flaws in the rolling cipher, integrity binding, or key derivation that allow automated recovery of original source
--   **Opcode shuffle predictability** — weaknesses in the PRNG seeding or Fisher-Yates implementation that reduce shuffle entropy
--   **String encoding bypasses** — methods to decode XOR-encoded constant pool strings without executing the VM
--   **Runtime template vulnerabilities** — issues in generated VM code that could be exploited at runtime (e.g., prototype pollution, injection)
--   **Information leakage** — cases where the obfuscated output unintentionally reveals source structure, variable names, or logic
+-   **Semantic miscompilation** — protected output differs from the accepted source region, including evaluation order, TDZ, exception, numeric, or reentrancy behavior
+-   **Trust-boundary leakage** — owner-only relation, placement, trace, key, or capability material appears in a client artifact
+-   **Evidence or claim forgery** — caller-controlled data can produce a complete proof, eligible deployment, or stronger security claim without compiler/custodian evidence
+-   **Custody protocol failures** — replay, fork, substitution, ambiguous authentication, missing request binding, or unsafe key/lineage handling in experimental nonlocal profiles
+-   **Filesystem safety** — traversal, link following, race, partial publication, unsafe overwrite, or owner/client artifact aliasing
+-   **Generated-code vulnerabilities** — injection, prototype pollution, ambient-intrinsic dependence, or resource exhaustion in emitted code
+-   **Browser and build-service availability** — unbounded input, worker hangs, malformed messages, dependency compromise, or privilege escalation
 
 Out of scope:
 
 -   Attacks requiring physical access to the build environment
 -   Social engineering
--   Denial of service against the CLI tool itself
 -   General JavaScript deobfuscation techniques that apply equally to all obfuscators
+-   Claims that the explicitly complete `holographic-local` client can be inspected or reverse engineered
 
 ## Disclosure Policy
 

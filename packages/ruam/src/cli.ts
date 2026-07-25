@@ -1,32 +1,35 @@
 #!/usr/bin/env node
 
 /**
- * CLI entry point for the `ruam` command.
- *
- * Features:
- * - Interactive wizard mode when no arguments provided
- * - Animated color-cycling ASCII art header
- * - Progress bar with per-file status for directory obfuscation
- * - Spinner with phase updates for single-file obfuscation
- * - Colored, sectioned help output
+ * CLI entry point for Ruam's Isogloss source-protection compiler.
  *
  * @module cli
  */
 
-import { obfuscateFile } from "./index.js";
-import type {
-	VmObfuscationOptions,
-	PresetName,
-	TargetEnvironment,
-} from "./types.js";
 import fs from "fs-extra";
 import path from "path";
 import chalk from "chalk";
 import ora from "ora";
+import { protectCode } from "./index.js";
+import {
+	commitDirectoryProtection,
+	planDirectoryProtection,
+	protectFileAtomically,
+	type PlannedFileProtection,
+} from "./file-protection.js";
+import {
+	resolveRuamOptions,
+	type IsoglossDeploymentProfile,
+	type IsoglossRegionDomains,
+	type IsoglossTargetEnvironment,
+	type IsoglossTargetMode,
+	type ResolvedRuamOptions,
+	type RuamOptions,
+} from "./isogloss/options.js";
 
-// --- Constants ---
+type ProtectionResult = ReturnType<typeof protectCode>;
+type OwnerSidecar = NonNullable<ProtectionResult["ownerTrace"]>;
 
-/** Raw ASCII art lines for the RUAM logo. */
 const LOGO_LINES = [
 	`:::::::..    ...    :::  :::.     .        :`,
 	`;;;;\`\`;;;;   ;;     ;;;  ;;\`;;    ;;,.    ;;;`,
@@ -36,7 +39,6 @@ const LOGO_LINES = [
 	` MMMM   "W"  "YmmMMMM"" YMM   ""\` MMM  M'  "MMM`,
 ];
 
-/** Color palette for the cycling logo animation (HSL hue rotation). */
 const PALETTE = [
 	"#ff6b6b",
 	"#ff8e53",
@@ -52,150 +54,151 @@ const PALETTE = [
 	"#fdcb6e",
 ];
 
-/** Human-readable labels for boolean obfuscation options. */
-import { OPTION_LABELS } from "./option-meta.js";
+const TAGLINE = "Isogloss JavaScript Source Protection";
 
-// --- CLI Argument Types ---
+/**
+ * Former execution-engine flags remain recognizable only so the CLI can fail
+ * with a migration diagnostic. None of them maps to an active option.
+ */
+const REMOVED_EXECUTION_FLAGS = new Set([
+	"--preset",
+	"-e",
+	"--encrypt",
+	"-d",
+	"--debug-protection",
+	"--no-debug-protection",
+	"--debug-logging",
+	"--dynamic-opcodes",
+	"--decoy-opcodes",
+	"--dead-code",
+	"--stack-encoding",
+	"--rolling-cipher",
+	"--integrity-binding",
+	"--vm-shielding",
+	"--mba",
+	"--handler-fragmentation",
+	"--string-atomization",
+	"--polymorphic-decoder",
+	"--scattered-keys",
+	"--block-permutation",
+	"--opcode-mutation",
+	"--bytecode-scattering",
+	"--incremental-cipher",
+	"--semantic-opacity",
+	"--observation-resistance",
+]);
 
-/** Parsed CLI arguments. */
 interface CliArgs {
 	input?: string;
 	output?: string;
-	options: VmObfuscationOptions;
 	include: string[];
 	exclude: string[];
 	help: boolean;
 	version: boolean;
 	interactive: boolean;
+	profile?: IsoglossDeploymentProfile;
+	minimumExactAttackQueries?: string;
+	ownerTracePath?: string;
+	custodianEndpoint?: string;
+	privateImplementation?: string;
+	attestationProvider?: string;
+	attestationMeasurement?: string;
+	targetMode?: IsoglossTargetMode;
+	threshold?: number;
+	preprocessIdentifiers?: boolean;
+	target?: IsoglossTargetEnvironment;
+	regionDomainsPath?: string;
 }
 
-// --- Animated Logo ---
+interface MaterializedCliOptions {
+	readonly input: RuamOptions;
+	readonly resolved: ResolvedRuamOptions;
+}
 
-/**
- * Renders the logo with a color gradient offset.
- * Each line gets a color from the palette, shifted by `offset`.
- *
- * @param offset - Palette rotation offset for animation frames.
- * @returns ANSI-colored logo string.
- */
-function renderLogo(offset: number): string {
-	const lines: string[] = [];
-	for (let i = 0; i < LOGO_LINES.length; i++) {
-		const colorIdx = (i + offset) % PALETTE.length;
-		lines.push("  " + chalk.hex(PALETTE[colorIdx]!)(LOGO_LINES[i]!));
+class CliUsageError extends Error {
+	override readonly name = "CliUsageError";
+
+	constructor(
+		readonly code:
+			| "RUAM_CLI_MISSING_VALUE"
+			| "RUAM_CLI_UNKNOWN_OPTION"
+			| "RUAM_REMOVED_CLI_OPTION"
+			| "RUAM_CLI_INVALID_REGION_DOMAINS_FILE"
+			| "RUAM_CLI_PROFILE_REQUIRES_PRODUCT_PLANNER"
+			| "RUAM_CLI_OUTPUT_OVERLAP",
+		detail: string
+	) {
+		super(`${code}: ${detail}`);
 	}
-	return lines.join("\n");
 }
 
-/**
- * Animated logo controller. Runs the color-cycling animation on a
- * setInterval so the main thread stays free for heavy compilation work.
- * Call `stop()` to freeze the logo in place.
- */
+function defaultCliArgs(): CliArgs {
+	return {
+		include: ["**/*.js"],
+		exclude: ["**/node_modules/**"],
+		help: false,
+		version: false,
+		interactive: false,
+	};
+}
+
+function renderLogo(offset: number): string {
+	return LOGO_LINES.map((line, index) =>
+		chalk.hex(PALETTE[(index + offset) % PALETTE.length]!)("  " + line)
+	).join("\n");
+}
+
 class LogoAnimation {
 	private offset = 0;
 	private timer: ReturnType<typeof setInterval> | null = null;
-	private lineCount = LOGO_LINES.length + 2; // logo lines + tagline + blank
+	private readonly lineCount = LOGO_LINES.length + 2;
 
-	/** Start the cycling animation (80ms per frame). */
 	start(version: string): void {
 		if (!process.stdout.isTTY) {
-			// Non-TTY: print static logo once
 			this.printStatic(version);
 			return;
 		}
 		this.printFrame(version);
 		this.timer = setInterval(() => {
 			this.offset++;
-			// Move cursor up and reprint
 			process.stdout.write(`\x1b[${this.lineCount}A`);
 			this.printFrame(version);
 		}, 120);
 	}
 
-	/** Stop the animation and leave the last frame visible. */
 	stop(): void {
-		if (this.timer) {
+		if (this.timer !== null) {
 			clearInterval(this.timer);
 			this.timer = null;
 		}
 	}
 
 	private printFrame(version: string): void {
-		const logo = renderLogo(this.offset);
-		const tagline =
-			"  " +
-			chalk.dim(`v${version}`) +
-			chalk.dim(" \u2014 ") +
-			chalk.dim.italic("Virtualization-Based JavaScript Obfuscation");
-		process.stdout.write(logo + "\n" + tagline + "\n\n");
+		process.stdout.write(
+			`${renderLogo(this.offset)}\n  ${chalk.dim(
+				`v${version} \u2014 ${TAGLINE}`
+			)}\n\n`
+		);
 	}
 
 	private printStatic(version: string): void {
-		const logo = renderLogo(0);
-		const tagline =
-			"  " +
-			chalk.dim(`v${version}`) +
-			chalk.dim(" \u2014 ") +
-			chalk.dim.italic("Virtualization-Based JavaScript Obfuscation");
-		console.log(logo);
-		console.log(tagline);
+		console.log(renderLogo(0));
+		console.log(`  ${chalk.dim(`v${version} \u2014 ${TAGLINE}`)}`);
 		console.log();
 	}
 }
 
-// --- Utilities ---
-
-/**
- * Render an inline progress bar.
- *
- * @param current - Items completed.
- * @param total - Total items.
- * @param width - Character width of the bar.
- * @returns Colored progress bar string.
- */
-function renderBar(current: number, total: number, width = 28): string {
-	const ratio = total > 0 ? current / total : 0;
-	const filled = Math.round(ratio * width);
-	const empty = width - filled;
-	const pct = Math.round(ratio * 100)
-		.toString()
-		.padStart(3);
-	return (
-		chalk.cyan("\u2588".repeat(filled)) +
-		chalk.dim("\u2591".repeat(empty)) +
-		" " +
-		chalk.dim(`${pct}%`) +
-		" " +
-		chalk.dim(`(${current}/${total})`)
-	);
-}
-
-/** Format a byte count to a human-readable string. */
 function formatBytes(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Format a millisecond duration to a human-readable string. */
 function formatTime(ms: number): string {
 	if (ms < 1000) return `${ms}ms`;
 	return `${(ms / 1000).toFixed(1)}s`;
 }
 
-/** Return the list of active protection layer labels from options. */
-function getActiveLabels(options: VmObfuscationOptions): string[] {
-	const active: string[] = [];
-	for (const [key, label] of Object.entries(OPTION_LABELS)) {
-		if (options[key as keyof VmObfuscationOptions]) {
-			active.push(label);
-		}
-	}
-	return active;
-}
-
-/** Read the package version from package.json. */
 async function getVersion(): Promise<string> {
 	try {
 		const raw = await fs.readFile(
@@ -208,40 +211,31 @@ async function getVersion(): Promise<string> {
 	}
 }
 
-// --- Argument Parser ---
-
-/**
- * Parse raw CLI arguments into a structured {@link CliArgs} object.
- *
- * @param argv - Arguments from `process.argv.slice(2)`.
- * @returns Parsed CLI arguments.
- */
 function parseArgs(argv: string[]): CliArgs {
-	const result: CliArgs = {
-		input: undefined,
-		output: undefined,
-		options: {},
-		include: ["**/*.js"],
-		exclude: ["**/node_modules/**"],
-		help: false,
-		version: false,
-		interactive: false,
+	const result = defaultCliArgs();
+
+	let index = 0;
+	const nextArg = (flag: string): string => {
+		index++;
+		if (index >= argv.length) {
+			throw new CliUsageError(
+				"RUAM_CLI_MISSING_VALUE",
+				`missing value for ${flag}`
+			);
+		}
+		return argv[index]!;
 	};
 
-	let i = 0;
-
-	/** Consume the next argument or exit with an error. */
-	function nextArg(flag: string): string {
-		if (++i >= argv.length) {
-			console.error(chalk.red(`  Missing value for ${flag}`));
-			process.exit(1);
+	while (index < argv.length) {
+		const argument = argv[index]!;
+		if (REMOVED_EXECUTION_FLAGS.has(argument)) {
+			throw new CliUsageError(
+				"RUAM_REMOVED_CLI_OPTION",
+				`${argument} was removed with the former execution architecture; use --profile and the explicit Isogloss capability flags`
+			);
 		}
-		return argv[i]!;
-	}
 
-	while (i < argv.length) {
-		const arg = argv[i]!;
-		switch (arg) {
+		switch (argument) {
 			case "-h":
 			case "--help":
 				result.help = true;
@@ -256,735 +250,670 @@ function parseArgs(argv: string[]): CliArgs {
 				break;
 			case "-o":
 			case "--output":
-				result.output = nextArg(arg);
+				result.output = nextArg(argument);
+				break;
+			case "--profile":
+				result.profile = nextArg(
+					argument
+				) as IsoglossDeploymentProfile;
+				break;
+			case "--minimum-exact-attack-queries":
+				result.minimumExactAttackQueries = nextArg(argument);
+				break;
+			case "--owner-trace":
+				result.ownerTracePath = nextArg(argument);
+				break;
+			case "--custodian-endpoint":
+				result.custodianEndpoint = nextArg(argument);
+				break;
+			case "--private-implementation":
+				result.privateImplementation = nextArg(argument);
+				break;
+			case "--attestation-provider":
+				result.attestationProvider = nextArg(argument);
+				break;
+			case "--attestation-measurement":
+				result.attestationMeasurement = nextArg(argument);
 				break;
 			case "-m":
 			case "--mode":
-				result.options.targetMode = nextArg(arg) as "root" | "comment";
+				result.targetMode = nextArg(argument) as IsoglossTargetMode;
 				break;
-			case "--preset":
-				result.options.preset = nextArg(arg) as PresetName;
-				break;
-			case "-e":
-			case "--encrypt":
-				result.options.encryptBytecode = true;
+			case "--threshold":
+				result.threshold = Number(nextArg(argument));
 				break;
 			case "-p":
 			case "--preprocess":
-				result.options.preprocessIdentifiers = true;
-				break;
-			case "-d":
-			case "--debug-protection":
-				result.options.debugProtection = true;
-				break;
-			case "--no-debug-protection":
-				result.options.debugProtection = false;
-				break;
-			case "--debug-logging":
-				result.options.debugLogging = true;
-				break;
-			case "--dynamic-opcodes":
-				result.options.dynamicOpcodes = true;
-				break;
-			case "--decoy-opcodes":
-				result.options.decoyOpcodes = true;
-				break;
-			case "--dead-code":
-				result.options.deadCodeInjection = true;
-				break;
-			case "--stack-encoding":
-				result.options.stackEncoding = true;
-				break;
-			case "--rolling-cipher":
-				result.options.rollingCipher = true;
-				break;
-			case "--integrity-binding":
-				result.options.integrityBinding = true;
-				break;
-			case "--vm-shielding":
-				result.options.vmShielding = true;
-				break;
-			case "--mba":
-				result.options.mixedBooleanArithmetic = true;
-				break;
-			case "--handler-fragmentation":
-				result.options.handlerFragmentation = true;
-				break;
-			case "--string-atomization":
-				result.options.stringAtomization = true;
-				break;
-			case "--polymorphic-decoder":
-				result.options.polymorphicDecoder = true;
-				break;
-			case "--scattered-keys":
-				result.options.scatteredKeys = true;
-				break;
-			case "--block-permutation":
-				result.options.blockPermutation = true;
-				break;
-			case "--opcode-mutation":
-				result.options.opcodeMutation = true;
-				break;
-			case "--bytecode-scattering":
-				result.options.bytecodeScattering = true;
+				result.preprocessIdentifiers = true;
 				break;
 			case "--target":
-				result.options.target = nextArg(arg) as TargetEnvironment;
+				result.target = nextArg(
+					argument
+				) as IsoglossTargetEnvironment;
+				break;
+			case "--region-domains":
+				result.regionDomainsPath = nextArg(argument);
 				break;
 			case "--include":
-				result.include = [nextArg(arg)];
+				result.include = [nextArg(argument)];
 				break;
 			case "--exclude":
-				result.exclude = [nextArg(arg)];
+				result.exclude = [nextArg(argument)];
 				break;
 			default:
-				if (arg.startsWith("-")) {
-					console.error(chalk.red(`  Unknown option: ${arg}`));
-					console.error(
-						chalk.dim("  Run ruam --help for usage information")
+				if (argument.startsWith("-")) {
+					throw new CliUsageError(
+						"RUAM_CLI_UNKNOWN_OPTION",
+						`unknown option ${argument}; run ruam --help`
 					);
-					process.exit(1);
 				}
-				result.input = arg;
-				break;
+				if (result.input !== undefined) {
+					throw new CliUsageError(
+						"RUAM_CLI_UNKNOWN_OPTION",
+						`unexpected positional argument ${argument}`
+					);
+				}
+				result.input = argument;
 		}
-		i++;
+		index++;
 	}
 
 	return result;
 }
 
-// --- Help ---
+async function materializeOptions(
+	args: CliArgs
+): Promise<MaterializedCliOptions> {
+	const requestedProfile = args.profile ?? "holographic-local";
+	if (
+		args.profile !== undefined &&
+		![
+			"holographic-local",
+			"holographic-custodied",
+			"holographic-private",
+			"holographic-tee",
+		].includes(args.profile)
+	) {
+		resolveRuamOptions({ isogloss: { profile: args.profile } });
+	}
+	if (
+		requestedProfile !== "holographic-local" ||
+		args.minimumExactAttackQueries !== undefined ||
+		args.custodianEndpoint !== undefined ||
+		args.privateImplementation !== undefined ||
+		args.attestationProvider !== undefined ||
+		args.attestationMeasurement !== undefined
+	) {
+		throw new CliUsageError(
+			"RUAM_CLI_PROFILE_REQUIRES_PRODUCT_PLANNER",
+			`${requestedProfile} custody and attestation require the unpublished owner deployment pipeline with an owner-proven execution boundary; the source CLI supports holographic-local only`
+		);
+	}
 
-/** Print the colored help text with the animated header frozen after one frame. */
+	let regionDomains: IsoglossRegionDomains | undefined;
+	if (args.regionDomainsPath !== undefined) {
+		const filePath = path.resolve(args.regionDomainsPath);
+		try {
+			regionDomains = JSON.parse(
+				await fs.readFile(filePath, "utf-8")
+			) as IsoglossRegionDomains;
+		} catch (error) {
+			throw new CliUsageError(
+				"RUAM_CLI_INVALID_REGION_DOMAINS_FILE",
+				`${args.regionDomainsPath}: ${
+					error instanceof Error ? error.message : String(error)
+				}`
+			);
+		}
+	}
+
+	const isogloss = {
+		...(args.profile === undefined ? {} : { profile: args.profile }),
+		...(args.ownerTracePath === undefined
+			? {}
+			: { ownerTrace: "sidecar" as const }),
+	};
+	const input: RuamOptions = {
+		...(Object.keys(isogloss).length === 0 ? {} : { isogloss }),
+		...(args.targetMode === undefined
+			? {}
+			: { targetMode: args.targetMode }),
+		...(args.threshold === undefined
+			? {}
+			: { threshold: args.threshold }),
+		...(args.preprocessIdentifiers === undefined
+			? {}
+			: { preprocessIdentifiers: args.preprocessIdentifiers }),
+		...(args.target === undefined ? {} : { target: args.target }),
+		...(regionDomains === undefined ? {} : { regionDomains }),
+	};
+
+	return Object.freeze({
+		input,
+		resolved: resolveRuamOptions(input),
+	});
+}
+
 function printHelp(version: string): void {
 	console.log();
 	console.log(renderLogo(0));
-	console.log(
-		"  " +
-			chalk.dim(`v${version}`) +
-			chalk.dim(" \u2014 ") +
-			chalk.dim.italic("Virtualization-Based JavaScript Obfuscation")
-	);
+	console.log(`  ${chalk.dim(`v${version} \u2014 ${TAGLINE}`)}`);
 	console.log();
 
-	const h = chalk.bold.white;
-	const f = chalk.cyan;
-	const d = chalk.dim;
-	const a = chalk.yellow;
+	const heading = chalk.bold.white;
+	const flag = chalk.cyan;
+	const argument = chalk.yellow;
+	const detail = chalk.dim;
 
-	console.log(h("  USAGE"));
+	console.log(heading("  USAGE"));
 	console.log(
-		`    ${f("ruam")} ${a(
+		`    ${flag("ruam")} ${argument(
 			"<input>"
-		)}              Obfuscate a file or directory`
+		)}                    Protect a file or directory`
 	);
 	console.log(
-		`    ${f("ruam")} ${a("<input>")} -o ${a(
+		`    ${flag("ruam")} ${argument("<input>")} -o ${argument(
 			"<output>"
-		)}  Obfuscate to a specific output path`
+		)}        Write protected source elsewhere`
 	);
 	console.log(
-		`    ${f("ruam")}                        Launch interactive wizard`
+		`    ${flag("ruam")}                            Launch the interactive wizard`
 	);
 	console.log();
 
-	console.log(h("  PRESETS"));
+	console.log(heading("  ISOGLOSS"));
 	console.log(
-		`    ${f("--preset")} ${a("<name>")}           ${d(
-			"low, medium, or max"
+		`    ${flag("--profile")} ${argument(
+			"<name>"
+		)}               Source profile ${detail(
+			"(holographic-local only; default)"
 		)}`
 	);
-	console.log(`      ${chalk.green("low")}     VM compilation only`);
 	console.log(
-		`      ${chalk.yellow(
-			"medium"
-		)}  + renaming, encryption, rolling cipher, decoy/dynamic opcodes`
+		`    ${flag("--region-domains")} ${argument(
+			"<json>"
+		)}          Function/binding runtime-guard domains`
 	);
-	console.log(`      ${chalk.red("max")}     All protections enabled`);
-	console.log();
-
-	console.log(h("  OUTPUT"));
 	console.log(
-		`    ${f("-o, --output")} ${a(
+		`    ${flag("--owner-trace")} ${argument(
 			"<path>"
-		)}       Output file or directory ${d("(default: overwrite)")}`
+		)}             Write the owner-only sidecar`
 	);
 	console.log();
 
-	console.log(h("  COMPILATION"));
 	console.log(
-		`    ${f("-m, --mode")} ${a(
-			"<mode>"
-		)}         Target mode: "root" or "comment"`
-	);
-	console.log(
-		`    ${f("-e, --encrypt")}             Enable bytecode encryption`
-	);
-	console.log(
-		`    ${f("-p, --preprocess")}           Preprocess/rename identifiers`
+		`    ${detail(
+			"Custodied, private-function, and TEE deployment remains an unpublished owner integration"
+		)}`
 	);
 	console.log();
 
-	console.log(h("  SECURITY"));
+	console.log(heading("  SELECTION"));
 	console.log(
-		`    ${f("-d, --debug-protection")}     Anti-debugger timing loop`
+		`    ${flag("-m, --mode")} ${argument(
+			"<root|comment>"
+		)}       Select roots or /* ruam:isogloss */ markers`
 	);
 	console.log(
-		`    ${f(
-			"--no-debug-protection"
-		)}        Disable anti-debugger (overrides preset)`
+		`    ${flag("--threshold")} ${argument(
+			"<0..1>"
+		)}             Eligible-target selection probability`
 	);
 	console.log(
-		`    ${f(
-			"--rolling-cipher"
-		)}           Position-dependent instruction encryption`
-	);
-	console.log(
-		`    ${f(
-			"--integrity-binding"
-		)}        Bind decryption to interpreter integrity`
+		`    ${flag("-p, --preprocess")}                 Rename identifiers after protection`
 	);
 	console.log();
 
-	console.log(h("  HARDENING"));
+	console.log(heading("  FILES AND TARGET"));
 	console.log(
-		`    ${f("--dynamic-opcodes")}         Filter unused opcode handlers`
+		`    ${flag("-o, --output")} ${argument("<path>")}            Output file or directory`
 	);
 	console.log(
-		`    ${f("--decoy-opcodes")}           Inject fake opcode handlers`
-	);
-	console.log(
-		`    ${f("--dead-code")}               Inject dead bytecode sequences`
-	);
-	console.log(
-		`    ${f("--stack-encoding")}           Encrypt values on the VM stack`
-	);
-	console.log(
-		`    ${f("--vm-shielding")}            Per-function micro-interpreters`
-	);
-	console.log(
-		`    ${f(
-			"--mba"
-		)}                      Mixed boolean arithmetic obfuscation`
-	);
-	console.log(
-		`    ${f(
-			"--handler-fragmentation"
-		)}   Split handlers into interleaved fragments`
-	);
-	console.log(
-		`    ${f(
-			"--string-atomization"
-		)}    Encode interpreter strings as table lookups`
-	);
-	console.log(
-		`    ${f(
-			"--polymorphic-decoder"
-		)}   Per-build randomized string decoder`
-	);
-	console.log(
-		`    ${f(
-			"--scattered-keys"
-		)}        Scatter key material across closure scopes`
-	);
-	console.log(
-		`    ${f("--block-permutation")}     Shuffle bytecode basic block order`
-	);
-	console.log(
-		`    ${f("--opcode-mutation")}       Runtime handler table mutations`
-	);
-	console.log(
-		`    ${f(
-			"--bytecode-scattering"
-		)}   Scatter bytecode into mixed-type fragments`
-	);
-	console.log();
-
-	console.log(h("  FILES"));
-	console.log(
-		`    ${f("--include")} ${a(
+		`    ${flag("--include")} ${argument(
 			"<glob>"
-		)}          File glob for directories ${d('(default: "**/*.js")')}`
+		)}              Directory include ${detail('(default: "**/*.js")')}`
 	);
 	console.log(
-		`    ${f("--exclude")} ${a("<glob>")}          Exclude glob ${d(
+		`    ${flag("--exclude")} ${argument(
+			"<glob>"
+		)}              Directory exclude ${detail(
 			'(default: "**/node_modules/**")'
 		)}`
 	);
-	console.log();
-
-	console.log(h("  ENVIRONMENT"));
 	console.log(
-		`    ${f("--target")} ${a("<env>")}             Target environment`
-	);
-	console.log(
-		`      ${chalk.cyan("node")}               Node.js (CJS / ESM)`
-	);
-	console.log(
-		`      ${chalk.cyan("browser")}            Plain browser scripts ${d(
-			"(default)"
-		)}`
-	);
-	console.log(
-		`      ${chalk.cyan("browser-extension")}  Chrome extension MAIN world`
+		`    ${flag("--target")} ${argument(
+			"<environment>"
+		)}         node, browser, or browser-extension`
 	);
 	console.log();
 
-	console.log(h("  OTHER"));
+	console.log(heading("  OTHER"));
 	console.log(
-		`    ${f("--debug-logging")}           Inject VM trace logging`
+		`    ${flag("-I, --interactive")}              Force interactive wizard mode`
 	);
-	console.log(
-		`    ${f("-I, --interactive")}          Force interactive wizard mode`
-	);
-	console.log(`    ${f("-h, --help")}                Show this help`);
-	console.log(`    ${f("-v, --version")}             Show version`);
+	console.log(`    ${flag("-h, --help")}                     Show help`);
+	console.log(`    ${flag("-v, --version")}                  Show version`);
 	console.log();
 
-	console.log(h("  EXAMPLES"));
+	console.log(heading("  EXAMPLES"));
 	console.log(
-		`    ${d("$")} ${f("ruam")} app.js                     ${d(
-			"# Obfuscate in-place"
-		)}`
+		`    ${detail("$")} ${flag(
+			"ruam"
+		)} app.js --region-domains domains.json`
 	);
 	console.log(
-		`    ${d("$")} ${f("ruam")} app.js -o app.obf.js       ${d(
-			"# Obfuscate to new file"
-		)}`
-	);
-	console.log(
-		`    ${d("$")} ${f("ruam")} dist/ --preset medium      ${d(
-			"# Directory with preset"
-		)}`
-	);
-	console.log(
-		`    ${d("$")} ${f("ruam")} src/bg.js -m comment -e    ${d(
-			"# Selective + encryption"
-		)}`
-	);
-	console.log(
-		`    ${d("$")} ${f("ruam")}                            ${d(
-			"# Interactive wizard"
-		)}`
+		`    ${detail("$")} ${flag(
+			"ruam"
+		)} app.js -m comment --owner-trace owner.json`
 	);
 	console.log();
 }
 
-// --- Config Summary ---
-
-/** Print a summary of the resolved configuration. */
-function printConfig(options: VmObfuscationOptions): void {
-	const active = getActiveLabels(options);
-	if (options.preset) {
-		const presetColor =
-			options.preset === "max"
-				? chalk.red
-				: options.preset === "medium"
-				? chalk.yellow
-				: chalk.green;
-		process.stdout.write(
-			`  ${chalk.dim("Preset:")} ${presetColor(options.preset)}`
-		);
-		if (active.length > 0) {
-			process.stdout.write(
-				chalk.dim(" + ") +
-					active.map((l) => chalk.cyan(l)).join(chalk.dim(", "))
-			);
-		}
-		process.stdout.write("\n");
-	} else if (active.length > 0) {
-		console.log(
-			`  ${chalk.dim("Layers:")} ${active
-				.map((l) => chalk.cyan(l))
-				.join(chalk.dim(", "))}`
-		);
+function printConfig(options: ResolvedRuamOptions): void {
+	console.log(
+		`  ${chalk.dim("Profile:")} ${chalk.cyan(options.isogloss.profile)}`
+	);
+	console.log(
+		`  ${chalk.dim("Mode:")}    ${chalk.white(options.targetMode)}${
+			options.targetMode === "comment"
+				? chalk.dim(" (/* ruam:isogloss */)")
+				: ""
+		}`
+	);
+	console.log(
+		`  ${chalk.dim("Domains:")} ${chalk.white(
+			Object.keys(options.regionDomains).length
+		)} configured function${
+			Object.keys(options.regionDomains).length === 1 ? "" : "s"
+		}`
+	);
+	if (options.isogloss.ownerTrace === "sidecar") {
+		console.log(`  ${chalk.dim("Trace:")}   ${chalk.cyan("owner sidecar")}`);
 	}
-
-	if (options.targetMode === "comment") {
+	if (options.preprocessIdentifiers) {
 		console.log(
-			`  ${chalk.dim("Mode:")}   ${chalk.white("comment")} ${chalk.dim(
-				"(only /* ruam:vm */ functions)"
+			`  ${chalk.dim("Preprocess:")} ${chalk.cyan(
+				"identifier renaming"
 			)}`
 		);
 	}
 }
 
-// --- Interactive Wizard ---
-
-/**
- * Launch the interactive configuration wizard.
- * Prompts the user for input path, output, preset, options, and target mode,
- * then runs the obfuscation with progress.
- *
- * @param version - Package version string.
- */
 async function runInteractive(version: string): Promise<void> {
 	const logo = new LogoAnimation();
 	logo.start(version);
-
-	// Small delay to let the user see the animation before prompts appear
-	await new Promise((r) => setTimeout(r, 600));
+	await new Promise((resolve) => setTimeout(resolve, 600));
 	logo.stop();
 
 	const {
 		input: promptInput,
 		select,
-		checkbox,
 		confirm,
 	} = await import("@inquirer/prompts");
 
-	// --- Input path ---
 	const inputRaw = await promptInput({
 		message: chalk.bold("Input path") + chalk.dim(" (file or directory)"),
-		validate: async (val: string) => {
-			if (!val.trim()) return "Please enter a path";
-			if (!(await fs.pathExists(path.resolve(val.trim()))))
-				return `Path does not exist: ${val}`;
+		validate: async (value: string) => {
+			if (!value.trim()) return "Please enter a path";
+			if (!(await fs.pathExists(path.resolve(value.trim())))) {
+				return `Path does not exist: ${value}`;
+			}
 			return true;
 		},
 	});
-
 	const resolvedInput = path.resolve(inputRaw.trim());
-	const stat = await fs.stat(resolvedInput);
-	const isDir = stat.isDirectory();
-
-	// --- Output path ---
+	const isDirectory = (await fs.stat(resolvedInput)).isDirectory();
 	const outputRaw = await promptInput({
 		message:
 			chalk.bold("Output path") +
-			chalk.dim(` (enter to overwrite${isDir ? " directory" : ""})`),
+			chalk.dim(
+				` (enter to overwrite${isDirectory ? " directory" : ""})`
+			),
 		default: "",
 	});
-
-	// --- Preset ---
-	const preset = await select<PresetName | "custom">({
-		message: chalk.bold("Protection preset"),
-		choices: [
-			{
-				name: `${chalk.green("low")}     ${chalk.dim(
-					"\u2014 VM compilation only"
-				)}`,
-				value: "low" as const,
-			},
-			{
-				name: `${chalk.yellow("medium")}  ${chalk.dim(
-					"\u2014 + encryption, rolling cipher, decoy opcodes"
-				)}`,
-				value: "medium" as const,
-			},
-			{
-				name: `${chalk.red("max")}     ${chalk.dim(
-					"\u2014 All protections enabled"
-				)}`,
-				value: "max" as const,
-			},
-			{
-				name: `${chalk.cyan("custom")}  ${chalk.dim(
-					"\u2014 Choose individual options"
-				)}`,
-				value: "custom" as const,
-			},
-		],
-	});
-
-	const options: VmObfuscationOptions = {};
-
-	if (preset !== "custom") {
-		options.preset = preset;
-	} else {
-		const selected = await checkbox({
-			message: chalk.bold("Select protection layers"),
-			choices: [
-				{ name: "Identifier Renaming", value: "preprocessIdentifiers" },
-				{ name: "Bytecode Encryption", value: "encryptBytecode" },
-				{ name: "Rolling Cipher", value: "rollingCipher" },
-				{ name: "Integrity Binding", value: "integrityBinding" },
-				{ name: "Debug Protection", value: "debugProtection" },
-				{ name: "Dynamic Opcodes", value: "dynamicOpcodes" },
-				{ name: "Decoy Opcodes", value: "decoyOpcodes" },
-				{ name: "Dead Code Injection", value: "deadCodeInjection" },
-				{ name: "Stack Encoding", value: "stackEncoding" },
-				{ name: "VM Shielding", value: "vmShielding" },
-				{
-					name: "Mixed Boolean Arithmetic",
-					value: "mixedBooleanArithmetic",
-				},
-				{
-					name: "Handler Fragmentation",
-					value: "handlerFragmentation",
-				},
-				{ name: "String Atomization", value: "stringAtomization" },
-				{ name: "Polymorphic Decoder", value: "polymorphicDecoder" },
-				{ name: "Scattered Keys", value: "scatteredKeys" },
-				{ name: "Block Permutation", value: "blockPermutation" },
-				{ name: "Opcode Mutation", value: "opcodeMutation" },
-				{ name: "Bytecode Scattering", value: "bytecodeScattering" },
-			],
-		});
-		for (const opt of selected) {
-			(options as Record<string, boolean>)[opt] = true;
-		}
-	}
-
-	// --- Target mode ---
-	const targetMode = await select<"root" | "comment">({
+	const targetMode = await select<IsoglossTargetMode>({
 		message: chalk.bold("Target mode"),
 		choices: [
 			{
-				name: `${chalk.cyan("root")}     ${chalk.dim(
-					"\u2014 All top-level functions"
-				)}`,
-				value: "root" as const,
+				name: "root \u2014 eligible top-level functions",
+				value: "root",
 			},
 			{
-				name: `${chalk.cyan("comment")}  ${chalk.dim(
-					"\u2014 Only /* ruam:vm */ annotated functions"
-				)}`,
-				value: "comment" as const,
+				name: "comment \u2014 /* ruam:isogloss */ markers",
+				value: "comment",
 			},
 		],
 	});
-	options.targetMode = targetMode;
+	const regionDomainsPath = await promptInput({
+		message:
+			chalk.bold("Region domains JSON") +
+			chalk.dim(" (enter for no configured domains)"),
+		default: "",
+		validate: async (value: string) =>
+			!value.trim() ||
+			(await fs.pathExists(path.resolve(value.trim()))) ||
+			`Path does not exist: ${value}`,
+	});
+	const preprocessIdentifiers = await confirm({
+		message: chalk.bold("Rename identifiers after protection?"),
+		default: false,
+	});
+	const ownerTracePath = await promptInput({
+		message:
+			chalk.bold("Owner sidecar path") +
+			chalk.dim(" (enter to keep owner tracing off)"),
+		default: "",
+	});
 
-	// --- Summary ---
+	const args: CliArgs = {
+		...defaultCliArgs(),
+		input: resolvedInput,
+		output: outputRaw.trim() || undefined,
+		profile: "holographic-local",
+		targetMode,
+		regionDomainsPath: regionDomainsPath.trim() || undefined,
+		preprocessIdentifiers,
+		ownerTracePath: ownerTracePath.trim() || undefined,
+	};
+
+	const materialized = await materializeOptions(args);
 	console.log();
 	console.log(chalk.bold("  Configuration"));
 	console.log(chalk.dim("  " + "\u2500".repeat(40)));
 	console.log(
-		`  ${chalk.dim("Input:")}    ${chalk.white(
+		`  ${chalk.dim("Input:")}   ${chalk.white(
 			path.relative(process.cwd(), resolvedInput) || "."
 		)}`
 	);
 	console.log(
-		`  ${chalk.dim("Output:")}   ${
-			outputRaw.trim()
-				? chalk.white(outputRaw.trim())
-				: chalk.dim("overwrite input")
+		`  ${chalk.dim("Output:")}  ${
+			args.output ? chalk.white(args.output) : chalk.dim("overwrite input")
 		}`
 	);
+	printConfig(materialized.resolved);
+	console.log();
 
-	if (preset !== "custom") {
-		const pc =
-			preset === "max"
-				? chalk.red
-				: preset === "medium"
-				? chalk.yellow
-				: chalk.green;
-		console.log(`  ${chalk.dim("Preset:")}   ${pc(preset)}`);
+	if (
+		!(await confirm({
+			message: chalk.bold("Proceed with protection?"),
+			default: true,
+		}))
+	) {
+		console.log(chalk.dim("  Cancelled."));
+		return;
 	}
+	console.log();
+	await executeProtection(args, materialized);
+}
 
-	console.log(`  ${chalk.dim("Mode:")}     ${chalk.white(targetMode)}`);
+async function protectFile(
+	inputPath: string,
+	outputPath: string,
+	options: RuamOptions,
+	ownerTracePath?: string
+): Promise<ProtectionResult> {
+	return protectFileAtomically(
+		inputPath,
+		outputPath,
+		options,
+		ownerTracePath
+	);
+}
 
-	const active = getActiveLabels(options);
-	if (active.length > 0) {
-		console.log(
-			`  ${chalk.dim("Layers:")}   ${active
-				.map((l) => chalk.cyan(l))
-				.join(chalk.dim(", "))}`
+async function writeOwnerTrace(
+	outputPath: string,
+	trace: OwnerSidecar,
+	containmentRoot?: string
+): Promise<void> {
+	const directory = path.dirname(outputPath);
+	if (containmentRoot !== undefined) {
+		await assertOwnerTraceTargetContained(
+			containmentRoot,
+			outputPath
 		);
 	}
-	console.log();
-
-	// --- Confirm ---
-	const proceed = await confirm({
-		message: chalk.bold("Proceed with obfuscation?"),
-		default: true,
-	});
-
-	if (!proceed) {
-		console.log(chalk.dim("  Cancelled."));
-		process.exit(0);
+	await fs.ensureDir(directory);
+	if (containmentRoot !== undefined) {
+		await assertOwnerTraceTargetContained(
+			containmentRoot,
+			outputPath
+		);
 	}
-
-	console.log();
-
-	// --- Run ---
-	const args: CliArgs = {
-		input: resolvedInput,
-		output: outputRaw.trim() || undefined,
-		options,
-		include: ["**/*.js"],
-		exclude: ["**/node_modules/**"],
-		help: false,
-		version: false,
-		interactive: false,
-	};
-
-	if (isDir) {
-		await obfuscateDirectoryWithProgress(resolvedInput, args);
-	} else {
-		await obfuscateSingleFileWithProgress(resolvedInput, args);
+	const stageDirectory = await fs.mkdtemp(
+		path.join(directory, ".ruam-owner-trace-")
+	);
+	const stagedPath = path.join(stageDirectory, "trace.json");
+	try {
+		await fs.writeFile(
+			stagedPath,
+			JSON.stringify(
+				trace,
+				(_key, value) =>
+					typeof value === "bigint"
+						? value.toString(10)
+						: value,
+				2
+			) + "\n",
+			{ encoding: "utf8", mode: 0o600, flag: "wx" }
+		);
+		if (await fs.pathExists(outputPath)) {
+			const stat = await fs.lstat(outputPath);
+			if (stat.isSymbolicLink() || !stat.isFile()) {
+				throw new CliUsageError(
+					"RUAM_CLI_OUTPUT_OVERLAP",
+					"an existing owner trace must be a non-symlink regular file"
+				);
+			}
+		}
+		await fs.rename(stagedPath, outputPath);
+	} finally {
+		await fs.remove(stageDirectory);
 	}
 }
 
-// --- Single File Obfuscation ---
-
-/**
- * Obfuscate a single file with a spinner and summary output.
- *
- * @param inputPath - Absolute path to the input file.
- * @param args - Parsed CLI arguments.
- */
-async function obfuscateSingleFileWithProgress(
+async function protectSingleFileWithProgress(
 	inputPath: string,
-	args: CliArgs
+	args: CliArgs,
+	materialized: MaterializedCliOptions
 ): Promise<void> {
 	const outputPath = args.output ? path.resolve(args.output) : inputPath;
-
-	if (args.output) {
-		await fs.ensureDir(path.dirname(outputPath));
-	}
-
 	const inputSize = (await fs.stat(inputPath)).size;
-	const relInput = path.relative(process.cwd(), inputPath);
-	const relOutput = path.relative(process.cwd(), outputPath);
-
+	const relativeInput = path.relative(process.cwd(), inputPath);
+	const relativeOutput = path.relative(process.cwd(), outputPath);
 	const spinner = ora({
-		text: `Obfuscating ${chalk.cyan(relInput)}...`,
+		text: `Protecting ${chalk.cyan(relativeInput)}...`,
 		prefixText: " ",
 		color: "cyan",
 	}).start();
-
 	const startTime = Date.now();
 
 	try {
-		await obfuscateFile(inputPath, outputPath, args.options);
-	} catch (err) {
-		spinner.fail(chalk.red("Obfuscation failed"));
-		console.error(
-			chalk.red("  " + (err instanceof Error ? err.message : String(err)))
+		const ownerTracePath =
+			args.ownerTracePath === undefined
+				? undefined
+				: path.resolve(args.ownerTracePath);
+		if (ownerTracePath !== undefined) {
+			await assertOwnerTraceFileDisjoint(ownerTracePath, [
+				inputPath,
+				outputPath,
+			]);
+		}
+		const result = await protectFile(
+			inputPath,
+			outputPath,
+			materialized.input,
+			ownerTracePath
 		);
-		process.exit(1);
+		const elapsed = Date.now() - startTime;
+		const outputSize = (await fs.stat(outputPath)).size;
+		const ratio =
+			inputSize === 0 ? "1.0" : (outputSize / inputSize).toFixed(1);
+
+		spinner.succeed(chalk.green("Protection complete"));
+		console.log();
+		console.log(
+			`  ${chalk.dim("File:")}       ${chalk.white(relativeInput)}${
+				relativeInput !== relativeOutput
+					? chalk.dim(" \u2192 ") + chalk.white(relativeOutput)
+					: ""
+			}`
+		);
+		console.log(
+			`  ${chalk.dim("Regions:")}    ${chalk.white(
+				result.stats.protectedRegionCount
+			)}`
+		);
+		console.log(
+			`  ${chalk.dim("Input:")}      ${chalk.white(
+				formatBytes(inputSize)
+			)}`
+		);
+		console.log(
+			`  ${chalk.dim("Output:")}     ${chalk.white(
+				formatBytes(outputSize)
+			)} ${chalk.dim(`(${ratio}\u00d7)`)}`
+		);
+		console.log(
+			`  ${chalk.dim("Time:")}       ${chalk.white(formatTime(elapsed))}`
+		);
+		console.log();
+	} catch (error) {
+		spinner.fail(chalk.red("Protection failed"));
+		throw error;
 	}
-
-	const elapsed = Date.now() - startTime;
-	const outputSize = (await fs.stat(outputPath)).size;
-	const ratio = (outputSize / inputSize).toFixed(1);
-
-	spinner.succeed(chalk.green("Obfuscation complete"));
-
-	console.log();
-	console.log(
-		`  ${chalk.dim("File:")}     ${chalk.white(relInput)}${
-			relInput !== relOutput
-				? chalk.dim(" \u2192 ") + chalk.white(relOutput)
-				: ""
-		}`
-	);
-	console.log(
-		`  ${chalk.dim("Input:")}    ${chalk.white(formatBytes(inputSize))}`
-	);
-	console.log(
-		`  ${chalk.dim("Output:")}   ${chalk.white(
-			formatBytes(outputSize)
-		)} ${chalk.dim(`(${ratio}\u00d7)`)}`
-	);
-	console.log(
-		`  ${chalk.dim("Time:")}     ${chalk.white(formatTime(elapsed))}`
-	);
-	console.log();
 }
 
-// --- Directory Obfuscation ---
-
-/**
- * Obfuscate all matching files in a directory with a progress bar.
- *
- * @param inputPath - Absolute path to the input directory.
- * @param args - Parsed CLI arguments.
- */
-async function obfuscateDirectoryWithProgress(
+async function protectDirectoryWithProgress(
 	inputPath: string,
-	args: CliArgs
+	args: CliArgs,
+	materialized: MaterializedCliOptions
 ): Promise<void> {
-	const outputDir = args.output ? path.resolve(args.output) : inputPath;
-
-	if (outputDir !== inputPath) {
-		await fs.copy(inputPath, outputDir);
-	}
-
-	const { globby } = await import("globby");
-	const files = await globby(args.include, {
-		cwd: outputDir,
-		ignore: args.exclude,
-		absolute: false,
-	});
-
-	if (files.length === 0) {
-		console.log(chalk.yellow("  No matching files found."));
-		return;
-	}
-
-	const relDir = path.relative(process.cwd(), outputDir) || ".";
-	console.log(
-		`  ${chalk.dim("Directory:")} ${chalk.white(relDir)} ${chalk.dim(
-			`(${files.length} file${files.length === 1 ? "" : "s"})`
-		)}`
-	);
-	console.log();
-
 	const startTime = Date.now();
-	let totalInputSize = 0;
-	let totalOutputSize = 0;
-	let errorCount = 0;
-	const errors: { file: string; message: string }[] = [];
+	const outputDirectory = args.output ? path.resolve(args.output) : inputPath;
+	const ownerTraceRoot =
+		args.ownerTracePath === undefined
+			? undefined
+			: path.resolve(args.ownerTracePath);
+	if (
+		outputDirectory !== inputPath &&
+		pathsOverlap(inputPath, outputDirectory)
+	) {
+		throw new CliUsageError(
+			"RUAM_CLI_OUTPUT_OVERLAP",
+			"directory output must not contain the input directory or be contained by it"
+		);
+	}
+	if (ownerTraceRoot !== undefined) {
+		await assertOwnerTraceRootDisjoint(ownerTraceRoot, [
+			inputPath,
+			outputDirectory,
+		]);
+	}
 
 	const spinner = ora({
-		text: "",
+		text: "Planning contained file transformations...",
 		prefixText: " ",
 		color: "cyan",
 	}).start();
-
-	for (let i = 0; i < files.length; i++) {
-		const file = files[i]!;
-		const filePath = path.join(outputDir, file);
-
-		let inputSize: number;
-		try {
-			inputSize = (await fs.stat(filePath)).size;
-		} catch {
-			inputSize = 0;
-		}
-		totalInputSize += inputSize;
-
-		spinner.text = `${renderBar(i, files.length)} ${chalk.dim(file)}`;
-
-		try {
-			await obfuscateFile(filePath, filePath, args.options);
-			const outputSize = (await fs.stat(filePath)).size;
-			totalOutputSize += outputSize;
-		} catch (err) {
-			errorCount++;
-			errors.push({
-				file,
-				message: err instanceof Error ? err.message : String(err),
-			});
+	let plans: readonly PlannedFileProtection[];
+	try {
+		// Transform every file before the first output mutation. A configured
+		// rejection therefore leaves both in-place and copied builds untouched.
+		plans = await planDirectoryProtection(
+			inputPath,
+			args.include,
+			args.exclude,
+			materialized.input
+		);
+	} catch (error) {
+		spinner.fail(chalk.red("Protection planning failed; no files changed"));
+		throw error;
+	}
+	if (plans.length === 0) {
+		spinner.stop();
+		console.log(chalk.yellow("  No matching files found."));
+		return;
+	}
+	for (const plan of plans) {
+		if (
+			ownerTraceRoot !== undefined &&
+			plan.build.ownerTrace === undefined
+		) {
+			spinner.fail(chalk.red("Owner trace planning failed"));
+			throw new Error(
+				"RUAM_CLI_OWNER_TRACE_MISSING: protection did not return the requested owner sidecar"
+			);
 		}
 	}
 
-	const elapsed = Date.now() - startTime;
-	const successCount = files.length - errorCount;
-	const ratio =
-		totalInputSize > 0
-			? (totalOutputSize / totalInputSize).toFixed(1)
-			: "0";
-
-	if (errorCount === 0) {
-		spinner.succeed(
-			chalk.green(
-				`${successCount} file${
-					successCount === 1 ? "" : "s"
-				} obfuscated`
-			)
-		);
-	} else {
-		spinner.warn(
-			chalk.yellow(`${successCount} obfuscated, ${errorCount} failed`)
-		);
+	// Publish disjoint owner material before client code. A sidecar failure
+	// therefore cannot leave newly protected code without its requested trace.
+	for (const plan of plans) {
+		if (
+			ownerTraceRoot !== undefined &&
+			plan.build.ownerTrace !== undefined
+		) {
+			await writeOwnerTrace(
+				path.join(
+					ownerTraceRoot,
+					`${plan.file}.owner-trace.json`
+				),
+				plan.build.ownerTrace,
+				ownerTraceRoot
+			);
+		}
 	}
 
+	try {
+		if (outputDirectory !== inputPath) {
+			spinner.text = "Staging the validated output tree...";
+			await publishSeparateDirectory(
+				inputPath,
+				outputDirectory,
+				plans
+			);
+		} else {
+			spinner.text = "Publishing staged protected files...";
+			await commitDirectoryProtection(outputDirectory, plans);
+		}
+	} catch (error) {
+		spinner.fail(chalk.red("Protection publish failed"));
+		throw error;
+	}
+
+	console.log(
+		`  ${chalk.dim("Directory:")} ${chalk.white(
+			path.relative(process.cwd(), outputDirectory) || "."
+		)} ${chalk.dim(`(${plans.length} file${plans.length === 1 ? "" : "s"})`)}`
+	);
 	console.log();
+
+	const totalInputSize = plans.reduce(
+		(total, plan) => total + plan.sourceBytes,
+		0
+	);
+	const totalOutputSize = plans.reduce(
+		(total, plan) => total + plan.build.stats.outputBytes,
+		0
+	);
+	const protectedRegionCount = plans.reduce(
+		(total, plan) => total + plan.build.stats.protectedRegionCount,
+		0
+	);
+	spinner.succeed(
+		chalk.green(
+			`${plans.length} file${plans.length === 1 ? "" : "s"} protected with staged atomic replacement`
+		)
+	);
+
+	const ratio =
+		totalInputSize === 0
+			? "1.0"
+			: (totalOutputSize / totalInputSize).toFixed(1);
+	console.log();
+	console.log(
+		`  ${chalk.dim("Regions:")}  ${chalk.white(protectedRegionCount)}`
+	);
 	console.log(
 		`  ${chalk.dim("Input:")}    ${chalk.white(
 			formatBytes(totalInputSize)
@@ -996,86 +925,337 @@ async function obfuscateDirectoryWithProgress(
 		)} ${chalk.dim(`(${ratio}\u00d7)`)}`
 	);
 	console.log(
-		`  ${chalk.dim("Time:")}     ${chalk.white(formatTime(elapsed))}`
+		`  ${chalk.dim("Time:")}     ${chalk.white(
+			formatTime(Date.now() - startTime)
+		)}`
 	);
-
-	if (errors.length > 0) {
-		console.log();
-		console.log(chalk.red("  Errors:"));
-		for (const e of errors) {
-			console.log(
-				`    ${chalk.red("\u2717")} ${chalk.dim(e.file)}: ${e.message}`
-			);
-		}
-	}
 
 	console.log();
 }
 
-// --- Main ---
+/**
+ * Build a separate output in a private sibling directory, then switch the
+ * complete tree into place. Existing outputs are retained as a rollback target
+ * until the new tree is visible.
+ */
+async function publishSeparateDirectory(
+	inputDirectory: string,
+	outputDirectory: string,
+	plans: readonly PlannedFileProtection[]
+): Promise<void> {
+	const parent = path.dirname(outputDirectory);
+	await fs.ensureDir(parent);
+	const stage = await fs.mkdtemp(
+		path.join(parent, `.${path.basename(outputDirectory)}.ruam-stage-`)
+	);
+	let backup: string | undefined;
+	try {
+		await fs.copy(inputDirectory, stage, { dereference: false });
+		await commitDirectoryProtection(stage, plans);
+		if (await fs.pathExists(outputDirectory)) {
+			const outputStat = await fs.lstat(outputDirectory);
+			if (outputStat.isSymbolicLink() || !outputStat.isDirectory()) {
+				throw new CliUsageError(
+					"RUAM_CLI_OUTPUT_OVERLAP",
+					"an existing directory output must be a non-symlink directory"
+				);
+			}
+			backup = await fs.mkdtemp(
+				path.join(
+					parent,
+					`.${path.basename(outputDirectory)}.ruam-backup-`
+				)
+			);
+			await fs.remove(backup);
+			await fs.rename(outputDirectory, backup);
+		}
+		try {
+			await fs.rename(stage, outputDirectory);
+		} catch (error) {
+			if (backup !== undefined) {
+				await fs.rename(backup, outputDirectory);
+				backup = undefined;
+			}
+			throw error;
+		}
+		if (backup !== undefined) {
+			await fs.remove(backup);
+			backup = undefined;
+		}
+	} catch (error) {
+		await fs.remove(stage);
+		if (
+			backup !== undefined &&
+			!(await fs.pathExists(outputDirectory))
+		) {
+			await fs.rename(backup, outputDirectory);
+		}
+		throw error;
+	}
+}
 
-/** CLI entry point. Routes to interactive wizard, help, or direct obfuscation. */
+async function assertOwnerTraceRootDisjoint(
+	traceRoot: string,
+	guardedRoots: readonly string[]
+): Promise<void> {
+	await assertNoSymlinkDirectoryComponents(
+		traceRoot,
+		commonPathAncestor([traceRoot, ...guardedRoots])
+	);
+	const canonicalTraceRoot = await canonicalizeProspectivePath(traceRoot);
+	for (const guardedRoot of guardedRoots) {
+		const canonicalGuardedRoot =
+			await canonicalizeProspectivePath(guardedRoot);
+		if (pathsOverlap(canonicalGuardedRoot, canonicalTraceRoot)) {
+			throw new CliUsageError(
+				"RUAM_CLI_OUTPUT_OVERLAP",
+				"owner trace directory must be physically disjoint from source and client output trees"
+			);
+		}
+	}
+}
+
+async function assertOwnerTraceFileDisjoint(
+	tracePath: string,
+	guardedFiles: readonly string[]
+): Promise<void> {
+	const traceDirectory = path.dirname(tracePath);
+	await assertNoSymlinkDirectoryComponents(
+		traceDirectory,
+		commonPathAncestor([
+			traceDirectory,
+			...guardedFiles.map((file) => path.dirname(file)),
+		])
+	);
+	const canonicalTracePath = await canonicalizeProspectivePath(tracePath);
+	for (const guardedFile of guardedFiles) {
+		if (
+			canonicalTracePath ===
+			(await canonicalizeProspectivePath(guardedFile))
+		) {
+			throw new CliUsageError(
+				"RUAM_CLI_OUTPUT_OVERLAP",
+				"owner trace file must be physically disjoint from source and client output"
+			);
+		}
+	}
+}
+
+async function assertOwnerTraceTargetContained(
+	traceRoot: string,
+	outputPath: string
+): Promise<void> {
+	const root = path.resolve(traceRoot);
+	const target = path.resolve(outputPath);
+	const relative = path.relative(root, target);
+	if (
+		relative === "" ||
+		relative === ".." ||
+		relative.startsWith(`..${path.sep}`) ||
+		path.isAbsolute(relative)
+	) {
+		throw new CliUsageError(
+			"RUAM_CLI_OUTPUT_OVERLAP",
+			"owner trace target escaped its declared root"
+		);
+	}
+	await assertNoSymlinkDirectoryComponents(root, root);
+	await assertNoSymlinkDirectoryComponents(path.dirname(target), root);
+	const canonicalRoot = await canonicalizeProspectivePath(root);
+	const canonicalTarget = await canonicalizeProspectivePath(target);
+	if (!pathsOverlap(canonicalRoot, canonicalTarget)) {
+		throw new CliUsageError(
+			"RUAM_CLI_OUTPUT_OVERLAP",
+			"owner trace target escaped its physical root"
+		);
+	}
+}
+
+async function assertNoSymlinkDirectoryComponents(
+	targetDirectory: string,
+	stopDirectory?: string
+): Promise<void> {
+	const stop =
+		stopDirectory === undefined
+			? path.parse(path.resolve(targetDirectory)).root
+			: path.resolve(stopDirectory);
+	let current = path.resolve(targetDirectory);
+	const relativeToStop = path.relative(stop, current);
+	if (
+		relativeToStop === ".." ||
+		relativeToStop.startsWith(`..${path.sep}`) ||
+		path.isAbsolute(relativeToStop)
+	) {
+		throw new CliUsageError(
+			"RUAM_CLI_OUTPUT_OVERLAP",
+			"owner trace target escaped its declared root"
+		);
+	}
+	for (;;) {
+		try {
+			const stat = await fs.lstat(current);
+			if (stat.isSymbolicLink() || !stat.isDirectory()) {
+				throw new CliUsageError(
+					"RUAM_CLI_OUTPUT_OVERLAP",
+					"owner trace directories and ancestors must be non-symlink directories"
+				);
+			}
+		} catch (error) {
+			if (
+				!(
+					error &&
+					typeof error === "object" &&
+					"code" in error &&
+					(error as NodeJS.ErrnoException).code === "ENOENT"
+				)
+			) {
+				throw error;
+			}
+		}
+		if (current === stop) break;
+		const parent = path.dirname(current);
+		if (parent === current) break;
+		current = parent;
+	}
+}
+
+function commonPathAncestor(paths: readonly string[]): string {
+	if (paths.length === 0) return path.parse(process.cwd()).root;
+	const resolved = paths.map((candidate) => path.resolve(candidate));
+	let common = resolved[0]!;
+	while (
+		resolved.some((candidate) => {
+			const relative = path.relative(common, candidate);
+			return (
+				relative === ".." ||
+				relative.startsWith(`..${path.sep}`) ||
+				path.isAbsolute(relative)
+			);
+		})
+	) {
+		const parent = path.dirname(common);
+		if (parent === common) return common;
+		common = parent;
+	}
+	return common;
+}
+
+async function canonicalizeProspectivePath(filePath: string): Promise<string> {
+	const resolved = path.resolve(filePath);
+	let existing = resolved;
+	for (;;) {
+		try {
+			await fs.lstat(existing);
+			break;
+		} catch (error) {
+			if (
+				!(
+					error &&
+					typeof error === "object" &&
+					"code" in error &&
+					(error as NodeJS.ErrnoException).code === "ENOENT"
+				)
+			) {
+				throw error;
+			}
+			const parent = path.dirname(existing);
+			if (parent === existing) throw error;
+			existing = parent;
+		}
+	}
+	const canonicalExisting = await fs.realpath(existing);
+	return path.resolve(
+		canonicalExisting,
+		path.relative(existing, resolved)
+	);
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+	const leftToRight = path.relative(left, right);
+	const rightToLeft = path.relative(right, left);
+	return (
+		leftToRight === "" ||
+		(!path.isAbsolute(leftToRight) &&
+			leftToRight !== ".." &&
+			!leftToRight.startsWith(`..${path.sep}`)) ||
+		(!path.isAbsolute(rightToLeft) &&
+			rightToLeft !== ".." &&
+			!rightToLeft.startsWith(`..${path.sep}`))
+	);
+}
+
+async function executeProtection(
+	args: CliArgs,
+	materialized: MaterializedCliOptions
+): Promise<void> {
+	if (args.input === undefined) {
+		throw new CliUsageError(
+			"RUAM_CLI_MISSING_VALUE",
+			"an input path is required"
+		);
+	}
+	const inputPath = path.resolve(args.input);
+	if (!(await fs.pathExists(inputPath))) {
+		throw new CliUsageError(
+			"RUAM_CLI_MISSING_VALUE",
+			`${args.input} does not exist`
+		);
+	}
+
+	const stat = await fs.stat(inputPath);
+	if (stat.isDirectory()) {
+		await protectDirectoryWithProgress(inputPath, args, materialized);
+	} else {
+		await protectSingleFileWithProgress(inputPath, args, materialized);
+	}
+}
+
 async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 	const version = await getVersion();
 
 	if (args.help) {
 		printHelp(version);
-		process.exit(0);
+		return;
 	}
-
 	if (args.version) {
 		console.log(version);
-		process.exit(0);
+		return;
 	}
-
-	// Interactive mode: no input provided or explicit --interactive
-	if (!args.input || args.interactive) {
+	if (args.input === undefined || args.interactive) {
 		if (!process.stdin.isTTY) {
 			printHelp(version);
-			process.exit(1);
+			process.exitCode = 1;
+			return;
 		}
 		await runInteractive(version);
 		return;
 	}
 
-	// --- Direct mode ---
-	const inputPath = path.resolve(args.input);
-
-	if (!(await fs.pathExists(inputPath))) {
-		console.error(chalk.red(`  Error: ${args.input} does not exist`));
-		process.exit(1);
-	}
-
-	// Show animated logo briefly, then proceed
+	const materialized = await materializeOptions(args);
 	const logo = new LogoAnimation();
 	logo.start(version);
-	await new Promise((r) => setTimeout(r, 800));
-	logo.stop();
-
-	printConfig(args.options);
-	console.log();
-
-	const stat = await fs.stat(inputPath);
-
-	if (stat.isDirectory()) {
-		await obfuscateDirectoryWithProgress(inputPath, args);
-	} else {
-		await obfuscateSingleFileWithProgress(inputPath, args);
+	if (process.stdout.isTTY) {
+		await new Promise((resolve) => setTimeout(resolve, 800));
 	}
+	logo.stop();
+	printConfig(materialized.resolved);
+	console.log();
+	await executeProtection(args, materialized);
 }
 
-main().catch((err) => {
-	// Handle Ctrl+C from @inquirer/prompts
+main().catch((error) => {
 	if (
-		err &&
-		typeof err === "object" &&
-		"name" in err &&
-		err.name === "ExitPromptError"
+		error &&
+		typeof error === "object" &&
+		"name" in error &&
+		error.name === "ExitPromptError"
 	) {
 		console.log(chalk.dim("\n  Cancelled."));
-		process.exit(0);
+		return;
 	}
-	console.error(chalk.red(err instanceof Error ? err.message : String(err)));
-	process.exit(1);
+	console.error(
+		chalk.red(error instanceof Error ? error.message : String(error))
+	);
+	process.exitCode = 1;
 });

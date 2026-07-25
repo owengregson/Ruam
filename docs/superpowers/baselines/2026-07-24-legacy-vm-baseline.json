@@ -1,0 +1,862 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Traveling Isogloss pre-implementation legacy baseline",
+  "baseline": {
+    "commit": "e8cecb56ba89d47512a16e325d81cf46f64b2ecb",
+    "commitSubject": "docs: plan full traveling isogloss replacement",
+    "reason": "Last branch commit before the first production-code implementation commit; measured in a detached worktree to avoid contamination from parallel agents.",
+    "package": "packages/ruam",
+    "packageName": "ruamvm",
+    "packageVersion": "2.0.0"
+  },
+  "environment": {
+    "collectedOn": "2026-07-24",
+    "node": "v25.6.1",
+    "bun": "1.3.11",
+    "npm": "11.9.0",
+    "typescript": "5.9.3",
+    "tsup": "8.5.1",
+    "os": "Darwin 25.3.0",
+    "architecture": "arm64",
+    "cpu": "Apple M5",
+    "logicalCpuCount": 10,
+    "memoryBytes": 25769803776
+  },
+  "commands": [
+    {
+      "command": "bun run typecheck",
+      "cwd": "<detached-worktree>/packages/ruam",
+      "exitCode": 0,
+      "timingSeconds": {
+        "real": 2.2,
+        "user": 3.81,
+        "sys": 0.27
+      },
+      "result": {
+        "passed": true,
+        "diagnostics": 0
+      },
+      "log": "/tmp/ruam-baseline-typecheck.log"
+    },
+    {
+      "command": "bun test",
+      "cwd": "<detached-worktree>/packages/ruam",
+      "exitCode": 0,
+      "timingSeconds": {
+        "real": 11.38,
+        "user": 19.9,
+        "sys": 1.31
+      },
+      "result": {
+        "passed": 2328,
+        "failed": 0,
+        "expectCalls": 4819,
+        "files": 44,
+        "bunReportedSeconds": 11.34
+      },
+      "embeddedPerformance": {
+        "weightedAverageOverheadX": 41.1,
+        "medianOverheadX": 40.8,
+        "fastest": {
+          "workload": "try/catch in loop",
+          "overheadX": 21.6
+        },
+        "slowest": {
+          "workload": "switch statement dispatch",
+          "overheadX": 102.5
+        },
+        "workloads": [
+          {
+            "name": "arithmetic loop (10k iterations)",
+            "nativeMs": 0.028,
+            "protectedMs": 1.408,
+            "overheadX": 49.9
+          },
+          {
+            "name": "fibonacci (recursive, n=20)",
+            "nativeMs": 0.122,
+            "protectedMs": 5.1,
+            "overheadX": 41.8
+          },
+          {
+            "name": "array manipulation (sort + map + reduce)",
+            "nativeMs": 0.059,
+            "protectedMs": 1.807,
+            "overheadX": 30.4
+          },
+          {
+            "name": "string operations (concatenation + manipulation)",
+            "nativeMs": 0.011,
+            "protectedMs": 0.386,
+            "overheadX": 34.3
+          },
+          {
+            "name": "object creation + property access",
+            "nativeMs": 0.012,
+            "protectedMs": 0.48,
+            "overheadX": 40.8
+          },
+          {
+            "name": "closures + higher-order functions",
+            "nativeMs": 0.015,
+            "protectedMs": 0.533,
+            "overheadX": 35.6
+          },
+          {
+            "name": "class instantiation + method calls",
+            "nativeMs": 0.023,
+            "protectedMs": 0.814,
+            "overheadX": 35
+          },
+          {
+            "name": "try/catch in loop",
+            "nativeMs": 0.026,
+            "protectedMs": 0.568,
+            "overheadX": 21.6
+          },
+          {
+            "name": "nested loops with conditionals",
+            "nativeMs": 0.037,
+            "protectedMs": 2.005,
+            "overheadX": 54.7
+          },
+          {
+            "name": "switch statement dispatch",
+            "nativeMs": 0.01,
+            "protectedMs": 1.027,
+            "overheadX": 102.5
+          }
+        ]
+      },
+      "log": "/tmp/ruam-baseline-test.log"
+    },
+    {
+      "command": "bun run build",
+      "cwd": "<detached-worktree>/packages/ruam",
+      "exitCode": 0,
+      "timingSeconds": {
+        "real": 3.09,
+        "user": 5.09,
+        "sys": 0.38
+      },
+      "result": {
+        "passed": true,
+        "esModuleBuildMs": 61,
+        "declarationBuildMs": 2658,
+        "outputs": [
+          {
+            "path": "dist/index.js",
+            "bytes": 285,
+            "gzipBytes": 156,
+            "sha256": "f8e81b2eb7bdc698953e76a57d92deddbd9dfda02a67adfc62aa9259aab0aba6"
+          },
+          {
+            "path": "dist/cli.js",
+            "bytes": 23611,
+            "gzipBytes": 6076,
+            "sha256": "34d4efc8788168bd7fdee6e64390b0356c4cbf0e6119e1b5c1a67d8baaf6e4bb"
+          },
+          {
+            "path": "dist/chunk-3BCH3N5C.js",
+            "bytes": 535347,
+            "gzipBytes": 100251,
+            "sha256": "bb88026b2a11b04ab665ed5cb7c4e5cef1c7b20460a3a3b785b7630626fd1477"
+          },
+          {
+            "path": "dist/index.d.ts",
+            "bytes": 11130
+          },
+          {
+            "path": "dist/cli.d.ts",
+            "bytes": 20
+          }
+        ],
+        "totalBytes": 570393
+      },
+      "log": "/tmp/ruam-baseline-build.log"
+    },
+    {
+      "command": "bun scripts/bench.mjs --quick",
+      "cwd": "<detached-worktree>/packages/ruam",
+      "exitCode": 0,
+      "timingSeconds": {
+        "real": 48.39,
+        "user": 82.3,
+        "sys": 2.29
+      },
+      "result": {
+        "iterationsPerWorkload": 30,
+        "allCorrect": true,
+        "presets": [
+          {
+            "name": "default",
+            "bootstrapMs": 0.038,
+            "aggregateExecutionOverheadX": 48.2,
+            "worstExecutionOverheadX": 69.2,
+            "worstWorkload": "fib-28",
+            "workloads": [
+              [
+                "arith-loop-200k",
+                0.3988,
+                9.528,
+                9.489,
+                23.9,
+                23.8,
+                11.1
+              ],
+              [
+                "fib-28",
+                1.4419,
+                99.875,
+                99.836,
+                69.3,
+                69.2,
+                12.1
+              ],
+              [
+                "nested-loops-300",
+                0.2119,
+                6.867,
+                6.829,
+                32.4,
+                32.2,
+                12.1
+              ],
+              [
+                "switch-dispatch-50k",
+                0.1198,
+                7.176,
+                7.138,
+                59.9,
+                59.6,
+                13.5
+              ],
+              [
+                "string-build-5k",
+                0.1274,
+                1.758,
+                1.719,
+                13.8,
+                13.5,
+                13.8
+              ],
+              [
+                "object-prop-20k",
+                0.1464,
+                4.5,
+                4.462,
+                30.7,
+                30.5,
+                11.5
+              ],
+              [
+                "array-ops-3k",
+                0.2958,
+                5.53,
+                5.492,
+                18.7,
+                18.6,
+                15
+              ],
+              [
+                "class-methods-2k",
+                0.1132,
+                2.75,
+                2.712,
+                24.3,
+                24,
+                18.3
+              ]
+            ]
+          },
+          {
+            "name": "low",
+            "bootstrapMs": 0.045,
+            "aggregateExecutionOverheadX": 50.5,
+            "worstExecutionOverheadX": 74.5,
+            "worstWorkload": "fib-28",
+            "workloads": [
+              [
+                "arith-loop-200k",
+                0.3983,
+                8.835,
+                8.79,
+                22.2,
+                22.1,
+                11.5
+              ],
+              [
+                "fib-28",
+                1.4573,
+                108.645,
+                108.6,
+                74.6,
+                74.5,
+                12.3
+              ],
+              [
+                "nested-loops-300",
+                0.2156,
+                6.921,
+                6.876,
+                32.1,
+                31.9,
+                12
+              ],
+              [
+                "switch-dispatch-50k",
+                0.1172,
+                7.474,
+                7.429,
+                63.8,
+                63.4,
+                13.7
+              ],
+              [
+                "string-build-5k",
+                0.0873,
+                1.607,
+                1.561,
+                18.4,
+                17.9,
+                13.9
+              ],
+              [
+                "object-prop-20k",
+                0.1832,
+                4.426,
+                4.381,
+                24.2,
+                23.9,
+                12.4
+              ],
+              [
+                "array-ops-3k",
+                0.3125,
+                5.332,
+                5.287,
+                17.1,
+                16.9,
+                14.6
+              ],
+              [
+                "class-methods-2k",
+                0.1128,
+                2.919,
+                2.873,
+                25.9,
+                25.5,
+                19
+              ]
+            ]
+          },
+          {
+            "name": "medium",
+            "bootstrapMs": 0.129,
+            "aggregateExecutionOverheadX": 52.6,
+            "worstExecutionOverheadX": 76.8,
+            "worstWorkload": "fib-28",
+            "workloads": [
+              [
+                "arith-loop-200k",
+                0.3861,
+                9.82,
+                9.692,
+                25.4,
+                25.1,
+                16
+              ],
+              [
+                "fib-28",
+                1.4861,
+                114.236,
+                114.108,
+                76.9,
+                76.8,
+                16.7
+              ],
+              [
+                "nested-loops-300",
+                0.1568,
+                7.434,
+                7.305,
+                47.4,
+                46.6,
+                16.7
+              ],
+              [
+                "switch-dispatch-50k",
+                0.1275,
+                7.942,
+                7.813,
+                62.3,
+                61.3,
+                18.4
+              ],
+              [
+                "string-build-5k",
+                0.0816,
+                1.866,
+                1.737,
+                22.9,
+                21.3,
+                18.8
+              ],
+              [
+                "object-prop-20k",
+                0.1966,
+                3.992,
+                3.863,
+                20.3,
+                19.7,
+                16.7
+              ],
+              [
+                "array-ops-3k",
+                0.3901,
+                6.283,
+                6.154,
+                16.1,
+                15.8,
+                20
+              ],
+              [
+                "class-methods-2k",
+                0.1106,
+                3.927,
+                3.798,
+                35.5,
+                34.3,
+                26
+              ]
+            ]
+          },
+          {
+            "name": "max",
+            "bootstrapMs": 0.246,
+            "aggregateExecutionOverheadX": 171.6,
+            "worstExecutionOverheadX": 206.4,
+            "worstWorkload": "fib-28",
+            "workloads": [
+              [
+                "arith-loop-200k",
+                0.3406,
+                42.15,
+                41.904,
+                123.7,
+                123,
+                39.2
+              ],
+              [
+                "fib-28",
+                1.4569,
+                300.903,
+                300.657,
+                206.5,
+                206.4,
+                37.2
+              ],
+              [
+                "nested-loops-300",
+                0.1563,
+                32.012,
+                31.766,
+                204.9,
+                203.3,
+                35.3
+              ],
+              [
+                "switch-dispatch-50k",
+                0.1986,
+                35.433,
+                35.187,
+                178.4,
+                177.2,
+                43.1
+              ],
+              [
+                "string-build-5k",
+                0.0778,
+                8.916,
+                8.67,
+                114.6,
+                111.5,
+                44.8
+              ],
+              [
+                "object-prop-20k",
+                0.1421,
+                22.299,
+                22.053,
+                157,
+                155.2,
+                39.1
+              ],
+              [
+                "array-ops-3k",
+                0.3024,
+                16.906,
+                16.66,
+                55.9,
+                55.1,
+                50.7
+              ],
+              [
+                "class-methods-2k",
+                0.0976,
+                19.133,
+                18.887,
+                196.1,
+                193.6,
+                58.3
+              ]
+            ]
+          }
+        ],
+        "workloadTupleFields": [
+          "name",
+          "nativeMs",
+          "protectedTotalMs",
+          "protectedExecutionMs",
+          "totalOverheadX",
+          "executionOverheadX",
+          "outputSizeKiB"
+        ]
+      },
+      "log": "/tmp/ruam-baseline-bench.log"
+    },
+    {
+      "command": "bun scripts/bench-attribution.mjs",
+      "cwd": "<detached-worktree>/packages/ruam",
+      "exitCode": 0,
+      "timingSeconds": {
+        "real": 19.49,
+        "user": 56.35,
+        "sys": 1.9
+      },
+      "result": {
+        "iterationsPerWorkload": 12,
+        "warmupIterations": 3,
+        "full": false,
+        "allCorrect": true,
+        "configurations": [
+          [
+            "default",
+            36.7,
+            51,
+            "switch-dispatch-15k"
+          ],
+          [
+            "medium",
+            38.6,
+            42,
+            "arith-loop-40k"
+          ],
+          [
+            "MAX (baseline)",
+            112.1,
+            152,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−stackEncoding",
+            96.8,
+            122,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−mixedBooleanArithmetic",
+            110.6,
+            222,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−observationResistance",
+            111.3,
+            191,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−opcodeMutation",
+            132.6,
+            240,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−incrementalCipher",
+            86.5,
+            109,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−semanticOpacity",
+            134.8,
+            253,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−vmShielding",
+            127.9,
+            250,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−deadCodeInjection",
+            123.2,
+            195,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−debugProtection",
+            136.4,
+            227,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−blockPermutation (sanity ~0)",
+            123.1,
+            188,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−integrityBinding",
+            147.5,
+            241,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−cache-trio (mut+inc+obs) [CACHE ON]",
+            79.8,
+            117,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−cache-trio −stackEncoding [CACHE ON]",
+            30.9,
+            63,
+            "switch-dispatch-15k"
+          ],
+          [
+            "−cache-trio −proxy −MBA [CACHE ON]",
+            33.7,
+            41,
+            "arith-loop-40k"
+          ],
+          [
+            "−cache-trio −proxy −MBA −semOpacity",
+            38.3,
+            53,
+            "switch-dispatch-15k"
+          ]
+        ],
+        "configurationTupleFields": [
+          "name",
+          "aggregateExecutionOverheadX",
+          "worstExecutionOverheadX",
+          "worstWorkload"
+        ]
+      },
+      "log": "/tmp/ruam-baseline-bench-attribution.log"
+    },
+    {
+      "command": "node scripts/collect-stats.mjs --all",
+      "cwd": "<isolated-copy-of-detached-worktree>/packages/ruam",
+      "exitCode": 0,
+      "timingSeconds": {
+        "real": 14.98,
+        "user": 26.17,
+        "sys": 1.8
+      },
+      "result": {
+        "version": "2.0.0",
+        "collectedAt": "2026-07-24T23:26:39.895Z",
+        "opcodes": {
+          "count": 324,
+          "categories": 25,
+          "superinstructions": 34,
+          "compounds": 38,
+          "slotOpcodes": 10
+        },
+        "source": {
+          "files": 91,
+          "lines": 32692,
+          "testFiles": 45,
+          "testLines": 18220,
+          "totalFiles": 136,
+          "totalLines": 50912,
+          "templateFiles": 0,
+          "visitorFiles": 4
+        },
+        "tests": {
+          "total": 2328,
+          "passed": 2328,
+          "failed": 0,
+          "suites": 44,
+          "durationMs": 13120
+        },
+        "performance": {
+          "weightedAvg": 25.5,
+          "median": 40.9,
+          "fastest": {
+            "name": "try/catch",
+            "multiplier": 5.2
+          },
+          "slowest": {
+            "name": "fibonacci (n=20)",
+            "multiplier": 79.9
+          },
+          "workloadCount": 10,
+          "workloads": [
+            {
+              "name": "arithmetic loop (10k)",
+              "multiplier": 14.4,
+              "nativeMs": 0.077,
+              "vmMs": 1.106
+            },
+            {
+              "name": "fibonacci (n=20)",
+              "multiplier": 79.9,
+              "nativeMs": 0.08,
+              "vmMs": 6.394
+            },
+            {
+              "name": "array ops",
+              "multiplier": 23.1,
+              "nativeMs": 0.059,
+              "vmMs": 1.375
+            },
+            {
+              "name": "string ops",
+              "multiplier": 50.4,
+              "nativeMs": 0.01,
+              "vmMs": 0.496
+            },
+            {
+              "name": "object creation",
+              "multiplier": 40.9,
+              "nativeMs": 0.015,
+              "vmMs": 0.622
+            },
+            {
+              "name": "closures + HOF",
+              "multiplier": 73.6,
+              "nativeMs": 0.008,
+              "vmMs": 0.557
+            },
+            {
+              "name": "class + methods",
+              "multiplier": 58.5,
+              "nativeMs": 0.014,
+              "vmMs": 0.84
+            },
+            {
+              "name": "nested loops",
+              "multiplier": 13.1,
+              "nativeMs": 0.112,
+              "vmMs": 1.464
+            },
+            {
+              "name": "switch dispatch",
+              "multiplier": 30.4,
+              "nativeMs": 0.029,
+              "vmMs": 0.882
+            },
+            {
+              "name": "try/catch",
+              "multiplier": 5.2,
+              "nativeMs": 0.17,
+              "vmMs": 0.874
+            }
+          ]
+        },
+        "size": {
+          "sampleInputBytes": 110,
+          "low": {
+            "bytes": 12842,
+            "ratio": 116.7
+          },
+          "medium": {
+            "bytes": 18848,
+            "ratio": 171.3
+          },
+          "high": {
+            "bytes": 12450,
+            "ratio": 113.2
+          }
+        },
+        "heroSnippet": {
+          "head": [
+            "var MJi = Object.prototype.hasOwnProperty,",
+            "  IpS = Math.imul,",
+            "  M1Y = Object.create(null),",
+            "  Ed0 = !(typeof globalThis === 'undefined') ? globa...",
+            "  gTs = 'avCIAmHKykW2TeuYscFZSgMzp_E0lih7boDqOL61n4x..."
+          ],
+          "totalLines": 627,
+          "tail": [
+            "function fibonacci(...__args) {",
+            "  var _n = __args.length | 0;",
+            "  return wVi(\"ugrvw\", __args, kNK, this);",
+            "}"
+          ]
+        },
+        "badges": {
+          "tests": "2,328",
+          "testsPassing": "2,328 passing",
+          "opcodes": "324",
+          "categories": "25",
+          "loc": "32.7k",
+          "totalLoc": "50.9k",
+          "overhead": "~25.5x",
+          "overheadMedian": "~40.9x",
+          "sizeRatioLow": "116.7x",
+          "sizeRatioHigh": "113.2x"
+        }
+      },
+      "log": "/tmp/ruam-baseline-stats.log",
+      "generatedStats": "/tmp/ruam-baseline-generated-stats.json",
+      "generatedTestResults": "/tmp/ruam-baseline-generated-test-results.json"
+    }
+  ],
+  "knownIssues": [
+    {
+      "script": "scripts/collect-stats.mjs",
+      "severity": "invalid-metric",
+      "detail": "The size collector requests preset 'high', but the public PresetName and PRESETS table only support low, medium, and max. Runtime object spread of undefined silently falls back to default-like options, so result.size.high and the 'high preset' badge are not max-preset measurements.",
+      "evidence": {
+        "requested": "obfuscateCode(sampleCode, { preset: \"high\" })",
+        "validPresets": [
+          "low",
+          "medium",
+          "max"
+        ]
+      }
+    },
+    {
+      "script": "scripts/bench-attribution.mjs",
+      "severity": "measurement-noise",
+      "detail": "Each configuration is compiled with fresh cryptographic entropy and measured only once at 12 iterations by default. Several removals report higher overhead than MAX, including options expected to be near-zero runtime cost. Use repeated seeded runs and confidence intervals before treating feature deltas as causal."
+    },
+    {
+      "script": "scripts/bench.mjs",
+      "severity": "measurement-noise",
+      "detail": "Protected outputs use fresh entropy and --quick uses 30 timing iterations, so exact overhead and output-size values are run-specific. All eight workload correctness checks passed for every preset in this run."
+    },
+    {
+      "script": "scripts/collect-stats.mjs",
+      "severity": "behavior-documentation-mismatch",
+      "detail": "The script runs benchmarks whenever dist/index.js exists, even without --bench, despite its usage text describing cached benchmark results for the default invocation."
+    }
+  ],
+  "rawEvidenceSha256": {
+    "/tmp/ruam-baseline-environment.log": "2144d354ece9aee40b9c26bdb9120735628125b0e275964bab89885b0e28caa3",
+    "/tmp/ruam-baseline-typecheck.log": "695148545ac172a5c5bcab1450e90bee00bc2e720314b73291d3b11b0d62",
+    "/tmp/ruam-baseline-test.log": "d07167bd1ab8931664f6ce8df1105fdfe1de689a01a89d0dfc4abaaef1c1b514",
+    "/tmp/ruam-baseline-build.log": "184fea6898391a5ea558c900203a39a2bd85f98db82090a573beddd7d3420789",
+    "/tmp/ruam-baseline-bench.log": "f7906a180070727e21e8cfac3a956c6ee745186b11a5e0721db863090f837e11",
+    "/tmp/ruam-baseline-bench-attribution.log": "c8b4a2a2b0adf77b03993180aaa434dc19ee6651784783867ef8bfbaf6405b5c",
+    "/tmp/ruam-baseline-stats.log": "7fd59a1af8e52e34acd42006c96fa2e5d3fa812e39ab1b98bbd70a55f652e6ae",
+    "/tmp/ruam-baseline-generated-stats.json": "458ec2bdb8efd1b81304324abd7852c5f5f59e427c807c2a6dbab97cd7f88691"
+  },
+  "mainTrackedWorktreeCleanAfterCollection": true
+}

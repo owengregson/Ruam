@@ -1,9 +1,9 @@
 /**
- * Main bytecode compiler entry point.
+ * Canonical semantic compiler entry point.
  *
- * {@link compileFunction} is the public API — it takes a Babel
- * `NodePath<Function>` and produces a {@link BytecodeUnit} (plus any
- * child units for nested functions).
+ * Babel visitors emit a temporary source-operation stream which is frozen
+ * into execution-independent semantic IR. No serialized instruction artifact
+ * or executable backend leaves this module.
  *
  * @module compiler
  */
@@ -12,7 +12,7 @@ import type { NodePath } from "@babel/traverse";
 import type * as t from "@babel/types";
 import { Emitter } from "./emitter.js";
 import { ScopeAnalyzer } from "./scope.js";
-import { Op } from "./opcodes.js";
+import { Op } from "./operations.js";
 import { compileExpression } from "./visitors/expressions.js";
 import {
 	compileBody,
@@ -20,17 +20,113 @@ import {
 	type LoopContext,
 } from "./visitors/statements.js";
 import { compileClassExpr } from "./visitors/classes.js";
-import type { BytecodeUnit } from "../types.js";
+import type {
+	RootGroupId,
+	SemanticCompileUnit,
+} from "./types.js";
 import {
 	computeUsesExceptions,
 	computeUsesThisContext,
-} from "./slot-analysis.js";
+} from "./metadata-analysis.js";
 import { LCG_MULTIPLIER, LCG_INCREMENT } from "../constants.js";
 import {
 	analyzeCapturedVars,
 	type CaptureAnalysisResult,
 } from "./capture-analysis.js";
-import { optimizeInstructions } from "./optimizer.js";
+import { buildCanonicalCfg } from "./cfg.js";
+import type {
+	SemanticRootGroup,
+	SemanticUnit,
+	SourceOrigin,
+} from "./ir.js";
+
+export {
+	buildCanonicalCallGraphInventory,
+	CALL_GRAPH_LIMITS,
+	isCompilerProducedCallGraphInventory,
+} from "./call-graph.js";
+export type {
+	CanonicalBoundaryKind,
+	CanonicalBoundaryObservability,
+	CanonicalCallBoundary,
+	CanonicalCallGraphInventory,
+	CanonicalCallGraphSummary,
+	CanonicalCallResolution,
+	CanonicalCallScc,
+	CanonicalCallSource,
+	CanonicalCallTargetPolicy,
+	CanonicalClosureSite,
+	CanonicalDirectCallEdge,
+	CanonicalUnresolvedCallReason,
+} from "./call-graph.js";
+export { analyzeCanonicalDirectCallTargets } from "./direct-call-targets.js";
+export type {
+	CanonicalDirectCallConvention,
+	CanonicalDirectCallTargetFact,
+	CanonicalDirectCallTargetInventory,
+} from "./direct-call-targets.js";
+export {
+	buildEffectRegionGraph,
+	validateEffectRegionGraph,
+} from "./regions.js";
+export type {
+	EffectRegion,
+	EffectRegionExit,
+	EffectRegionGraph,
+	EffectRegionId,
+	RegionBoundaryContract,
+	RegionEffectSummary,
+	RegionStateDomain,
+	RegionStatePort,
+} from "./regions.js";
+export {
+	MAX_PURE_REGION_INTEGER_MAGNITUDE,
+	isPureRegionValueInDomain,
+	lowerEffectRegionsToPureContract,
+} from "./pure-region-lowering.js";
+export type {
+	LoweredPureRegionContract,
+	PureRegionBinding,
+	PureRegionInputAssumption,
+	PureRegionInputBinding,
+	PureRegionLoweringRequest,
+	PureRegionOutputBinding,
+	PureRegionValueDomain,
+} from "./pure-region-lowering.js";
+export {
+	planPureRegionCandidates,
+	PURE_REGION_PLANNING_LIMITS,
+} from "./pure-region-planning.js";
+export type {
+	PlannedPureRegionCandidate,
+	PureRegionCandidatePlan,
+	PureRegionCandidateRejection,
+	PureRegionCandidateRejectionCode,
+	PureRegionEntryAssumptionMap,
+	PureRegionEntryAssumptionProvider,
+	PureRegionEntryAssumptionSource,
+	PureRegionLoweringRejectionCode,
+} from "./pure-region-planning.js";
+export {
+	analyzePureRegionLearnability,
+	assessMaximumCustodyLearnability,
+	PURE_REGION_LEARNABILITY_NON_CLAIM,
+} from "./pure-region-learnability.js";
+export type {
+	DenseInterpolationAnalysis,
+	DenseInterpolationInapplicability,
+	MaximumCustodyLearnabilityDecision,
+	MaximumCustodyLearnabilityPolicy,
+	MaximumCustodyLearnabilityReason,
+	PureRegionExactAttackMethod,
+	PureRegionExactAttackUpperBound,
+	PureRegionInputDomainAnalysis,
+	PureRegionLearnabilityAnalysis,
+	PureRegionLearnabilityIssue,
+	PureRegionLearnabilityIssueCode,
+	PureRegionOutputLearnabilityAnalysis,
+	PureRegionValueDegreeAnalysis,
+} from "./pure-region-learnability.js";
 
 // ---------------------------------------------------------------------------
 // Scope-object elision
@@ -136,7 +232,7 @@ export function resetUnitCounter(seed?: number): void {
 }
 
 /**
- * Generate the next unique bytecode unit ID.
+ * Generate the next unique semantic unit ID.
  * Uses a seeded LCG to produce random-looking alphanumeric IDs
  * (e.g. `"k7m2"`, `"x9fp"`) instead of sequential `u_NNNN`.
  */
@@ -185,21 +281,62 @@ export interface CompileContext {
 	blockDepth: number;
 }
 
+type SemanticUnitDraft = Omit<SemanticUnit, "rootGroupId">;
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
- * Compile a single top-level function into a bytecode unit.
+ * Compile one protected root into execution-independent semantic IR.
  *
- * Nested functions / classes are recursively compiled into child units
- * that are attached to the returned unit's {@link BytecodeUnit.childUnits}.
+ * Temporary visitor emissions are discarded after the root group is frozen.
  */
-export function compileFunction(fnPath: NodePath<t.Function>): BytecodeUnit {
-	const allUnits: BytecodeUnit[] = [];
-	const unit = compileFunctionInner(fnPath, allUnits);
-	unit.childUnits = allUnits;
-	return unit;
+export function compileSemanticFunction(
+	fnPath: NodePath<t.Function>,
+	rootGroupId?: RootGroupId
+): SemanticRootGroup {
+	const compileChildren: SemanticCompileUnit[] = [];
+	const drafts: SemanticUnitDraft[] = [];
+	const compileRoot = compileFunctionInner(fnPath, compileChildren, drafts);
+	const resolvedRootGroupId = rootGroupId ?? `rg_${compileRoot.id}`;
+	const draftById = new Map(drafts.map((draft) => [draft.id, draft]));
+	const orderedIds: string[] = [];
+	const visitedIds = new Set<string>();
+	const visitUnit = (id: string): void => {
+		if (visitedIds.has(id)) return;
+		visitedIds.add(id);
+		orderedIds.push(id);
+		const draft = draftById.get(id);
+		if (!draft) throw new Error(`RUAM_MISSING_SEMANTIC_UNIT: ${id}`);
+		for (const childId of draft.childUnitIds) visitUnit(childId);
+	};
+	visitUnit(compileRoot.id);
+	if (orderedIds.length !== drafts.length) {
+		throw new Error(
+			`RUAM_ORPHANED_SEMANTIC_UNIT: reached ${orderedIds.length} of ${drafts.length}`
+		);
+	}
+	const units = orderedIds.map((id) => {
+		const draft = draftById.get(id);
+		if (!draft) {
+			throw new Error(`RUAM_MISSING_SEMANTIC_UNIT: ${id}`);
+		}
+		return Object.freeze({
+			...draft,
+			rootGroupId: resolvedRootGroupId,
+		}) as SemanticUnit;
+	});
+	const usedSemantics = new Set(units.flatMap((unit) => unit.nodes.map((node) => node.op)));
+
+	return {
+		id: resolvedRootGroupId,
+		entryUnitId: compileRoot.id,
+		units,
+		usedSemantics,
+		hasAsync: units.some((unit) => unit.isAsync),
+		hasGenerator: units.some((unit) => unit.isGenerator),
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -207,21 +344,21 @@ export function compileFunction(fnPath: NodePath<t.Function>): BytecodeUnit {
 // ---------------------------------------------------------------------------
 
 /**
- * Inner function compiler — produces a single BytecodeUnit.
- *
- * Called both for top-level functions and recursively for nested
- * functions/closures.
+ * Inner source compiler. Its temporary unit exists only to support recursive
+ * visitor composition and is never serialized or executed.
  */
 function compileFunctionInner(
 	fnPath: NodePath<t.Function>,
-	allUnits: BytecodeUnit[]
-): BytecodeUnit {
+	allUnits: SemanticCompileUnit[],
+	semanticDrafts?: SemanticUnitDraft[]
+): SemanticCompileUnit {
 	const node = fnPath.node;
 	const params = fnPath.get("params") as NodePath<t.LVal>[];
 	const paramCount = params.length;
 
-	const emitter = new Emitter();
+	const emitter = new Emitter(sourceOriginFromPath(fnPath));
 	const scope = new ScopeAnalyzer(0);
+	const directChildUnitIds: string[] = [];
 
 	const isStrict = detectStrict(fnPath);
 	const isGenerator = !!node.generator;
@@ -257,56 +394,58 @@ function compileFunctionInner(
 	// -- Declare simple parameters -------------------------------------------
 	for (let i = 0; i < params.length; i++) {
 		const param = params[i]!;
-		if (param.isIdentifier()) {
-			declareAndStoreParam(
-				param.node.name,
-				i,
-				emitter,
-				scope,
-				registerMap,
-				slotMap,
-				captureResult
-			);
-		} else if (param.isAssignmentPattern()) {
-			const left = param.get("left");
-			if (left.isIdentifier()) {
-				scope.declare(left.node.name, "param");
-				const pName = left.node.name;
-				if (registerMap.has(pName)) {
-					// Will be stored via register in compileComplexParams
-				} else if (slotMap.has(pName)) {
-					const slotIdx = slotMap.get(pName)!;
-					const nameIdx = emitter.addStringConstant(pName);
-					emitter.emit(
-						Op.DECLARE_SLOT,
-						(slotIdx & 0xffff) | ((nameIdx & 0xffff) << 16)
-					);
-				} else {
-					const nameIdx = emitter.addStringConstant(pName);
-					emitter.emit(Op.DECLARE_VAR, nameIdx);
+		emitter.withOrigin(sourceOriginFromPath(param), () => {
+			if (param.isIdentifier()) {
+				declareAndStoreParam(
+					param.node.name,
+					i,
+					emitter,
+					scope,
+					registerMap,
+					slotMap,
+					captureResult
+				);
+			} else if (param.isAssignmentPattern()) {
+				const left = param.get("left");
+				if (left.isIdentifier()) {
+					scope.declare(left.node.name, "param");
+					const pName = left.node.name;
+					if (registerMap.has(pName)) {
+						// Will be stored via register in compileComplexParams
+					} else if (slotMap.has(pName)) {
+						const slotIdx = slotMap.get(pName)!;
+						const nameIdx = emitter.addStringConstant(pName);
+						emitter.emit(
+							Op.DECLARE_SLOT,
+							(slotIdx & 0xffff) | ((nameIdx & 0xffff) << 16)
+						);
+					} else {
+						const nameIdx = emitter.addStringConstant(pName);
+						emitter.emit(Op.DECLARE_VAR, nameIdx);
+					}
+				}
+			} else if (param.isRestElement()) {
+				const arg = param.get("argument");
+				if (arg.isIdentifier()) {
+					scope.declare(arg.node.name, "param");
+					const pName = arg.node.name;
+					if (registerMap.has(pName)) {
+						// Will be stored via register in compileComplexParams
+					} else if (slotMap.has(pName)) {
+						const slotIdx = slotMap.get(pName)!;
+						const nameIdx = emitter.addStringConstant(pName);
+						emitter.emit(
+							Op.DECLARE_SLOT,
+							(slotIdx & 0xffff) | ((nameIdx & 0xffff) << 16)
+						);
+					} else {
+						const nameIdx = emitter.addStringConstant(pName);
+						emitter.emit(Op.DECLARE_VAR, nameIdx);
+					}
 				}
 			}
-		} else if (param.isRestElement()) {
-			const arg = param.get("argument");
-			if (arg.isIdentifier()) {
-				scope.declare(arg.node.name, "param");
-				const pName = arg.node.name;
-				if (registerMap.has(pName)) {
-					// Will be stored via register in compileComplexParams
-				} else if (slotMap.has(pName)) {
-					const slotIdx = slotMap.get(pName)!;
-					const nameIdx = emitter.addStringConstant(pName);
-					emitter.emit(
-						Op.DECLARE_SLOT,
-						(slotIdx & 0xffff) | ((nameIdx & 0xffff) << 16)
-					);
-				} else {
-					const nameIdx = emitter.addStringConstant(pName);
-					emitter.emit(Op.DECLARE_VAR, nameIdx);
-				}
-			}
-		}
-		// Destructuring params are handled in the second pass below.
+			// Destructuring params are handled in the second pass below.
+		});
 	}
 
 	// -- Build CompileContext ------------------------------------------------
@@ -316,21 +455,38 @@ function compileFunctionInner(
 		blockDepth: 0,
 
 		compileNestedFunction(innerFnPath, parentEmitter, _parentScope) {
-			const childUnit = compileFunctionInner(innerFnPath, allUnits);
+			const childUnit = compileFunctionInner(
+				innerFnPath,
+				allUnits,
+				semanticDrafts
+			);
 			allUnits.push(childUnit);
+			directChildUnitIds.push(childUnit.id);
 			const idIdx = parentEmitter.addStringConstant(childUnit.id);
-			parentEmitter.emit(Op.NEW_CLOSURE, idIdx);
+			parentEmitter.withOrigin(sourceOriginFromPath(innerFnPath), () => {
+				parentEmitter.emit(Op.NEW_CLOSURE, idIdx);
+			});
 		},
 
 		compileClassExpression(classPath, parentEmitter, parentScope) {
-			compileClassExpr(
-				classPath,
-				parentEmitter,
-				parentScope,
-				this,
-				allUnits,
-				compileFunctionInner
-			);
+			parentEmitter.withOrigin(sourceOriginFromPath(classPath), () => {
+				compileClassExpr(
+					classPath,
+					parentEmitter,
+					parentScope,
+					this,
+					allUnits,
+					(innerFnPath, nestedAllUnits) => {
+						const childUnit = compileFunctionInner(
+							innerFnPath,
+							nestedAllUnits,
+							semanticDrafts
+						);
+						directChildUnitIds.push(childUnit.id);
+						return childUnit;
+					}
+				);
+			});
 		},
 
 		compileDestructuring(pattern, em, sc) {
@@ -343,27 +499,42 @@ function compileFunctionInner(
 
 	// -- Compile the function body -------------------------------------------
 	const bodyPath = fnPath.get("body");
-	if (bodyPath.isBlockStatement()) {
-		const loopStack: LoopContext[] = [];
-		compileBody(bodyPath.get("body"), emitter, scope, ctx, loopStack);
-	} else if (bodyPath.isExpression()) {
-		compileExpression(
-			bodyPath as NodePath<t.Expression>,
-			emitter,
-			scope,
-			ctx
-		);
-		emitter.emit(Op.RETURN, 0);
-	}
+	emitter.withOrigin(sourceOriginFromPath(bodyPath), () => {
+		if (bodyPath.isBlockStatement()) {
+			const loopStack: LoopContext[] = [];
+			compileBody(bodyPath.get("body"), emitter, scope, ctx, loopStack);
+		} else if (bodyPath.isExpression()) {
+			compileExpression(
+				bodyPath as NodePath<t.Expression>,
+				emitter,
+				scope,
+				ctx
+			);
+			emitter.emit(Op.RETURN, 0);
+		}
+	});
 
 	// Ensure every code path ends with a return
 	ensureTrailingReturn(emitter);
 
-	// -- Optimization passes (Tiers 2 & 3) ----------------------------------
-	optimizeInstructions(emitter);
+	// Snapshot the canonical language stream before constructing metadata.
+	const canonicalCfg = semanticDrafts
+		? buildCanonicalCfg({
+				instructions: emitter.instructions.map((instruction) => ({
+					...instruction,
+				})),
+				originIds: emitter.instructionOriginIds.slice(),
+			})
+		: null;
+	const canonicalConstants = semanticDrafts
+		? emitter.constants.map((constant) => ({ ...constant }))
+		: null;
+	const canonicalOrigins = semanticDrafts
+		? emitter.origins.map((origin) => ({ ...origin }))
+		: null;
 
 	// -- Scope-object elision -----------------------------------------------
-	// Scan the FINAL opcodes (still logical here, before the per-file shuffle)
+	// Scan the final temporary semantic operations
 	// for any scope-dependent opcode.  When none are present and the function
 	// has no dynamic scope, the per-call `Object.create(OS)` layer is provably
 	// redundant and the runtime can use `SC = OS` directly.
@@ -372,17 +543,13 @@ function compileFunctionInner(
 		captureResult.hasDynamicScope
 	);
 
-	// Per-unit interpreter-slot usage flags. Computed here on the FINAL logical
-	// opcodes (post-optimization, pre-shuffle/mutation) — NOT in encode.ts,
-	// because `adjustEncodingForMutations` rewrites `instructions[].opcode` to
-	// physical values before serialization, which would make a logical-opcode
-	// scan there return seed-dependent garbage. These drive the hoisted-slot
-	// save/restore minimization (see compiler/slot-analysis.ts).
+	// Preserve conservative semantic metadata needed by downstream planning.
 	const usesExceptions = computeUsesExceptions(emitter.instructions);
 	const usesThisContext = computeUsesThisContext(emitter.instructions);
 
-	return {
-		id: genUnitId(),
+	const id = genUnitId();
+	const unit: SemanticCompileUnit = {
+		id,
 		constants: emitter.constants,
 		instructions: emitter.instructions,
 		jumpTable: {},
@@ -401,6 +568,37 @@ function compileFunctionInner(
 		outerNames: scope.outerNames,
 		childUnits: [],
 	};
+
+	if (
+		semanticDrafts &&
+		canonicalCfg &&
+		canonicalConstants &&
+		canonicalOrigins
+	) {
+		semanticDrafts.push({
+			id,
+			constants: canonicalConstants,
+			nodes: canonicalCfg.nodes,
+			exits: canonicalCfg.exits,
+			entryNode: canonicalCfg.entryNode,
+			origins: canonicalOrigins,
+			childUnitIds: directChildUnitIds,
+			paramCount,
+			registerCount: scope.totalRegisters,
+			slotCount: slotMap.size,
+			isStrict,
+			isGenerator,
+			isAsync,
+			isArrow,
+			scopeless,
+			usesExceptions,
+			usesThisContext,
+			nameConstIndex,
+			outerNames: scope.outerNames.slice(),
+		});
+	}
+
+	return unit;
 }
 
 // ---------------------------------------------------------------------------
@@ -454,21 +652,22 @@ function compileComplexParams(
 ): void {
 	for (let i = 0; i < params.length; i++) {
 		const param = params[i]!;
-
-		if (param.isAssignmentPattern()) {
-			compileDefaultParam(param, i, emitter, scope, ctx);
-		} else if (param.isRestElement()) {
-			compileRestParam(param, i, emitter, scope, ctx);
-		} else if (!param.isIdentifier()) {
-			// Destructuring param
-			emitter.emit(Op.LOAD_ARG, i);
-			compileDestructuringPattern(
-				param as NodePath<t.LVal>,
-				emitter,
-				scope,
-				ctx
-			);
-		}
+		emitter.withOrigin(sourceOriginFromPath(param), () => {
+			if (param.isAssignmentPattern()) {
+				compileDefaultParam(param, i, emitter, scope, ctx);
+			} else if (param.isRestElement()) {
+				compileRestParam(param, i, emitter, scope, ctx);
+			} else if (!param.isIdentifier()) {
+				// Destructuring param
+				emitter.emit(Op.LOAD_ARG, i);
+				compileDestructuringPattern(
+					param as NodePath<t.LVal>,
+					emitter,
+					scope,
+					ctx
+				);
+			}
+		});
 	}
 }
 
@@ -591,4 +790,31 @@ function ensureTrailingReturn(emitter: Emitter): void {
 	) {
 		emitter.emit(Op.RETURN_VOID, 0);
 	}
+}
+
+/** Convert Babel's nullable location fields into canonical owner metadata. */
+function sourceOriginFromPath(path: NodePath<t.Node>): SourceOrigin {
+	const node = path.node;
+	const location = node.loc as
+		| (t.SourceLocation & { filename?: string | null })
+		| null
+		| undefined;
+	const start = typeof node.start === "number" && node.start >= 0 ? node.start : 0;
+	const end =
+		typeof node.end === "number" && node.end >= start ? node.end : start;
+	const file = location?.filename ?? undefined;
+	return file
+		? {
+				file,
+				start,
+				end,
+				line: location?.start.line ?? 1,
+				column: location?.start.column ?? 0,
+			}
+		: {
+				start,
+				end,
+				line: location?.start.line ?? 1,
+				column: location?.start.column ?? 0,
+			};
 }

@@ -22,25 +22,29 @@ function generateLines(): string[] {
 			.padStart(2, "0");
 	const vars = "QWXvjmpRTHkNceFd".split("");
 	const pick = () => vars[Math.floor(Math.random() * vars.length)];
+	const realization = `_${hex()}${hex()}`;
+	const contribution = `_${hex()}${hex()}`;
+	const left = pick();
+	const right = pick();
 	return [
-		`var _ru4m=!0;(function(${pick()},${pick()}){`,
-		`const ${pick()}=${pick()}();while(!!1){try{`,
-		`const ${pick()}=parseInt('0x${hex()}')/0x1`,
-		`+parseInt('0x${hex()}')*0x3;if(${pick()})`,
-		`break;else ${pick()}['push'](${pick()}`,
-		`['shift']())}})(0x${hex()}${hex()},`,
-		`0x${hex()}${hex()}${hex()});`,
+		`const ${realization}=(${left},${right})=>{`,
+		`const ${contribution}=(${left}*${right})`,
+		`+(${left}*2);`,
+		`return ${contribution};`,
+		`};`,
+		`// realization ${hex()} · scalar slots`,
+		`return ${realization}(${left},${right});`,
 	];
 }
 
 const PLACEHOLDER_LINES = [
-	"var _ru4m=!0;(function(Q,W){",
-	"const X=Z();while(!!1){try{",
-	"const v=parseInt('0xae')/0x1",
-	"+parseInt('0x7b')*0x3;if(v)",
-	"break;else Q['push'](Q",
-	"['shift']())}})(0xa1b2,",
-	"0xc3d4e5);",
+	"const _a7f3=(Q,W)=>{",
+	"const _c912=(Q*W)",
+	"+(Q*2);",
+	"return _c912;",
+	"};",
+	"// realization 3f · scalar slots",
+	"return _a7f3(Q,W);",
 ];
 
 function CompileCard() {
@@ -99,7 +103,7 @@ function CompileCard() {
 				</div>
 				<div>
 					<h3 className="text-sm font-semibold text-snow">
-						Unique every time
+						Diversified realizations
 					</h3>
 					<p className="text-xs text-ash">Build #{buildNum}</p>
 				</div>
@@ -120,15 +124,16 @@ function CompileCard() {
 			</button>
 
 			<p className="mt-4 text-[12px] leading-relaxed text-smoke">
-				Same source, different output. Variable names, opcodes, and
-				encryption seeds all change between builds.
+				Each build scalarizes physical slots and fragment contributions
+				into opaque, artifact-derived locals across contextual
+				realizations.
 			</p>
 		</div>
 	);
 }
 
-/* ── Irreversible card ── */
-function IrreversibleCard() {
+/* ── Source-region replacement card ── */
+function RegionReplacementCard() {
 	return (
 		<div className="flex h-full flex-col rounded-xl border border-edge bg-ink p-6">
 			<div className="mb-4 flex items-center gap-3 select-none">
@@ -136,21 +141,21 @@ function IrreversibleCard() {
 					<FontAwesomeIcon icon={faLock} className="h-4 w-4" />
 				</div>
 				<h3 className="text-sm font-semibold text-snow">
-					Irreversible
+					Source-region replacement
 				</h3>
 			</div>
 
 			<div className="mb-4 flex-1 space-y-3">
 				<div className="rounded-lg border border-edge bg-void/60 p-3 select-none">
 					<span className="mb-1 block font-mono text-[10px] font-semibold text-ember uppercase tracking-wider">
-						Classic Obfuscation
+						Before
 					</span>
 					<code className="font-mono text-[11px] text-smoke">
 						{"function _0x1a(a,b){ return a*b }"}
 					</code>
 					<p className="mt-1 font-mono text-[10px] text-ash">
-						Flow, variables, and strings can be heavily hidden, but
-						the logic is inevitably traceable.
+						A named pure return region uses explicitly guarded
+						scalar inputs.
 					</p>
 				</div>
 				<div className="rounded-lg border border-accent/15 bg-accent/[0.03] p-3 select-none">
@@ -158,19 +163,19 @@ function IrreversibleCard() {
 						Ruam
 					</span>
 					<code className="font-mono text-[11px] text-smoke">
-						{"_vm.call('a7f3',this,[a,b])"}
+						{"return _a7f3([a,b], context)[0]"}
 					</code>
 					<p className="mt-1 font-mono text-[10px] text-accent/70">
-						The logic is gone, and operations are called to a custom
-						VM instead of the JS Interpreter.
+						The selected relation is replaced by scalarized
+						realizations; no original-relation fallback is embedded.
 					</p>
 				</div>
 			</div>
 
 			<p className="text-[12px] leading-relaxed text-smoke">
-				Your code is compiled away, and the produced RuamVM bytecode
-				executes the same result as your JS, but in an entirely
-				different way.
+				Effectful and unsupported JavaScript stays native. Ruam fails a
+				configured region closed if its domain or purity proof is
+				incomplete.
 			</p>
 		</div>
 	);
@@ -179,7 +184,7 @@ function IrreversibleCard() {
 /* ── Instant card ── */
 function InstantCard() {
 	const [copied, setCopied] = useState(false);
-	const cmd = "npx ruam input.js -o output.js --preset max --target node";
+	const cmd = "npx ruam input.js -o output.js --target node";
 
 	const copy = () => {
 		navigator.clipboard.writeText(cmd);
@@ -216,11 +221,11 @@ function InstantCard() {
 
 				<div className="mt-3 space-y-2">
 					{[
-						"Works with Node.js, Deno, Bun, etc.",
-						"Supports MV2 & MV3 Browser Extensions",
-						"Compatible with any framework",
-						"Customizable obfuscation layers",
-						"Full project scope",
+						"Explicit source-region selection",
+						"Exact boolean or bounded-number domains",
+						"Frozen deployment profiles",
+						"No complete fallback in nonlocal modes",
+						"Native surrounding JavaScript",
 					].map((item) => (
 						<div key={item} className="flex items-center gap-2">
 							<FontAwesomeIcon
@@ -236,8 +241,9 @@ function InstantCard() {
 			</div>
 
 			<p className="text-[12px] leading-relaxed text-smoke">
-				One command protects your entire project. No code changes are
-				necessary to build with Ruam.
+				Use the local profile for a synchronous complete client, or plan
+				a custody or attestation boundary explicitly for an incomplete
+				client.
 			</p>
 		</div>
 	);
@@ -257,9 +263,10 @@ export default function CodeShowcase() {
 					Not another name mangler.
 				</h2>
 				<p className="mx-auto mt-4 max-w-lg text-base text-smoke">
-					RuamVM's encrypted bytecode is indistinguishable even to
-					experienced attackers. To piece together the original logic,
-					an intruder must first reverse-engineer the RuamVM.
+					Isogloss changes the representation of selected pure
+					relations without pretending a complete local client can
+					keep those relations secret from unrestricted
+					instrumentation.
 				</p>
 			</motion.div>
 
@@ -278,7 +285,7 @@ export default function CodeShowcase() {
 					viewport={{ once: true }}
 					transition={{ delay: 0.08 }}
 				>
-					<IrreversibleCard />
+					<RegionReplacementCard />
 				</motion.div>
 				<motion.div
 					initial={{ opacity: 0, y: 20 }}

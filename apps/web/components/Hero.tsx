@@ -15,7 +15,6 @@ const scrambleChar = () =>
 /* ── Syntax color classes ── */
 const K = "text-syn-keyword";
 const N = "text-syn-number";
-const S = "text-syn-string";
 const D = "text-snow";
 const CMT = "text-ash";
 
@@ -31,150 +30,33 @@ function line(...parts: Cell[][]): Cell[] {
 	return parts.flat();
 }
 
-/* ── Snippet type from stats.json ── */
-export interface HeroSnippet {
-	head: string[];
-	totalLines: number;
-	tail: string[];
-}
-
-/* ── JS syntax tokenizer (simple, for visual effect) ── */
-const JS_KEYWORDS = new Set([
-	"var",
-	"let",
-	"const",
-	"function",
-	"return",
-	"if",
-	"for",
-	"while",
-	"do",
-	"else",
-	"new",
-	"this",
-	"typeof",
-	"void",
-	"true",
-	"false",
-	"null",
-	"undefined",
-	"class",
-	"extends",
-]);
-
-function tokenizeLine(src: string): Cell[] {
-	const cells: Cell[] = [];
-	let i = 0;
-	while (i < src.length) {
-		const ch = src[i]!;
-		// String literals
-		if (ch === '"' || ch === "'") {
-			const quote = ch;
-			let j = i + 1;
-			while (j < src.length && src[j] !== quote) {
-				if (src[j] === "\\") j++;
-				j++;
-			}
-			j++; // closing quote
-			cells.push(...seg(src.slice(i, j), S));
-			i = j;
-		}
-		// Comments
-		else if (ch === "/" && src[i + 1] === "/") {
-			cells.push(...seg(src.slice(i), CMT));
-			break;
-		}
-		// Numbers (not part of identifiers)
-		else if (/[0-9]/.test(ch) && (i === 0 || !/[a-zA-Z_$]/.test(src[i - 1]!))) {
-			let j = i;
-			while (j < src.length && /[0-9.]/.test(src[j]!)) j++;
-			cells.push(...seg(src.slice(i, j), N));
-			i = j;
-		}
-		// Identifiers / keywords
-		else if (/[a-zA-Z_$]/.test(ch)) {
-			let j = i;
-			while (j < src.length && /[a-zA-Z0-9_$]/.test(src[j]!)) j++;
-			const word = src.slice(i, j);
-			cells.push(...seg(word, JS_KEYWORDS.has(word) ? K : D));
-			i = j;
-		}
-		// Everything else
-		else {
-			cells.push({ ch, cls: D });
-			i++;
-		}
-	}
-	return cells;
-}
-
-/* ── Build afterMap from snippet data (must match beforeMap line count) ── */
-function buildAfterMap(snippet: HeroSnippet): Cell[][] {
-	const target = beforeMap.length; // 8 lines
-	const tail = snippet.tail.map(tokenizeLine);
-	// 1 line reserved for the comment, rest split between head and tail
-	const headCount = target - tail.length - 1;
-	const head = snippet.head.slice(0, headCount).map(tokenizeLine);
-
-	const count = snippet.totalLines.toLocaleString("en-US");
-	return [
-		...head,
-		line(seg(`  // ... ${count}+ lines of VM runtime`, CMT)),
-		...tail,
-	];
-}
-
 /* ── Source code character map (syntax-colored) ── */
 const beforeMap: Cell[][] = [
+	line(seg("/* ruam:isogloss */", CMT)),
 	line(
 		seg("function", K),
-		seg(" fibonacci(", D),
-		seg("n", D),
+		seg(" priceQuote(", D),
+		seg("quantity", D),
+		seg(", ", D),
+		seg("unitPrice", D),
 		seg(") {", D)
 	),
 	line(
 		seg("  ", D),
-		seg("if", K),
-		seg(" (n <= ", D),
-		seg("1", N),
-		seg(") ", D),
 		seg("return", K),
-		seg(" n;", D)
+		seg(" (quantity * unitPrice)", D)
 	),
-	line(
-		seg("  ", D),
-		seg("let", K),
-		seg(" a = ", D),
-		seg("0", N),
-		seg(", b = ", D),
-		seg("1", N),
-		seg(";", D)
-	),
-	line(
-		seg("  ", D),
-		seg("for", K),
-		seg(" (", D),
-		seg("let", K),
-		seg(" i = ", D),
-		seg("2", N),
-		seg("; i <= n; i++) {", D)
-	),
-	line(seg("    [a, b] = [b, a + b];", D)),
-	line(seg("  }", D)),
-	line(seg("  ", D), seg("return", K), seg(" b;", D)),
+	line(seg("    + (quantity * ", D), seg("2", N), seg(");", D)),
 	line(seg("}", D)),
 ];
 const beforeLens = beforeMap.map((r) => r.length);
 
-/* ── Hardcoded fallback (must be same line count as beforeMap) ── */
+/* ── Representative scalarized local realization ── */
 const defaultAfterMap: Cell[][] = [
-	line(seg("var", K), seg(" qv = {};", D)),
-	line(seg("var", K), seg(" wi = Object.create(", D), seg("null", K), seg(");", D)),
-	line(seg("var", K), seg(" od = ", D), seg("'cMGDq0EItS9gFzAosmU7y5akwh...'", S), seg(";", D)),
-	line(seg("  // ... 2,200+ lines of VM runtime", CMT)),
-	line(seg("function", K), seg(" fibonacci(...__args) {", D)),
-	line(seg("  ", D), seg("var", K), seg(" _n = __args.length | ", D), seg("0", N), seg(";", D)),
-	line(seg("  ", D), seg("return", K), seg(" tg(", D), seg('"hny2l"', S), seg(", __args, up, ", D), seg("this", K), seg(");", D)),
+	line(seg("const", K), seg(" q7 = (a,b) => (a*b)+(a*", D), seg("2", N), seg(");", D)),
+	line(seg("const", K), seg(" m4 = (a,b) => q7(a,b);", D)),
+	line(seg("function", K), seg(" priceQuote(quantity, unitPrice) {", D)),
+	line(seg("  ", D), seg("return", K), seg(" m4(quantity, unitPrice);", D)),
 	line(seg("}", D)),
 ];
 
@@ -242,7 +124,7 @@ function useTerminalAnimation(config: AnimConfig) {
 		beforePadded.map((row) => row.map((c) => ({ ...c })))
 	);
 	const [barState, setBarState] = useState({
-		label: "fibonacci.js",
+		label: "price-quote.js",
 		badge: "exposed",
 		badgeClass: "bg-ember/10 text-ember",
 	});
@@ -335,7 +217,7 @@ function useTerminalAnimation(config: AnimConfig) {
 			while (!cancelledRef.current) {
 				setCells(beforePadded.map((row) => row.map((c) => ({ ...c }))));
 				setBarState({
-					label: "fibonacci.js",
+					label: "price-quote.js",
 					badge: "exposed",
 					badgeClass: "bg-ember/10 text-ember",
 				});
@@ -356,8 +238,8 @@ function useTerminalAnimation(config: AnimConfig) {
 				if (cancelledRef.current) return;
 
 				setBarState({
-					label: "fibonacci.protected.js",
-					badge: "protected",
+					label: "price-quote.isogloss.js",
+					badge: "scalarized",
 					badgeClass: "bg-accent/10 text-accent",
 				});
 				setGlowing(true);
@@ -371,7 +253,7 @@ function useTerminalAnimation(config: AnimConfig) {
 
 				setCells(beforePadded.map((row) => row.map((c) => ({ ...c }))));
 				setBarState({
-					label: "fibonacci.js",
+					label: "price-quote.js",
 					badge: "exposed",
 					badgeClass: "bg-ember/10 text-ember",
 				});
@@ -392,11 +274,8 @@ function useTerminalAnimation(config: AnimConfig) {
 }
 
 /* ── Component ── */
-export default function Hero({ snippet }: { snippet?: HeroSnippet | null }) {
-	const config = useMemo(() => {
-		const afterMap = snippet ? buildAfterMap(snippet) : defaultAfterMap;
-		return buildAnimConfig(afterMap);
-	}, [snippet]);
+export default function Hero() {
+	const config = useMemo(() => buildAnimConfig(defaultAfterMap), []);
 
 	const { cells, barState, glowing, contentOpacity } =
 		useTerminalAnimation(config);
@@ -438,17 +317,18 @@ export default function Hero({ snippet }: { snippet?: HeroSnippet | null }) {
 							<span className="text-snow">
 								Don&apos;t just
 								<br />
-								obfuscate code.
+								hide syntax.
 							</span>
 							<br />
 							<span className="glow-text text-accent italic">
-								Destroy it.
+								Reshape the relation.
 							</span>
 						</h1>
 						<p className="mt-8 max-w-md text-lg leading-relaxed text-smoke">
-							Ruam compiles your JavaScript into encrypted
-							bytecode designed for a per-build unique RuamVM.
-							There is no deobfuscator.
+							Ruam replaces guarded pure source regions with
+							diversified scalar Isogloss realizations. Choose a
+							local, custodied, private-function, or attested
+							profile for the boundary you can actually enforce.
 						</p>
 						<div className="mt-10 flex flex-wrap items-center gap-4">
 							<a

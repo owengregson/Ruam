@@ -1,17 +1,16 @@
 /**
  * Expression compilation visitors.
  *
- * Every JS expression type is compiled into a bytecode sequence that
- * leaves exactly one value on the VM stack.  Binary/unary operators map
- * directly to opcodes; calls, member access, and optional chaining
- * require multi-step sequences.
+ * Accepted JavaScript expressions are lowered into temporary stack-form
+ * source operations. Canonical CFG construction consumes this form before it
+ * can become a runtime representation.
  *
  * @module compiler/visitors/expressions
  */
 
 import type { NodePath } from "@babel/traverse";
 import type * as t from "@babel/types";
-import { Op } from "../opcodes.js";
+import { Op } from "../operations.js";
 import type { Emitter } from "../emitter.js";
 import type { ScopeAnalyzer } from "../scope.js";
 import type { CompileContext } from "../index.js";

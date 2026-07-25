@@ -2,14 +2,13 @@ import type { Metadata } from "next";
 import { config } from "@fortawesome/fontawesome-svg-core";
 import "@fortawesome/fontawesome-svg-core/styles.css";
 import "./globals.css";
-import SiteProtection from "@/components/SiteProtection";
 
 config.autoAddCss = false;
 
 export const metadata: Metadata = {
-	title: "Ruam: JavaScript VM Obfuscation",
+	title: "Ruam: Isogloss JavaScript Protection",
 	description:
-		"Compile JavaScript functions into encrypted custom bytecode executed by an embedded virtual machine. Open-source. Per-build unique. No deobfuscator exists.",
+		"Replace guarded pure JavaScript source regions with diversified scalar Isogloss realizations, with explicit local, custody, private-function, and attested deployment profiles.",
 	icons: {
 		icon: `${process.env.NEXT_PUBLIC_BASE_PATH}/ruam.svg`,
 	},
@@ -35,7 +34,6 @@ export default function RootLayout({
 				/>
 			</head>
 			<body className="noise font-body antialiased">
-				<SiteProtection />
 				{children}
 			</body>
 		</html>
