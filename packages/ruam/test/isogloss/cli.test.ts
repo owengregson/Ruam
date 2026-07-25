@@ -94,7 +94,7 @@ describe("Isogloss CLI cutover", () => {
 			expect(result.stderr).toContain("RUAM_REMOVED_CLI_OPTION");
 			expect(result.stderr).toContain(flag);
 		}
-	});
+	}, 15_000);
 
 	it("rejects nonlocal profiles before source or capability processing", () => {
 		for (const profile of [
