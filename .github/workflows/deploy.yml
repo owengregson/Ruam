@@ -6,8 +6,6 @@ on:
     paths:
       - 'apps/web/**'
       - '.github/workflows/deploy.yml'
-    paths-ignore:
-      - 'packages/ruam/**'
 
 concurrency:
   group: deploy-pages
@@ -36,12 +34,9 @@ jobs:
 
       - run: bun install
 
-      # Build ruam + collect stats so the site always includes stats.json
+      # Build and verify Ruam before bundling the playground.
       - run: bun run build:lib
       - run: bun run test
-      - run: bun run stats
-      - name: Copy stats.json into site
-        run: cp packages/ruam/stats.json apps/web/public/stats.json
 
       # Build browser worker bundle for the playground
       - name: Build browser worker bundle
