@@ -96,7 +96,8 @@ export function prepareCustodyRequest(
 export function openCustodiedProjection(
 	contract: CustodyClientContract,
 	state: CustodyClientState,
-	response: CustodyResponse | undefined
+	response: CustodyResponse | undefined,
+	expectedNonce: string
 ): OpenedCustodyProjection {
 	if (response === undefined) {
 		throw new Error("RUAM_CSH_CUSTODIAN_REQUIRED");
@@ -104,6 +105,7 @@ export function openCustodiedProjection(
 	if (
 		response.sessionId !== contract.sessionId ||
 		response.contractId !== contract.contractId ||
+		response.requestNonce !== expectedNonce ||
 		response.epoch !== state.epoch ||
 		response.nextEpoch !== state.epoch + 1
 	) {

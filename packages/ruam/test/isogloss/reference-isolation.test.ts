@@ -46,6 +46,7 @@ describe("Isogloss reference isolation", () => {
 			"/src/isogloss/csh/reference.ts",
 			"/src/isogloss/csh/testing-bprf-reference.ts",
 			"/src/isogloss/csh/reference-custodian.ts",
+			"/src/isogloss/csh/reference-chart-custodian.ts",
 		];
 
 		for (const forbidden of forbiddenModules) {
@@ -59,6 +60,7 @@ describe("Isogloss reference isolation", () => {
 			"ReferenceRelationCustodian",
 			"evaluateBprfReference",
 			"evaluateBprfOverCshReference",
+			"ReferenceChartRelationCustodian",
 			"RUAM_BPRF_CSH_MULTIPLICATION_QUORUM",
 			"server-only-lineage-secret",
 		]) {

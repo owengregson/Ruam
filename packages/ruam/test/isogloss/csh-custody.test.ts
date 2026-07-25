@@ -54,10 +54,23 @@ describe("custodied CSH direct-relation reference", () => {
 		);
 
 		expect(() =>
-			openCustodiedProjection(contract, state, undefined)
+			openCustodiedProjection(contract, state, undefined, request.nonce)
 		).toThrow("RUAM_CSH_CUSTODIAN_REQUIRED");
 		const response = custodian.evaluate(request);
-		const opened = openCustodiedProjection(contract, state, response);
+		expect(() =>
+			openCustodiedProjection(
+				contract,
+				state,
+				response,
+				"nonce_wrong_0001"
+			)
+		).toThrow("RUAM_CSH_CUSTODY_RESPONSE_MISMATCH");
+		const opened = openCustodiedProjection(
+			contract,
+			state,
+			response,
+			request.nonce
+		);
 		const inputProjection =
 			2 * 7 + 3 * 11 + 5 * 13 + 19;
 		expect(opened.projection).toBe(
@@ -114,7 +127,12 @@ describe("custodied CSH direct-relation reference", () => {
 		};
 
 		expect(() =>
-			openCustodiedProjection(contract, state, tampered)
+			openCustodiedProjection(
+				contract,
+				state,
+				tampered,
+				"nonce_tamper_01"
+			)
 		).toThrow("RUAM_CSH_CUSTODY_BAD_SIGNATURE");
 		const serialized = JSON.stringify(contract).toLowerCase();
 		for (const forbidden of [
@@ -147,7 +165,12 @@ describe("custodied CSH direct-relation reference", () => {
 			);
 			const response = custodian.evaluate(request);
 			openings.add(JSON.stringify(response.projectionOpening));
-			const opened = openCustodiedProjection(contract, state, response);
+			const opened = openCustodiedProjection(
+				contract,
+				state,
+				response,
+				request.nonce
+			);
 			expect(opened.state.epoch).toBe(epoch + 1);
 			state = opened.state;
 		}
