@@ -16,7 +16,10 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { Script } from "node:vm";
-import { protectCode } from "../src/index.ts";
+import {
+	protectCode,
+	validateIsoglossProtectionCertificate,
+} from "../src/index.ts";
 
 const LEGACY_REF = "e8cecb56ba89d47512a16e325d81cf46f64b2ecb";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -30,6 +33,7 @@ if (ROOT_LOOKUP.status !== 0) {
 }
 const REPO_ROOT = ROOT_LOOKUP.stdout.trim();
 const QUICK = process.argv.includes("--quick");
+const STRICT_PROTECTION = process.argv.includes("--strict-protection");
 const JSON_INDEX = process.argv.indexOf("--json");
 const JSON_PATH =
 	JSON_INDEX === -1
@@ -252,10 +256,14 @@ try {
 			Boolean(workload.async)
 		);
 
-		const currentBuild = await measureBuild(() =>
-			protectCode(source, workload.options)
-		);
-		const currentProgram = materialize(currentBuild.value.code);
+			const currentBuild = await measureBuild(() =>
+				protectCode(source, workload.options)
+			);
+			const protectionCertificate = currentProtectionCertificate(
+				currentBuild.value,
+				workload.name
+			);
+			const currentProgram = materialize(currentBuild.value.code);
 		const currentResult = await currentProgram.work();
 		const currentTiming = await measure(
 			currentProgram.work,
@@ -267,35 +275,44 @@ try {
 		}
 
 		const legacy = {};
-		for (const preset of LEGACY_PRESETS) {
-			const options = preset === "default" ? {} : { preset };
-			try {
-				const legacyBuild = await measureBuild(() => ({
-					code: legacyModule.obfuscateCode(source, options),
-				}));
-				const legacyProgram = materialize(legacyBuild.value.code);
+			for (const preset of LEGACY_PRESETS) {
+				const options = preset === "default" ? {} : { preset };
+				try {
+					const warningCapture = await captureWarnings(() =>
+						measureBuild(() => ({
+							code: legacyModule.obfuscateCode(source, options),
+						}))
+					);
+					const legacyBuild = warningCapture.value;
+					const legacyProgram = materialize(legacyBuild.value.code);
 				const legacyResult = await legacyProgram.work();
 				const legacyTiming = await measure(
 					legacyProgram.work,
 					Boolean(workload.async)
 				);
 				const correct = canonical(legacyResult) === expected;
-				if (!correct) {
-					throw new Error(`legacy correctness mismatch: ${workload.name}:${preset}`);
-				}
-				legacy[preset] = {
-					supported: true,
-					correct,
-					buildMilliseconds: legacyBuild.milliseconds,
+					if (!correct) {
+						throw new Error(`legacy correctness mismatch: ${workload.name}:${preset}`);
+					}
+					const protectionStatus = classifyLegacyProtection(
+						legacyBuild.value.code,
+						warningCapture.warnings
+					);
+					legacy[preset] = {
+						protectionStatus,
+						correct,
+						compileWarnings: warningCapture.warnings,
+						buildMilliseconds: legacyBuild.milliseconds,
 					bootstrapMilliseconds: legacyProgram.bootstrapMilliseconds,
 					runtimeMilliseconds: legacyTiming,
 					outputBytes: bytes(legacyBuild.value.code),
 					gzipBytes: gzipBytes(legacyBuild.value.code),
 				};
-			} catch (error) {
-				legacy[preset] = {
-					supported: false,
-					error: error instanceof Error ? error.message : String(error),
+				} catch (error) {
+					legacy[preset] = {
+						protectionStatus: "failed",
+						correct: false,
+						error: error instanceof Error ? error.message : String(error),
 				};
 			}
 		}
@@ -309,9 +326,14 @@ try {
 				bootstrapMilliseconds: nativeProgram.bootstrapMilliseconds,
 				runtimeMilliseconds: nativeTiming,
 			},
-			isogloss: {
-				correct: true,
-				buildMilliseconds: currentBuild.milliseconds,
+				isogloss: {
+					correct: true,
+					fullyProtected: protectionCertificate !== null,
+					protectionCertificate:
+						protectionCertificate === null
+							? null
+							: certificateSummary(protectionCertificate),
+					buildMilliseconds: currentBuild.milliseconds,
 				bootstrapMilliseconds: currentProgram.bootstrapMilliseconds,
 				runtimeMilliseconds: currentTiming,
 				outputBytes: bytes(currentBuild.value.code),
@@ -326,11 +348,12 @@ try {
 	}
 
 	const result = {
-		schemaVersion: 1,
+			schemaVersion: 2,
 		purpose: "Isogloss versus frozen pre-PR-6 VM architecture engineering benchmark",
 		legacyRef: LEGACY_REF,
 		mode: QUICK ? "quick" : "full",
-		parameters: {
+			parameters: {
+				strictProtection: STRICT_PROTECTION,
 			buildRounds: BUILD_ROUNDS,
 			timingRounds: TIMING_ROUNDS,
 			callsPerRound: CALLS_PER_ROUND,

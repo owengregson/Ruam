@@ -14,6 +14,7 @@ import { Op } from "../operations.js";
 import type { Emitter } from "../emitter.js";
 import type { ScopeAnalyzer } from "../scope.js";
 import type { CompileContext } from "../index.js";
+import { withNodeOrigin } from "./origin.js";
 
 // ---------------------------------------------------------------------------
 // Operator → opcode lookup tables (shared across multiple functions)
@@ -86,6 +87,17 @@ const COMPOUND_SCOPED_OP_MAP: Record<string, Op> = {
 // ---------------------------------------------------------------------------
 
 export function compileExpression(
+	path: NodePath<t.Expression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
+): void {
+	return withNodeOrigin(path, emitter, () => {
+		compileExpressionAtOrigin(path, emitter, scope, ctx);
+	});
+}
+
+function compileExpressionAtOrigin(
 	path: NodePath<t.Expression>,
 	emitter: Emitter,
 	scope: ScopeAnalyzer,

@@ -16,6 +16,7 @@ import type { Emitter } from "../emitter.js";
 import type { ScopeAnalyzer } from "../scope.js";
 import type { CompileContext } from "../index.js";
 import { compileExpression } from "./expressions.js";
+import { withNodeOrigin } from "./origin.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +47,18 @@ export interface LoopContext {
 // ---------------------------------------------------------------------------
 
 export function compileStatement(
+	path: NodePath<t.Statement>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext,
+	loopStack: LoopContext[]
+): void {
+	return withNodeOrigin(path, emitter, () => {
+		compileStatementAtOrigin(path, emitter, scope, ctx, loopStack);
+	});
+}
+
+function compileStatementAtOrigin(
 	path: NodePath<t.Statement>,
 	emitter: Emitter,
 	scope: ScopeAnalyzer,
