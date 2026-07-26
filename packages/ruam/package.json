@@ -1,17 +1,16 @@
 {
-	"name": "ruamvm",
+	"name": "ruam",
 	"version": "2.0.0",
-	"description": "JS VM obfuscator — compiles functions to custom bytecode executed by an embedded interpreter",
+	"description": "Isogloss JavaScript source protection with explicit local, custodied, private-function, and attested deployment profiles",
 	"keywords": [
 		"obfuscator",
 		"obfuscation",
 		"javascript-obfuscator",
-		"vm",
-		"virtual-machine",
-		"bytecode",
+		"source-protection",
+		"isogloss",
+		"dynamic-analysis",
+		"analysis-cost",
 		"code-protection",
-		"anti-tamper",
-		"anti-debug",
 		"security"
 	],
 	"homepage": "https://github.com/owengregson/Ruam#readme",
@@ -34,8 +33,7 @@
 		}
 	},
 	"bin": {
-		"ruam": "dist/cli.js",
-		"ruamvm": "dist/cli.js"
+		"ruam": "dist/cli.js"
 	},
 	"files": [
 		"dist"
@@ -43,14 +41,12 @@
 	"scripts": {
 		"build": "tsup",
 		"prepublishOnly": "bun run typecheck && bun test && bun run build",
-		"generate-manifest": "node scripts/generate-manifest.mjs",
-		"build:browser": "node scripts/generate-manifest.mjs && node scripts/build-browser.mjs",
+		"build:browser": "node scripts/build-browser.mjs",
+		"bench": "bun scripts/bench.mjs",
 		"typecheck": "tsc --noEmit",
 		"dev": "tsup --watch",
 		"test": "bun test",
-		"test:watch": "bun test --watch",
-		"stats": "node scripts/collect-stats.mjs",
-		"stats:test": "node scripts/collect-stats.mjs --test"
+		"test:watch": "bun test --watch"
 	},
 	"engines": {
 		"node": ">=18"

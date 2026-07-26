@@ -12,57 +12,57 @@ import {
 const layers = [
 	{
 		icon: faLock,
-		title: "VM Compilation",
-		tag: "Layer 1",
+		title: "Source-region proof",
+		tag: "Contract 1",
 		description:
-			"Your JavaScript is compiled into custom bytecode — register-based instructions executed by an embedded interpreter. No native JS logic remains in the output.",
+			"Ruam selects a named pure return expression and requires an exact boolean or bounded-number domain for every scalar input. Configured regions fail closed when that proof is incomplete.",
 		visual: [
 			{
-				label: "Source",
-				value: "function add(a,b) { return a+b }",
+				label: "Selected source",
+				value: "/* ruam:isogloss */ function quote(q,p) { return q*p+q*2 }",
 				style: "ember" as const,
 			},
 			{
-				label: "Bytecode",
-				value: "LOAD_REG 0 → MUL → STORE_REG 2 → RET",
+				label: "Guard domains",
+				value: "quote.q ∈ [1,100] · quote.p ∈ [1,500]",
 				style: "accent" as const,
 			},
 		],
 	},
 	{
 		icon: faShuffle,
-		title: "Opcode Shuffling",
-		tag: "Layer 2",
+		title: "Scalar BPRF emission",
+		tag: "Contract 2",
 		description:
-			"Every build shuffles all ~300 opcodes via seeded Fisher-Yates. The interpreter uses physical opcode numbers as case labels — no reverse map exists to decode.",
+			"Physical slots and fragment contributions become dedicated opaque locals and scalar functions. Context selects among diversified realizations without a runtime artifact walker or generic evaluator.",
 		visual: [
 			{
-				label: "Build A",
-				value: "ADD=0x3F  MUL=0x91  RET=0xC2",
+				label: "Contextual realizations",
+				value: "caller × epoch × lineage → realization k",
 				style: "ember" as const,
 			},
 			{
-				label: "Build B",
-				value: "ADD=0xA7  MUL=0x1E  RET=0x58",
+				label: "Emitted shape",
+				value: "physical slots → fragment functions → scalar output",
 				style: "accent" as const,
 			},
 		],
 	},
 	{
 		icon: faShieldHalved,
-		title: "Rolling Encryption",
-		tag: "Layer 3",
+		title: "Deployment profile",
+		tag: "Contract 3",
 		description:
-			"Every instruction is XOR-encrypted with a position-dependent key derived from bytecode metadata via FNV-1a. No plaintext seed appears in the output.",
+			"The profile states where the relation lives and what the client contains. Local mode is honestly complete; custody, private-function, and attested modes forbid a complete local fallback.",
 		visual: [
 			{
-				label: "Key derivation",
-				value: "FNV-1a(instCount, regCount, paramCount)",
+				label: "Complete client",
+				value: "holographic-local → analysis amplification only",
 				style: "ember" as const,
 			},
 			{
-				label: "Per-instruction",
-				value: "XOR(opcode, mixState(key, idx, idx^φ))",
+				label: "Incomplete client",
+				value: "custodied · private · attested → no local fallback",
 				style: "accent" as const,
 			},
 		],
@@ -81,14 +81,14 @@ export default function VsSection() {
 				viewport={{ once: true }}
 			>
 				<p className="mb-3 font-mono text-xs text-accent uppercase tracking-widest">
-					Defense in Depth
+					Explicit by design
 				</p>
 				<h2 className="font-display text-3xl text-snow sm:text-5xl">
-					Three layers of protection
+					Three verifiable contracts
 				</h2>
 				<p className="mt-4 max-w-lg text-base text-smoke">
-					Each layer makes reverse engineering exponentially harder.
-					Together, they make it practically impossible.
+					The source region, emitted representation, and deployment
+					boundary each carry a separate fail-closed contract.
 				</p>
 			</motion.div>
 

@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: Build, Test & Stats
+    name: Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -42,25 +42,13 @@ jobs:
       - run: bun run build:lib
       - run: bun run typecheck
       - run: bun run test
-      - run: bun run stats
-
-      - uses: actions/upload-artifact@v4
-        if: github.ref == 'refs/heads/main'
-        with:
-          name: stats
-          path: packages/ruam/stats.json
-
-      # Publish stats.json to GitHub Pages alongside the Next.js site
-      - name: Copy stats.json into site
-        if: github.ref == 'refs/heads/main'
-        run: cp packages/ruam/stats.json apps/web/public/stats.json
 
       # Build browser worker bundle for the playground
       - name: Build browser worker bundle
         if: github.ref == 'refs/heads/main'
         run: bun run build:worker
 
-      - name: Build site with stats
+      - name: Build site
         if: github.ref == 'refs/heads/main'
         run: bun run build:web
 

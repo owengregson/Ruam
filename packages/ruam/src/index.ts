@@ -1,94 +1,112 @@
 /**
- * Ruam VM Obfuscator -- public API surface.
+ * Ruam Isogloss public API.
+ *
  * @module index
  */
 
-import { obfuscateCode as transformCode } from "./transform.js";
-import type { VmObfuscationOptions } from "./types.js";
 import fs from "fs-extra";
-import path from "path";
 import { globby } from "globby";
+import path from "node:path";
+import { obfuscateCode, protectCode } from "./transform.js";
+import type { IsoglossSourceBuildResult } from "./isogloss/source-transform.js";
+import type { RuamOptions } from "./isogloss/options.js";
 
+export { obfuscateCode, protectCode };
 export {
-	type VmObfuscationOptions,
-	type PresetName,
-	type TargetEnvironment,
-} from "./types.js";
-export { PRESETS } from "./presets.js";
+	IsoglossSourceTransformError,
+	type IsoglossBuildDiagnostic,
+	type IsoglossBuildDiagnosticCode,
+	type IsoglossOwnerRegionTrace,
+	type IsoglossOwnerSidecar,
+	type IsoglossSourceBuildResult,
+	type IsoglossSourceBuildStats,
+} from "./isogloss/source-transform.js";
 export {
-	OPTION_META,
-	AUTO_ENABLE_RULES,
-	OPTION_LABELS,
-} from "./option-meta.js";
-export type {
-	OptionMetaEntry,
-	AutoEnableRule,
-	OptionCategory,
-} from "./option-meta.js";
+	DEFAULT_MINIMUM_EXACT_ATTACK_QUERIES,
+	DEFAULT_MINIMUM_EXACT_ATTACK_QUERIES_TEXT,
+	ISOGLOSS_FIXED_LOCAL_BPRF,
+	REMOVED_LEGACY_VM_OPTION_HINTS,
+	REMOVED_LEGACY_VM_OPTIONS,
+	RuamOptionError,
+	resolveRuamOptions,
+	type IsoglossAttestationCapability,
+	type IsoglossBooleanRegionDomain,
+	type IsoglossCapabilityOptions,
+	type IsoglossCustodianCapability,
+	type IsoglossDeploymentProfile,
+	type IsoglossMaximumCustodyOptions,
+	type IsoglossNumericRegionDomain,
+	type IsoglossOptions,
+	type IsoglossOwnerTrace,
+	type IsoglossPrivateFunctionCapability,
+	type IsoglossRegionDomain,
+	type IsoglossRegionDomains,
+	type IsoglossTargetEnvironment,
+	type IsoglossTargetMode,
+	type ResolvedIsoglossOptions,
+	type ResolvedRuamOptions,
+	type RuamOptionErrorCode,
+	type RuamOptions,
+} from "./isogloss/options.js";
+export {
+	createSourceExpressionMacroregionCallRiskEvidence,
+	deriveIsoglossMacroregionCallRisk,
+	digestCanonicalIsoglossBuildValue,
+	planIsoglossProduct,
+} from "./isogloss/plan.js";
+export * from "./isogloss/types.js";
 
-// --- Single-Source Obfuscation ---
-
-/**
- * Obfuscate a JavaScript source string. Compiles eligible functions to
- * bytecode, embeds a VM runtime, and returns the transformed source.
- *
- * @param source - JavaScript source code to obfuscate.
- * @param options - Obfuscation options.
- * @returns The obfuscated JavaScript source.
- */
-export function obfuscateCode(
-	source: string,
-	options?: VmObfuscationOptions
-): string {
-	return transformCode(source, options);
+/** Protect one file and return the same honest metadata as {@link protectCode}. */
+export async function protectFile(
+	inputPath: string,
+	outputPath?: string,
+	options: RuamOptions = {}
+): Promise<IsoglossSourceBuildResult> {
+	const source = await fs.readFile(inputPath, "utf8");
+	const result = protectCode(source, options);
+	await fs.writeFile(outputPath ?? inputPath, result.code, "utf8");
+	return result;
 }
 
-// --- File-Level Obfuscation ---
-
-/**
- * Obfuscate a single file on disk.
- *
- * @param inputPath - Path to the source JS file.
- * @param outputPath - Where to write the result (defaults to overwriting the input).
- * @param options - Obfuscation options.
- */
+/** String-only file alias for callers that do not consume build metadata. */
 export async function obfuscateFile(
 	inputPath: string,
 	outputPath?: string,
-	options?: VmObfuscationOptions
+	options: RuamOptions = {}
 ): Promise<void> {
-	const source = await fs.readFile(inputPath, "utf-8");
-	const result = transformCode(source, options);
-	await fs.writeFile(outputPath ?? inputPath, result, "utf-8");
+	await protectFile(inputPath, outputPath, options);
 }
 
-// --- Directory-Level Obfuscation ---
+export interface RunProtectionConfig {
+	readonly include?: readonly string[];
+	readonly exclude?: readonly string[];
+	readonly options?: RuamOptions;
+}
 
-/**
- * Obfuscate all matching JS files in a directory.
- *
- * @param dir - Root directory to scan.
- * @param config - Include/exclude globs and obfuscation options.
- */
-export async function runVmObfuscation(
+export interface ProtectedFileResult {
+	readonly file: string;
+	readonly build: IsoglossSourceBuildResult;
+}
+
+/** Protect matching JavaScript files without any legacy execution fallback. */
+export async function runProtection(
 	dir: string,
-	config?: {
-		include?: string[];
-		exclude?: string[];
-		options?: VmObfuscationOptions;
-	}
-): Promise<void> {
-	const include = config?.include ?? ["**/*.js"];
-	const exclude = config?.exclude ?? ["**/node_modules/**"];
-
-	const files = await globby(include, {
+	config: RunProtectionConfig = {}
+): Promise<readonly ProtectedFileResult[]> {
+	const files = await globby(config.include ?? ["**/*.js"], {
 		cwd: dir,
-		ignore: exclude,
+		ignore: [...(config.exclude ?? ["**/node_modules/**"])],
 		absolute: false,
 	});
-
+	const results: ProtectedFileResult[] = [];
 	for (const file of files) {
 		const filePath = path.join(dir, file);
-		await obfuscateFile(filePath, filePath, config?.options);
+		const build = await protectFile(filePath, filePath, config.options);
+		results.push(Object.freeze({ file, build }));
 	}
+	return Object.freeze(results);
 }
+
+// Keep the function type reachable without exporting implementation internals
+// from the transform module's private deterministic-test entry point.
+export type ProtectCode = typeof protectCode;

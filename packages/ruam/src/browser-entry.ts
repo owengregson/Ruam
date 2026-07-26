@@ -1,16 +1,18 @@
 /**
- * Browser entry point for Ruam.
- *
- * Re-exports {@link obfuscateCode} with Node.js `crypto` polyfilled
- * for the Web Crypto API. Used by the playground Web Worker.
+ * Browser entry point for the Ruam Isogloss source transform.
  *
  * @module browser-entry
  */
 
-export { obfuscateCode } from "./transform.js";
-export { PRESETS } from "./presets.js";
+export { obfuscateCode, protectCode } from "./transform.js";
+export {
+	resolveRuamOptions,
+	type IsoglossOptions,
+	type IsoglossRegionDomain,
+	type IsoglossRegionDomains,
+	type RuamOptions,
+} from "./isogloss/options.js";
 export type {
-	VmObfuscationOptions,
-	PresetName,
-	TargetEnvironment,
-} from "./types.js";
+	IsoglossSourceBuildResult,
+	IsoglossSourceBuildStats,
+} from "./isogloss/source-transform.js";

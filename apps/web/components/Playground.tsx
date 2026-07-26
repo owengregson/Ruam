@@ -13,41 +13,157 @@ import {
 	faChevronUp,
 } from "@fortawesome/free-solid-svg-icons";
 
-// --- Types ---
+// --- Isogloss source model ---
 
-type PresetName = "low" | "medium" | "max";
+type IsoglossProfile =
+	| "holographic-local"
+	| "holographic-custodied"
+	| "holographic-private"
+	| "holographic-tee";
 type TargetEnv = "node" | "browser" | "browser-extension";
 
-interface ManifestOption {
-	key: string;
-	label: string;
-	category: string;
-	description?: string;
-	cliFlag?: string;
+type RegionDomain =
+	| { type: "boolean" }
+	| { type: "number"; min: number; max: number };
+
+interface RegionBindingDraft {
+	id: number;
+	name: string;
+	type: RegionDomain["type"];
+	min: string;
+	max: string;
 }
 
-interface OptionManifest {
-	options: ManifestOption[];
-	presets: Record<string, Record<string, boolean>>;
-	autoEnableRules: { when: string; enables: string }[];
+interface IsoglossSourceOptions {
+	isogloss: {
+		profile: "holographic-local";
+		ownerTrace: "off";
+	};
+	targetMode: "comment";
+	threshold: 1;
+	preprocessIdentifiers: boolean;
+	target: TargetEnv;
+	regionDomains: Record<string, Record<string, RegionDomain>>;
 }
 
-interface OptionMeta {
-	key: string;
+interface ProfileDescription {
+	id: IsoglossProfile;
 	label: string;
-	group: string;
+	availability: string;
+	description: string;
+	playground: boolean;
 }
+
+const PROFILES: readonly ProfileDescription[] = [
+	{
+		id: "holographic-local",
+		label: "Local",
+		availability: "available here",
+		description:
+			"Complete local client with diversified scalar BPRF realizations. Raises analysis cost without claiming secrecy under full instrumentation.",
+		playground: true,
+	},
+	{
+		id: "holographic-custodied",
+		label: "Custodied",
+		availability: "deployment planner",
+		description:
+			"Holds part of the relation behind an existing remote-await boundary. A complete local fallback is forbidden.",
+		playground: false,
+	},
+	{
+		id: "holographic-private",
+		label: "Private",
+		availability: "deployment planner",
+		description:
+			"Combines custody with an actively secure private-function protocol and a padded universal circuit.",
+		playground: false,
+	},
+	{
+		id: "holographic-tee",
+		label: "Attested",
+		availability: "deployment planner",
+		description:
+			"Executes the held relation inside an owner-pinned attested trust domain without a complete local fallback.",
+		playground: false,
+	},
+] as const;
+
+const DEFAULT_BINDINGS: readonly RegionBindingDraft[] = [
+	{ id: 1, name: "quantity", type: "number", min: "1", max: "100" },
+	{ id: 2, name: "unitPrice", type: "number", min: "1", max: "500" },
+];
 
 // --- Default input code ---
 
-const DEFAULT_CODE = `function fibonacci(n) {
-  if (n <= 1) return n;
-  let a = 0, b = 1;
-  for (let i = 2; i <= n; i++) {
-    [a, b] = [b, a + b];
-  }
-  return b;
+const DEFAULT_CODE = `/* ruam:isogloss */
+function priceQuote(quantity, unitPrice) {
+  return (quantity * unitPrice) + (quantity * 2);
 }`;
+
+const IDENTIFIER_PATTERN = /^[A-Za-z_$][0-9A-Za-z_$]*$/;
+
+function materializeRegionDomains(
+	regionName: string,
+	bindings: readonly RegionBindingDraft[]
+):
+	| { regionDomains: IsoglossSourceOptions["regionDomains"]; error: null }
+	| { regionDomains: null; error: string } {
+	const name = regionName.trim();
+	if (!IDENTIFIER_PATTERN.test(name)) {
+		return {
+			regionDomains: null,
+			error: "Source region must be a named JavaScript function.",
+		};
+	}
+	if (bindings.length === 0) {
+		return {
+			regionDomains: null,
+			error: "Declare at least one guarded input binding.",
+		};
+	}
+
+	const domains: Record<string, RegionDomain> = {};
+	for (const binding of bindings) {
+		const bindingName = binding.name.trim();
+		if (!IDENTIFIER_PATTERN.test(bindingName)) {
+			return {
+				regionDomains: null,
+				error: `Invalid input binding: ${binding.name || "(empty)"}.`,
+			};
+		}
+		if (Object.hasOwn(domains, bindingName)) {
+			return {
+				regionDomains: null,
+				error: `Input binding ${bindingName} is declared more than once.`,
+			};
+		}
+		if (binding.type === "boolean") {
+			domains[bindingName] = { type: "boolean" };
+			continue;
+		}
+		const min = Number(binding.min);
+		const max = Number(binding.max);
+		if (
+			!Number.isSafeInteger(min) ||
+			!Number.isSafeInteger(max) ||
+			Object.is(min, -0) ||
+			Object.is(max, -0) ||
+			min > max
+		) {
+			return {
+				regionDomains: null,
+				error: `${bindingName} requires safe-integer bounds with min ≤ max.`,
+			};
+		}
+		domains[bindingName] = { type: "number", min, max };
+	}
+
+	return {
+		regionDomains: { [name]: domains },
+		error: null,
+	};
+}
 
 // --- CodeMirror dynamic loader ---
 
@@ -258,8 +374,8 @@ function useWorker() {
 		};
 	}, []);
 
-	const obfuscate = useCallback(
-		(code: string, options: Record<string, boolean | string>) =>
+	const transformRegion = useCallback(
+		(code: string, options: IsoglossSourceOptions) =>
 			new Promise<{ result: string; elapsed: number }>(
 				(resolve, reject) => {
 					if (!workerRef.current) {
@@ -305,57 +421,27 @@ function useWorker() {
 		[]
 	);
 
-	return { ready, obfuscate, initError };
+	return { ready, transformRegion, initError };
 }
 
 // --- Playground component ---
 
 export default function Playground() {
-	// --- Manifest loading ---
-	const [manifest, setManifest] = useState<OptionManifest | null>(null);
-	const [manifestError, setManifestError] = useState<string | null>(null);
-
-	useEffect(() => {
-		const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-		fetch(`${basePath}/option-manifest.json`)
-			.then((res) => {
-				if (!res.ok) throw new Error(`HTTP ${res.status}`);
-				return res.json();
-			})
-			.then((data: OptionManifest) => setManifest(data))
-			.catch((err) =>
-				setManifestError(err instanceof Error ? err.message : String(err))
-			);
-	}, []);
-
-	// --- Derived option metadata ---
-	const OPTIONS: OptionMeta[] = (manifest?.options ?? []).map((o) => ({
-		key: o.key,
-		label: o.label,
-		group: o.category,
-	}));
-
 	// --- State ---
-	const [preset, setPreset] = useState<PresetName>("medium");
+	const profile: IsoglossProfile = "holographic-local";
 	const [target, setTarget] = useState<TargetEnv>("browser");
-	const [toggles, setToggles] = useState<Record<string, boolean>>({});
-	const [isCustom, setIsCustom] = useState(false);
-	const [optionsOpen, setOptionsOpen] = useState(false);
+	const [regionName, setRegionName] = useState("priceQuote");
+	const [bindings, setBindings] =
+		useState<RegionBindingDraft[]>(() => [...DEFAULT_BINDINGS]);
+	const [preprocessIdentifiers, setPreprocessIdentifiers] = useState(false);
+	const [optionsOpen, setOptionsOpen] = useState(true);
+	const bindingIdRef = useRef(3);
 
 	const [output, setOutput] = useState("");
 	const [error, setError] = useState<string | null>(null);
 	const [running, setRunning] = useState(false);
 	const [elapsed, setElapsed] = useState<number | null>(null);
 	const [copied, setCopied] = useState(false);
-
-	// Initialize toggles from manifest medium preset once loaded
-	const manifestLoaded = useRef(false);
-	useEffect(() => {
-		if (manifest && !manifestLoaded.current) {
-			manifestLoaded.current = true;
-			setToggles(manifest.presets["medium"] ?? {});
-		}
-	}, [manifest]);
 
 	const inputRef = useRef<HTMLDivElement>(null);
 	const outputRef = useRef<HTMLDivElement>(null);
@@ -374,82 +460,79 @@ export default function Playground() {
 	);
 	const { viewRef: outputViewRef, loaded: outputLoaded } = useCodeMirror(
 		outputRef,
-		"// Output will appear here after obfuscation",
+		"// Scalarized Isogloss output will appear here",
 		true,
 		{ current: null }
 	);
 
-	const { ready: workerReady, obfuscate, initError: workerError } = useWorker();
+	const {
+		ready: workerReady,
+		transformRegion,
+		initError: workerError,
+	} = useWorker();
 
-	const allLoaded = inputLoaded && outputLoaded && workerReady && manifest !== null;
+	const allLoaded = inputLoaded && outputLoaded && workerReady;
 
-	// --- Preset selection ---
-	const selectPreset = useCallback((name: PresetName) => {
-		if (!manifest) return;
-		setPreset(name);
-		setToggles(manifest.presets[name] ?? {});
-		setIsCustom(false);
-	}, [manifest]);
-
-	// --- Toggle individual option ---
-	const toggleOption = useCallback(
-		(key: string) => {
-			setToggles((prev) => {
-				const next = { ...prev, [key]: !prev[key] };
-				// Check if it still matches a preset
-				const matchesPreset = (["low", "medium", "max"] as const).find(
-					(p) => {
-						const pd = manifest?.presets[p];
-						if (!pd) return false;
-						return Object.keys(pd).every(
-							(k) => pd[k] === next[k]
-						);
-					}
-				);
-				if (matchesPreset) {
-					setPreset(matchesPreset);
-					setIsCustom(false);
-				} else {
-					setIsCustom(true);
-				}
-				return next;
-			});
+	const updateBinding = useCallback(
+		(id: number, patch: Partial<Omit<RegionBindingDraft, "id">>) => {
+			setBindings((current) =>
+				current.map((binding) =>
+					binding.id === id ? { ...binding, ...patch } : binding
+				)
+			);
 		},
-		[manifest]
+		[]
 	);
 
-	// --- Run obfuscation ---
+	const addBinding = useCallback(() => {
+		const id = bindingIdRef.current++;
+		setBindings((current) => [
+			...current,
+			{
+				id,
+				name: `input${id}`,
+				type: "number",
+				min: "0",
+				max: "100",
+			},
+		]);
+	}, []);
+
+	const removeBinding = useCallback((id: number) => {
+		setBindings((current) =>
+			current.filter((binding) => binding.id !== id)
+		);
+	}, []);
+
+	// --- Build the configured source region ---
 	const run = useCallback(async () => {
 		if (running || !allLoaded) return;
-		setRunning(true);
 		setError(null);
 		setElapsed(null);
 
-		const options: Record<string, boolean | string> = {
-			...(isCustom ? toggles : { preset }),
+		const materialized = materializeRegionDomains(regionName, bindings);
+		if (materialized.regionDomains === null) {
+			setError(materialized.error);
+			return;
+		}
+
+		const options: IsoglossSourceOptions = {
+			isogloss: {
+				profile: "holographic-local",
+				ownerTrace: "off",
+			},
+			targetMode: "comment",
+			threshold: 1,
+			preprocessIdentifiers,
 			target,
+			regionDomains: materialized.regionDomains,
 		};
 
-		// Deterministic minimum delay (300-450ms) so the UI
-		// feels weighty. Hash is seeded from input length +
-		// first/last chars so the same code always gets the
-		// same delay.
+		setRunning(true);
 		const code = codeRef.current;
-		const h =
-			(code.length * 2654435761 +
-				(code.charCodeAt(0) || 0) * 31 +
-				(code.charCodeAt(code.length - 1) || 0)) >>>
-			0;
-		const minDelay = 300 + (h % 151); // 300-450ms
-		const delayPromise = new Promise<void>((r) =>
-			setTimeout(r, minDelay)
-		);
 
 		try {
-			const [{ result, elapsed: ms }] = await Promise.all([
-				obfuscate(code, options),
-				delayPromise,
-			]);
+			const { result, elapsed: ms } = await transformRegion(code, options);
 			setOutput(result);
 			setElapsed(ms);
 
@@ -481,7 +564,16 @@ export default function Playground() {
 		} finally {
 			setRunning(false);
 		}
-	}, [running, allLoaded, isCustom, toggles, preset, target, obfuscate, outputViewRef]);
+	}, [
+		running,
+		allLoaded,
+		regionName,
+		bindings,
+		preprocessIdentifiers,
+		target,
+		transformRegion,
+		outputViewRef,
+	]);
 
 	// --- Copy output ---
 	const copyOutput = useCallback(() => {
@@ -498,7 +590,7 @@ export default function Playground() {
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement("a");
 		a.href = url;
-		a.download = "obfuscated.js";
+		a.download = "isogloss.js";
 		a.click();
 		URL.revokeObjectURL(url);
 	}, [output]);
@@ -527,38 +619,24 @@ export default function Playground() {
 						<span className="text-accent italic">Playground</span>
 					</h1>
 					<p className="mt-1 text-sm text-smoke">
-						Paste JavaScript, pick options, and obfuscate — all in
-						your browser. Nothing leaves your machine.
+						Declare a guarded pure source region and compile it with
+						the complete-local Isogloss profile. Nothing leaves your
+						machine.
 					</p>
 				</motion.div>
 
-				{/* Top bar: presets + obfuscate + stats */}
+				{/* Top bar: profile + target + build + stats */}
 				<motion.div
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
 					transition={{ duration: 0.4, delay: 0.1 }}
 					className="mb-3 flex flex-wrap items-center gap-3"
 				>
-					{/* Preset selector */}
+					{/* Frozen local profile */}
 					<div className="flex items-center gap-1.5 rounded-lg border border-edge bg-ink/80 p-1">
-						{(["low", "medium", "max"] as const).map((p) => (
-							<button
-								key={p}
-								onClick={() => selectPreset(p)}
-								className={`rounded-md px-3 py-1.5 font-mono text-xs font-medium transition-all ${
-									preset === p && !isCustom
-										? "bg-accent text-void shadow-sm"
-										: "text-smoke hover:bg-panel hover:text-cloud"
-								}`}
-							>
-								{p}
-							</button>
-						))}
-						{isCustom && (
-							<span className="rounded-md border border-accent/30 bg-accent/10 px-3 py-1.5 font-mono text-xs font-medium text-accent">
-								custom
-							</span>
-						)}
+						<span className="rounded-md bg-accent px-3 py-1.5 font-mono text-xs font-medium text-void shadow-sm">
+							{profile}
+						</span>
 					</div>
 
 					{/* Target selector */}
@@ -586,7 +664,7 @@ export default function Playground() {
 						))}
 					</div>
 
-					{/* Obfuscate button */}
+					{/* Compile button */}
 					<button
 						onClick={run}
 						disabled={!allLoaded || running}
@@ -598,7 +676,7 @@ export default function Playground() {
 								running ? "animate-spin" : ""
 							}`}
 						/>
-						{running ? "obfuscating..." : "obfuscate"}
+						{running ? "compiling region..." : "compile region"}
 					</button>
 
 					{/* Stats */}
@@ -689,7 +767,7 @@ export default function Playground() {
 							</span>
 							{output && (
 								<span className="ml-auto rounded bg-accent/10 px-2 py-0.5 font-mono text-[10px] font-medium text-accent">
-									protected
+									isogloss
 								</span>
 							)}
 							{error && (
@@ -714,7 +792,7 @@ export default function Playground() {
 					</div>
 				</motion.div>
 
-				{/* Options panel */}
+				{/* Profile and source-region panel */}
 				<motion.div
 					initial={{ opacity: 0 }}
 					animate={{ opacity: 1 }}
@@ -725,11 +803,10 @@ export default function Playground() {
 						onClick={() => setOptionsOpen((o) => !o)}
 						className="flex w-full items-center gap-2 rounded-lg border border-edge bg-ink/60 px-4 py-2.5 font-mono text-xs text-smoke transition hover:bg-panel"
 					>
-						<span className="font-medium">options</span>
+						<span className="font-medium">isogloss configuration</span>
 						<span className="text-ash">
-							{isCustom
-								? "custom configuration"
-								: `${preset} preset`}
+							{regionName || "unnamed region"} · {bindings.length}{" "}
+							guarded {bindings.length === 1 ? "input" : "inputs"}
 						</span>
 						<FontAwesomeIcon
 							icon={optionsOpen ? faChevronUp : faChevronDown}
@@ -744,41 +821,169 @@ export default function Playground() {
 							exit={{ opacity: 0, height: 0 }}
 							className="mt-1 rounded-lg border border-edge bg-ink/60 p-4"
 						>
-							{(
-								[
-									["security", "Security"],
-									["obfuscation", "Obfuscation"],
-									["optimization", "Optimization"],
-								] as [string, string][]
-							).map(([group, label]) => (
-								<div key={group} className="mb-3 last:mb-0">
-									<span className="mb-2 block font-mono text-[10px] font-semibold uppercase tracking-wider text-ash">
-										{label}
-									</span>
-									<div className="flex flex-wrap gap-2">
-										{OPTIONS.filter(
-											(o) => o.group === group
-										).map((opt) => {
-											const active = toggles[opt.key];
-											return (
-												<button
-													key={opt.key}
-													onClick={() =>
-														toggleOption(opt.key)
-													}
-													className={`rounded-md border px-3 py-1.5 font-mono text-[11px] transition-all ${
-														active
-															? "border-accent/30 bg-accent/15 text-accent"
-															: "border-edge bg-void/40 text-ash hover:border-steel hover:text-smoke"
-													}`}
-												>
-													{opt.label}
-												</button>
-											);
-										})}
-									</div>
+							<div>
+								<span className="mb-2 block font-mono text-[10px] font-semibold uppercase tracking-wider text-ash">
+									Frozen deployment profiles
+								</span>
+								<div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+									{PROFILES.map((item) => (
+										<button
+											key={item.id}
+											type="button"
+											disabled={!item.playground}
+											title={
+												item.playground
+													? item.description
+													: `${item.description} This synchronous playground cannot satisfy its boundary.`
+											}
+											className={`rounded-lg border p-3 text-left ${
+												item.id === profile
+													? "border-accent/30 bg-accent/[0.08]"
+													: "cursor-not-allowed border-edge bg-void/30 opacity-55"
+											}`}
+										>
+											<span
+												className={`block font-mono text-xs font-semibold ${
+													item.id === profile
+														? "text-accent"
+														: "text-smoke"
+												}`}
+											>
+												{item.label}
+											</span>
+											<span className="mt-1 block font-mono text-[9px] uppercase tracking-wider text-ash">
+												{item.availability}
+											</span>
+											<span className="mt-2 block text-[11px] leading-relaxed text-smoke">
+												{item.description}
+											</span>
+										</button>
+									))}
 								</div>
-							))}
+							</div>
+
+							<div className="mt-5 border-t border-edge pt-4">
+								<div className="flex flex-wrap items-end gap-3">
+									<label className="min-w-52 flex-1">
+										<span className="mb-1.5 block font-mono text-[10px] font-semibold uppercase tracking-wider text-ash">
+											Source-region function
+										</span>
+										<input
+											value={regionName}
+											onChange={(event) =>
+												setRegionName(event.target.value)
+											}
+											spellCheck={false}
+											className="w-full rounded-md border border-edge bg-void/50 px-3 py-2 font-mono text-xs text-cloud outline-none transition focus:border-accent/40"
+										/>
+									</label>
+									<label className="flex items-center gap-2 rounded-md border border-edge bg-void/30 px-3 py-2 font-mono text-[11px] text-smoke">
+										<input
+											type="checkbox"
+											checked={preprocessIdentifiers}
+											onChange={(event) =>
+												setPreprocessIdentifiers(
+													event.target.checked
+												)
+											}
+											className="accent-[#7fadfe]"
+										/>
+										preprocess identifiers
+									</label>
+								</div>
+								<p className="mt-2 text-[11px] leading-relaxed text-ash">
+									The exact marker{" "}
+									<code className="text-smoke">
+										{"/* ruam:isogloss */"}
+									</code>{" "}
+									selects this named function. Every input used
+									by its pure return expression needs an exact
+									guard domain.
+								</p>
+
+								<div className="mt-4 space-y-2">
+									{bindings.map((binding) => (
+										<div
+											key={binding.id}
+											className="grid items-center gap-2 rounded-lg border border-edge bg-void/30 p-2 sm:grid-cols-[minmax(130px,1fr)_110px_minmax(90px,0.7fr)_minmax(90px,0.7fr)_auto]"
+										>
+											<input
+												aria-label="Input binding name"
+												value={binding.name}
+												onChange={(event) =>
+													updateBinding(binding.id, {
+														name: event.target.value,
+													})
+												}
+												spellCheck={false}
+												className="rounded-md border border-edge bg-ink px-2.5 py-2 font-mono text-[11px] text-cloud outline-none focus:border-accent/40"
+											/>
+											<select
+												aria-label={`${binding.name} domain type`}
+												value={binding.type}
+												onChange={(event) =>
+													updateBinding(binding.id, {
+														type: event.target
+															.value as RegionDomain["type"],
+													})
+												}
+												className="rounded-md border border-edge bg-ink px-2.5 py-2 font-mono text-[11px] text-cloud outline-none focus:border-accent/40"
+											>
+												<option value="number">number</option>
+												<option value="boolean">boolean</option>
+											</select>
+											<input
+												aria-label={`${binding.name} minimum`}
+												value={binding.min}
+												onChange={(event) =>
+													updateBinding(binding.id, {
+														min: event.target.value,
+													})
+												}
+												disabled={binding.type === "boolean"}
+												placeholder="min"
+												inputMode="numeric"
+												className="rounded-md border border-edge bg-ink px-2.5 py-2 font-mono text-[11px] text-cloud outline-none focus:border-accent/40 disabled:opacity-30"
+											/>
+											<input
+												aria-label={`${binding.name} maximum`}
+												value={binding.max}
+												onChange={(event) =>
+													updateBinding(binding.id, {
+														max: event.target.value,
+													})
+												}
+												disabled={binding.type === "boolean"}
+												placeholder="max"
+												inputMode="numeric"
+												className="rounded-md border border-edge bg-ink px-2.5 py-2 font-mono text-[11px] text-cloud outline-none focus:border-accent/40 disabled:opacity-30"
+											/>
+											<button
+												type="button"
+												onClick={() =>
+													removeBinding(binding.id)
+												}
+												className="rounded-md border border-edge px-2.5 py-2 font-mono text-[10px] text-ash transition hover:border-alert/30 hover:text-alert"
+											>
+												remove
+											</button>
+										</div>
+									))}
+								</div>
+								<button
+									type="button"
+									onClick={addBinding}
+									className="mt-2 rounded-md border border-accent/20 bg-accent/[0.05] px-3 py-1.5 font-mono text-[10px] text-accent transition hover:bg-accent/10"
+								>
+									add guarded input
+								</button>
+								<p className="mt-3 text-[11px] leading-relaxed text-ash">
+									Local mode ships a complete client. It
+									increases analysis work, but does not claim a
+									secret relation or resistance to unrestricted
+									dynamic instrumentation.
+								</p>
+							</div>
 						</motion.div>
 					)}
 				</motion.div>
@@ -787,13 +992,13 @@ export default function Playground() {
 				{!allLoaded && (
 					<div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 backdrop-blur-sm">
 						<div className="flex flex-col items-center gap-4">
-							{workerError || manifestError ? (
+							{workerError ? (
 								<>
 									<p className="font-mono text-sm text-alert">
 										Failed to load Ruam engine
 									</p>
 									<p className="max-w-md text-center font-mono text-xs text-ash">
-										{workerError || manifestError}
+										{workerError}
 									</p>
 								</>
 							) : (
