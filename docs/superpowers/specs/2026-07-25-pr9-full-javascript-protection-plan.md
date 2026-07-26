@@ -1041,6 +1041,54 @@ versioned decision approves stricter ones:
 Failing performance does not authorize native fallback or weakened semantic
 coverage.
 
+### 11.12 Final Isogloss-versus-VM architecture comparison
+
+After every language, host, no-pass-through, and artifact-binding gate passes,
+run a final reproducible comparison against native JavaScript and the frozen
+pre-PR-6 VM at `e8cecb56ba89d47512a16e325d81cf46f64b2ecb`. The release benchmark uses
+`packages/ruam/scripts/bench-architectures.mjs --strict-protection`; a row is
+eligible for an Isogloss-versus-VM aggregate only when its emitted-artifact
+certificate proves full protection and all native/hybrid counts are zero.
+
+Legacy compile failures, unsupported syntax, and native or partial pass-through
+are reported as separate capability outcomes. They are never credited as VM
+performance and never silently removed from the workload denominator.
+
+The versioned JSON and Markdown report must include absolute measurements and
+Isogloss/native, VM/native, and Isogloss/VM ratios for:
+
+- end-to-end build latency plus parse, ownership, canonical compile, regional
+  lowering, BPRF/CSH generation, verification, encoding, and emission phases;
+- cold bootstrap/parse/compile latency, first-call latency, warm steady-state
+  latency and throughput, and P50/P95/P99 distributions;
+- raw, gzip, and Brotli bytes for source, per-program artifact, shared runtime,
+  owner sidecar, certificate, package JavaScript, declarations, and browser
+  worker bundle;
+- peak RSS, peak heap, retained heap after forced collection where supported,
+  carrier/continuation growth, and bytes per protected root/region;
+- sync recursion, hot arithmetic/control, property/proxy/coercion, classes and
+  private state, exceptions/finally/disposal, generators, async interleaving,
+  modules/TLA/dynamic import, dynamic source, reentry, workers, and Realms;
+- small, medium, large, and adversarial source/CFG scaling tiers;
+- custodied profile request count, bandwidth, P50/P95/P99 added latency,
+  concurrency, failure behavior, and custodian CPU/memory when applicable; and
+- attacker work, observation, reconstruction, and storage amplification so
+  performance costs are interpreted beside measured protection rather than in
+  isolation.
+
+Each architecture/workload pair runs in a fresh process. Cold and warm samples
+remain separate; setup, garbage collection, and correctness-oracle time are
+excluded from execution timing. The harness records the exact source/data and
+build seeds, commit IDs, options, runtime versions, OS, CPU, memory, sample
+counts, warm-up policy, and raw samples. At least 30 measured samples are used
+for latency distributions, with confidence intervals or an equivalent robust
+uncertainty report. Node, Bun, and the supported browser/worker environments
+are reported separately rather than pooled.
+
+The final release report replaces the misleading PR 8 comparison, whose fast
+rows were primarily native pass-through. No final benchmark may be published
+until `--strict-protection` succeeds for every Isogloss workload.
+
 ## 12. CI organization
 
 Required focused suites:
@@ -1132,6 +1180,8 @@ PR 9 is complete only when:
       cross-Realm execution gates pass.
 - [ ] Typecheck, all tests, build, seed stress, fuzzing, performance, memory,
       and external security review pass.
+- [ ] The strict final Isogloss-versus-VM comparison publishes versioned raw
+      JSON and a reviewed Markdown report covering every Section 11.12 metric.
 - [ ] README, API, CLI, web UI, and package metadata make only the honest
       non-bypass/exactness/local-amplification or explicit custody claims.
 
@@ -1153,7 +1203,9 @@ protection.
 10. Integrate CSH/custody only after local exactness and DR gates pass.
 11. Delete PR 8 native/hybrid source transformation and compatibility tests.
 12. Run full attacker, environment, seed, fuzz, resource, and external review
-    qualification before opening the release pull request.
+    qualification.
+13. Run the strict final Isogloss-versus-VM benchmark and publish its versioned
+    JSON and Markdown report before opening the release pull request.
 
 This ordering preserves the core rule throughout development: missing
 capability blocks emission; it never widens a native pass-through lane.

@@ -44,6 +44,7 @@
 		"build:browser": "node scripts/build-browser.mjs",
 		"bench": "bun scripts/bench.mjs",
 		"bench:architectures": "bun scripts/bench-architectures.mjs",
+		"bench:architectures:release": "bun scripts/bench-architectures.mjs --strict-protection",
 		"typecheck": "tsc --noEmit",
 		"dev": "tsup --watch",
 		"test": "bun test",

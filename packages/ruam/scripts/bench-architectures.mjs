@@ -5,7 +5,8 @@
  * The legacy implementation is loaded from the frozen commit immediately
  * before PR 6 production work. It is never copied back into the product tree.
  * Unsupported legacy workloads are reported as such instead of disappearing
- * from the comparison.
+ * from the comparison. Release results must use --strict-protection, which
+ * rejects every Isogloss row lacking artifact-bound, zero-pass-through proof.
  */
 
 import { gzipSync } from "node:zlib";
@@ -256,14 +257,14 @@ try {
 			Boolean(workload.async)
 		);
 
-			const currentBuild = await measureBuild(() =>
-				protectCode(source, workload.options)
-			);
-			const protectionCertificate = currentProtectionCertificate(
-				currentBuild.value,
-				workload.name
-			);
-			const currentProgram = materialize(currentBuild.value.code);
+		const currentBuild = await measureBuild(() =>
+			protectCode(source, workload.options)
+		);
+		const protectionCertificate = currentProtectionCertificate(
+			currentBuild.value,
+			workload.name
+		);
+		const currentProgram = materialize(currentBuild.value.code);
 		const currentResult = await currentProgram.work();
 		const currentTiming = await measure(
 			currentProgram.work,
@@ -275,44 +276,47 @@ try {
 		}
 
 		const legacy = {};
-			for (const preset of LEGACY_PRESETS) {
-				const options = preset === "default" ? {} : { preset };
-				try {
-					const warningCapture = await captureWarnings(() =>
-						measureBuild(() => ({
-							code: legacyModule.obfuscateCode(source, options),
-						}))
-					);
-					const legacyBuild = warningCapture.value;
-					const legacyProgram = materialize(legacyBuild.value.code);
+		for (const preset of LEGACY_PRESETS) {
+			const options = preset === "default" ? {} : { preset };
+			try {
+				const warningCapture = await captureWarnings(() =>
+					measureBuild(() => ({
+						code: legacyModule.obfuscateCode(source, options),
+					}))
+				);
+				const legacyBuild = warningCapture.value;
+				const legacyProgram = materialize(legacyBuild.value.code);
 				const legacyResult = await legacyProgram.work();
 				const legacyTiming = await measure(
 					legacyProgram.work,
 					Boolean(workload.async)
 				);
 				const correct = canonical(legacyResult) === expected;
-					if (!correct) {
-						throw new Error(`legacy correctness mismatch: ${workload.name}:${preset}`);
-					}
-					const protectionStatus = classifyLegacyProtection(
-						legacyBuild.value.code,
-						warningCapture.warnings
-					);
-					legacy[preset] = {
-						protectionStatus,
-						correct,
-						compileWarnings: warningCapture.warnings,
-						buildMilliseconds: legacyBuild.milliseconds,
+				if (!correct) {
+					throw new Error(`legacy correctness mismatch: ${workload.name}:${preset}`);
+				}
+				const protectionStatus = classifyLegacyProtection(
+					source,
+					legacyBuild.value.code,
+					warningCapture.warnings
+				);
+				legacy[preset] = {
+					supported: protectionStatus === "vm-protected",
+					protectionStatus,
+					correct,
+					compileWarnings: warningCapture.warnings,
+					buildMilliseconds: legacyBuild.milliseconds,
 					bootstrapMilliseconds: legacyProgram.bootstrapMilliseconds,
 					runtimeMilliseconds: legacyTiming,
 					outputBytes: bytes(legacyBuild.value.code),
 					gzipBytes: gzipBytes(legacyBuild.value.code),
 				};
-				} catch (error) {
-					legacy[preset] = {
-						protectionStatus: "failed",
-						correct: false,
-						error: error instanceof Error ? error.message : String(error),
+			} catch (error) {
+				legacy[preset] = {
+					supported: false,
+					protectionStatus: "failed",
+					correct: false,
+					error: error instanceof Error ? error.message : String(error),
 				};
 			}
 		}
@@ -326,14 +330,17 @@ try {
 				bootstrapMilliseconds: nativeProgram.bootstrapMilliseconds,
 				runtimeMilliseconds: nativeTiming,
 			},
-				isogloss: {
-					correct: true,
-					fullyProtected: protectionCertificate !== null,
-					protectionCertificate:
-						protectionCertificate === null
-							? null
-							: certificateSummary(protectionCertificate),
-					buildMilliseconds: currentBuild.milliseconds,
+			isogloss: {
+				correct: true,
+				fullyProtected: isFullyProtected(
+					currentBuild.value,
+					protectionCertificate
+				),
+				protectionCertificate:
+					protectionCertificate === null
+						? null
+						: certificateSummary(protectionCertificate),
+				buildMilliseconds: currentBuild.milliseconds,
 				bootstrapMilliseconds: currentProgram.bootstrapMilliseconds,
 				runtimeMilliseconds: currentTiming,
 				outputBytes: bytes(currentBuild.value.code),
@@ -348,12 +355,12 @@ try {
 	}
 
 	const result = {
-			schemaVersion: 2,
+		schemaVersion: 2,
 		purpose: "Isogloss versus frozen pre-PR-6 VM architecture engineering benchmark",
 		legacyRef: LEGACY_REF,
 		mode: QUICK ? "quick" : "full",
-			parameters: {
-				strictProtection: STRICT_PROTECTION,
+		parameters: {
+			strictProtection: STRICT_PROTECTION,
 			buildRounds: BUILD_ROUNDS,
 			timingRounds: TIMING_ROUNDS,
 			callsPerRound: CALLS_PER_ROUND,
@@ -430,22 +437,125 @@ async function measureBuild(build) {
 	return { value, milliseconds: median(samples) };
 }
 
+function currentProtectionCertificate(build, workloadName) {
+	const candidate = build.protectionCertificate;
+	if (candidate === undefined) {
+		if (STRICT_PROTECTION) {
+			throw new Error(
+				`RUAM_BENCHMARK_INCOMPLETE_ISOGLOSS: ${workloadName}: missing emitted-artifact protection certificate`
+			);
+		}
+		return null;
+	}
+	const certificate = validateIsoglossProtectionCertificate(candidate);
+	if (STRICT_PROTECTION && !isFullyProtected(build, certificate)) {
+		throw new Error(
+			`RUAM_BENCHMARK_INCOMPLETE_ISOGLOSS: ${workloadName}: ${JSON.stringify(
+				protectionFailure(build, certificate)
+			)}`
+		);
+	}
+	return certificate;
+}
+
+function isFullyProtected(build, certificate) {
+	return Boolean(
+		certificate?.artifactBound === true &&
+			certificate?.fullyProtected === true &&
+			build.stats.nativeRegionCount === 0 &&
+			build.stats.nativeFunctionCount === 0 &&
+			build.stats.hybridFunctionCount === 0
+	);
+}
+
+function protectionFailure(build, certificate) {
+	return {
+		certificatePresent: certificate !== null,
+		artifactBound: certificate?.artifactBound ?? false,
+		fullyProtected: certificate?.fullyProtected ?? false,
+		nativeRegionCount: build.stats.nativeRegionCount,
+		nativeFunctionCount: build.stats.nativeFunctionCount,
+		hybridFunctionCount: build.stats.hybridFunctionCount,
+	};
+}
+
+function certificateSummary(certificate) {
+	return {
+		format: certificate.format,
+		coverageScope: certificate.coverageScope,
+		artifactBound: certificate.artifactBound,
+		fullyProtected: certificate.fullyProtected,
+		targetRootCount: certificate.targetRootCount,
+		canonicalNodeCount: certificate.canonicalNodeCount,
+		verifiedBoundaryVariantCount: certificate.verifiedBoundaryVariantCount,
+	};
+}
+
+async function captureWarnings(action) {
+	const warnings = [];
+	const previous = console.warn;
+	console.warn = (...values) => {
+		warnings.push(values.map((value) => String(value)).join(" "));
+	};
+	try {
+		return { value: await action(), warnings };
+	} finally {
+		console.warn = previous;
+	}
+}
+
+function classifyLegacyProtection(source, output, warnings) {
+	if (warnings.length > 0) {
+		return output === source
+			? "native-pass-through"
+			: "partial-pass-through";
+	}
+	return output === source ? "native-pass-through" : "vm-protected";
+}
+
 function summarize(rows) {
+	const protectedIsogloss = rows.filter((row) => row.isogloss.fullyProtected);
 	const isogloss = {
 		allCorrect: rows.every((row) => row.isogloss.correct),
-		totalSourceBytes: sum(rows, (row) => row.sourceBytes),
-		totalOutputBytes: sum(rows, (row) => row.isogloss.outputBytes),
-		medianBuildMilliseconds: median(rows.map((row) => row.isogloss.buildMilliseconds)),
-		geometricRuntimeOverheadVsNative: geometricMean(
-			rows.map((row) => row.isogloss.runtimeMilliseconds / row.native.runtimeMilliseconds)
-		),
+		allFullyProtected: protectedIsogloss.length === rows.length,
+		fullyProtectedWorkloads: protectedIsogloss.length,
+		unqualifiedWorkloads: rows.length - protectedIsogloss.length,
+		qualified:
+			protectedIsogloss.length === 0
+				? null
+				: {
+					totalSourceBytes: sum(protectedIsogloss, (row) => row.sourceBytes),
+					totalOutputBytes: sum(
+						protectedIsogloss,
+						(row) => row.isogloss.outputBytes
+					),
+					medianBuildMilliseconds: median(
+						protectedIsogloss.map(
+							(row) => row.isogloss.buildMilliseconds
+						)
+					),
+					geometricRuntimeOverheadVsNative: geometricMean(
+						protectedIsogloss.map(
+							(row) =>
+								row.isogloss.runtimeMilliseconds /
+								row.native.runtimeMilliseconds
+						)
+					),
+				},
 	};
 	const legacy = {};
 	for (const preset of LEGACY_PRESETS) {
 		const supported = rows.filter((row) => row.legacy[preset].supported);
+		const passThrough = rows.filter((row) =>
+			row.legacy[preset].protectionStatus.includes("pass-through")
+		);
+		const commonProtected = supported.filter(
+			(row) => row.isogloss.fullyProtected
+		);
 		legacy[preset] = {
-			supportedWorkloads: supported.length,
-			unsupportedWorkloads: rows.length - supported.length,
+			vmProtectedWorkloads: supported.length,
+			passThroughWorkloads: passThrough.length,
+			failedWorkloads: rows.length - supported.length - passThrough.length,
 			totalOutputBytes: sum(supported, (row) => row.legacy[preset].outputBytes),
 			medianBuildMilliseconds:
 				supported.length === 0
@@ -461,11 +571,11 @@ function summarize(rows) {
 								row.native.runtimeMilliseconds
 						)
 					),
-			geometricIsoglossSpeedup:
-				supported.length === 0
+			geometricIsoglossSpeedupOnCommonProtectedRows:
+				commonProtected.length === 0
 					? null
 					: geometricMean(
-						supported.map(
+						commonProtected.map(
 							(row) =>
 								row.legacy[preset].runtimeMilliseconds /
 								row.isogloss.runtimeMilliseconds
@@ -486,20 +596,21 @@ function print(result) {
 				const legacy = row.legacy[preset];
 				return {
 					workload: row.name,
-					lane:
-						row.isogloss.protectedRegions === 0
-							? "native"
-							: row.isogloss.hybridFunctions > 0
-								? "hybrid"
-								: "bprf",
+					"iso status": row.isogloss.fullyProtected
+						? "fully-protected"
+						: "unqualified",
+					"VM status": legacy.protectionStatus,
 					"native ms": fixed(row.native.runtimeMilliseconds),
 					"isogloss ms": fixed(row.isogloss.runtimeMilliseconds),
-					"legacy ms": legacy.supported ? fixed(legacy.runtimeMilliseconds) : "unsupported",
+					"legacy ms": legacy.correct
+						? fixed(legacy.runtimeMilliseconds)
+						: "failed",
 					"iso bytes": row.isogloss.outputBytes,
-					"legacy bytes": legacy.supported ? legacy.outputBytes : "unsupported",
-					"iso speedup": legacy.supported
+					"legacy bytes": legacy.correct ? legacy.outputBytes : "failed",
+					"iso speedup":
+						legacy.supported && row.isogloss.fullyProtected
 						? `${(legacy.runtimeMilliseconds / row.isogloss.runtimeMilliseconds).toFixed(2)}x`
-						: "n/a",
+						: "ineligible",
 				};
 			})
 		);
