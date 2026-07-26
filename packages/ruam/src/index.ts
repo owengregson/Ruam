@@ -53,6 +53,16 @@ export {
 } from "./isogloss/options.js";
 export { ISOGLOSS_SOURCE_LIMITS } from "./isogloss/source-transform.js";
 export {
+	createIsoglossProtectionCertificate,
+	ISOGLOSS_PROTECTION_CERTIFICATE_FORMAT,
+	IsoglossProtectionCertificateError,
+	validateIsoglossProtectionCertificate,
+	type IsoglossCanonicalNodeReference,
+	type IsoglossProtectionCertificate,
+	type IsoglossProtectionCertificateErrorCode,
+	type IsoglossTargetRootProtection,
+} from "./isogloss/protection-certificate.js";
+export {
 	FILE_PROTECTION_LIMITS,
 	RuamFileSafetyError,
 	type RuamFileSafetyErrorCode,

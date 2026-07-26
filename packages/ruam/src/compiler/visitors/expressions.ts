@@ -9,11 +9,12 @@
  */
 
 import type { NodePath } from "@babel/traverse";
-import type * as t from "@babel/types";
+import * as t from "@babel/types";
 import { Op } from "../operations.js";
 import type { Emitter } from "../emitter.js";
 import type { ScopeAnalyzer } from "../scope.js";
 import type { CompileContext } from "../index.js";
+import { withNodeOrigin } from "./origin.js";
 
 // ---------------------------------------------------------------------------
 // Operator → opcode lookup tables (shared across multiple functions)
@@ -86,6 +87,17 @@ const COMPOUND_SCOPED_OP_MAP: Record<string, Op> = {
 // ---------------------------------------------------------------------------
 
 export function compileExpression(
+	path: NodePath<t.Expression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
+): void {
+	return withNodeOrigin(path, emitter, () => {
+		compileExpressionAtOrigin(path, emitter, scope, ctx);
+	});
+}
+
+function compileExpressionAtOrigin(
 	path: NodePath<t.Expression>,
 	emitter: Emitter,
 	scope: ScopeAnalyzer,
@@ -356,6 +368,15 @@ export function compileExpression(
 		case "MetaProperty": {
 			if (node.meta.name === "new" && node.property.name === "target") {
 				emitter.emit(Op.PUSH_NEW_TARGET, 0);
+			} else if (
+				node.meta.name === "import" &&
+				node.property.name === "meta"
+			) {
+				emitter.emit(Op.IMPORT_META, 0);
+			} else {
+				throw new Error(
+					`RUAM_CANONICAL_UNSUPPORTED_META_PROPERTY: ${node.meta.name}.${node.property.name}`
+				);
 			}
 			break;
 		}
@@ -440,6 +461,14 @@ function compileBinaryExpression(
 	const node = path.node;
 
 	if (node.operator === "in") {
+		if (t.isPrivateName(node.left)) {
+			compileExpression(path.get("right"), emitter, scope, ctx);
+			emitter.emit(
+				Op.HAS_PRIVATE_FIELD,
+				emitter.addStringConstant(`#${node.left.id.name}`)
+			);
+			return;
+		}
 		compileExpression(
 			path.get("left") as NodePath<t.Expression>,
 			emitter,
@@ -815,6 +844,21 @@ function compileAssignmentExpression(
 			emitter.emit(Op.SET_SUPER_PROP, nameIdx);
 		}
 		emitter.emit(Op.POP, 0);
+	} else if (
+		left.isMemberExpression() &&
+		t.isPrivateName(left.node.property)
+	) {
+		compileExpression(left.get("object"), emitter, scope, ctx);
+		compileExpression(
+			path.get("right") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		emitter.emit(
+			Op.SET_PRIVATE_FIELD,
+			emitter.addStringConstant(`#${left.node.property.id.name}`)
+		);
 	} else if (left.isMemberExpression()) {
 		if (left.node.computed) {
 			// Use registers for computed member to avoid deep-stack ROT3 issues
@@ -1072,8 +1116,15 @@ function compileLogicalAssignment(
 	const node = path.node;
 	const left = path.get("left");
 
-	if (!left.isIdentifier())
-		throw new Error("Logical assignment only supported for identifiers");
+	if (left.isMemberExpression()) {
+		compileMemberLogicalAssignment(path, left, emitter, scope, ctx);
+		return;
+	}
+	if (!left.isIdentifier()) {
+		throw new Error(
+			`RUAM_CANONICAL_UNSUPPORTED_LOGICAL_ASSIGNMENT_TARGET: ${left.node.type}`
+		);
+	}
 
 	const varName = left.node.name;
 	const reg = ctx.registerMap.get(varName);
@@ -1121,6 +1172,145 @@ function compileLogicalAssignment(
 	}
 
 	emitter.patchJump(jumpIdx!, emitter.ip);
+}
+
+/**
+ * Compile `obj[key] &&= rhs` and its `||=` / `??=` variants while evaluating
+ * both the base object and computed property key exactly once.
+ */
+function compileMemberLogicalAssignment(
+	path: NodePath<t.AssignmentExpression>,
+	left: NodePath<t.MemberExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
+): void {
+	const node = path.node;
+	const objectIsSuper = left.get("object").isSuper();
+	const isPrivate = t.isPrivateName(left.node.property);
+	const objectRegister = objectIsSuper
+		? undefined
+		: scope.registerAllocator.alloc();
+	const keyRegister = left.node.computed
+		? scope.registerAllocator.alloc()
+		: undefined;
+
+	if (objectRegister !== undefined) {
+		compileExpression(left.get("object"), emitter, scope, ctx);
+		emitter.emit(Op.STORE_REG, objectRegister);
+	}
+	if (keyRegister !== undefined) {
+		compileExpression(
+			left.get("property") as NodePath<t.Expression>,
+			emitter,
+			scope,
+			ctx
+		);
+		emitter.emit(Op.STORE_REG, keyRegister);
+	}
+
+	if (objectIsSuper) {
+		if (keyRegister !== undefined) {
+			emitter.emit(Op.LOAD_REG, keyRegister);
+			emitter.emit(Op.GET_SUPER_PROP, -1);
+		} else {
+			emitter.emit(
+				Op.GET_SUPER_PROP,
+				emitter.addStringConstant(
+					(left.node.property as t.Identifier).name
+				)
+			);
+		}
+	} else if (isPrivate) {
+		emitter.emit(Op.LOAD_REG, objectRegister!);
+		emitter.emit(
+			Op.GET_PRIVATE_FIELD,
+			emitter.addStringConstant(
+				`#${(left.node.property as t.PrivateName).id.name}`
+			)
+		);
+	} else if (keyRegister !== undefined) {
+		emitter.emit(Op.LOAD_REG, objectRegister!);
+		emitter.emit(Op.LOAD_REG, keyRegister);
+		emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+	} else {
+		emitter.emit(Op.LOAD_REG, objectRegister!);
+		emitter.emit(
+			Op.GET_PROP_STATIC,
+			emitter.addStringConstant(
+				(left.node.property as t.Identifier).name
+			)
+		);
+	}
+
+	emitter.emit(Op.DUP, 0);
+	let skipAssignment: number;
+	if (node.operator === "&&=") {
+		skipAssignment = emitter.emit(Op.JMP_FALSE, 0);
+	} else if (node.operator === "||=") {
+		skipAssignment = emitter.emit(Op.JMP_TRUE, 0);
+	} else {
+		const assignNullish = emitter.emit(Op.JMP_NULLISH, 0);
+		skipAssignment = emitter.emit(Op.JMP, 0);
+		emitter.patchJump(assignNullish, emitter.ip);
+	}
+
+	emitter.emit(Op.POP, 0);
+	compileExpression(
+		path.get("right") as NodePath<t.Expression>,
+		emitter,
+		scope,
+		ctx
+	);
+	if (objectIsSuper) {
+		emitter.emit(Op.DUP, 0);
+		if (keyRegister !== undefined) {
+			const valueRegister = scope.registerAllocator.alloc();
+			emitter.emit(Op.STORE_REG, valueRegister);
+			emitter.emit(Op.LOAD_REG, keyRegister);
+			emitter.emit(Op.LOAD_REG, valueRegister);
+			emitter.emit(Op.SET_SUPER_PROP, -1);
+		} else {
+			emitter.emit(
+				Op.SET_SUPER_PROP,
+				emitter.addStringConstant(
+					(left.node.property as t.Identifier).name
+				)
+			);
+		}
+		emitter.emit(Op.POP, 0);
+	} else if (isPrivate) {
+		const valueRegister = scope.registerAllocator.alloc();
+		emitter.emit(Op.STORE_REG, valueRegister);
+		emitter.emit(Op.LOAD_REG, objectRegister!);
+		emitter.emit(Op.LOAD_REG, valueRegister);
+		emitter.emit(
+			Op.SET_PRIVATE_FIELD,
+			emitter.addStringConstant(
+				`#${(left.node.property as t.PrivateName).id.name}`
+			)
+		);
+	} else {
+		const valueRegister = scope.registerAllocator.alloc();
+		emitter.emit(Op.DUP, 0);
+		emitter.emit(Op.STORE_REG, valueRegister);
+		emitter.emit(Op.LOAD_REG, objectRegister!);
+		if (keyRegister !== undefined) {
+			emitter.emit(Op.LOAD_REG, keyRegister);
+			emitter.emit(Op.LOAD_REG, valueRegister);
+			emitter.emit(Op.SET_PROP_DYNAMIC, 0);
+		} else {
+			emitter.emit(Op.LOAD_REG, valueRegister);
+			emitter.emit(
+				Op.SET_PROP_STATIC,
+				emitter.addStringConstant(
+					(left.node.property as t.Identifier).name
+				)
+			);
+		}
+		emitter.emit(Op.POP, 0);
+	}
+	emitter.patchJump(skipAssignment, emitter.ip);
 }
 
 function compileCallExpression(
@@ -1240,19 +1430,54 @@ function compileCallExpression(
 			}
 		}
 		emitter.emit(Op.SUPER_CALL, args.length);
+	} else if (
+		callee.isIdentifier({ name: "eval" }) &&
+		callee.scope.getBinding("eval") === undefined
+	) {
+		if (args.some((argument) => argument.isSpreadElement())) {
+			throw new Error("RUAM_CANONICAL_UNSUPPORTED_DIRECT_EVAL_SPREAD");
+		}
+		if (args.length === 0) {
+			emitter.emit(Op.PUSH_UNDEFINED, 0);
+		} else {
+			for (let index = 0; index < args.length; index++) {
+				compileExpression(
+					args[index] as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				// Direct eval observes only its first argument, but all trailing
+				// arguments are still evaluated from left to right for side effects.
+				if (index > 0) emitter.emit(Op.POP, 0);
+			}
+		}
+		// The canonical opcode consumes the single retained source argument.
+		emitter.emit(Op.DIRECT_EVAL, 0);
 	} else if (callee.node.type === "Import") {
-		// Dynamic import(): import(specifier)
+		// Dynamic import(): import(specifier[, options]). Both operands are part
+		// of the operation because import attributes affect module resolution.
+		if (args.length > 2) {
+			throw new Error("RUAM_CANONICAL_UNSUPPORTED_DYNAMIC_IMPORT_ARITY");
+		}
+		let argumentCount = args.length;
 		if (args.length > 0) {
-			compileExpression(
-				args[0] as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
+			for (const argument of args) {
+				if (argument.isSpreadElement()) {
+					throw new Error("RUAM_CANONICAL_UNSUPPORTED_DYNAMIC_IMPORT_SPREAD");
+				}
+				compileExpression(
+					argument as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+			}
 		} else {
 			emitter.emit(Op.PUSH_UNDEFINED, 0);
+			argumentCount = 1;
 		}
-		emitter.emit(Op.DYNAMIC_IMPORT, 0);
+		emitter.emit(Op.DYNAMIC_IMPORT, argumentCount);
 	} else {
 		compileExpression(
 			callee as NodePath<t.Expression>,
@@ -1483,6 +1708,14 @@ export function compileMemberExpression(
 	scope: ScopeAnalyzer,
 	ctx: CompileContext
 ): void {
+	if (t.isPrivateName(path.node.property)) {
+		compileExpression(path.get("object"), emitter, scope, ctx);
+		emitter.emit(
+			Op.GET_PRIVATE_FIELD,
+			emitter.addStringConstant(`#${path.node.property.id.name}`)
+		);
+		return;
+	}
 	// super.prop / super[expr] — use dedicated GET_SUPER_PROP opcode
 	if (path.get("object").isSuper()) {
 		if (path.node.computed) {

@@ -9,7 +9,7 @@
  */
 
 import type { NodePath } from "@babel/traverse";
-import type * as t from "@babel/types";
+import * as t from "@babel/types";
 import { Op } from "../operations.js";
 import type { Emitter } from "../emitter.js";
 import type { ScopeAnalyzer } from "../scope.js";
@@ -64,8 +64,31 @@ export function compileClassExpr(
 				allUnits,
 				compileFunctionInner
 			);
+		} else if (member.isClassPrivateMethod()) {
+			compilePrivateClassMethod(
+				member,
+				emitter,
+				allUnits,
+				compileFunctionInner
+			);
 		} else if (member.isClassProperty() && member.node.static) {
 			compileStaticProperty(member, emitter, scope, ctx);
+		} else if (member.isClassPrivateProperty() && member.node.static) {
+			compileStaticPrivateProperty(member, emitter, scope, ctx);
+		} else if (member.isStaticBlock()) {
+			compileStaticBlock(
+				member,
+				emitter,
+				allUnits,
+				compileFunctionInner
+			);
+		} else if (
+			!member.isClassProperty() &&
+			!member.isClassPrivateProperty()
+		) {
+			throw new Error(
+				`RUAM_CANONICAL_UNSUPPORTED_CLASS_ELEMENT: ${member.node.type}`
+			);
 		}
 	}
 }
@@ -85,29 +108,49 @@ function injectInstanceProperties(classNode: t.ClassExpression): void {
 	const inits: t.Statement[] = [];
 
 	for (const member of classNode.body.body) {
-		if (member.type === "ClassProperty" && !member.static && member.value) {
-			const key = member.key;
-			if (key.type === "Identifier") {
-				inits.push({
-					type: "ExpressionStatement",
-					expression: {
-						type: "AssignmentExpression",
-						operator: "=",
-						left: {
-							type: "MemberExpression",
-							object: {
-								type: "ThisExpression",
-							} as t.ThisExpression,
-							property: {
-								type: "Identifier",
-								name: key.name,
-							} as t.Identifier,
-							computed: false,
-						} as t.MemberExpression,
-						right: member.value,
-					} as t.AssignmentExpression,
-				} as t.ExpressionStatement);
+		if (member.type === "ClassProperty" && !member.static) {
+			if (member.computed) {
+				throw new Error(
+					"RUAM_CANONICAL_UNSUPPORTED_COMPUTED_INSTANCE_FIELD"
+				);
 			}
+			const key = member.key;
+			if (
+				!t.isIdentifier(key) &&
+				!t.isStringLiteral(key) &&
+				!t.isNumericLiteral(key)
+			) {
+				throw new Error(
+					`RUAM_CANONICAL_UNSUPPORTED_INSTANCE_FIELD_KEY: ${key.type}`
+				);
+			}
+			inits.push(
+				t.expressionStatement(
+					t.assignmentExpression(
+						"=",
+						t.memberExpression(
+							t.thisExpression(),
+							key,
+							!t.isIdentifier(key)
+						),
+						member.value ?? t.unaryExpression("void", t.numericLiteral(0))
+					)
+				)
+			);
+		} else if (member.type === "ClassPrivateProperty" && !member.static) {
+			inits.push(
+				t.expressionStatement(
+					t.assignmentExpression(
+						"=",
+						t.memberExpression(
+							t.thisExpression(),
+							member.key,
+							false
+						),
+						member.value ?? t.unaryExpression("void", t.numericLiteral(0))
+					)
+				)
+			);
 		}
 	}
 
@@ -273,19 +316,28 @@ function compileClassMethod(
 	let keyName: string;
 	if (key.type === "Identifier") keyName = key.name;
 	else if (key.type === "StringLiteral") keyName = key.value;
+	else if (key.type === "NumericLiteral") keyName = String(key.value);
 	else throw new Error(`Unsupported class method key: ${key.type}`);
 
 	const nameIdx = emitter.addStringConstant(keyName);
-	const isStatic = member.node.static ? 1 : 0;
 
 	if (member.node.kind === "constructor") {
 		emitter.emit(Op.DEFINE_METHOD, nameIdx);
 	} else if (member.node.kind === "get") {
-		emitter.emit(Op.DEFINE_GETTER, nameIdx | (isStatic << 16));
+		emitter.emit(
+			member.node.static ? Op.DEFINE_STATIC_GETTER : Op.DEFINE_GETTER,
+			nameIdx
+		);
 	} else if (member.node.kind === "set") {
-		emitter.emit(Op.DEFINE_SETTER, nameIdx | (isStatic << 16));
+		emitter.emit(
+			member.node.static ? Op.DEFINE_STATIC_SETTER : Op.DEFINE_SETTER,
+			nameIdx
+		);
 	} else {
-		emitter.emit(Op.DEFINE_METHOD, nameIdx | (isStatic << 16));
+		emitter.emit(
+			member.node.static ? Op.DEFINE_STATIC_METHOD : Op.DEFINE_METHOD,
+			nameIdx
+		);
 	}
 
 	emitter.emit(Op.POP, 0);
@@ -298,29 +350,139 @@ function compileStaticProperty(
 	scope: ScopeAnalyzer,
 	ctx: CompileContext
 ): void {
-	if (!member.node.value) return;
-
 	emitter.emit(Op.DUP, 0);
-	compileExpression(
-		member.get("value") as NodePath<t.Expression>,
-		emitter,
-		scope,
-		ctx
-	);
-
 	const key = member.node.key;
-	if (key.type === "Identifier") {
-		const nameIdx = emitter.addStringConstant(key.name);
-		emitter.emit(Op.SET_PROP_STATIC, nameIdx);
-	} else if (member.node.computed) {
+	if (member.node.computed) {
 		compileExpression(
 			member.get("key") as NodePath<t.Expression>,
 			emitter,
 			scope,
 			ctx
 		);
+		emitClassFieldValue(member, emitter, scope, ctx);
 		emitter.emit(Op.SET_PROP_DYNAMIC, 0);
+	} else {
+		const keyName = staticKeyName(key);
+		emitClassFieldValue(member, emitter, scope, ctx);
+		emitter.emit(
+			Op.DEFINE_STATIC_FIELD,
+			emitter.addStringConstant(keyName)
+		);
 	}
 
 	emitter.emit(Op.POP, 0);
+}
+
+function emitClassFieldValue(
+	member: NodePath<t.ClassProperty>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
+): void {
+	const value = member.get("value");
+	if (value.node && value.isExpression()) {
+		compileExpression(value, emitter, scope, ctx);
+	} else {
+		emitter.emit(Op.PUSH_UNDEFINED, 0);
+	}
+}
+
+function compileStaticPrivateProperty(
+	member: NodePath<t.ClassPrivateProperty>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext
+): void {
+	emitter.emit(Op.DUP, 0);
+	const value = member.get("value");
+	if (value.node && value.isExpression()) {
+		compileExpression(value, emitter, scope, ctx);
+	} else {
+		emitter.emit(Op.PUSH_UNDEFINED, 0);
+	}
+	emitter.emit(
+		Op.DEFINE_STATIC_PRIVATE_FIELD,
+		emitter.addStringConstant(`#${member.node.key.id.name}`)
+	);
+	emitter.emit(Op.POP, 0);
+}
+
+function compilePrivateClassMethod(
+	member: NodePath<t.ClassPrivateMethod>,
+	emitter: Emitter,
+	allUnits: SemanticCompileUnit[],
+	compileFunctionInner: (
+		fnPath: NodePath<t.Function>,
+		allUnits: SemanticCompileUnit[]
+	) => SemanticCompileUnit
+): void {
+	if (
+		member.node.static &&
+		(member.node.kind === "get" || member.node.kind === "set")
+	) {
+		throw new Error(
+			"RUAM_CANONICAL_UNSUPPORTED_STATIC_PRIVATE_ACCESSOR"
+		);
+	}
+	emitter.emit(Op.DUP, 0);
+	const childUnit = compileFunctionInner(
+		member as unknown as NodePath<t.Function>,
+		allUnits
+	);
+	allUnits.push(childUnit);
+	emitter.emit(
+		Op.NEW_CLOSURE,
+		emitter.addStringConstant(childUnit.id)
+	);
+	const nameIndex = emitter.addStringConstant(`#${member.node.key.id.name}`);
+	const operation = member.node.static
+		? Op.DEFINE_STATIC_PRIVATE_METHOD
+		: member.node.kind === "get"
+			? Op.DEFINE_PRIVATE_GETTER
+			: member.node.kind === "set"
+				? Op.DEFINE_PRIVATE_SETTER
+				: Op.DEFINE_PRIVATE_METHOD;
+	emitter.emit(operation, nameIndex);
+	emitter.emit(Op.POP, 0);
+}
+
+function compileStaticBlock(
+	member: NodePath<t.StaticBlock>,
+	emitter: Emitter,
+	allUnits: SemanticCompileUnit[],
+	compileFunctionInner: (
+		fnPath: NodePath<t.Function>,
+		allUnits: SemanticCompileUnit[]
+	) => SemanticCompileUnit
+): void {
+	const synthetic = t.classMethod(
+		"method",
+		t.identifier("__ruamStaticBlock"),
+		[],
+		t.blockStatement(member.node.body)
+	);
+	synthetic.static = true;
+	member.replaceWith(synthetic);
+	const childUnit = compileFunctionInner(
+		member as unknown as NodePath<t.Function>,
+		allUnits
+	);
+	allUnits.push(childUnit);
+	emitter.emit(Op.DUP, 0);
+	emitter.emit(
+		Op.NEW_CLOSURE,
+		emitter.addStringConstant(childUnit.id)
+	);
+	emitter.emit(Op.CLASS_STATIC_BLOCK, 0);
+	emitter.emit(Op.POP, 0);
+}
+
+function staticKeyName(key: t.Expression | t.Identifier | t.PrivateName): string {
+	if (t.isIdentifier(key)) return key.name;
+	if (t.isStringLiteral(key) || t.isNumericLiteral(key)) {
+		return String(key.value);
+	}
+	throw new Error(
+		`RUAM_CANONICAL_UNSUPPORTED_STATIC_FIELD_KEY: ${key.type}`
+	);
 }

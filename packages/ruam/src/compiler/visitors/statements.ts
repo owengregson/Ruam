@@ -16,6 +16,7 @@ import type { Emitter } from "../emitter.js";
 import type { ScopeAnalyzer } from "../scope.js";
 import type { CompileContext } from "../index.js";
 import { compileExpression } from "./expressions.js";
+import { withNodeOrigin } from "./origin.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,6 +47,18 @@ export interface LoopContext {
 // ---------------------------------------------------------------------------
 
 export function compileStatement(
+	path: NodePath<t.Statement>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext,
+	loopStack: LoopContext[]
+): void {
+	return withNodeOrigin(path, emitter, () => {
+		compileStatementAtOrigin(path, emitter, scope, ctx, loopStack);
+	});
+}
+
+function compileStatementAtOrigin(
 	path: NodePath<t.Statement>,
 	emitter: Emitter,
 	scope: ScopeAnalyzer,
@@ -182,6 +195,9 @@ export function compileStatement(
 				loopStack
 			);
 			break;
+
+		case "WithStatement":
+			throw new Error("RUAM_CANONICAL_UNSUPPORTED_WITH_SCOPE_UNWINDING");
 
 		case "BreakStatement":
 			compileBreakStatement(
@@ -943,16 +959,25 @@ function compileForOfStatement(
 	scope.pushScope(true);
 
 	compileExpression(path.get("right"), emitter, scope, ctx);
-	emitter.emit(Op.GET_ITERATOR, 0);
+	emitter.emit(path.node.await ? Op.GET_ASYNC_ITERATOR : Op.GET_ITERATOR, 0);
 
 	const testIp = emitter.ip;
-	// ITER_DONE peeks at iterator, pushes done flag — no DUP needed
-	emitter.emit(Op.ITER_DONE, 0);
-	const exitJump = emitter.emit(Op.JMP_TRUE, 0);
-
-	// DUP iterator before ITER_NEXT (which pops it)
-	emitter.emit(Op.DUP, 0);
-	emitter.emit(Op.ITER_NEXT, 0);
+	let exitJump: number;
+	if (path.node.await) {
+		// Async iterator acquisition does not advance. Each iteration awaits
+		// `.next()`, tests completion, then reads the resolved value.
+		emitter.emit(Op.ASYNC_ITER_NEXT, 0);
+		emitter.emit(Op.ASYNC_ITER_DONE, 0);
+		exitJump = emitter.emit(Op.JMP_TRUE, 0);
+		emitter.emit(Op.ASYNC_ITER_VALUE, 0);
+	} else {
+		// GET_ITERATOR advances to the first result. ITER_DONE peeks at the
+		// iterator, while ITER_NEXT consumes a duplicate and pushes its value.
+		emitter.emit(Op.ITER_DONE, 0);
+		exitJump = emitter.emit(Op.JMP_TRUE, 0);
+		emitter.emit(Op.DUP, 0);
+		emitter.emit(Op.ITER_NEXT, 0);
+	}
 
 	// Per-iteration scope so closures in the body capture fresh bindings
 	const left = path.get("left");
