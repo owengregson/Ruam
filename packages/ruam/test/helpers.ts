@@ -87,6 +87,28 @@ export function evalOriginal(source: string): unknown {
 	return runInContext(source, makeContext());
 }
 
+/**
+ * Evaluate already-obfuscated code (e.g. bundle output) in a fresh context.
+ * Returns the value of the script's final expression.
+ */
+export function evalCode(code: string): unknown {
+	return runInContext(code, makeContext());
+}
+
+/**
+ * Run a sequence of code strings in ONE shared context (shared globalThis),
+ * in order. Returns the context's global object so tests can read values the
+ * scripts wrote to globalThis (e.g. `globalThis.__R = ...`). Used to simulate
+ * a cross-file runtime link: provider script first, consumer script second.
+ */
+export function evalSharedSequence(
+	codes: string[]
+): Record<string, unknown> {
+	const ctx = makeContext();
+	for (const code of codes) runInContext(code, ctx);
+	return ctx as unknown as Record<string, unknown>;
+}
+
 export function evalObfuscated(
 	source: string,
 	options?: VmObfuscationOptions

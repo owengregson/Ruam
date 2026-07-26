@@ -138,6 +138,12 @@ function buildDeriveKeyFunction(
 		body.push(exprStmt(assign(k, ushr(xor(k, id(names.keyAnchor)), 0))));
 	}
 
+	// Per-unit key salt (W2): fold the unit's own salt so every unit derives a
+	// distinct key even when its metadata collides with another unit's. Mirrors
+	// the build-side fold of perUnitSalt into the key anchor in serializeUnit.
+	// `u.us` is always present (the deserializer reads it from the header).
+	body.push(exprStmt(assign(k, ushr(xor(k, member(u, "us")), 0))));
+
 	// return k;
 	body.push(returnStmt(k));
 

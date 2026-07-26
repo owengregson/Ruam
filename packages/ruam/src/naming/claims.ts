@@ -215,6 +215,7 @@ export const TEMP_KEYS = [
 	"_orExp",
 	"_orW",
 	"_orWv",
+	"_dsk",
 ] as const;
 
 /** Fields of RuntimeNames that are shared across all shielding groups. */

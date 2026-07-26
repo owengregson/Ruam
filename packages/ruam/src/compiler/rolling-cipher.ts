@@ -107,3 +107,95 @@ export function rollingEncrypt(instrs: number[], masterKey: number): void {
 		instrs[i + 1] = (instrs[i + 1]! ^ keyStream) | 0;
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Decode-path impurity (W3) — chained encryption + build-time self-equality gate
+// ---------------------------------------------------------------------------
+
+/** Chain mixing prime for the decode-impurity accumulator. */
+const CHAIN_PRIME = 0x85ebca77;
+
+/**
+ * Advance the decode-impurity accumulator from a decrypted instruction.
+ * Identical at build (from plaintext) and runtime (from the decrypted stream).
+ */
+function chainAcc(acc: number, op: number, operand: number): number {
+	return (Math.imul(acc, CHAIN_PRIME) ^ op ^ operand) >>> 0;
+}
+
+/**
+ * Encrypt the instruction stream with a CHAINED keystream (decode impurity).
+ *
+ * Each instruction's keystream folds in an accumulator chained from every
+ * PRIOR instruction's plaintext (in linear order). This removes the position
+ * cipher's random-access property: an attacker cannot decrypt instruction K
+ * without first decrypting 0..K-1 — forcing full sequential simulation.
+ *
+ * Safe because the decode cache materializes the stream in the SAME linear
+ * forward pass at runtime (independent of the execution path), so the
+ * accumulator evolves identically. Only valid for cache-active builds; the
+ * caller (transform) enforces that and runs {@link assertChainedDecryptInverts}.
+ *
+ * @param instrs    Flat `[op0, operand0, ...]` (modified in place).
+ * @param masterKey Key derived from {@link deriveImplicitKey}.
+ */
+export function rollingEncryptChained(
+	instrs: number[],
+	masterKey: number
+): void {
+	let acc = masterKey >>> 0;
+	for (let i = 0; i < instrs.length; i += 2) {
+		const idx = i >>> 1;
+		const op = instrs[i]!;
+		const operand = instrs[i + 1]!;
+		const keyStream = mixState(
+			masterKey,
+			idx,
+			(idx ^ GOLDEN_RATIO_PRIME ^ acc) >>> 0
+		);
+		instrs[i] = (op ^ (keyStream & 0xffff)) & 0xffff;
+		instrs[i + 1] = (operand ^ keyStream) | 0;
+		// Chain from the PLAINTEXT (== what the runtime decrypt yields).
+		acc = chainAcc(acc, op & 0xffff, operand | 0);
+	}
+}
+
+/**
+ * MANDATORY build-time self-equality gate for decode impurity.
+ *
+ * Simulates the runtime chained decrypt over {@link encrypted} and asserts it
+ * recovers {@link original} exactly. The runtime AST implements this same
+ * algorithm; cross-seed round-trip tests lock build==runtime equivalence. If
+ * this ever diverges it THROWS at build time — a loud build failure, never a
+ * silent miscompile.
+ *
+ * @throws If the simulated decrypt does not reproduce the original plaintext.
+ */
+export function assertChainedDecryptInverts(
+	encrypted: number[],
+	masterKey: number,
+	original: number[]
+): void {
+	let acc = masterKey >>> 0;
+	for (let i = 0; i < encrypted.length; i += 2) {
+		const idx = i >>> 1;
+		const keyStream = mixState(
+			masterKey,
+			idx,
+			(idx ^ GOLDEN_RATIO_PRIME ^ acc) >>> 0
+		);
+		const decOp = (encrypted[i]! ^ (keyStream & 0xffff)) & 0xffff;
+		const decOperand = (encrypted[i + 1]! ^ keyStream) | 0;
+		if (
+			decOp !== (original[i]! & 0xffff) ||
+			decOperand !== (original[i + 1]! | 0)
+		) {
+			throw new Error(
+				`decodeImpurity self-equality gate failed at instruction ${idx}: ` +
+					`build/runtime decrypt would diverge — refusing to emit a ` +
+					`potentially miscompiled unit.`
+			);
+		}
+		acc = chainAcc(acc, decOp, decOperand);
+	}
+}

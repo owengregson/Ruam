@@ -199,6 +199,43 @@ export interface VmObfuscationOptions {
 	observationResistance?: boolean;
 
 	/**
+	 * Bind decryption to an OFF-DEVICE secret that is genuinely absent from the
+	 * shipped artifact (the only lever that crosses from work-factor to
+	 * cryptographic hardness against an offline AI decompiler).
+	 *
+	 * The runtime reads a secret string from {@link ExternalKeyBinding.accessor}
+	 * (a dotted property path rooted at a global, e.g. `globalThis.__RUAM_KEY`),
+	 * hashes it, and folds it into the implicit key derivation. The secret
+	 * VALUE is used at build time to compute the matching key but is NEVER
+	 * embedded in the output — only the accessor path is. Without the correct
+	 * runtime secret the bytecode cannot be decrypted (the file produces
+	 * garbage / cannot run), so static offline reconstruction is impossible.
+	 *
+	 * Trade-off: breaks offline / network-free operation for the protected
+	 * asset. Opt-in only; not part of any preset. Requires {@link rollingCipher}
+	 * (auto-enabled).
+	 */
+	externalKeyBinding?: ExternalKeyBinding;
+
+	/**
+	 * Decode-path impurity (anti-agentic): chain each instruction's decryption
+	 * keystream off every prior decrypted instruction (in linear decode order),
+	 * removing the position cipher's random-access property. An attacker cannot
+	 * decrypt instruction K without first decrypting 0..K-1, forcing full
+	 * sequential simulation of each unit (defeats cheap parallel/random-access
+	 * decrypt and transferable automation).
+	 *
+	 * Requires the decode cache (whose linear forward-pass decrypt makes the
+	 * chain build==runtime symmetric), so it is INCOMPATIBLE with
+	 * `incrementalCipher`, `opcodeMutation`, and `observationResistance` (each
+	 * disables the cache) — combining them throws at build time. Auto-enables
+	 * `rollingCipher`. Every encoded unit passes a mandatory build-time
+	 * self-equality gate (a divergence is a loud build failure, never a silent
+	 * miscompile). Opt-in; not part of any preset.
+	 */
+	decodeImpurity?: boolean;
+
+	/**
 	 * Target execution environment.
 	 *
 	 * Controls environment-specific output settings. Explicit options
@@ -211,6 +248,25 @@ export interface VmObfuscationOptions {
 	 *   with `require-trusted-types-for 'script'`.
 	 */
 	target?: TargetEnvironment;
+}
+
+/**
+ * Configuration for {@link VmObfuscationOptions.externalKeyBinding}.
+ */
+export interface ExternalKeyBinding {
+	/**
+	 * The secret value, known at BUILD time, used to derive the matching key.
+	 * Never embedded in the output. At runtime the value read from
+	 * {@link accessor} must equal this for the bytecode to decrypt.
+	 */
+	value: string;
+	/**
+	 * A dotted property path, rooted at a global object, where the runtime
+	 * reads the secret (e.g. `"globalThis.__RUAM_KEY"`, `"self.__k"`). Emitted
+	 * as plain member access (no `eval`); each segment must be a valid
+	 * identifier.
+	 */
+	accessor: string;
 }
 
 // --- Bytecode Data Structures ---

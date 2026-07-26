@@ -84,6 +84,7 @@ export function buildDeserializer(
 	const FL = T("_dfl"); // flags
 	const PC = T("_dpc"); // param count
 	const RC = T("_drc"); // register count
+	const SK = T("_dsk"); // per-unit key salt (W2)
 	const CC = T("_dcc"); // constant count
 	const CS = T("_dcs"); // constants array
 	const IC = T("_dic"); // instruction count
@@ -230,6 +231,8 @@ export function buildDeserializer(
 	body.push(varDecl(PC, rcall(DU16)));
 	// var rc=r.u16();
 	body.push(varDecl(RC, rcall(DU16)));
+	// var sk=r.u32();  (per-unit key salt — W2)
+	body.push(varDecl(SK, rcall(DU32)));
 	// var cc=r.u32();
 	body.push(varDecl(CC, rcall(DU32)));
 
@@ -427,6 +430,7 @@ export function buildDeserializer(
 				["i", id(IN)],
 				["r", id(RC)],
 				["sl", lit(0)],
+				["us", id(SK)],
 				["p", id(PC)],
 				["g", band(flags, 1)],
 				["s", band(flags, 2)],

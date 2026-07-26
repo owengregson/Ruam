@@ -13,7 +13,10 @@
  * @module cli
  */
 
-import { obfuscateFile } from "./index.js";
+import { obfuscateFile, obfuscateCode, createCohort } from "./index.js";
+import type { CohortContext, CohortLink } from "./index.js";
+import { gateSourceMaps } from "./source-map-gate.js";
+import { randomBytes } from "node:crypto";
 import type {
 	VmObfuscationOptions,
 	PresetName,
@@ -64,6 +67,8 @@ interface CliArgs {
 	options: VmObfuscationOptions;
 	include: string[];
 	exclude: string[];
+	keepSourceMaps: boolean;
+	link?: CohortLink;
 	help: boolean;
 	version: boolean;
 	interactive: boolean;
@@ -223,12 +228,17 @@ function parseArgs(argv: string[]): CliArgs {
 		options: {},
 		include: ["**/*.js"],
 		exclude: ["**/node_modules/**"],
+		keepSourceMaps: false,
 		help: false,
 		version: false,
 		interactive: false,
 	};
 
 	let i = 0;
+	let extKeyValue: string | undefined;
+	let extKeyAccessor: string | undefined;
+	let linkProvider: string | undefined;
+	let linkConsumers: string[] | undefined;
 
 	/** Consume the next argument or exit with an error. */
 	function nextArg(flag: string): string {
@@ -337,6 +347,27 @@ function parseArgs(argv: string[]): CliArgs {
 			case "--exclude":
 				result.exclude = [nextArg(arg)];
 				break;
+			case "--keep-source-maps":
+				result.keepSourceMaps = true;
+				break;
+			case "--external-key-value":
+				extKeyValue = nextArg(arg);
+				break;
+			case "--external-key-accessor":
+				extKeyAccessor = nextArg(arg);
+				break;
+			case "--decode-impurity":
+				result.options.decodeImpurity = true;
+				break;
+			case "--link-provider":
+				linkProvider = nextArg(arg);
+				break;
+			case "--link-consumers":
+				linkConsumers = nextArg(arg)
+					.split(",")
+					.map((s) => s.trim())
+					.filter(Boolean);
+				break;
 			default:
 				if (arg.startsWith("-")) {
 					console.error(chalk.red(`  Unknown option: ${arg}`));
@@ -349,6 +380,40 @@ function parseArgs(argv: string[]): CliArgs {
 				break;
 		}
 		i++;
+	}
+
+	// External key binding requires both the build-time value and the runtime
+	// accessor path; one without the other is a usage error.
+	if (extKeyValue !== undefined || extKeyAccessor !== undefined) {
+		if (extKeyValue === undefined || extKeyAccessor === undefined) {
+			console.error(
+				chalk.red(
+					"  --external-key-value and --external-key-accessor must be used together"
+				)
+			);
+			process.exit(1);
+		}
+		result.options.externalKeyBinding = {
+			value: extKeyValue,
+			accessor: extKeyAccessor,
+		};
+	}
+
+	// Cross-file runtime link requires a provider and at least one consumer.
+	if (linkProvider !== undefined || linkConsumers !== undefined) {
+		if (
+			linkProvider === undefined ||
+			linkConsumers === undefined ||
+			linkConsumers.length === 0
+		) {
+			console.error(
+				chalk.red(
+					"  --link-provider and --link-consumers must be used together (consumers comma-separated)"
+				)
+			);
+			process.exit(1);
+		}
+		result.link = { provider: linkProvider, consumers: linkConsumers };
 	}
 
 	return result;
@@ -512,6 +577,11 @@ function printHelp(version: string): void {
 			'(default: "**/node_modules/**")'
 		)}`
 	);
+	console.log(
+		`    ${f("--keep-source-maps")}        Keep .map files in directory output ${d(
+			"(default: strip)"
+		)}`
+	);
 	console.log();
 
 	console.log(h("  ENVIRONMENT"));
@@ -528,6 +598,36 @@ function printHelp(version: string): void {
 	);
 	console.log(
 		`      ${chalk.cyan("browser-extension")}  Chrome extension MAIN world`
+	);
+	console.log();
+
+	console.log(h("  ADVANCED"));
+	console.log(
+		`    ${f("--external-key-value")} ${a("<secret>")}     Off-device secret (build-time)`
+	);
+	console.log(
+		`    ${f("--external-key-accessor")} ${a("<path>")}    Runtime path to the secret ${d(
+			'(e.g. "globalThis.__K")'
+		)}`
+	);
+	console.log(
+		`      ${d(
+			"Binds decryption to an absent secret; breaks offline use of the asset."
+		)}`
+	);
+	console.log(
+		`    ${f("--link-provider")} ${a("<file>")}        Cross-file link provider (dir mode)`
+	);
+	console.log(
+		`    ${f("--link-consumers")} ${a("<a,b>")}        Consumers that require the provider`
+	);
+	console.log(
+		`      ${d(
+			"Consumers cannot run without the provider co-resident + loaded first."
+		)}`
+	);
+	console.log(
+		`    ${f("--decode-impurity")}          Chain decrypt (anti random-access)`
 	);
 	console.log();
 
@@ -806,6 +906,7 @@ async function runInteractive(version: string): Promise<void> {
 		options,
 		include: ["**/*.js"],
 		exclude: ["**/node_modules/**"],
+		keepSourceMaps: false,
 		help: false,
 		version: false,
 		interactive: false,
@@ -936,24 +1037,108 @@ async function obfuscateDirectoryWithProgress(
 		color: "cyan",
 	}).start();
 
+	// Pre-read every source so the cross-file cohort term can depend on the
+	// whole bundle (Layer-1 build-time tangle). Per-file hermeticity is
+	// otherwise preserved — each file keeps its own seed/names/key anchor.
+	const fileSources: string[] = [];
+	const readOk: boolean[] = [];
+	for (const file of files) {
+		try {
+			fileSources.push(
+				await fs.readFile(path.join(outputDir, file), "utf-8")
+			);
+			readOk.push(true);
+		} catch (err) {
+			// Surface the read failure and mark the file un-processable. The ""
+			// placeholder only keeps indices aligned with `files`/the cohort; the
+			// write loop skips it so we never overwrite the copied original with
+			// output generated from empty input.
+			fileSources.push("");
+			readOk.push(false);
+			errorCount++;
+			errors.push({
+				file,
+				message: `read failed: ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			});
+		}
+	}
+	const cohort: CohortContext | undefined =
+		files.length >= 2 || args.link
+			? createCohort(
+					files.map((file, i) => ({
+						path: path.join(outputDir, file),
+						code: fileSources[i] ?? "",
+					})),
+					randomBytes(4).readUInt32LE(0),
+					args.link
+			  )
+			: undefined;
+
+	// Strict cross-file link (Layer 2, opt-in) has NO fallback: each consumer
+	// bakes in a fold that only decrypts once the provider emits its runtime
+	// secret write at load. If the declared provider itself can't be processed,
+	// that write is never emitted and EVERY consumer ships non-runnable. Detect
+	// an unprocessable provider up front and fail loudly rather than reporting a
+	// dead bundle as N-1 "successes".
+	const linkProviderIdx =
+		args.link && cohort
+			? files.findIndex(
+					(file) => !!cohort!.providerLink(path.join(outputDir, file))
+			  )
+			: -1;
+	if (args.link && cohort) {
+		const n = args.link.consumers.length;
+		const consumerNoun = `consumer${n === 1 ? "" : "s"}`;
+		if (linkProviderIdx < 0) {
+			// Provider declared but not among the obfuscated files → its secret
+			// write is never emitted anywhere → all consumers would be dead.
+			spinner.fail(
+				chalk.red(
+					`cross-file link provider "${args.link.provider}" was not found among ` +
+						`the obfuscated files — its ${consumerNoun} would ship non-runnable ` +
+						`(strict link, no fallback). Aborting; check --link-provider and --include.`
+				)
+			);
+			process.exit(1);
+		}
+		if (!readOk[linkProviderIdx]) {
+			spinner.fail(
+				chalk.red(
+					`cross-file link provider "${files[linkProviderIdx]}" could not be read — ` +
+						`its ${n} ${consumerNoun} would ship non-runnable (strict link, no ` +
+						`fallback). Aborting; fix the provider and rebuild.`
+				)
+			);
+			process.exit(1);
+		}
+	}
+	let providerWritten = false;
+
 	for (let i = 0; i < files.length; i++) {
 		const file = files[i]!;
+		// A file that failed the pre-read pass was already counted as an error;
+		// skip it so its copied original is left intact (never overwritten with
+		// obfuscated empty-input output).
+		if (!readOk[i]) continue;
 		const filePath = path.join(outputDir, file);
+		const source = fileSources[i] ?? "";
 
-		let inputSize: number;
-		try {
-			inputSize = (await fs.stat(filePath)).size;
-		} catch {
-			inputSize = 0;
-		}
-		totalInputSize += inputSize;
+		totalInputSize += Buffer.byteLength(source, "utf-8");
 
 		spinner.text = `${renderBar(i, files.length)} ${chalk.dim(file)}`;
 
 		try {
-			await obfuscateFile(filePath, filePath, args.options);
-			const outputSize = (await fs.stat(filePath)).size;
-			totalOutputSize += outputSize;
+			const obfuscated = obfuscateCode(
+				source,
+				args.options,
+				cohort,
+				filePath
+			);
+			await fs.writeFile(filePath, obfuscated, "utf-8");
+			totalOutputSize += Buffer.byteLength(obfuscated, "utf-8");
+			if (i === linkProviderIdx) providerWritten = true;
 		} catch (err) {
 			errorCount++;
 			errors.push({
@@ -961,6 +1146,39 @@ async function obfuscateDirectoryWithProgress(
 				message: err instanceof Error ? err.message : String(err),
 			});
 		}
+	}
+
+	// Obfuscation-failure variant of the strict-link brick: the provider read OK
+	// (pre-loop guards above already abort on a missing/unreadable provider) but
+	// threw during obfuscation, so its secret write was never emitted. The
+	// consumers are already written yet non-runnable — surface the blast radius
+	// loudly (the provider's own error is recorded above; this names the impact
+	// so the operator does not ship a dead bundle).
+	if (args.link && linkProviderIdx >= 0 && !providerWritten) {
+		const n = args.link.consumers.length;
+		errors.push({
+			file: files[linkProviderIdx]!,
+			message: `link provider failed to obfuscate — its ${n} consumer${
+				n === 1 ? "" : "s"
+			} are NON-RUNNABLE (strict link, no fallback); fix the provider and rebuild`,
+		});
+	}
+
+	// Cleartext-leak gate: remove copied source maps (and any surviving
+	// sourceMappingURL annotations) so the original source never ships
+	// alongside the obfuscated output. On by default; --keep-source-maps opts out.
+	let mapsRemoved = 0;
+	let gateError: string | undefined;
+	try {
+		mapsRemoved = await gateSourceMaps(outputDir, {
+			keepSourceMaps: args.keepSourceMaps,
+		});
+	} catch (err) {
+		// Never fail a build over the gate, but DO surface the failure: this gate
+		// is what prevents shipping original source via .map files, so a silent
+		// swallow could let a source leak through unnoticed.
+		mapsRemoved = 0;
+		gateError = err instanceof Error ? err.message : String(err);
 	}
 
 	const elapsed = Date.now() - startTime;
@@ -998,6 +1216,22 @@ async function obfuscateDirectoryWithProgress(
 	console.log(
 		`  ${chalk.dim("Time:")}     ${chalk.white(formatTime(elapsed))}`
 	);
+	if (mapsRemoved > 0) {
+		console.log(
+			`  ${chalk.dim("Maps:")}     ${chalk.white(
+				`${mapsRemoved} source map${
+					mapsRemoved === 1 ? "" : "s"
+				} stripped`
+			)}`
+		);
+	}
+	if (gateError) {
+		console.log(
+			`  ${chalk.yellow("⚠")} ${chalk.yellow(
+				`source-map gate failed: ${gateError} — verify no .map files or sourceMappingURL annotations remain in ${relDir}`
+			)}`
+		);
+	}
 
 	if (errors.length > 0) {
 		console.log();

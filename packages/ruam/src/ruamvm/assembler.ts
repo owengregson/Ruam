@@ -43,6 +43,7 @@ import {
 import { buildDebugProtection } from "./builders/debug-protection.js";
 import { buildDebugLogging } from "./builders/debug-logging.js";
 import { buildRollingCipherSource } from "./builders/rolling-cipher.js";
+import { buildExternalKeyFold } from "./builders/external-key.js";
 import { buildIncrementalCipherSource } from "./builders/incremental-cipher.js";
 import {
 	buildInterpreterFunctions,
@@ -102,6 +103,10 @@ export function generateVmRuntime(options: {
 	integrityHash?: number;
 	usedOpcodes?: Set<number>;
 	cipherSalt?: number;
+	/** Cross-file cohort term, XOR-folded into the key anchor like integrityHash. */
+	cohortTerm?: number;
+	/** Off-device / cross-file key bindings: dotted accessor paths read + folded at runtime. */
+	externalKeyAccessors?: string[];
 	mixedBooleanArithmetic?: boolean;
 	handlerFragmentation?: boolean;
 	/** Generate per-build polymorphic decoder chain for string constants. */
@@ -120,6 +125,8 @@ export function generateVmRuntime(options: {
 	semanticOpacity?: boolean;
 	/** Silently corrupt cipher state when function references are tampered. */
 	observationResistance?: boolean;
+	/** Decode impurity (W3): chained keystream in the decode-cache materialization. */
+	decodeImpurity?: boolean;
 	/** Number of functions to bind for observation resistance (from tuning). */
 	identityBindingCount?: number;
 	/** Tuning: probability (0-100) of witness check per handler. */
@@ -150,6 +157,8 @@ export function generateVmRuntime(options: {
 		integrityHash,
 		usedOpcodes,
 		cipherSalt,
+		cohortTerm,
+		externalKeyAccessors,
 		mixedBooleanArithmetic = false,
 		handlerFragmentation = false,
 		polymorphicDecoder = false,
@@ -160,6 +169,7 @@ export function generateVmRuntime(options: {
 		incrementalCipher = false,
 		semanticOpacity = false,
 		observationResistance = false,
+		decodeImpurity = false,
 		identityBindingCount = 5,
 		witnessCheckProbability,
 		alphabet,
@@ -293,6 +303,7 @@ export function generateVmRuntime(options: {
 			incrementalCipher,
 			semanticOpacity,
 			observationResistance,
+			decodeImpurity,
 			witnessCheckProbability,
 		},
 		split,
@@ -322,6 +333,41 @@ export function generateVmRuntime(options: {
 				)
 			)
 		);
+	}
+	// Cross-file cohort tangle: fold the cohort term into the key anchor.
+	// Mirrors the build-side `keyAnchor ^= cohortTerm` in transform.ts so
+	// rcDeriveKey reproduces the exact key used to encrypt the bytecode.
+	if (rollingCipher && cohortTerm !== undefined) {
+		tier2Nodes.push(
+			exprStmt(
+				assign(
+					id(names.keyAnchor),
+					bin(
+						BOp.Ushr,
+						bin(
+							BOp.BitXor,
+							id(names.keyAnchor),
+							split(cohortTerm)
+						),
+						lit(0)
+					)
+				)
+			)
+		);
+	}
+	// Off-device / cross-file key binding: read each secret from its accessor at
+	// runtime, hash it, and fold into the key anchor. Mirrors the build-side
+	// `keyAnchor ^= fnv1a(secretValue)`. Without the correct runtime secret the
+	// key is wrong and decryption produces garbage (the intended denial). One
+	// fold per accessor: externalKeyBinding (off-device secret) and/or a
+	// cross-file runtime link (sibling-supplied secret) may both be present.
+	if (rollingCipher && externalKeyAccessors && externalKeyAccessors.length) {
+		const ekGen = registry.createDynamicGenerator("externalKey");
+		for (const accessor of externalKeyAccessors) {
+			tier2Nodes.push(
+				...buildExternalKeyFold(names, accessor, ekGen, split)
+			);
+		}
 	}
 	// Rolling cipher helpers (must come after handler table + key anchor)
 	if (rollingCipher) {
@@ -556,6 +602,8 @@ export function generateShieldedVmRuntime(options: {
 	semanticOpacity?: boolean;
 	/** Silently corrupt cipher state when function references are tampered. */
 	observationResistance?: boolean;
+	/** Decode impurity (W3): chained keystream in the decode-cache materialization. */
+	decodeImpurity?: boolean;
 	/** Number of functions to bind for observation resistance (from tuning). */
 	identityBindingCount?: number;
 	/** Tuning: probability (0-100) of witness check per handler. */
@@ -585,6 +633,7 @@ export function generateShieldedVmRuntime(options: {
 		incrementalCipher = false,
 		semanticOpacity = false,
 		observationResistance = false,
+		decodeImpurity = false,
 		identityBindingCount = 5,
 		witnessCheckProbability,
 		alphabet,
@@ -727,6 +776,7 @@ export function generateShieldedVmRuntime(options: {
 				incrementalCipher,
 				semanticOpacity,
 				observationResistance,
+				decodeImpurity,
 				witnessCheckProbability,
 			},
 			groupSplit,
