@@ -201,6 +201,8 @@ const callInputs = (operand: number): ResolvedStackArity =>
 	operand >= 0 ? operand + 1 : dynamicArity;
 const methodCallInputs = (operand: number): ResolvedStackArity =>
 	operand >= 0 ? operand + 2 : dynamicArity;
+const dynamicImportInputs = (operand: number): ResolvedStackArity =>
+	operand === 1 || operand === 2 ? operand : dynamicArity;
 
 const overrides = new Map<SemanticOpValue, SignatureOverride>();
 
@@ -1112,8 +1114,8 @@ classify([SemanticOp.PUSH_THIS, SemanticOp.PUSH_NEW_TARGET], {
 	readsThis: true,
 });
 classify([SemanticOp.DYNAMIC_IMPORT], {
-	operandKind: "none",
-	stackInput: 1,
+	operandKind: "count",
+	stackInput: dynamicImportInputs,
 	stackOutput: 1,
 	effect: "async",
 	control: "call",

@@ -636,7 +636,7 @@ export enum Op {
 	PUSH_WELL_KNOWN_SYMBOL,
 	/** Push `import.meta` object. */
 	IMPORT_META,
-	/** `import(specifier)` — dynamic import expression. */
+	/** Dynamic import (operand: 1 for specifier, 2 with import options). */
 	DYNAMIC_IMPORT,
 	/** `debugger` statement. */
 	DEBUGGER_STMT,

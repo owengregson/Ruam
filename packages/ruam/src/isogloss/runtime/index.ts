@@ -1,4 +1,3 @@
-export { executeCanonicalRootGroup } from "./reference-runtime.js";
 export {
 	UnsupportedCanonicalRuntimeOperationError,
 	type CanonicalEffectEvent,
