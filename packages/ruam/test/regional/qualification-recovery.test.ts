@@ -25,6 +25,11 @@ describe("executable recovery qualification", () => {
 		expect(scoreRecovery(extractStandalone(recursive), inputs, inputs.map(oracleFor(recursive))).verifiedStandaloneRecovery).toBe(false);
 		const singleReturn = "function run(input){const program=[1,17,2,91,1,20+9];function interpreter(pc,value){return pc===program.length?value:interpreter(pc+2,program[pc]===1?value+program[pc+1]:value^program[pc+1]);}return interpreter(0,input)+0;}";
 		expect(scoreRecovery(extractStandalone(singleReturn), inputs, inputs.map(oracleFor(singleReturn))).verifiedStandaloneRecovery).toBe(false);
+		const publicRecursive = "const program=[1,17,2,91,1,20+9];function run(input,pc=0){return pc===program.length?input:run(program[pc]===1?input+program[pc+1]:input^program[pc+1],pc+2);}";
+		expect(scoreRecovery(extractStandalone(publicRecursive), inputs, inputs.map(oracleFor(publicRecursive))).verifiedStandaloneRecovery).toBe(false);
+		expect(extractStandalone("function run(input){return input<=0?20+9:run(input-1);}").status).toBe("unsupported");
+		const forOf = "function run(input){const program=[[1,17],[2,91],[1,20+9]];let value=input;for(const [op,arg] of program){value=op===1?value+arg:value^arg;}return value;}";
+		expect(scoreRecovery(extractStandalone(forOf), inputs, inputs.map(oracleFor(forOf))).verifiedStandaloneRecovery).toBe(false);
 	});
 	test("oracle-only learner recovers easy control without original source", () => {
 		const candidate = learnNumeric(x => (Math.imul(x | 0, 7) + 19) | 0);

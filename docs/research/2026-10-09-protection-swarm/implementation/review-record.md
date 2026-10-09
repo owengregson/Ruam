@@ -28,3 +28,13 @@ The implementation was divided among three workers: A owned bounded compiler rec
 - Main and PR5 selected baseline behavior each passed 10/10 runs. PR7's ordinary rows had no protected regions; its separate declared-domain probe did. WIP restoration stayed isolated and recorded passes and timeouts without resistance credit.
 
 These checks do not establish real-browser behavior, whole-source protection, unrestricted equivalence or a security multiplier. The research outcome is **NO-GO for expansion**. The production VM remains the default. PR-head review approvals and remote CI results are recorded on the PR separately; this pre-review record is not a fabricated GitHub approval.
+
+## Follow-up review of PR #11
+
+Worker A found two more ways that unrelated constant folding could disguise a retained runtime: recursion in the public entry and a single-parameter `for-of` interpreter. Worker C replaced the permissive residual-root test with positive admission of a closed scalar expression or the exact scalar-transition/history scaffold. All six retained-runtime counterexamples now return unsupported; A approved that correction after checking the code and direct reproductions.
+
+The final recovery regression suite passed seven tests and 21 assertions with a 30-second test deadline. A concurrent rerun hit the default five-second deadline under host contention without an assertion mismatch; that timeout is not recorded as a passing run. Library typechecking passed. C's independent review of compiler, graph, publication and entry points passed 60 tests with 1,060 assertions, also using the explicit deadline.
+
+After freezing the corrected sources, the 576-row qualification run completed with all recorded source hashes matching and `sourcesUnchangedDuringRun:true`: 576 behavioral passes, 480 static recoveries, 128 oracle recoveries, and 576 recovered by at least one lane. The 30 distinct artifacts are not 576 independent realizations. Every dependent/configuration family triggered the early falsifier, with paired median CPU ratios of approximately 0.613–1.240 versus plain generation. No complete root qualified. The result remains **NO-GO**, without a protected-baseline strength claim.
+
+Copilot reported that it could not review the PR because the requesting user's quota was exhausted. That comment is not approval. Actual cross-worker reviews, their scopes, final commit and remote checks are attributed on the PR before merge.

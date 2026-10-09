@@ -75,6 +75,28 @@ function reduceScalarBody(fn: t.FunctionDeclaration, allowUnchanged = false): t.
 	try { const result = statements(fn.body.body, initial); return (assignments || allowUnchanged) && result && generate(result).code.length < 20_000 ? result : null; } catch { return null; }
 }
 
+/** Exact admitted residual scaffold, not a blacklist of interpreter spellings. */
+function isHistoryRoot(fn: t.FunctionDeclaration): boolean {
+	if (fn.params.length !== 1 || !t.isIdentifier(fn.params[0])) return false;
+	const input = fn.params[0].name;
+	const body = fn.body.body.filter(statement => !t.isFunctionDeclaration(statement));
+	if (body.length !== 3 || !t.isVariableDeclaration(body[0]) || body[0].declarations.length !== 2 || !t.isForStatement(body[1]) || !t.isReturnStatement(body[2])) return false;
+	const [state, output] = body[0].declarations;
+	if (!state || !output || !t.isIdentifier(state.id) || !t.isNumericLiteral(state.init) || !t.isIdentifier(output.id) || !t.isArrayExpression(output.init) || output.init.elements.length || !t.isIdentifier(body[2].argument, { name: output.id.name })) return false;
+	const loop = body[1];
+	if (!t.isVariableDeclaration(loop.init) || loop.init.declarations.length !== 1) return false;
+	const counter = loop.init.declarations[0]!;
+	if (!t.isIdentifier(counter.id) || !t.isNumericLiteral(counter.init, { value: 0 }) || !t.isUpdateExpression(loop.update, { operator: "++" }) || !t.isIdentifier(loop.update.argument, { name: counter.id.name })) return false;
+	if (!t.isBinaryExpression(loop.test, { operator: "<" }) || !t.isIdentifier(loop.test.left, { name: counter.id.name }) || !t.isMemberExpression(loop.test.right) || loop.test.right.computed || !t.isIdentifier(loop.test.right.object, { name: input }) || !t.isIdentifier(loop.test.right.property, { name: "length" })) return false;
+	if (!t.isBlockStatement(loop.body) || loop.body.body.length !== 2) return false;
+	const [transition, append] = loop.body.body;
+	if (!t.isExpressionStatement(transition) || !t.isAssignmentExpression(transition.expression, { operator: "=" }) || !t.isIdentifier(transition.expression.left, { name: state.id.name }) || !t.isCallExpression(transition.expression.right)) return false;
+	const call = transition.expression.right;
+	if (!t.isIdentifier(call.callee) || call.arguments.length !== 2 || !t.isIdentifier(call.arguments[0], { name: state.id.name }) || !t.isMemberExpression(call.arguments[1]) || !call.arguments[1].computed || !t.isIdentifier(call.arguments[1].object, { name: input }) || !t.isIdentifier(call.arguments[1].property, { name: counter.id.name })) return false;
+	if (!fn.body.body.some(statement => t.isFunctionDeclaration(statement) && statement.id?.name === (call.callee as t.Identifier).name && reduceScalarBody(statement, true))) return false;
+	return t.isExpressionStatement(append) && t.isCallExpression(append.expression) && t.isMemberExpression(append.expression.callee) && !append.expression.callee.computed && t.isIdentifier(append.expression.callee.object, { name: output.id.name }) && t.isIdentifier(append.expression.callee.property, { name: "push" }) && append.expression.arguments.length === 1 && t.isIdentifier(append.expression.arguments[0], { name: state.id.name });
+}
+
 export function extractStandalone(artifact: string, publicEntry = "run"): RecoveryCandidate {
 	const started = begin();
 	const transformations: Record<string, number> = { constantFolds: 0, helperInlines: 0, scalarBodiesReduced: 0, unusedFunctionsRemoved: 0, ssaStatements: 0 };
@@ -90,8 +112,9 @@ export function extractStandalone(artifact: string, publicEntry = "run"): Recove
 		}
 		const root = declarations.get(publicEntry);
 		if (!root) return { kind: "static-extraction", status: "unsupported", reason: "Public entry is not a top-level statically bound declaration; no VM lifting implemented.", transformations, resources: resources(started) };
+		if (!t.isFunctionDeclaration(root) || root.params.length !== 1 || !t.isIdentifier(root.params[0])) return { kind: "static-extraction", status: "unsupported", reason: "Recovery grammar requires one plain input parameter; default/rest/destructured entries are unsupported.", transformations, resources: resources(started) };
 		const needed = new Set([publicEntry]);
-		let selected = [t.cloneNode(root, true)];
+		let selected: t.Statement[] = [t.cloneNode(root, true)];
 		for (let pass = 0; pass < 24; pass++) {
 			let changed = false;
 			const file = t.file(t.program(selected));
@@ -104,7 +127,7 @@ export function extractStandalone(artifact: string, publicEntry = "run"): Recove
 			if (!changed) break;
 		}
 		// Copying the whole generated interpreter is not independently extracted semantics.
-		if (needed.size > 12) return { kind: "static-extraction", status: "artifact-transplant-only", reason: `Entry requires ${needed.size} top-level bindings; refusing to relabel a retained runtime as recovery.`, transformations, resources: resources(started) };
+		if (needed.size > 1) return { kind: "static-extraction", status: "unsupported", reason: `Entry requires ${needed.size} top-level bindings; only self-contained scalar/history entries are supported, not retained external runtimes.`, transformations, resources: resources(started) };
 		const recovered = t.file(t.program(selected));
 		// A bounded declaration count does not exclude an embedded interpreter. Admit only the
 		// scalar-expression plus ordered array-history grammar, never generic dispatch machinery.
@@ -121,7 +144,10 @@ export function extractStandalone(artifact: string, publicEntry = "run"): Recove
 			},
 			CallExpression(path) {
 				const callee = path.node.callee;
-				if (t.isIdentifier(callee) && path.scope.getBinding(callee.name)?.path.isFunctionDeclaration()) return;
+				if (t.isIdentifier(callee)) {
+					if (callee.name === publicEntry) { residualRuntime = "recursive public entry"; return; }
+					if (path.scope.getBinding(callee.name)?.path.isFunctionDeclaration()) return;
+				}
 				if (t.isMemberExpression(callee) && !callee.computed && t.isIdentifier(callee.property)) {
 					if (t.isIdentifier(callee.object, { name: "Math" }) && callee.property.name === "imul") return;
 					if (t.isIdentifier(callee.object) && callee.property.name === "push") {
@@ -172,6 +198,8 @@ export function extractStandalone(artifact: string, publicEntry = "run"): Recove
 			const binding = path.parentPath.scope.getBinding(path.node.id.name);
 			if (binding && !binding.referenced) { path.remove(); transformations.unusedFunctionsRemoved!++; }
 		} } });
+		const residualEntry = recovered.program.body.find(statement => t.isFunctionDeclaration(statement) && statement.id?.name === publicEntry) as t.FunctionDeclaration | undefined;
+		if (!residualEntry || (!reduceScalarBody(residualEntry, true) && !isHistoryRoot(residualEntry))) return { kind: "static-extraction", status: "unsupported", reason: "Residual public entry is outside the positive closed-scalar/exact-history grammar; no runtime retention credit.", transformations, resources: resources(started) };
 		let sequence = 0;
 		// Produce a fresh three-address computation for returns, not a wrapper invoking the artifact.
 		traverse(recovered, { ReturnStatement(path) {

@@ -1,0 +1,25 @@
+{
+  "worker": "worker-c",
+  "slateRevision": "r1",
+  "selected": ["A1"],
+  "reasons": {
+    "A1": "Conditionally select one algorithm-and-derived-state architecture for partial semantic edit and falsifiable comprehension tasks. Genuine changes across initialization, event updates and observations may require recovering coupled unchanged behavior. A cheap clean machine or shadow evaluator can still defeat it; this vote funds that falsifier, not a strength claim.",
+    "A2": "Do not select. Circuit extraction and public synthesis rules can yield a usable independent relation without original word reconstruction. I could not supply a concrete existing noncryptographic kernel and partial edit that survives this attack while meeting legitimate cost limits.",
+    "A3": "Do not select separately. Future-observation quotienting overlaps A1 infrastructure and may expose a simpler transition system. History count measures coverage, not difficulty. I withdrew my independent nomination after the direct challenge."
+  },
+  "requiredConditions": [
+    "Freeze three existing source-defined evaluator roots and their original event/observation interfaces before selecting transformations; report admission failures rather than substitute generated kernels.",
+    "Retain source-required records, deletion maps, iteration order, identity, numeric behavior and effects; bounds must already belong to the source contract.",
+    "Audit edit-ticket information equally for ordinary and transformed baselines. A complete replacement specification must not be mistaken for a task requiring invariant recovery.",
+    "Allow added-state sidecars, full history retention, reset/replay, omission and synthesis of events, black-box learning, output patching and complete reimplementation.",
+    "Require partial edits to preserve all unchanged observable behavior across held-out histories and resets; comprehension must predict behavior and state a testable invariant.",
+    "Score executable recovery, original-source attribution, partial edits and comprehension separately. A clone failure does not invalidate an edit result, and an edit result does not establish clone resistance.",
+    "Run cheap transition extraction and ticket-driven shadow reimplementation before a broad compiler build. Comparable-cost success stops the corresponding protection claim.",
+    "Measure legitimate runtime, cold start, tails, bytes, memory and support limits alongside CPU, wall, analyst/model work and reusable setup; do not credit overhead alone."
+  ],
+  "cheapestDefeat": "Observe the public event stream, retain tuples/history in a sidecar, and implement the requested partial change using the ticket, a small amount of recovered unchanged behavior and replay. In parallel, extract initialization, transition and output equations into a clean evaluator. Neither attack needs original state names or the intended representation inverse.",
+  "firstExperiment": "Choose one pre-existing pilot evaluator and a precise partial-behavior edit whose unchanged coupled semantics remain required. Audit the ticket, build only applicable hand-checked algorithm alternatives, and attempt direct transition extraction, shadow reconstruction and replay/synthetic-event edits against the ordinary and transformed versions with identical information. If the task survives, freeze the three-root study and broader attack protocol; otherwise stop before building a new general compiler.",
+  "claimsDemonstratedSecurity": false,
+  "claimsFunctionalRecoveryResistance": false,
+  "voteMeaning": "conditional-research-selection"
+}
