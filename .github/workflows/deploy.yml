@@ -6,8 +6,6 @@ on:
     paths:
       - 'apps/web/**'
       - '.github/workflows/deploy.yml'
-    paths-ignore:
-      - 'packages/ruam/**'
 
 concurrency:
   group: deploy-pages
