@@ -1,0 +1,95 @@
+# Independent ambitious architecture search — worker B
+
+Date: 2026-10-09. This brief was generated before reading the coordinator's candidate brief or the other worker's new proposals. It is a candidate inventory, not a final selection. No candidate below has demonstrated protection. The existing regional implementation remains an explicitly unqualified experiment.
+
+The adversary receives the entire final JavaScript package, compiler implementation, build seed, arbitrary execution and instrumentation, patching, snapshots, and multiple builds. There is no server, WASM, TEE, secret runtime service, trusted clock, or inaccessible key. Every accepted program must preserve its declared program-visible behavior. Hosts remain observable effect boundaries. All supplied authored code stays owned; an unsupported contribution rejects the package. Selecting a small qualified profile is different from silently running unsupported authored code through an easy realization.
+
+The relevant target is the cheapest **valid functional replacement**, including a normalized machine, circuit, relation, or table-driven implementation. Recovering owner variable names or the original algorithm is unnecessary. Copying the unchanged artifact is recorded separately; excluding unchanged reuse must not also exclude a generic extractor that emits a new, ordinary evaluator. Otherwise almost every proposal can win by changing the vocabulary of its intermediate representation. General virtual-black-box obfuscation has impossibility results; those do not establish that every bounded extraction-cost improvement is impossible. [Barak et al., original paper](https://www.wisdom.weizmann.ac.il/~oded/PS/obf3.pdf)
+
+## B1 — Whole-algorithm resynthesis with an adversarial extraction objective
+
+**Construction.** Replace selected complete computations with implementations from genuinely different algorithm families, then optimize their combined observable result. For example, a rule engine's nested branches and helper predicates become a reduced multi-output decision network; a repeated collection scan becomes indexed joins and aggregate maintenance; a bounded integer transform becomes a jointly synthesized bit network. The source's call graph, data structures, and intermediate algorithm cease to exist. This exceeds call inlining or local MBA: the synthesis search crosses representations and algorithms, not just expressions. Candidate generation is deterministic under public seeds, with verified semantic rules and bounded search.
+
+**Proposed obstacle.** One reusable “undo this lowering” pass cannot recover source-shaped operations because no inverse structural correspondence exists. Domain-specific recognition and new algorithm synthesis may be necessary to obtain a smaller replacement. Selection uses the minimum cost of a portfolio of extractors, never source ugliness. Equality saturation supplies a way to retain equivalent alternatives and choose an extraction cost; it does not itself supply a security metric. The synthesis machinery would be implemented as JavaScript build tooling, not ship a Rust/WASM dependency. [egg primary paper](https://arxiv.org/abs/2004.03082)
+
+**Cheapest defeat.** Ignore the source algorithm. Convert the chosen implementation directly into clean SSA or a clean decision-network evaluator. Algorithm recognition by a model may also make the new implementation easier than the old. Public build rules let the attacker reuse the compiler's own equivalences.
+
+**Burden and first falsifier.** Exact proofs need separate integer, string, collection-order, and effects models; arbitrary Number reassociation is forbidden. Start with bounded pure roots and three substantially different algorithm families, not eight arithmetic identities. Run the same SSA/partial-evaluation/model-assisted extraction harness on each. Kill the protection claim if direct translation yields valid replacements as cheaply as the strongest baseline, even when reconstructing the owner's original algorithm looks difficult. Performance improvements are useful but not evidence of resistance.
+
+## B2 — Persistent incremental computation synthesized across transactions
+
+**Construction.** Compile a stateful application's full transition relation into auxiliary materialized views and their higher-order update rules. Store enough derived state to answer and update several outputs jointly, without retaining the source's original collection representation. A pricing engine that repeatedly scans inventory, discounts, and eligibility sets could become mutually maintained counts, indexes, and cross terms. No cold-path copy of the old scan remains. Initialization is synthesized from the same rules and included in the attack surface. Higher-order incremental view maintenance is an existing semantic technique; using its structural change as protection is the new hypothesis here. [DBToaster original work](https://arxiv.org/abs/1207.0137)
+
+**Proposed obstacle.** The attacker must recover relations among long-lived views and transitions across real application events. Per-output slicing may include many shared updates; a local arithmetic reducer cannot reconstruct the old query or safely delete apparently redundant state. These are necessary updates, not noise or artificial execution history.
+
+**Cheapest defeat.** Extract the initialization and update rules together as a new state machine. Instrument view deltas, reset the program, and apply chosen events to learn algebraic invariants. Copying a generic map/update engine plus extracted rules may already meet the replacement criterion. A synthesized initialization routine may directly reveal the original query.
+
+**Burden and first falsifier.** Memory can grow badly with auxiliary indexes; duplicate keys, iteration order, exceptions, aliasing and callbacks constrain admissible rewrites. Start with a source-established finite map/event interface with exact update order, then test reset, repeated events, deletions and adversarial reentry. Train a generic delta-to-transition extractor on one app and attack a held-out app. Stop if it lifts the maintained state and transitions without recovering the original views. A win must survive long traces and cold initialization, not only steady-state throughput.
+
+## B3 — Observer-derived state and irreversible removal of owner structure
+
+**Construction.** Derive the smallest practical state sufficient for all declared future observations, then synthesize transitions on that state. Owner fields that can never be distinguished by future inputs collapse into the same abstract state. Several redundant representations can disappear entirely. For a finite protocol/policy subsystem, this resembles minimizing a transducer; for a numeric subsystem, it may mean maintaining sufficient invariants instead of original variables. Joint minimization spans every output and future transition, not one selected output.
+
+**Proposed obstacle.** The original representation becomes information-theoretically non-identifiable from the artifact: multiple source implementations yield the same observational quotient. That can protect implementation history or constants that were truly behaviorally redundant. There is no decoder to discover because the eliminated information is absent.
+
+**Cheapest defeat.** The minimized transition system is often the simplest functional replacement! This candidate may improve owner-structure confidentiality while making functional extraction faster. It therefore cannot inherit the project's replacement-resistance claim merely because reconstruction of the original source is impossible.
+
+**Burden and first falsifier.** Whole future-observation equivalence is difficult; initial admission must be explicitly finite or use proved abstractions. External object identity and source-sensitive reflection can prohibit merging. Construct a small policy machine where several source states merge, then hand the result to a generic transition-table extractor. If clean extraction becomes easier, retain this only as an optimization or a separate source-information-removal result. It must not be renamed “stronger protection.”
+
+## B4 — Space-time compilation into a nonlinear recurrent Boolean fabric
+
+**Construction.** Compile a bounded integer transaction into a synchronous recurrent network. Values, phase, and control reside together in a vector of bits; sparse nonlinear updates move information through multiple rounds. Synthesis chooses an entire time-unrolled behavior, then folds compatible nodes into repeated state updates. Completion is a proved bounded phase, not timeout behavior. There are no opcode handlers or source-operation dispatch tables; only a generated state-update circuit and a final projection. The selected architecture must not emit an additional direct implementation.
+
+**Proposed obstacle.** A source value is distributed across both state coordinates and time. Discovering one variable encoding or reducing one arithmetic expression does not identify the macro transition. The potential cost is recovering invariants of a recurrent system, rather than naming VM opcodes.
+
+**Cheapest defeat.** Extract its next-state equations, unroll its public round count, constant-propagate phase bits, and emit a clean circuit. Alternatively preserve recurrence in a clean loop. Public seeds expose permutations and any reversible coordinate transform chosen independently of source semantics. Calling the network a “reservoir” or “neural” machine changes none of this.
+
+**Burden and first falsifier.** Potentially severe slowdown and code growth; bounded synthesis and exact Boolean equivalence are essential. JS Number/BigInt coercion must happen at proven source points, with general behavior rejected if not supported. Prototype only 8–16-bit multi-output roots and measure the direct transition-extractor first. Kill if the extracted circuit is cheap and valid even when algebraic source reconstruction is slow. Only later consider word packing and temporal folding; optimizations can expose the circuit more clearly.
+
+## B5 — Execution of a unique implicit relation
+
+**Construction.** Replace explicit assignments with a system of constraints tying inputs, outputs and internal witnesses together. Compilation proves that each admitted input has one output and provides a bounded witness-construction schedule. Constraints fuse branches and arithmetic across a full transaction, and the emitted code executes a source-specific elimination schedule. A general solver or universal semantic router is not allowed as the supposedly protected boundary: if one is required, it is part of the attackable artifact and its extraction is scored.
+
+**Proposed obstacle.** The artifact exposes a relation whose cheapest alternative witness schedule may require global elimination or synthesis. A locally recovered equation does not necessarily correspond to an original operation or isolate an output. This could make clean reduction harder than SSA extraction when many indispensable constraints remain coupled.
+
+**Cheapest defeat.** Export the constraints and use the same witness schedule in a generic evaluator. If a straight-line witness generator appears, lift it to SSA. If runtime uses a solver, extract its data and ship a clean solver. Unique outputs alone do not make the relation difficult to execute or clone.
+
+**Burden and first falsifier.** Uniqueness and termination are correctness obligations for every input, not empirical convergence claims. General SAT search is incompatible with predictable budgets without much tighter limits. Compare a small coupled arithmetic/branch example against a relation-extractor that knows every supported constraint kind. Stop if a portable evaluator preserves behavior with comparable effort. This is an ambitious execution-model experiment, not an established cryptographic construction.
+
+## B6 — Global tensor-network realization of exact finite behavior
+
+**Construction.** Express a bounded multi-output Boolean computation as tensor factors, contract and refactor across source boundaries, and emit a specialized contraction plan using exact small integers or Boolean-semiring operations. Source gates become internal indices and disappear after partial contraction; factors may span data and branch conditions jointly. Different whole-root decompositions have different memory/time tradeoffs. Crucially, the candidate is not merely gate tables with a new name: contraction must actually remove source-operation boundaries and change the computational graph.
+
+**Proposed obstacle.** Recovering a useful compact imperative algorithm may require factorization and global reasoning; independent output slices may lose substantial shared work. Whole-network decompositions potentially give more structural variation than changing local opcodes.
+
+**Cheapest defeat.** Extract the factor arrays and contraction order into a clean generic tensor evaluator. Public encodings and low-rank factors can expose ordinary gates immediately. The attacker need not refactor anything if the evaluator is an accepted valid replacement.
+
+**Burden and first falsifier.** Intermediate tensors can expand exponentially; hard size, rank, and peak-memory caps must precede compilation. Floating-point contractions would violate exact bit semantics unless rigorously bounded; start with exact finite operations. A first experiment uses three small dependent-output circuits with distinct contraction orders and one reusable tensor extractor. Reject resistance if its cost is approximately linear in artifact size. Any useful optimization result remains separate.
+
+## B7 — Input-witness predicates using a public injective one-way map
+
+**Construction.** For source constants used solely as strict equality predicates, encode candidate strings injectively as exponents `x` in a bounded range and replace comparison to a hidden constant `s` by `g^x mod p === g^s mod p` in a certified prime-order group. Inputs outside the exact type/length/range immediately produce the original false result. Because exponentiation is injective on the admitted exponent range, this avoids the semantic collision problem of replacing equality with an ordinary hash. No runtime key or hidden seed is required; group parameters are public. Established finite-field group parameters illustrate the mathematical substrate, not a proof of this product design. [RFC 7919](https://www.rfc-editor.org/rfc/rfc7919.html)
+
+**Proposed obstacle.** Recovering a high-entropy unobserved constant becomes a discrete-log problem or dictionary search, not locating a string. A branch's necessary data could additionally depend on the genuine witness, but dynamic-source decryption would conflict with CSP and must not become a hidden eval lane.
+
+**Cheapest defeat.** For functional replacement, copy the public predicate and constant into a small clean modular-exponentiation routine. For constant extraction, observe one successful input or enumerate a low-entropy dictionary. Patching a license check can simply remove it when successful protected computation needs no unavailable information. Thus this candidate offers a narrow hidden-constant hypothesis, not whole-program clone resistance.
+
+**Burden and first falsifier.** Exact UTF-16 encoding, length checks, subgroup/range proofs, and expensive BigInt exponentiation are real costs. Do not invent secret key generation hidden from the seed-known model. Give the extractor one positive trace and the public predicate; require both literal recovery and functional replacement to be reported separately. It is disqualified as a general architecture if the project's target is functional replacement alone, but deserves an explicit hearing because it supplies a different, concrete obstacle under a narrower objective.
+
+## B8 — Reusable garbled execution without a trusted party
+
+**Construction.** Try replacing wires with cryptographic labels and gates with encrypted local transition records. A reusable input encoder accepts arbitrary user inputs, while an output decoder produces ordinary JS results. Garbling is a real cryptographic technique with precise security definitions, not a synonym for obfuscation. Those definitions must be checked against what the artifact actually gives its adversary. [Bellare, Hoang and Rogaway, publication record and primary papers](https://web.cs.ucdavis.edu/~rogaway/papers/)
+
+**Proposed obstacle.** If only one appropriate label per input wire were available, the evaluator could execute without seeing both semantic alternatives. That is a meaningful mechanism in other models.
+
+**Cheapest defeat here.** The offline reusable encoder and unrestricted chosen inputs let the attacker obtain both labels for each input bit; public deterministic seed-derived labels are easier still. Propagating label alternatives through gate tables reconstructs truth tables. If encoders hide another secret implementation, the problem has merely moved there. An external party that withholds labels, a one-time hardware token, or an inaccessible key would change the stipulated model.
+
+**Burden and first falsifier.** High cryptographic runtime/source overhead, difficult reuse security, and an input-encoding seam. Before any implementation, expose encoder state and run the both-input-labels attack on a tiny circuit. This candidate should fail that falsifier unless its authors supply a precise replacement construction and proof under the actual fully exposed model. “Encrypted VM” is insufficient.
+
+## Shared experimental contract, before selecting one or two
+
+Compare against ordinary generated JS, strongest functional PR5, eligible PR7 scalar BPRF, and the current regional experiment on the same inputs. Use per-output, whole-root, cold initialization, multiple builds, known seeds and known supported rewrite rules. Include reset/replay, chosen-event instrumentation, direct normalized-machine extraction, and model-assisted algorithm recognition. Baseline calibration and held-out builds precede selection.
+
+Report wall time to a validated replacement, CPU, memory, tokens, analyst effort, tool setup and amortization. Count the cheapest successful attack lane; failure of a solver cannot hide success of a small generic evaluator. Report legitimate runtime, cold start, peak heap, package bytes, build search time, maximum supported dimensions, and rejection fraction. Candidate artifacts must not receive extra CPU, input restrictions or inaccessible owner facts that the baseline lacks.
+
+The first debate should distinguish B1/B2's algorithm change, B4/B5/B6's execution-model change, B3's source-information removal, and B7/B8's cryptographic assumptions. These are real competing explanations of where resistance might arise, with different failure modes. This brief deliberately makes no final choice. We should select at most one or two only after the other workers attack these proposals and we inspect their alternatives; none earns selection merely for being more complicated than the existing compiler.

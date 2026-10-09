@@ -1,0 +1,149 @@
+{
+  "worker": "worker-c",
+  "slateRevision": "r1",
+  "preferredPlan": "P-regional",
+  "ranking": [
+    "P-regional",
+    "P-research",
+    "P-legacy"
+  ],
+  "components": {
+    "C01": {
+      "disposition": "foundation",
+      "reason": "Reliable historical controls and preserved language fixtures are necessary to distinguish actual progress from deleted coverage or broken baselines.",
+      "conditions": [
+        "Publish minimal baseline repair diffs and reproduce a suspected defect before fixing it.",
+        "Keep every historical fixture classified as supported, rejected with reason, or failing; no green-by-deletion migration."
+      ]
+    },
+    "C02": {
+      "disposition": "foundation",
+      "reason": "One effect/alias/domain/completion model prevents each proposed transformation inventing incompatible semantics or a parallel compiler.",
+      "conditions": [
+        "Scope the first implementation to the admitted synchronous graph; do not implement the entire WIP feature surface before the first attack.",
+        "Transformation witnesses stay owner-side and are checked against final syntax; they are not equivalence or resistance proofs merely by existing."
+      ]
+    },
+    "C03": {
+      "disposition": "prototype",
+      "reason": "Removing genuine private call and heap boundaries changes concrete recovery targets and may also improve cost, but ordinary SSA recovery could defeat it.",
+      "conditions": [
+        "Compare with plain optimizing/fused compilation as well as production max on equal coverage.",
+        "Prove nonescape, immutable call targets, effect order and alias behavior; reject unsupported transformations without copying authored bodies."
+      ]
+    },
+    "C04": {
+      "disposition": "foundation",
+      "reason": "Activation-local liveness and precise shared-cell semantics are required for correctness, reentrancy and honest resource accounting.",
+      "conditions": [
+        "Never restore a snapshot over callback writes; invalidate and reread affected shared cells.",
+        "No depth-only frame pool may alias suspended or concurrently reentrant activations.",
+        "Treat reduced frame visibility as an attack hypothesis, not foundation security credit."
+      ]
+    },
+    "C05": {
+      "disposition": "prototype",
+      "reason": "Joint necessary branch/result dependencies are the most coherent regional protection hypothesis, provided the problem does not reduce to independently easy projections.",
+      "conditions": [
+        "Use unconditional proven int32/uint32/Boolean domains and one selected equivalent implementation.",
+        "Validate complete exits and outgoing values, then attack using whole-artifact normalization, window slicing and synthesis.",
+        "Stop protection expansion if the preregistered early rejection screen fails; retain any demonstrated speed benefit separately."
+      ]
+    },
+    "C06": {
+      "disposition": "defer",
+      "reason": "Private representation changes risk becoming generic masking and extra compiler complexity before fusion or joint synthesis has shown value. With observable-effect crossing excluded, the initial benefit is particularly uncertain.",
+      "conditions": [
+        "Only fund after C03/C05 have survived the plain-form normalizer and resource comparisons.",
+        "A later isolated ablation must show additional whole-artifact recovery cost beyond plain scalarization and joint realization.",
+        "Never introduce a reusable codec, complete decoded tuple, or new fallback to make the representation feasible."
+      ]
+    },
+    "C07": {
+      "disposition": "prototype",
+      "reason": "Residualizing a private evaluator/configuration pair removes an actual declarative extraction target and merits a bounded competing experiment.",
+      "conditions": [
+        "Report fixed-configuration workloads separately; cannot justify arbitrary-JS strength.",
+        "Prove configuration immutability and closed-world use without executing arbitrary owner objects during compilation.",
+        "Score executable relation recovery, not just failure to recover original literal tables."
+      ]
+    },
+    "C08": {
+      "disposition": "foundation",
+      "reason": "One deterministic cost ledger is required to prevent separately reasonable transformations exceeding aggregate runtime, memory, size or build budgets.",
+      "conditions": [
+        "Begin with fixed recipes and explicit whole-build limits.",
+        "Freeze comparators, measurement aggregation, device tier and research-versus-normal-build budgets before seeing results.",
+        "Budgets reject builds or candidate plans; they must not introduce behavior-changing runtime timeouts."
+      ]
+    },
+    "C09": {
+      "disposition": "defer",
+      "reason": "Automated search can overfit weak attackers and consume the project before a fixed recipe works.",
+      "conditions": [
+        "Require demonstrated benefit of fixed C03/C05 or C07 recipes before implementing search.",
+        "Keep independent held-out attack tools and disclose deterministic search budgets; a timeout never certifies hardness."
+      ]
+    },
+    "C10": {
+      "disposition": "foundation",
+      "reason": "The confirmed shielding bypass and historical copied-source risk demand one graph owner and one artifact-only final writer.",
+      "conditions": [
+        "Every source, module and convenience API must pass the common admission/qualification path.",
+        "Supplied application/vendor code remains authored ownership, even behind an adapter.",
+        "Use final-byte qualification and immutable versioned package publication; multiple per-file renames are not graph-atomic."
+      ]
+    },
+    "C11": {
+      "disposition": "foundation",
+      "reason": "A precise scoped execution contract is necessary to avoid promising incompatible exact reflection, arbitrary dynamic code and strict CSP.",
+      "conditions": [
+        "Initial profile rejects eval, Function constructors and string timers, including literal forms.",
+        "Qualified ordinary host callbacks are allowed; attacker toString inspection is allowed and sees generated source.",
+        "Disclose original-source-sensitive application behavior as excluded; investigate unknown legitimate integrations without blanket-banning escapes.",
+        "Require three realistic complete roots that fit admission without source rewrites before expansion."
+      ]
+    },
+    "C12": {
+      "disposition": "foundation",
+      "reason": "Only artifact-bound correctness and competent executable recovery tests can decide whether the architecture is worth implementing further.",
+      "conditions": [
+        "Keep correctness, ownership, provenance and measured resistance as separate reports.",
+        "Mutate emitted semantics and recompute hashes to ensure the checker is not just trusting emitter metadata.",
+        "Use actual claimed engines/browser/CSP environments and preserve unsupported-host status.",
+        "Charge all attack lanes and setup; censored or broken comparisons earn no comparative win."
+      ]
+    },
+    "C13": {
+      "disposition": "defer",
+      "reason": "Encoded state crossing effects, callbacks and suspension expands aliasing and completion risk before the simpler hypothesis is established.",
+      "conditions": [
+        "Require a precise state-commit/invalidation protocol and plain-state control with reentrant adversaries.",
+        "Do not make later support for this component a prerequisite for the initial regional experiment."
+      ]
+    },
+    "C14": {
+      "disposition": "reject",
+      "reason": "These mechanisms or proxies do not establish the claimed protection under a compiler-aware editable-artifact attacker and often recreate historical overclaims.",
+      "conditions": [
+        "Incidental algebraic representations require independent whole-artifact evidence and may not supply headline protection claims.",
+        "Never reinstate embedded-secret, self-hash authenticity or hook-count arguments through renamed terminology."
+      ]
+    }
+  },
+  "blockingObjections": [
+    "No three realistic admitted roots or competent independent extractor has yet been demonstrated for the proposed new pipeline. These are blockers to expansion, not reasons to claim the design already works.",
+    "The shared semantic and final-artifact validator must reject altered behavior even when an emitter updates hashes and metadata. Self-consistent witnesses alone are insufficient.",
+    "Original-source reflection and arbitrary runtime source remain explicit compatibility limits. Qualified host APIs cannot become arbitrary adapters that exclude supplied source from ownership.",
+    "The cheapest general generated lane or alternate projection may normalize more cheaply than legacy max. A favorable specialized-kernel result cannot override a whole-artifact defeat."
+  ],
+  "dissent": [
+    "Change C06 from nominated prototype to defer until C03/C05 show a measured advantage; representation work should not become the next masking project before its simpler control survives.",
+    "P-regional is a conditional target, not authorization for a broad replacement. If the first admission or normalization screen fails, revert the investment to P-research and preserve only independently justified fixes.",
+    "Treat strict admission as an experiment boundary rather than marketable full-JavaScript support; publish rejection rates and do not select only toy workloads to make the boundary look practical."
+  ],
+  "cheapestExpectedAttack": "Parse emitted JavaScript into SSA, partially evaluate known support/helpers with the disclosed seed, propagate constants and aliases, slice each observable output/state update, and repartition joint regions into small synthesis windows. Instrument unavoidable host projections and compare candidate replacements on hidden stateful traces. Unchanged artifact reuse remains trivial and is reported separately.",
+  "firstExperiment": "First establish three representative complete roots fit the initial host/admission contract without edits. Freeze the slate recurrence/configuration specimens and independent-output controls, eight builds each. Compare ordinary fused output, validated historical protected intersections and C03+C05 ablations without C06. Fund one bounded one-day AST-to-SSA/helper-evaluation/slicing extractor, then require standalone recovered replacements on hidden inputs/effect traces. Stop protection expansion at the slate 2x/no-added-analyst-effort rejection screen; do not build broad syntax support first.",
+  "voteMeaning": "approve-prototype-investment",
+  "claimsDemonstratedSecurity": false
+}

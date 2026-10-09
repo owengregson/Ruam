@@ -1,0 +1,4 @@
+# Reproducible machine evidence; accompanying READMEs describe scope and outcomes.
+docs/research/**/qualification/*-report.json linguist-generated=true
+# Unified-diff context deliberately retains the historical file's indentation.
+docs/research/**/qualification/*.patch -whitespace

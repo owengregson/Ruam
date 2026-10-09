@@ -2734,9 +2734,9 @@ function buildStackEncodingKeyExpr(n: RuntimeNames, split?: SplitFn): JsNode {
  * The ONLY bare numbers on the stack are masked int32s, so a `typeof` test
  * unambiguously distinguishes them from boxed values. A float is also
  * `typeof === 'number'` but is NOT an int32 ((v|0)===v fails), so it is boxed —
- * never bare — preventing stkDec from wrongly unmasking it. -0 masks-as-int and
- * round-trips to +0 (`-0 ^ k === k`, `k ^ k === 0`), matching JS `-0|0===0` and
- * the old `[tag,payload]` scheme exactly. NaN/Infinity/2^31..2^32 are boxed.
+ * never bare — preventing stkDec from wrongly unmasking it. Negative zero is
+ * boxed too: XOR would otherwise destroy its observable sign. NaN, Infinity
+ * and 2^31..2^32 are also boxed.
  *
  * The key formula and per-unit `_sek` key are byte-identical to the old Proxy,
  * so int32 stack values remain position-XOR-masked with the same keystream;
@@ -2768,12 +2768,20 @@ export function buildStackEncodingHelpers(
 
 	// stkEnc(v,i,k)
 	const encBody: JsNode[] = [
-		// if(typeof v==='number'&&(v|0)===v)return v^key  — bare masked int, no alloc
+		// Preserve -0; all other int32 values retain the allocation-free path.
 		ifStmt(
 			bin(
 				BOp.And,
-				bin(BOp.Seq, un(UOp.Typeof, id("v")), lit("number")),
-				bin(BOp.Seq, bin(BOp.BitOr, id("v"), lit(0)), id("v"))
+				bin(
+					BOp.And,
+					bin(BOp.Seq, un(UOp.Typeof, id("v")), lit("number")),
+					bin(BOp.Seq, bin(BOp.BitOr, id("v"), lit(0)), id("v"))
+				),
+				bin(
+					BOp.Or,
+					bin(BOp.Sneq, id("v"), lit(0)),
+					bin(BOp.Gt, bin(BOp.Div, lit(1), id("v")), lit(0))
+				)
 			),
 			[returnStmt(bin(BOp.BitXor, id("v"), xorKey(id("i"))))]
 		),

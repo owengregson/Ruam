@@ -1,0 +1,467 @@
+{
+  "schema": "ruam-wip-repair-experiment-v1",
+  "generatedAt": "2026-10-09T08:25:27.202Z",
+  "baseline": "f7f52c821dd37f44d790b7204d56fe7f486a8a57",
+  "archive": "/var/folders/04/0sr3tcsj5dn5v6_sgpvxwfmc0000gn/T/ruam-qualified-september-local-OCg3kx",
+  "sourceSha256Before": "283d2810cea190598355f95db1294f75808321d944e1a387bc5eec8a194303b5",
+  "sourceSha256After": "9bf0466abbbea59cd6bca145c9043b839f3e814f127d4ae5cffcb5830fe81b43",
+  "patchSha256": "cfd2b4816376852c0be84bd74eb929c44f427a2f1158f38e182c0803e374c6b1",
+  "limitations": [
+    "Experimental replacement, not recovered original implementation. Only reducible natural loops with a linear prefix to the branch condition are recognized.",
+    "Unrecognized loops retain existing fail-closed emitter behavior; this repair is not general loop/exception correctness qualification.",
+    "Patch remains exclusively in isolated archive and evidence, not the shared product branch."
+  ],
+  "claimsDemonstratedSecurity": false,
+  "rows": [
+    {
+      "specimen": "recurrence-1",
+      "seed": 0,
+      "status": "timeout-right-censored",
+      "error": "spawnSync /Users/owengregson/.bun/bin/bun ETIMEDOUT",
+      "resistanceCredit": false
+    },
+    {
+      "specimen": "recurrence-1",
+      "seed": 1,
+      "status": "timeout-right-censored",
+      "error": "spawnSync /Users/owengregson/.bun/bin/bun ETIMEDOUT",
+      "resistanceCredit": false
+    },
+    {
+      "specimen": "fixed-configuration-1",
+      "seed": 0,
+      "status": "timeout-right-censored",
+      "error": "spawnSync /Users/owengregson/.bun/bin/bun ETIMEDOUT",
+      "resistanceCredit": false
+    },
+    {
+      "specimen": "fixed-configuration-1",
+      "seed": 1,
+      "status": "timeout-right-censored",
+      "error": "spawnSync /Users/owengregson/.bun/bin/bun ETIMEDOUT",
+      "resistanceCredit": false
+    },
+    {
+      "specimen": "independent-control-1",
+      "seed": 0,
+      "status": "timeout-right-censored",
+      "error": "spawnSync /Users/owengregson/.bun/bin/bun ETIMEDOUT",
+      "resistanceCredit": false
+    },
+    {
+      "specimen": "independent-control-1",
+      "seed": 1,
+      "status": "timeout-right-censored",
+      "error": "spawnSync /Users/owengregson/.bun/bin/bun ETIMEDOUT",
+      "resistanceCredit": false
+    },
+    {
+      "specimen": "independent-control-4",
+      "seed": 0,
+      "status": "compiled",
+      "artifactSha256": "dde16705a47df0f8c04fa0948d661f464784d408f135ad123a7fc24b19752cd6",
+      "artifactBytes": 7861,
+      "compileWallMs": 3081.147458,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 1,
+        "protectedRegionCount": 14,
+        "targetFunctionCount": 2,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 69,
+        "outputBytes": 7861,
+        "expansionRatio": 113.92753623188406,
+        "languageCoverage": "full-javascript",
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 8.916208000000097,
+          "cpuUserMilliseconds": 4.737,
+          "cpuSystemMilliseconds": 0.488,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 153747456,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 17.62145899999996,
+          "cpuUserMilliseconds": 11.859,
+          "cpuSystemMilliseconds": 1.535,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 156352512,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "4ea0150df05bb367d7b51daf09f8ecf9610355556fd7e42d138fc7dfc31cfdef"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "specimen": "independent-control-4",
+      "seed": 1,
+      "status": "compiled",
+      "artifactSha256": "73426423a0f1b76d568371ce387924289d4c559a69d5d9609c6c3ac23f47db92",
+      "artifactBytes": 7916,
+      "compileWallMs": 2825.182833,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 1,
+        "protectedRegionCount": 14,
+        "targetFunctionCount": 2,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 69,
+        "outputBytes": 7916,
+        "expansionRatio": 114.72463768115942,
+        "languageCoverage": "full-javascript",
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 52.05195800000001,
+          "cpuUserMilliseconds": 11.527,
+          "cpuSystemMilliseconds": 2.396,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 132759552,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 86.81737500000054,
+          "cpuUserMilliseconds": 11.794,
+          "cpuSystemMilliseconds": 1.522,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 132759552,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "4ea0150df05bb367d7b51daf09f8ecf9610355556fd7e42d138fc7dfc31cfdef"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 0,
+      "status": "compiled",
+      "artifactSha256": "17e0fd107a591b291e85dfa7acf6f8f81a15072f692071d479aa94c85671258a",
+      "artifactBytes": 14785,
+      "compileWallMs": 4602.179125,
+      "correctness": {
+        "status": "pass",
+        "cases": 100,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 1,
+        "protectedRegionCount": 18,
+        "targetFunctionCount": 2,
+        "realizationCount": 15,
+        "fragmentFunctionCount": 45,
+        "originalBytes": 95,
+        "outputBytes": 14785,
+        "expansionRatio": 155.6315789473684,
+        "languageCoverage": "full-javascript",
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 21.567958999999973,
+          "cpuUserMilliseconds": 15.795,
+          "cpuSystemMilliseconds": 3.942,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 141688832,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 26.824208,
+          "cpuUserMilliseconds": 13.235,
+          "cpuSystemMilliseconds": 4.885,
+          "retainedHeapDeltaBytes": 3023339,
+          "peakRssBytes": 141688832,
+          "queries": 12,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "domainProbe": "Adapted PR7 source-transform.test.ts crown relation, one numeric input with owner-declared domain1..20; 20 distinct values repeated five times, not 100 independent cases. Oracle learner may query outside domain and report error.",
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 1,
+      "status": "compiled",
+      "artifactSha256": "43d763243d0da75e228c5540ab1e1d3a8451a8b62fb6a785a3453f368ff9365f",
+      "artifactBytes": 14862,
+      "compileWallMs": 4190.6158749999995,
+      "correctness": {
+        "status": "pass",
+        "cases": 100,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 1,
+        "protectedRegionCount": 18,
+        "targetFunctionCount": 2,
+        "realizationCount": 15,
+        "fragmentFunctionCount": 45,
+        "originalBytes": 95,
+        "outputBytes": 14862,
+        "expansionRatio": 156.44210526315788,
+        "languageCoverage": "full-javascript",
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 31.68791599999986,
+          "cpuUserMilliseconds": 17.521,
+          "cpuSystemMilliseconds": 4.869,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 154992640,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 44.15991600000052,
+          "cpuUserMilliseconds": 10.026,
+          "cpuSystemMilliseconds": 3.964,
+          "retainedHeapDeltaBytes": 3647861,
+          "peakRssBytes": 154992640,
+          "queries": 12,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "domainProbe": "Adapted PR7 source-transform.test.ts crown relation, one numeric input with owner-declared domain1..20; 20 distinct values repeated five times, not 100 independent cases. Oracle learner may query outside domain and report error.",
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "specimen": "wip-simple-loop-probe",
+      "seed": 0,
+      "status": "compiled",
+      "artifactSha256": "dfe9ccb611b76f93bafae18c5ee3ea7c51b5de4e9aa43aa8dea78d8e10985e0c",
+      "artifactBytes": 11207,
+      "compileWallMs": 574.270458,
+      "correctness": {
+        "status": "pass",
+        "cases": 20,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 1,
+        "protectedRegionCount": 25,
+        "targetFunctionCount": 2,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 124,
+        "outputBytes": 11207,
+        "expansionRatio": 90.37903225806451,
+        "languageCoverage": "full-javascript",
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 4.052208000000064,
+          "cpuUserMilliseconds": 8.02,
+          "cpuSystemMilliseconds": 0.358,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 182681600,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": null,
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "specimen": "wip-simple-loop-probe",
+      "seed": 1,
+      "status": "compiled",
+      "artifactSha256": "941d98a0518e9e7c428e7b5db498b9d10df26241c9736541e0c3b062e36bf0f9",
+      "artifactBytes": 11285,
+      "compileWallMs": 576.02,
+      "correctness": {
+        "status": "pass",
+        "cases": 20,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 1,
+        "protectedRegionCount": 25,
+        "targetFunctionCount": 2,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 124,
+        "outputBytes": 11285,
+        "expansionRatio": 91.00806451612904,
+        "languageCoverage": "full-javascript",
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 6.258000000000038,
+          "cpuUserMilliseconds": 9.453,
+          "cpuSystemMilliseconds": 0.408,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 180060160,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": null,
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    }
+  ]
+}

@@ -9,6 +9,13 @@ import fs from "fs-extra";
 import path from "path";
 import { globby } from "globby";
 
+// Explicit experimental API. Production VM defaults are retained until the
+// regional candidate passes the published recovery and compatibility gates.
+export { compileRegionalCode, compileRegionalGraph } from "./regional/index.js";
+export type { RegionalGraphOptions, RegionalPackageBuild } from "./regional/index.js";
+export { protectRegionalPath } from "./regional/files.js";
+export type { RegionalFileOptions } from "./regional/files.js";
+
 export {
 	type VmObfuscationOptions,
 	type PresetName,

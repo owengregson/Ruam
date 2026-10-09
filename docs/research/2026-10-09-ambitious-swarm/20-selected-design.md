@@ -1,0 +1,40 @@
+# Selected idea: replace the algorithm and its maintained state
+
+All three workers selected **A1 only**, conditionally. The ambition is to remove the owner's computational decomposition: a private rule should no longer correspond neatly to one helper, table, scan or state field. For eligible components, compile a genuinely different algorithm and derive initialization, event updates and observations together. The result remains strictly offline ordinary JavaScript.
+
+This is a hypothesis about the cost of **understanding logic and making a partial semantic change**. No measured advantage exists yet. A clean state-machine extractor may still clone the behavior cheaply. That would defeat clone resistance even if some explanation or edit task remained difficult. Votes cannot change those limits.
+
+## How the integrated system would work
+
+The first domain is an existing deterministic synchronous evaluator with private owned state and an explicit event/observation API. Multiset or relational evaluators are promising because deletion, duplicate multiplicity and several outputs can couple the same private rule. A protocol evaluator is eligible only when the same exact contract and algorithm alternatives can be established. No existing application root has yet qualified for this new architecture.
+
+1. **Admit an entire component.** Inventory its initialization, reset, events, observations, identities, errors and numeric domains. Derive bounds from source semantics. Unknown effects, escaping state or unproved domains refuse admission. Do not trim the API or replace rejected roots with convenient synthetic examples.
+2. **Represent its exact transitions and outputs.** Construct a relation model with explicit effects and collection semantics. This is the common input to all algorithms and the basis of correctness obligations. Internal operations must preserve JavaScript behavior, including ordering and coercion where admitted.
+3. **Choose a different algorithm family.** Explore only applicable alternatives: specialized decision/dataflow evaluation, indexed relational evaluation, or incremental maintenance of shared derived views. A different seed or local arithmetic encoding is not a different algorithm. Search cost and failed alternatives count against the compiler budget.
+4. **Derive state and consumers together.** Synthesize initialization, event deltas and output projections from the same model. Remove a base representation only when no future observation needs it. Delete-by-key, record export and observable identity can require retaining records; disclose that retention. Shared views must do necessary work, not create irrelevant state solely to inflate analysis.
+5. **Emit one direct JavaScript realization.** Preserve native effect boundaries and the original API. No generic bytecode interpreter, hidden source copy, second easy implementation, runtime server or inaccessible key is introduced. The attacker receives the entire artifact, compiler and seed.
+6. **Qualify the final application bytes.** Check exact behavior over complete event histories, then measure the cheapest successful reconstruction, explanation and edit attacks alongside legitimate execution costs. Correctness evidence and protection evidence remain separate.
+
+For example, source code might repeatedly join orders, accounts and policy records before calculating several outputs. An incremental realization instead maintains necessary intermediate quantities as events occur. A change to one predicate can then affect initialization, insert/delete updates and several outputs. Deriving a consistent partial change could require recovering those relationships. This example is not a qualifying workload or evidence of difficulty: symbolic analysis, domain recognition or a shadow evaluator may make the change cheap.
+
+## The challenge that changed the proposal
+
+Worker C pointed out that an attacker can log every public event, retain original tuples in new state, and implement the requested behavior independently. If the edit ticket already describes the complete replacement, the attacker need not understand the maintained views at all. A and B accepted that defeat; the final design explicitly permits added state, reset, replay, omitted or synthetic events, output patches and complete replacement.
+
+The remaining experiment concerns a **partial** change that preserves other private but observable behavior. An illustrative ticket changes whether a failed amendment consumes credit while preserving existing retry ordering, valuation and all later outputs. The artifact or observations must supply the unspecified behavior. This may require comprehension, but simple replay or a small sidecar may still win. Ordinary and transformed implementations must receive identical tickets, public schemas and resources. Do not conceal public information to manufacture difficulty.
+
+An explanation succeeds by predicting effects and stating a checkable invariant on unseen histories. An edit succeeds by implementing the ticket while passing hidden unchanged-behavior tests. Neither task requires original names or reproducing a non-identifiable original algorithm. A usable extracted machine that removes realization machinery counts as functional recovery; cosmetic source reformatting alone does not.
+
+## First experiment and stopping decision
+
+Inventory and freeze three existing evaluator roots and candidate tasks before selecting favorable implementations. Run the first root as a staged pilot, as C requested, before spending on all three. Record rejected roots and inapplicable algorithm families. A and B's three-root requirement still applies before advancing beyond that pilot; there was no disagreement about the selected architecture.
+
+Start with the ticket-information audit and cheapest sidecar/reset/replay attack. If it already solves the intended task at comparable cost, stop. Only a surviving eligible root justifies hand-checked realizations from up to three applicable algorithm families and a clean transition extractor. The broader three-root experiment still requires three genuinely applicable families; a pilot with fewer leaves that requirement unmet, rather than waiving it. Measure edits and explanations against ordinary optimized code and actually functional historical baselines on the intersection they protect. Easy threshold edits and fully specified replacement tickets remain negative controls.
+
+Correctness must cover cold initialization, reset, deletion, duplicates, numeric boundaries, errors and untouched future behavior. Report attacker CPU, wall time, model use, analyst work, memory and reusable setup separately; unknown effort remains unknown. Report legitimate build cost, cold start, event latency, output size, memory and admission rate. Use the cheapest successful attack, and do not mistake costs proportional to a larger/slower artifact for protection. Require improvements in both comprehension and partial edits on held-out targets before a larger preregistered study. Disclose cheap clones independently. Comparable-cost recovery, failed admission or failed resource/correctness gates stops the corresponding claim.
+
+The current PR supplies reusable graph ownership, final-byte validation, bounded budgets, publication and differential-scoring infrastructure. Its AST recipes do **not** implement this algorithm/state compiler, and its measured NO-GO does not validate this proposal. A surviving pilot is the prerequisite to constructing that compiler.
+
+## Why there is only one idea
+
+All workers rejected a standalone circuit-resynthesis slot: no concrete existing noncryptographic target and partial edit survived the clean-network extraction and cost challenge. They also rejected a standalone residual-transducer slot: minimization can expose a simpler machine, and history count is coverage rather than hardness. Either technique can support A1 where justified, but neither earned a separate investment. C withdrew both original nominations during argumentation. There was no final selection dissent and no obligation to manufacture a second idea.

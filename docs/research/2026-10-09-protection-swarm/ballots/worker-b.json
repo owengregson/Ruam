@@ -1,0 +1,91 @@
+{
+  "worker": "worker-b",
+  "slateRevision": "r1",
+  "preferredPlan": "P-regional",
+  "ranking": ["P-regional", "P-research", "P-legacy"],
+  "components": {
+    "C01": {
+      "disposition": "foundation",
+      "reason": "A runnable semantic baseline and preserved corpus are prerequisites for interpreting either speed or attack results.",
+      "conditions": ["Publish minimal repair diffs and all unsupported cases.", "Use production max and functional offline historical variants; keep debug controls separately labeled."]
+    },
+    "C02": {
+      "disposition": "foundation",
+      "reason": "Shared value, effect, alias and completion facts are necessary to remove real boundaries without changing JavaScript behavior.",
+      "conditions": ["Unknown effects remain conservative.", "Many-to-many witnesses must be independently checked rather than accepted as emitter assertions."]
+    },
+    "C03": {
+      "disposition": "prototype",
+      "reason": "Fusion and elimination remove concrete private call and heap cuts, but may also make ordinary SSA extraction easier.",
+      "conditions": ["Compare with plain optimized/fused JavaScript under the same coverage and cost limits.", "Retain only performance benefits if recovery amplification fails the common gate."]
+    },
+    "C04": {
+      "disposition": "foundation",
+      "reason": "Activation-owned liveness and true alias cells are correctness and resource foundations independent of protection value.",
+      "conditions": ["Preserve recursive reentry, callback mutations, thrown identity and finally semantics.", "Commit at original effect points, invalidate affected facts and reread after unknown callbacks; never restore stale encoded state over legitimate writes."]
+    },
+    "C05": {
+      "disposition": "prototype",
+      "reason": "Dependent recurrence or predicate/result fusion could change useful local inference problems; mere joint emission cannot.",
+      "conditions": ["Use domains proven by unconditional authored semantics and one emitted realization initially.", "Attack each output projection and every equivalent general lane; the cheapest successful lane bounds the claim.", "Treat a cheap whole-function oracle as a ceiling, not a failure to instrument deeply enough."]
+    },
+    "C06": {
+      "disposition": "defer",
+      "reason": "Local representation conjugation is especially likely to add reversible algebra and legitimate cost that one normalization pass removes. It should not complicate the first integrated prototype.",
+      "conditions": ["Reconsider only after C03/C05 beat the plain fusion control and leave a specific useful state cut for C06 to remove.", "Require a separate equal-cost ablation against static inversion, per-output slicing and local relation inference.", "Keep any initial experiment inside effect-free private regions with no generic codec or complete decoded tuple."]
+    },
+    "C07": {
+      "disposition": "prototype",
+      "reason": "Private configuration residualization targets a concrete evaluator-plus-data recovery surface and may fund its cost through real optimization.",
+      "conditions": ["Score the workload class separately.", "Attack residual decision graphs, acceptance boundaries and equivalent ruleset recovery, not only original configuration bytes.", "Prove configuration immutability and nonescape without executing arbitrary owner code at build time."]
+    },
+    "C08": {
+      "disposition": "foundation",
+      "reason": "One deterministic ledger and complete-artifact cost plan prevent independent transforms from exceeding budgets or silently selecting cheaper unprotected bodies.",
+      "conditions": ["Use fixed recipes and replayable plans initially.", "Runtime, startup, size, memory and ordinary build caps remain conjunctive and preregistered.", "Runtime timeouts, added yields or recursion caps cannot silently enforce build policy."]
+    },
+    "C09": {
+      "disposition": "defer",
+      "reason": "Automatic search can overfit the in-build attacker before any fixed recipe demonstrates value.",
+      "conditions": ["Retain cheap-function calibration and constructive learnability audits in the initial evaluation even while automated search is deferred.", "Later search must face an independent normalizer and fresh programs, with amortized cross-build attacker learning."]
+    },
+    "C10": {
+      "disposition": "foundation",
+      "reason": "Whole-graph ownership and exact-byte publication close concrete omission and sidecar-leak failures without pretending to provide runtime secrecy.",
+      "conditions": ["Supplied vendor/application code remains authored ownership.", "No post-qualification mutation or partially protected publication.", "Digests and brands are provenance and hygiene, never anti-patch or resistance evidence."]
+    },
+    "C11": {
+      "disposition": "foundation",
+      "reason": "The explicit initial admission contract makes the architecture implementable without an easy dynamic-source fallback or a false full-JavaScript claim.",
+      "conditions": ["Reject eval, Function constructors and string timers initially, including literals; qualify finite local imports separately.", "Allow attacker inspection of generated source and qualified ordinary callbacks.", "Disclose original-source-dependent program behavior as excluded; do not claim unrestricted hostile contextual equivalence.", "HostContract assertions cannot exempt source or settle unresolved legitimate source-sensitive integrations."]
+    },
+    "C12": {
+      "disposition": "foundation",
+      "reason": "Independent executable recovery and final-artifact semantic checks are what make the protection hypothesis falsifiable.",
+      "conditions": ["Use the same admissible attack portfolio and CPU, model-token and analyst budgets, reporting time to a valid replacement and all resource dimensions.", "A cheaper successful alternate lane defeats the claim; CPU work shifted to models or humans earns no gain.", "Separate unchanged reuse or artifact reprinting from extracted semantics and preregistered meaningful edits.", "Use exact real-host observations, report all cohorts and treat censored or broken comparisons honestly."]
+    },
+    "C13": {
+      "disposition": "defer",
+      "reason": "Observable aliasing, reentry and suspension can invalidate encoded cached state, while exposed effects can erase the intended protection benefit.",
+      "conditions": ["Pass commit/invalidate/reread tests with recursive callbacks, shared aliases and throw/finally paths first.", "Require an incremental attack benefit over plain activation-local state before promotion."]
+    },
+    "C14": {
+      "disposition": "reject",
+      "reason": "These mechanisms or metrics do not establish a harder recovery problem under the declared full-access offline attacker.",
+      "conditions": ["Incidental arithmetic representations may exist only with semantic justification and whole-artifact evidence; their mere presence earns no security credit."]
+    }
+  },
+  "blockingObjections": [
+    "Current September baseline is not qualified while its structured-loop dependency is missing. Repair and semantic qualification block comparisons and migration, but do not block this bounded research vote.",
+    "Any easier equivalent lane, unclassified authored execution path, changed alias/reentry behavior, or silent CSP/reflection contract deviation blocks artifact admission regardless of attack scores.",
+    "If three realistic complete roots cannot fit the initial contract without source rewrites, or the early normalization screen fails, stop regional expansion rather than relaxing scope or replacing the cohort after seeing results."
+  ],
+  "dissent": [
+    "I defer C06 rather than adopting the slate's prototype nomination. First isolate whether fusion and genuine semantic dependence produce any gain; reversible representation algebra can obscure that result and consume the cost budget.",
+    "The preferred architecture is conditional. P-research becomes the practical next step if the first regional falsifier fails; this vote does not authorize an unconditional backend rewrite."
+  ],
+  "cheapestExpectedAttack": "Parse the final package into effect-aware SSA, partially evaluate generated helpers and constant selectors, normalize representation algebra, slice outputs and state updates independently, and use local inference or whole-function learning for remaining relations. Reuse rules learned from compiler-known chosen-source builds. Force or lift any easier equivalent general lane before attempting the elaborate one.",
+  "firstExperiment": "After baseline repair and three-real-root admission screening, implement the one-day generic normalization/slicing attacker on six dependent recurrences, six fixed-configuration evaluators and independent-output controls across eight builds. Compare plain optimized/fused JS, main max, functional offline PR5, eligible PR7 scalar BPRF, repaired September and candidate ablations on equivalent coverage. Validate standalone replacements and meaningful edits on hidden observations; stop the protection rationale at the frozen 2x early-falsifier rule, and give survivors the full paired campaign rather than claiming victory from the screen.",
+  "voteMeaning": "approve-prototype-investment",
+  "claimsDemonstratedSecurity": false
+}

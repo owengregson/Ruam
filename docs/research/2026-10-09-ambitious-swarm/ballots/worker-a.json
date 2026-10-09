@@ -1,0 +1,25 @@
+{
+  "worker": "worker-a",
+  "slateRevision": "r1",
+  "selected": ["A1"],
+  "reasons": {
+    "A1": "Select one bounded falsifier investment. Algorithm-family changes plus genuine derived-state maintenance could distribute a partial rule edit across necessary update and observation relations. This is a concrete comprehension/edit hypothesis, with no established obstacle to clean functional replacement. It merits testing only against existing APIs and the cheapest independent reimplementation lanes.",
+    "A2": "Do not select. No concrete existing noncryptographic kernel/edit survived the clean circuit extraction and projection-patching challenge. Runtime and source expansion could account for the entire apparent attacker cost. Word-level reconstruction is not necessary for every useful explanation, edit or replacement.",
+    "A3": "Do not select separately. Quotienting future-equivalent states can simplify the attacker's machine. History count does not establish complexity or resistance; useful residualization may support A1 without consuming another architecture slot."
+  },
+  "requiredConditions": [
+    "Freeze three existing evaluator roots, authored event/observation APIs and partial edit tickets before choosing implementations or inspecting attack results. Report rejected roots and easy controls without replacing them with favorable synthetic tasks.",
+    "Numeric domains, bounds, duplicate multiplicities, ordering, deletion behavior, exceptions and observable identities must follow authored semantics. Preserve required base records and key-to-record information; never change the API to justify removing them.",
+    "Every alternative must be a genuinely applicable algorithm family with exact initialization, reset, updates and observations. One ordinary JavaScript realization is emitted; no server, secret, generic VM fallback or second easy direct implementation is introduced.",
+    "Give ordinary and transformed implementations identical public schema, task information and resources. Audit whether the edit ticket itself supplies a full replacement specification, but do not withhold legitimately public information to obstruct rebuilding.",
+    "Permit added attacker state, event replay, omission or synthesis of events, output patches, clean machine extraction and complete shadow reimplementation. Requiring an in-place edit of the protected artifact is prohibited.",
+    "Score correct partial edits and checkable comprehension separately using hidden unchanged behaviors and future histories, including cold start, reset, deletion, duplicates and numeric boundaries. Do not require attribution of a non-identifiable original algorithm or source names.",
+    "Keep functional replacement, unchanged artifact reuse, cosmetic reprinting and meaningful clean-machine extraction distinct. Disclose cheap cloning even if edit or comprehension tasks prove harder.",
+    "Measure minimum successful attacker cost, setup/transfer and all legitimate runtime, cold-start, memory, output-size and compile costs. Stop when a reusable sidecar, replay strategy or extractor solves the actual tasks at comparable cost; surviving the pilot is not a security multiplier or product approval."
+  ],
+  "cheapestDefeat": "Observe the full public event stream, reconstruct original tuples in attacker-added state, and implement the amended rule from the public schema and edit ticket while preserving unspecified outputs using the available artifact or a clean extracted machine. This can avoid learning the maintained-view invariants entirely. Separately, lifting initialization, updates and projections into a usable state machine can defeat cloning claims without reconstructing owner algorithms.",
+  "firstExperiment": "On three frozen existing synchronous evaluator roots, produce three applicable algorithm-family realizations under the same exact API and cost envelope. First run a clean transition extractor and ticket-driven shadow evaluator with reset/replay; then attempt partial join, predicate or multiplicity edits plus invariant/consequence explanations on held-out histories. Include ordinary optimized code and actually functional eligible historical baselines on their protected intersection. If comparable-cost attacks succeed, stop A1 rather than adding masking or more state. Only a survivor justifies a larger preregistered study.",
+  "claimsDemonstratedSecurity": false,
+  "claimsFunctionalRecoveryResistance": false,
+  "voteMeaning": "conditional-research-selection"
+}

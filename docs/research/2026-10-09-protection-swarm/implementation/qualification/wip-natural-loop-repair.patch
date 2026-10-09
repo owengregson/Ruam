@@ -1,0 +1,73 @@
+--- a/packages/ruam/src/isogloss/runtime/regional-artifact-emitter.ts
++++ b/packages/ruam/src/isogloss/runtime/regional-artifact-emitter.ts
+@@ -272,6 +272,70 @@
+ 	readonly directRealizerOps: readonly SemanticOpValue[];
+ 	readonly shapeLimitedRealizerOps: readonly SemanticOpValue[];
+ 	readonly missingRealizerOps: readonly SemanticOpValue[];
++}
++
++
++/** Isolated qualification repair: reducible natural loops with a linear header prefix. */
++interface StructuredLoopLayout {
++ readonly headerRegionId: string;
++ readonly loopTarget: string;
++ readonly exitTarget: string;
++ readonly continueWhenTrue: boolean;
++}
++function buildStructuredLoopLayouts(graph: EffectRegionGraph, _unit: unknown): ReadonlyMap<string, StructuredLoopLayout> {
++ const byId = new Map(graph.regions.map(region => [region.id, region]));
++ const reachable = new Set(regionDistances(graph, graph.entryRegionId).keys());
++ const predecessors = new Map([...reachable].map(id => [id, new Set<string>()]));
++ for (const region of graph.regions) if (reachable.has(region.id)) {
++  for (const edge of normalRegionTargets(region)) predecessors.get(edge.target)?.add(region.id);
++ }
++ const dominators = new Map([...reachable].map(id => [id, id === graph.entryRegionId ? new Set([id]) : new Set(reachable)]));
++ let changed = true;
++ while (changed) {
++  changed = false;
++  for (const id of reachable) {
++   if (id === graph.entryRegionId) continue;
++   const parents = [...(predecessors.get(id) ?? [])];
++   const common = new Set(parents.length ? dominators.get(parents[0]!) : []);
++   for (const parent of parents.slice(1)) for (const value of common) if (!dominators.get(parent)?.has(value)) common.delete(value);
++   common.add(id);
++   const previous = dominators.get(id)!;
++   if (common.size !== previous.size || [...common].some(value => !previous.has(value))) { dominators.set(id, common); changed = true; }
++  }
++ }
++ const loops = new Map<string, Set<string>>();
++ for (const region of graph.regions) for (const edge of normalRegionTargets(region)) {
++  if (!dominators.get(region.id)?.has(edge.target)) continue;
++  const members = loops.get(edge.target) ?? new Set([edge.target]);
++  const pending = [region.id];
++  while (pending.length) {
++   const id = pending.pop()!;
++   if (members.has(id)) continue;
++   members.add(id);
++   for (const parent of predecessors.get(id) ?? []) pending.push(parent);
++  }
++  loops.set(edge.target, members);
++ }
++ const layouts = new Map<string, StructuredLoopLayout>();
++ for (const [headerRegionId, members] of loops) {
++  let current = headerRegionId;
++  const visited = new Set<string>();
++  while (!visited.has(current)) {
++   visited.add(current);
++   const region = byId.get(current);
++   if (!region) break;
++   const edges = normalRegionTargets(region);
++   const yes = edges.find(edge => edge.kind === "branch-true"), no = edges.find(edge => edge.kind === "branch-false");
++   if (edges.length === 2 && yes && no && members.has(yes.target) !== members.has(no.target)) {
++    const continueWhenTrue = members.has(yes.target);
++    layouts.set(current, { headerRegionId, loopTarget: continueWhenTrue ? yes.target : no.target, exitTarget: continueWhenTrue ? no.target : yes.target, continueWhenTrue });
++    break;
++   }
++   if (edges.length !== 1 || !members.has(edges[0]!.target)) break;
++   current = edges[0]!.target;
++  }
++ }
++ return layouts;
+ }
+ 
+ interface RegionFrameLayout {

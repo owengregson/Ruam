@@ -1,0 +1,33 @@
+{
+  "slateRevision": "r1",
+  "slateSha256": "7b69d8aa564626cc6027dc53aef1def5520818173e0cdcae41f72090a9cd6dd2",
+  "voteMeaning": "conditional-research-selection",
+  "nominationCount": 23,
+  "nominationSets": 3,
+  "nominationsMayOverlap": true,
+  "actualWorkerCount": 3,
+  "independentBallotsPerWorker": 1,
+  "coordinatorVotes": 0,
+  "workers": [
+    "worker-a",
+    "worker-b",
+    "worker-c"
+  ],
+  "ballotHashes": {
+    "worker-a": "928655641b3c8bc10edc653d9ba85a6a26545243df4562a642d9b15c204337c2",
+    "worker-b": "d93350bbca612bfb80068aa772f5ed746c00eee4d4fa21498c5ad6c39279c193",
+    "worker-c": "eadceb3a9bc43f6d9d2fa14133f618e6eba8337fada1f0bd8951b8f3ced2fe40"
+  },
+  "votes": {
+    "A1": 3,
+    "A2": 0,
+    "A3": 0
+  },
+  "selected": [
+    "A1"
+  ],
+  "emptyBallots": [],
+  "claimsDemonstratedSecurity": false,
+  "claimsFunctionalRecoveryResistance": false,
+  "caveat": "Three persistent model workers voted after shared deliberation. These are independent ballot submissions, not independent models, human approvals or security measurements. All required conditions remain binding."
+}
