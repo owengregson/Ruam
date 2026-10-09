@@ -10,7 +10,7 @@
 <strong>Virtualization-Based (VM) JavaScript Obfuscator</strong><br>
 
 <p>Compiles JavaScript (JS) functions into custom bytecode executed by an embedded virtual machine.<br>
-No deobfuscator exists for RuamVM bytecode** <strong>NOTE: Fable 5 is able to deobfuscate single-file Ruam code.</strong></p>
+Obfuscation does not guarantee secrecy or prevent reconstruction by an attacker who controls execution.</p>
 
 <a href="https://nodejs.org/en/"><img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=flat-square&logo=node.js&logoColor=white&color=1F49AC" alt="Node.js >= 18"></a>
 <img src="https://img.shields.io/badge/license-LGPL--2.1-yellow?style=flat-square&logo=googledocs&logoColor=white&color=3659BD" alt="LGPL-2.1">
@@ -32,6 +32,8 @@ No deobfuscator exists for RuamVM bytecode** <strong>NOTE: Fable 5 is able to de
 
 <hr>
 
+The experimental offline regional compiler is available through explicit research APIs and `ruam --regional-research`. Its protection strength is unqualified; it does not replace the production VM. See the [implementation and evidence](docs/research/2026-10-09-protection-swarm/implementation/README.md) and the [selected design](docs/research/2026-10-09-protection-swarm/50-integrated-design.md).
+
 <h2 id="why-ruam">Why Ruam?</h2>
 
 <p>
@@ -39,7 +41,7 @@ No deobfuscator exists for RuamVM bytecode** <strong>NOTE: Fable 5 is able to de
 </p>
 
 <p>
-  <strong>Ruam takes a fundamentally different approach.</strong> It <i>compiles</i> your JavaScript into a custom bytecode instruction set and replaces the original source with a compact virtual machine that executes an unintelligible instruction stream. The original code is destroyed &mdash; it does not exist anywhere in the output.
+  Ruam compiles eligible JavaScript functions into a custom bytecode instruction set and embeds a virtual machine to execute them. Code outside the selected compilation scope can remain ordinary JavaScript. The artifact contains what it needs to run offline, so an attacker can inspect the interpreter, observe execution, and attempt to reconstruct equivalent logic.
 </p>
 
 <h4>Traditional Obfuscators</h4>
@@ -55,9 +57,9 @@ No deobfuscator exists for RuamVM bytecode** <strong>NOTE: Fable 5 is able to de
 <p>Source JS  →  Custom Bytecode
 		+ Embedded VM</p>
 <ul>
-<li>Original source is destroyed</li>
-<li>Must reverse-engineer the VM itself</li>
-<li>No deobfuscator exists</li>
+<li>Selected function bodies become bytecode</li>
+<li>Attackers can analyze the VM or infer equivalent behavior</li>
+<li>Recovery resistance must be measured against concrete attacks</li>
 </ul>
 <br>
 
@@ -179,7 +181,7 @@ function publicHelper() {
   <tbody>
     <tr>
       <td><strong>Virtualization</strong></td>
-      <td>Original JS is compiled to a custom bytecode ISA. The source code is destroyed &mdash; an attacker must reverse-engineer the entire VM to recover any logic.</td>
+      <td>Selected function bodies are compiled to a custom bytecode ISA. VM analysis, runtime instrumentation and behavioral inference remain possible recovery approaches.</td>
     </tr>
     <tr>
       <td><strong>Polymorphic encoding</strong></td>

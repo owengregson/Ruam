@@ -23,6 +23,7 @@ import fs from "fs-extra";
 import path from "path";
 import chalk from "chalk";
 import ora from "ora";
+import { runRegionalCli } from "./regional/cli.js";
 
 // --- Constants ---
 
@@ -532,6 +533,7 @@ function printHelp(version: string): void {
 	console.log();
 
 	console.log(h("  OTHER"));
+	console.log(`    ${f("--regional-research --help")}  Offline regional compiler experiment`);
 	console.log(
 		`    ${f("--debug-logging")}           Inject VM trace logging`
 	);
@@ -1016,6 +1018,10 @@ async function obfuscateDirectoryWithProgress(
 
 /** CLI entry point. Routes to interactive wizard, help, or direct obfuscation. */
 async function main(): Promise<void> {
+	if (process.argv[2] === "--regional-research") {
+		await runRegionalCli(process.argv.slice(3));
+		return;
+	}
 	const args = parseArgs(process.argv.slice(2));
 	const version = await getVersion();
 

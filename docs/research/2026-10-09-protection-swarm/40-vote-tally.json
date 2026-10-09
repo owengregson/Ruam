@@ -1,0 +1,106 @@
+{
+  "slateRevision": "r1",
+  "voteMeaning": "approve-prototype-investment",
+  "claimsDemonstratedSecurity": false,
+  "actualWorkerCount": 3,
+  "specialistBriefCount": 9,
+  "independentBallotsPerWorker": 1,
+  "voters": [
+    "worker-a",
+    "worker-b",
+    "worker-c"
+  ],
+  "firstChoiceCounts": {
+    "P-legacy": 0,
+    "P-regional": 3,
+    "P-research": 0
+  },
+  "majorityPlan": "P-regional",
+  "componentDispositions": {
+    "C01": {
+      "foundation": 3,
+      "prototype": 0,
+      "defer": 0,
+      "reject": 0
+    },
+    "C02": {
+      "foundation": 3,
+      "prototype": 0,
+      "defer": 0,
+      "reject": 0
+    },
+    "C03": {
+      "foundation": 0,
+      "prototype": 3,
+      "defer": 0,
+      "reject": 0
+    },
+    "C04": {
+      "foundation": 3,
+      "prototype": 0,
+      "defer": 0,
+      "reject": 0
+    },
+    "C05": {
+      "foundation": 0,
+      "prototype": 3,
+      "defer": 0,
+      "reject": 0
+    },
+    "C06": {
+      "foundation": 0,
+      "prototype": 0,
+      "defer": 3,
+      "reject": 0
+    },
+    "C07": {
+      "foundation": 0,
+      "prototype": 3,
+      "defer": 0,
+      "reject": 0
+    },
+    "C08": {
+      "foundation": 3,
+      "prototype": 0,
+      "defer": 0,
+      "reject": 0
+    },
+    "C09": {
+      "foundation": 0,
+      "prototype": 0,
+      "defer": 3,
+      "reject": 0
+    },
+    "C10": {
+      "foundation": 3,
+      "prototype": 0,
+      "defer": 0,
+      "reject": 0
+    },
+    "C11": {
+      "foundation": 3,
+      "prototype": 0,
+      "defer": 0,
+      "reject": 0
+    },
+    "C12": {
+      "foundation": 3,
+      "prototype": 0,
+      "defer": 0,
+      "reject": 0
+    },
+    "C13": {
+      "foundation": 0,
+      "prototype": 0,
+      "defer": 3,
+      "reject": 0
+    },
+    "C14": {
+      "foundation": 0,
+      "prototype": 0,
+      "defer": 0,
+      "reject": 3
+    }
+  },
+  "caveat": "Three persistent model workers after shared deliberation; nine briefs are not nine voters. Votes are judgments, not security measurements."
+}

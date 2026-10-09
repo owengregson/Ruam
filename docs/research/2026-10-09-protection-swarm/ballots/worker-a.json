@@ -1,0 +1,156 @@
+{
+  "worker": "worker-a",
+  "slateRevision": "r1",
+  "preferredPlan": "P-regional",
+  "ranking": [
+    "P-regional",
+    "P-research",
+    "P-legacy"
+  ],
+  "components": {
+    "C01": {
+      "disposition": "foundation",
+      "reason": "Working historical controls and a preserved semantic corpus are prerequisites for any comparison.",
+      "conditions": [
+        "Publish minimal repair diffs and distinguish confirmed fixes from unverified defect indicators.",
+        "Use production max and strongest functional offline historical configurations only on their actually protected intersections.",
+        "Keep all attempted fixtures, failures, and rejections visible."
+      ]
+    },
+    "C02": {
+      "disposition": "foundation",
+      "reason": "A shared value/effect representation is necessary to justify fusion, alias handling, and many-to-many ownership.",
+      "conditions": [
+        "Unknown coercion, alias, call, completion, or domain facts remain conservative.",
+        "Separate exact finite-domain proofs from general-JS template and differential evidence.",
+        "Do not describe source ownership counts as equivalence or resistance."
+      ]
+    },
+    "C03": {
+      "disposition": "prototype",
+      "reason": "Eliminating actual private call and heap boundaries is an implementable change to the recovery task with possible performance benefits.",
+      "conditions": [
+        "Start with exactly resolved synchronous calls and proven nonescaping private allocations.",
+        "Compare against ordinary fusion and scalar replacement without added protection.",
+        "Kill its protection rationale if generic normalization restores equally reusable semantics at comparable cost."
+      ]
+    },
+    "C04": {
+      "disposition": "foundation",
+      "reason": "Activation ownership, shared binding identity, and reentry invalidation are correctness requirements independent of protection.",
+      "conditions": [
+        "Commit observable shared cells at their original effect points; invalidate and reread affected cached facts after unknown calls.",
+        "Validate recursive reentry, alias mutation, throws, and finally completion behavior.",
+        "Do not introduce extra promises, yields, or observable runtime limits."
+      ]
+    },
+    "C05": {
+      "disposition": "prototype",
+      "reason": "A single verified realization of genuinely dependent predicates and results is the most concrete protection hypothesis in the slate.",
+      "conditions": [
+        "Derive domains from unconditional authored semantics and preserve their coercion effects exactly.",
+        "Do not count independent-output bundling as added semantic difficulty.",
+        "Verify whole-region relations, including exit selection, before emission.",
+        "Attack general operations, cold paths, and any equivalent alternate lane at the minimum successful recovery cost."
+      ]
+    },
+    "C06": {
+      "disposition": "defer",
+      "reason": "Invertible local representations presently lack a distinct demonstrated benefit beyond fusion and can recreate decoder or simplifier patterns.",
+      "conditions": [
+        "Reconsider only after plain fusion and C05 survive the first artifact-aware normalization/slicing screen.",
+        "Use a matched plain-state ablation and require added recovery cost beyond added execution work.",
+        "Do not cross observable effects or claim transient values are unobservable."
+      ]
+    },
+    "C07": {
+      "disposition": "prototype",
+      "reason": "Residualizing a proven private configuration can eliminate a convenient evaluator-plus-data recovery target and genuine interpretation overhead.",
+      "conditions": [
+        "Require immutable private data, exact evaluator identity, and absence of observable configuration identity or access hooks.",
+        "Keep its preregistered workload cohort separate from general-JS claims.",
+        "Score recovered equivalent behavior even when original configuration literals remain unrecovered."
+      ]
+    },
+    "C08": {
+      "disposition": "foundation",
+      "reason": "One complete-artifact ledger is needed to prevent individually bounded transformations from producing an unbounded combined build.",
+      "conditions": [
+        "Use fixed qualified recipes initially and deterministic search ordering.",
+        "A wall-clock watchdog aborts rather than choosing whichever unfinished candidate completed first.",
+        "Apply the slate's conjunctive cost envelope to final complete packages and all executed lanes."
+      ]
+    },
+    "C09": {
+      "disposition": "defer",
+      "reason": "Automated candidate tournaments risk expensive overfitting before simple fixed recipes demonstrate any value.",
+      "conditions": [
+        "Retain existing constructive learnability bounds as owner-side diagnostics without treating their absence as hardness.",
+        "Adopt automated search only if independent held-out attackers show improvement at equal resource budgets.",
+        "Do not add online model or service dependencies to ordinary local builds."
+      ]
+    },
+    "C10": {
+      "disposition": "foundation",
+      "reason": "A frozen authored graph, separated owner evidence, and one final writer prevent coverage and packaging bypasses.",
+      "conditions": [
+        "Qualify exact bytes after all minification and packaging.",
+        "Use immutable graph versions plus a single switch or archive publication instead of claiming multiple renames are graph-atomic.",
+        "Supplied integration and vendor modules remain authored ownership."
+      ]
+    },
+    "C11": {
+      "disposition": "foundation",
+      "reason": "Explicit complete-root admission and scoped observations make the staged experiment both practical and truthful.",
+      "conditions": [
+        "Allow qualified ordinary callbacks without confusing attacker reflection with application-visible correctness.",
+        "Disclose generated-source reflection and reject unresolved legitimate dependence on original source text.",
+        "Initially reject eval, Function constructors, string timers, and unqualified asynchronous or cyclic-module behavior.",
+        "Demonstrate three realistic admitted roots without rewriting source before claiming practical applicability."
+      ]
+    },
+    "C12": {
+      "disposition": "foundation",
+      "reason": "Independent semantic and recovery evidence is the only basis for deciding whether the architecture improves protection.",
+      "conditions": [
+        "Mutation-test final-byte validation against stale or recomputed emitter metadata.",
+        "Use actual claimed engines and CSP contexts; simulations do not qualify an unavailable host.",
+        "Require executable replacements or meaningful preregistered edits, with artifact reuse reported separately.",
+        "Freeze hardware, per-metric comparator rules, cost substitution policy, cohorts, and censoring analysis before measurement.",
+        "A CPU ratio alone cannot establish improvement when work merely moves to model inference or analysts."
+      ]
+    },
+    "C13": {
+      "disposition": "defer",
+      "reason": "Cross-effect encoded state risks overwriting legitimate callback mutations and has not earned its semantic complexity.",
+      "conditions": [
+        "First pass plain-state alias, reentry, throw/finally, and later suspension protocols.",
+        "Require an independent state-recovery ablation showing value beyond activation/liveness improvements.",
+        "No singleton scratch storage or depth-only pools for independently live activations."
+      ]
+    },
+    "C14": {
+      "disposition": "reject",
+      "reason": "These mechanisms or metrics do not establish the intended recovery-cost claim under a fully informed offline attacker.",
+      "conditions": [
+        "Incidental representations may remain only when needed by a separately qualified transform.",
+        "Keep source-map stripping and publication hygiene without presenting them as cryptographic or anti-patching guarantees."
+      ]
+    }
+  },
+  "blockingObjections": [
+    "No outright contradiction blocks the bounded prototype vote, but no shipping or stronger-protection claim is approved by this ballot.",
+    "The repaired WIP, restored corpus, and three realistic admitted roots are unfinished prerequisites; architecture expansion must stop if those admission requirements fail.",
+    "Any easier equivalent general lane, altered coercion/completion behavior, or stale state after callback mutation blocks qualification even if the selected numeric region passes.",
+    "The numeric promotion gates require a frozen censoring and cross-resource accounting procedure; unresolved denominators or shifted model/analyst work make a comparative claim inconclusive."
+  ],
+  "dissent": [
+    "Defer C06 rather than nominate it as an immediate prototype. Local change-of-basis machinery should not be built alongside the first fusion experiment before it has an independent reason to exist.",
+    "P-regional is a conditional target, not permission for a broad rewrite. If generic normalization defeats the first experiments, revert investment to P-research and retain only measured correctness/performance improvements.",
+    "The default target remains scoped declared observations, not unrestricted full-JavaScript contextual equivalence. This compatibility boundary must stay prominent in support reporting."
+  ],
+  "cheapestExpectedAttack": "Patch or extract the exact general lane where one exists; otherwise normalize the emitted AST to SSA, inline known helpers, slice each useful output and state transition, and use local synthesis to rebuild small reusable relations. Cache the extractor across builds. Copying the complete artifact remains an immediate separate reuse success.",
+  "firstExperiment": "After minimal baseline restoration, run one bounded artifact-aware AST-to-SSA and slicing experiment on the slate's six dependent-recurrence and six configuration specimens plus independent-output controls, with eight builds each. Include plain fusion, C05, C07, and historical protected intersections; omit C06. Before timing, run the state.n callback-mutation/reentrant-throw counterexamples and attempt to force or extract every equivalent general lane. Stop expansion if a reusable extractor recovers valid replacements within 2x comparable work without added analyst effort.",
+  "voteMeaning": "approve-prototype-investment",
+  "claimsDemonstratedSecurity": false
+}

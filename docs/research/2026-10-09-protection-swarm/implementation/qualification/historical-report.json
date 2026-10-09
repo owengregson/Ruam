@@ -1,0 +1,2083 @@
+{
+  "schema": "ruam-pinned-baselines-v1",
+  "generatedAt": "2026-10-09T08:22:18.914Z",
+  "claimsDemonstratedSecurity": false,
+  "processTimeoutMs": 15000,
+  "attackCpuBudget": "bounded by process timeout; no inferred resistance from errors/timeouts",
+  "archives": [
+    {
+      "id": "main-max",
+      "ref": "1fb1a61",
+      "options": {
+        "preset": "max"
+      },
+      "protectedScope": "legacy virtualized functions; top-level source may remain native",
+      "deterministicSeed": false,
+      "commit": "1fb1a6148fd0a70c566af6bf14b314dddeaa9034",
+      "archive": "/var/folders/04/0sr3tcsj5dn5v6_sgpvxwfmc0000gn/T/ruam-qualified-main-max-yObkC4",
+      "modifications": "none",
+      "localOnlyCommit": false
+    },
+    {
+      "id": "pr5-offline-max",
+      "ref": "30f4563",
+      "options": {
+        "preset": "max"
+      },
+      "protectedScope": "legacy functions, offline-only; no external-key credit",
+      "deterministicSeed": false,
+      "commit": "30f45634d53a92c5f605e28bc7872fa8a4e0d5d5",
+      "archive": "/var/folders/04/0sr3tcsj5dn5v6_sgpvxwfmc0000gn/T/ruam-qualified-pr5-offline-max-xd8SRa",
+      "modifications": "none",
+      "localOnlyCommit": false
+    },
+    {
+      "id": "pr7-local",
+      "ref": "b464a82",
+      "options": {
+        "isogloss": {
+          "profile": "holographic-local"
+        }
+      },
+      "protectedScope": "only owner-report-confirmed protected regions; no native/hybrid credit",
+      "deterministicSeed": true,
+      "commit": "b464a82aa033bc013b89b5347a073b18c9815605",
+      "archive": "/var/folders/04/0sr3tcsj5dn5v6_sgpvxwfmc0000gn/T/ruam-qualified-pr7-local-gy1gLs",
+      "modifications": "none",
+      "localOnlyCommit": false
+    },
+    {
+      "id": "september-local",
+      "ref": "f7f52c8",
+      "options": {
+        "isogloss": {
+          "profile": "holographic-local"
+        }
+      },
+      "protectedScope": "local WIP; any repair is separately hashed and published",
+      "deterministicSeed": true,
+      "commit": "f7f52c821dd37f44d790b7204d56fe7f486a8a57",
+      "archive": "/var/folders/04/0sr3tcsj5dn5v6_sgpvxwfmc0000gn/T/ruam-qualified-september-local-OCg3kx",
+      "modifications": "none",
+      "localOnlyCommit": true
+    }
+  ],
+  "rows": [
+    {
+      "baseline": "main-max",
+      "specimen": "recurrence-1",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 9407.569083,
+      "status": "compiled",
+      "artifactSha256": "4885ac57b90989ec554f68ce9d7b1ca7a418f6da17ecd0660fb99b45d63bca9a",
+      "artifactBytes": 50521,
+      "compileWallMs": 4072.159541,
+      "correctness": {
+        "status": "pass",
+        "cases": 96,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 286.12145899999996,
+          "cpuUserMilliseconds": 159.23,
+          "cpuSystemMilliseconds": 17.596,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 157450240,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": null,
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "recurrence-1",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 6466.209292,
+      "status": "compiled",
+      "artifactSha256": "b7e5343ef1c6cc875670b1ee4309a5b692ef9868732f5dafadcf594362115fcd",
+      "artifactBytes": 52502,
+      "compileWallMs": 1649.661083,
+      "correctness": {
+        "status": "pass",
+        "cases": 96,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 36.76166699999976,
+          "cpuUserMilliseconds": 52.834,
+          "cpuSystemMilliseconds": 6.202,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 162922496,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": null,
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "fixed-configuration-1",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 6102.734832999999,
+      "status": "compiled",
+      "artifactSha256": "6d9a42741e55207ba68906aa138c440dbef334f0e199d9c9d47e33eab3e1ccf6",
+      "artifactBytes": 49206,
+      "compileWallMs": 2105.5530000000003,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 84.69533299999966,
+          "cpuUserMilliseconds": 105.704,
+          "cpuSystemMilliseconds": 12.573,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 145555456,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 25.689166999999543,
+          "cpuUserMilliseconds": 27.167,
+          "cpuSystemMilliseconds": 2.665,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 145555456,
+          "queries": 4,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "fixed-configuration-1",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 8074.9755829999995,
+      "status": "compiled",
+      "artifactSha256": "f0fcc6408c481946c490ecdd74edfcb5eb918e391d4ba5aea75fbb609c15c1f8",
+      "artifactBytes": 48132,
+      "compileWallMs": 2550.7858749999996,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 383.97762500000044,
+          "cpuUserMilliseconds": 105.956,
+          "cpuSystemMilliseconds": 15.234,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 162398208,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 76.733792,
+          "cpuUserMilliseconds": 21.119,
+          "cpuSystemMilliseconds": 2.649,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 162398208,
+          "queries": 4,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "independent-control-1",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 3621.728166000001,
+      "status": "compiled",
+      "artifactSha256": "f9ed3ca51e3786eaac311988724723d15e6300b1e2b5c1df00b56913ffc63c74",
+      "artifactBytes": 38587,
+      "compileWallMs": 709.3579579999998,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 342.2014159999999,
+          "cpuUserMilliseconds": 76.412,
+          "cpuSystemMilliseconds": 9.978,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 155172864,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 88.51404200000025,
+          "cpuUserMilliseconds": 83.894,
+          "cpuSystemMilliseconds": 6.022,
+          "retainedHeapDeltaBytes": 3585483,
+          "peakRssBytes": 155172864,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "483986b09b2188d747d088831838cd601009abe8769d473256f0b260b9f9518b"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "independent-control-1",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 3194.693833000005,
+      "status": "compiled",
+      "artifactSha256": "835d263342ea0589f47adb10db9d61d2dbc72fe92f1ff618d51b0210dd369cf5",
+      "artifactBytes": 44070,
+      "compileWallMs": 843.5865409999999,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 137.84562499999993,
+          "cpuUserMilliseconds": 64.72,
+          "cpuSystemMilliseconds": 8.477,
+          "retainedHeapDeltaBytes": 2606463,
+          "peakRssBytes": 147619840,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 142.75870799999984,
+          "cpuUserMilliseconds": 62.253,
+          "cpuSystemMilliseconds": 6.454,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 147619840,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "483986b09b2188d747d088831838cd601009abe8769d473256f0b260b9f9518b"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "independent-control-4",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 2184.2302500000005,
+      "status": "compiled",
+      "artifactSha256": "dbe1b6356a95555ab3f61b2bc6f5c29198e4af71e07ca925b8fb92dbacdd2788",
+      "artifactBytes": 34172,
+      "compileWallMs": 644.876333,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 86.99424999999997,
+          "cpuUserMilliseconds": 46,
+          "cpuSystemMilliseconds": 4.244,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 142458880,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 36.074292000000014,
+          "cpuUserMilliseconds": 16.322,
+          "cpuSystemMilliseconds": 0.986,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 142458880,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "4ea0150df05bb367d7b51daf09f8ecf9610355556fd7e42d138fc7dfc31cfdef"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "independent-control-4",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 1905.6888749999998,
+      "status": "compiled",
+      "artifactSha256": "7e49cd293de83575ff0414f3e94437e4ff1f99590395add1e71cd3e13a63dc49",
+      "artifactBytes": 32744,
+      "compileWallMs": 447.51583400000004,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 14.259624999999915,
+          "cpuUserMilliseconds": 29.866,
+          "cpuSystemMilliseconds": 2.391,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 154812416,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 35.57166600000005,
+          "cpuUserMilliseconds": 38.653,
+          "cpuSystemMilliseconds": 2.493,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 155893760,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "4ea0150df05bb367d7b51daf09f8ecf9610355556fd7e42d138fc7dfc31cfdef"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 2832.154290999999,
+      "status": "compiled",
+      "artifactSha256": "48c00a21c1a5f8b101383660aef71b44755fdf393b6c338b224ebae0abce6613",
+      "artifactBytes": 42513,
+      "compileWallMs": 807.5448339999999,
+      "correctness": {
+        "status": "pass",
+        "cases": 100,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 304.7323329999999,
+          "cpuUserMilliseconds": 68.306,
+          "cpuSystemMilliseconds": 8.092,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 162496512,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 34.291833000000224,
+          "cpuUserMilliseconds": 56.158,
+          "cpuSystemMilliseconds": 3.476,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 162496512,
+          "queries": 12,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "domainProbe": "Adapted PR7 source-transform.test.ts crown relation, one numeric input with owner-declared domain1..20; 20 distinct values repeated five times, not 100 independent cases. Oracle learner may query outside domain and report error.",
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "main-max",
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 2398.5467089999947,
+      "status": "compiled",
+      "artifactSha256": "236bf7f6050d7a9d0cecb4200466dad427270444a66bdd272972b7df7890ab62",
+      "artifactBytes": 34183,
+      "compileWallMs": 779.2180409999999,
+      "correctness": {
+        "status": "pass",
+        "cases": 100,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 19.629042000000027,
+          "cpuUserMilliseconds": 36.333,
+          "cpuSystemMilliseconds": 2.83,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 153337856,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 171.22549999999956,
+          "cpuUserMilliseconds": 30.493,
+          "cpuSystemMilliseconds": 3.503,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 154402816,
+          "queries": 12,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "domainProbe": "Adapted PR7 source-transform.test.ts crown relation, one numeric input with owner-declared domain1..20; 20 distinct values repeated five times, not 100 independent cases. Oracle learner may query outside domain and report error.",
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "recurrence-1",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 3015.529042000002,
+      "status": "compiled",
+      "artifactSha256": "c03e3573287460716ffd06feaf4d3adaeaba1f4928615de3017a4ed987ac9d66",
+      "artifactBytes": 52562,
+      "compileWallMs": 1058.902875,
+      "correctness": {
+        "status": "pass",
+        "cases": 96,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 36.567167000000154,
+          "cpuUserMilliseconds": 33.164,
+          "cpuSystemMilliseconds": 3.414,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 173735936,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": null,
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "recurrence-1",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 1999.9588339999973,
+      "status": "compiled",
+      "artifactSha256": "1eac4aad07e2f0cb5e1dffbfaafcfaa8557a2108a77a9cb10fd3d665b1fb7fea",
+      "artifactBytes": 54518,
+      "compileWallMs": 937.296875,
+      "correctness": {
+        "status": "pass",
+        "cases": 96,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 49.7662499999999,
+          "cpuUserMilliseconds": 74.277,
+          "cpuSystemMilliseconds": 6.07,
+          "retainedHeapDeltaBytes": 4093571,
+          "peakRssBytes": 195870720,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": null,
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "fixed-configuration-1",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 1071.5158749999973,
+      "status": "compiled",
+      "artifactSha256": "969080f2c44bf0720c4f60d69ab8c26acba609f25b668a84b2a354b203bc57e4",
+      "artifactBytes": 46329,
+      "compileWallMs": 355.08925,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 108.18716699999993,
+          "cpuUserMilliseconds": 87.023,
+          "cpuSystemMilliseconds": 6.716,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 183533568,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 16.005707999999913,
+          "cpuUserMilliseconds": 11.163,
+          "cpuSystemMilliseconds": 0.708,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 183599104,
+          "queries": 4,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "fixed-configuration-1",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 1255.1455419999984,
+      "status": "compiled",
+      "artifactSha256": "ab4320ab97dfb778dd3bfe49d822b378d3da9fb6d3ea9d4e55903bbd5eb12f41",
+      "artifactBytes": 46910,
+      "compileWallMs": 503.543625,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 37.11824999999999,
+          "cpuUserMilliseconds": 46.009,
+          "cpuSystemMilliseconds": 3.866,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 185827328,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 12.931959000000006,
+          "cpuUserMilliseconds": 19.497,
+          "cpuSystemMilliseconds": 1.46,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 187449344,
+          "queries": 4,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "independent-control-1",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 1113.2019589999982,
+      "status": "compiled",
+      "artifactSha256": "73eaff1d809a056a78415199a2e657a0fb9c1140e54eb067e4d6d737c6960c21",
+      "artifactBytes": 40418,
+      "compileWallMs": 358.51425,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 51.65137500000003,
+          "cpuUserMilliseconds": 43.778,
+          "cpuSystemMilliseconds": 3.843,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 174407680,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 96.75579199999993,
+          "cpuUserMilliseconds": 72.376,
+          "cpuSystemMilliseconds": 6.623,
+          "retainedHeapDeltaBytes": 1581123,
+          "peakRssBytes": 180109312,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "483986b09b2188d747d088831838cd601009abe8769d473256f0b260b9f9518b"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "independent-control-1",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 1054.4950829999943,
+      "status": "compiled",
+      "artifactSha256": "d6e06ed891d00340143be3e6cdf3d1208278df8c779c6381e677047eed546862",
+      "artifactBytes": 39321,
+      "compileWallMs": 273.012333,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 36.10708299999999,
+          "cpuUserMilliseconds": 46.803,
+          "cpuSystemMilliseconds": 3.787,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 173604864,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 66.80108300000006,
+          "cpuUserMilliseconds": 88.526,
+          "cpuSystemMilliseconds": 6.228,
+          "retainedHeapDeltaBytes": 4074223,
+          "peakRssBytes": 181600256,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "483986b09b2188d747d088831838cd601009abe8769d473256f0b260b9f9518b"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "independent-control-4",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 923.6544579999972,
+      "status": "compiled",
+      "artifactSha256": "ae84da5dce341be2db6ad7be4c777d8d1d7b8c88d3d315ce4a8bb123803121a4",
+      "artifactBytes": 33294,
+      "compileWallMs": 316.61983299999997,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 26.991750000000025,
+          "cpuUserMilliseconds": 34.135,
+          "cpuSystemMilliseconds": 2.861,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 157106176,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 52.54079200000001,
+          "cpuUserMilliseconds": 43.176,
+          "cpuSystemMilliseconds": 3.197,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 161103872,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "4ea0150df05bb367d7b51daf09f8ecf9610355556fd7e42d138fc7dfc31cfdef"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "independent-control-4",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 834.6955420000013,
+      "status": "compiled",
+      "artifactSha256": "eaaef04069570e4e188553cb1c1cf1274c56ac4ebb454410d1a53d9aed2321d8",
+      "artifactBytes": 34687,
+      "compileWallMs": 253.060584,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 51.26520899999991,
+          "cpuUserMilliseconds": 54.764,
+          "cpuSystemMilliseconds": 3.796,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 159137792,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 24.860915999999975,
+          "cpuUserMilliseconds": 32.533,
+          "cpuSystemMilliseconds": 1.914,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 161251328,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "4ea0150df05bb367d7b51daf09f8ecf9610355556fd7e42d138fc7dfc31cfdef"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 0,
+      "seedIsDeterministic": false,
+      "wallMs": 968.0792499999952,
+      "status": "compiled",
+      "artifactSha256": "e1f6c06c308090062e8fc983a643b769c9533928b23d35b2e034289ef6b2194a",
+      "artifactBytes": 35469,
+      "compileWallMs": 271.01654199999996,
+      "correctness": {
+        "status": "pass",
+        "cases": 100,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 112.17295899999999,
+          "cpuUserMilliseconds": 48.791,
+          "cpuSystemMilliseconds": 6.684,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 163659776,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 33.10841700000003,
+          "cpuUserMilliseconds": 30.935,
+          "cpuSystemMilliseconds": 2.643,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 165363712,
+          "queries": 12,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "domainProbe": "Adapted PR7 source-transform.test.ts crown relation, one numeric input with owner-declared domain1..20; 20 distinct values repeated five times, not 100 independent cases. Oracle learner may query outside domain and report error.",
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr5-offline-max",
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 1,
+      "seedIsDeterministic": false,
+      "wallMs": 1203.6522090000071,
+      "status": "compiled",
+      "artifactSha256": "7696523b70f1682a1434e8300853b3517c6411f0cc308d08fa4a4d07ed2bfd18",
+      "artifactBytes": 35897,
+      "compileWallMs": 439.36191600000006,
+      "correctness": {
+        "status": "pass",
+        "cases": 100,
+        "mismatches": 0
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Public entry is not a top-level statically bound declaration; no VM lifting implemented.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 23.644500000000107,
+          "cpuUserMilliseconds": 38.417,
+          "cpuSystemMilliseconds": 2.732,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 163872768,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 46.99720900000011,
+          "cpuUserMilliseconds": 47.536,
+          "cpuSystemMilliseconds": 3.418,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 168148992,
+          "queries": 12,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "domainProbe": "Adapted PR7 source-transform.test.ts crown relation, one numeric input with owner-declared domain1..20; 20 distinct values repeated five times, not 100 independent cases. Oracle learner may query outside domain and report error.",
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "recurrence-1",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 1089.8832079999993,
+      "status": "compiled",
+      "artifactSha256": "850826a269ae0bcf8e79c34ef79af92bfaa0dd48d7e01abcb79bbb7a43ad30a6",
+      "artifactBytes": 461,
+      "compileWallMs": 166.84233400000005,
+      "correctness": {
+        "status": "pass",
+        "cases": 96,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 0,
+        "protectedRegionCount": 0,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 461,
+        "outputBytes": 461,
+        "expansionRatio": 1,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Artifact-only declaration slicing, helper partial evaluation and fresh three-address return computations; no original artifact invocation.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 1,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 3
+        },
+        "resources": {
+          "wallMilliseconds": 124.89970799999992,
+          "cpuUserMilliseconds": 50,
+          "cpuSystemMilliseconds": 6.471,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 106512384,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 96,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "8cd698bfd2dcc66b6274c878e5a67827f89b8d97e5e7ec5952fa279928c2b8ad"
+      },
+      "numericAttack": null,
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "recurrence-1",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 885.1984579999989,
+      "status": "compiled",
+      "artifactSha256": "850826a269ae0bcf8e79c34ef79af92bfaa0dd48d7e01abcb79bbb7a43ad30a6",
+      "artifactBytes": 461,
+      "compileWallMs": 145.383375,
+      "correctness": {
+        "status": "pass",
+        "cases": 96,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 0,
+        "protectedRegionCount": 0,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 461,
+        "outputBytes": 461,
+        "expansionRatio": 1,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Artifact-only declaration slicing, helper partial evaluation and fresh three-address return computations; no original artifact invocation.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 1,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 3
+        },
+        "resources": {
+          "wallMilliseconds": 110.79858300000001,
+          "cpuUserMilliseconds": 48.399,
+          "cpuSystemMilliseconds": 6.234,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 106790912,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 96,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "8cd698bfd2dcc66b6274c878e5a67827f89b8d97e5e7ec5952fa279928c2b8ad"
+      },
+      "numericAttack": null,
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "fixed-configuration-1",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 875.9776669999992,
+      "status": "compiled",
+      "artifactSha256": "efbd82279610b4d10bfe4576f0eecbd72efd0638c36d16ecc6d8951e7c544c72",
+      "artifactBytes": 321,
+      "compileWallMs": 158.30174999999997,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 0,
+        "protectedRegionCount": 0,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 321,
+        "outputBytes": 321,
+        "expansionRatio": 1,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Artifact-only declaration slicing, helper partial evaluation and fresh three-address return computations; no original artifact invocation.",
+        "transformations": {
+          "constantFolds": 2,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 1,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 4
+        },
+        "resources": {
+          "wallMilliseconds": 73.575916,
+          "cpuUserMilliseconds": 37.416,
+          "cpuSystemMilliseconds": 4.964,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 91652096,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "ff5152c63cc9eee26678f673a6848656645944ce30db7a19eeef266899d4c050"
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 2.070959000000016,
+          "cpuUserMilliseconds": 0.978,
+          "cpuSystemMilliseconds": 0.156,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 105545728,
+          "queries": 4,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "fixed-configuration-1",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 526.8168339999975,
+      "status": "compiled",
+      "artifactSha256": "efbd82279610b4d10bfe4576f0eecbd72efd0638c36d16ecc6d8951e7c544c72",
+      "artifactBytes": 321,
+      "compileWallMs": 73.83879100000001,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 0,
+        "protectedRegionCount": 0,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 321,
+        "outputBytes": 321,
+        "expansionRatio": 1,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Artifact-only declaration slicing, helper partial evaluation and fresh three-address return computations; no original artifact invocation.",
+        "transformations": {
+          "constantFolds": 2,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 1,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 4
+        },
+        "resources": {
+          "wallMilliseconds": 47.828332999999986,
+          "cpuUserMilliseconds": 35.173,
+          "cpuSystemMilliseconds": 3.52,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 93585408,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "ff5152c63cc9eee26678f673a6848656645944ce30db7a19eeef266899d4c050"
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "unsupported",
+        "reason": "No learned expression fit the training oracle.",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 1.6784579999999778,
+          "cpuUserMilliseconds": 0.886,
+          "cpuSystemMilliseconds": 0.133,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 107446272,
+          "queries": 4,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "independent-control-1",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 734.3448750000098,
+      "status": "compiled",
+      "artifactSha256": "87c8096b2aba9af1e1274696b4b03e914b4fbb34f9c47577e7df739925700e3b",
+      "artifactBytes": 100,
+      "compileWallMs": 50.27487500000001,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 0,
+        "protectedRegionCount": 0,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 100,
+        "outputBytes": 100,
+        "expansionRatio": 1,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 2
+        },
+        "resources": {
+          "wallMilliseconds": 24.534416999999962,
+          "cpuUserMilliseconds": 15.95,
+          "cpuSystemMilliseconds": 1.626,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 86245376,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 6.448167000000012,
+          "cpuUserMilliseconds": 2.83,
+          "cpuSystemMilliseconds": 0.396,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 88522752,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "483986b09b2188d747d088831838cd601009abe8769d473256f0b260b9f9518b"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "independent-control-1",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 847.6011670000007,
+      "status": "compiled",
+      "artifactSha256": "87c8096b2aba9af1e1274696b4b03e914b4fbb34f9c47577e7df739925700e3b",
+      "artifactBytes": 100,
+      "compileWallMs": 105.87270899999999,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 0,
+        "protectedRegionCount": 0,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 100,
+        "outputBytes": 100,
+        "expansionRatio": 1,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 2
+        },
+        "resources": {
+          "wallMilliseconds": 30.142791999999986,
+          "cpuUserMilliseconds": 20.887,
+          "cpuSystemMilliseconds": 2.467,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 86425600,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 9.562792000000059,
+          "cpuUserMilliseconds": 5.792,
+          "cpuSystemMilliseconds": 0.812,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 88768512,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "483986b09b2188d747d088831838cd601009abe8769d473256f0b260b9f9518b"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "independent-control-4",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 497.59029100000043,
+      "status": "compiled",
+      "artifactSha256": "a054da6095c0ad3b4f8e816242d8bee9dce7201198f18341765253979abebccd",
+      "artifactBytes": 69,
+      "compileWallMs": 35.35662500000001,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 0,
+        "protectedRegionCount": 0,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 69,
+        "outputBytes": 69,
+        "expansionRatio": 1,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 14.165415999999993,
+          "cpuUserMilliseconds": 6.944,
+          "cpuSystemMilliseconds": 0.931,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 83804160,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 4.653209000000004,
+          "cpuUserMilliseconds": 2.547,
+          "cpuSystemMilliseconds": 0.523,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 85229568,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "4ea0150df05bb367d7b51daf09f8ecf9610355556fd7e42d138fc7dfc31cfdef"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "independent-control-4",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 485.8110000000015,
+      "status": "compiled",
+      "artifactSha256": "a054da6095c0ad3b4f8e816242d8bee9dce7201198f18341765253979abebccd",
+      "artifactBytes": 69,
+      "compileWallMs": 29.852666,
+      "correctness": {
+        "status": "pass",
+        "cases": 106,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 0,
+        "protectedRegionCount": 0,
+        "realizationCount": 0,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 69,
+        "outputBytes": 69,
+        "expansionRatio": 1,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "artifact-transplant-only",
+        "reason": "Slicing alone did not transform the computation; unchanged function copying earns no recovery credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 5.920541999999955,
+          "cpuUserMilliseconds": 5.891,
+          "cpuSystemMilliseconds": 0.495,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 84475904,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "candidate",
+        "entry": "recovered",
+        "reason": "Numeric constant/affine/xor/quadratic grammar fit; hidden validation still required.",
+        "transformations": {
+          "learnedExpression": 1
+        },
+        "resources": {
+          "wallMilliseconds": 2.415458000000001,
+          "cpuUserMilliseconds": 2.145,
+          "cpuSystemMilliseconds": 0.294,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 86196224,
+          "queries": 14,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "validation": {
+          "status": "pass",
+          "cases": 106,
+          "mismatches": 0
+        },
+        "verifiedStandaloneRecovery": true,
+        "recoveredSha256": "4ea0150df05bb367d7b51daf09f8ecf9610355556fd7e42d138fc7dfc31cfdef"
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 942.4718750000029,
+      "status": "compiled",
+      "artifactSha256": "4b6c4abe70bacac6baec98de4975ffb66b171b5ca797a32bab016c2c44ca413b",
+      "artifactBytes": 7644,
+      "compileWallMs": 187.39833299999998,
+      "correctness": {
+        "status": "pass",
+        "cases": 100,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 1,
+        "protectedRegionCount": 1,
+        "realizationCount": 3,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 95,
+        "outputBytes": 7644,
+        "expansionRatio": 80.46315789473684,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Residual computation is outside the scalar/history grammar (non-scalar or dynamic call); no retained runtime credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 83.222667,
+          "cpuUserMilliseconds": 62.241,
+          "cpuSystemMilliseconds": 6.484,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 118210560,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "error",
+        "reason": "Error: RUAM_BPRF_SCALAR_INPUT_GUARD",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 2.68429100000003,
+          "cpuUserMilliseconds": 1.117,
+          "cpuSystemMilliseconds": 0.135,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 118521856,
+          "queries": 1,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "domainProbe": "Adapted PR7 source-transform.test.ts crown relation, one numeric input with owner-declared domain1..20; 20 distinct values repeated five times, not 100 independent cases. Oracle learner may query outside domain and report error.",
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "pr7-local",
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 844.2615410000144,
+      "status": "compiled",
+      "artifactSha256": "84a4442bec48c5094fa072f3bea1541df76b3aff0e514d94cc568315d61be9c2",
+      "artifactBytes": 7606,
+      "compileWallMs": 203.82174999999995,
+      "correctness": {
+        "status": "pass",
+        "cases": 100,
+        "mismatches": 0
+      },
+      "ownerStats": {
+        "engine": "isogloss",
+        "profile": "holographic-local",
+        "rootGroupCount": 1,
+        "protectedRegionCount": 1,
+        "realizationCount": 3,
+        "fragmentFunctionCount": 0,
+        "originalBytes": 95,
+        "outputBytes": 7606,
+        "expansionRatio": 80.06315789473685,
+        "clientCompleteness": "complete",
+        "hardnessLowerBound": null
+      },
+      "staticAttack": {
+        "kind": "static-extraction",
+        "status": "unsupported",
+        "reason": "Residual computation is outside the scalar/history grammar (non-scalar or dynamic call); no retained runtime credit.",
+        "transformations": {
+          "constantFolds": 0,
+          "helperInlines": 0,
+          "scalarBodiesReduced": 0,
+          "unusedFunctionsRemoved": 0,
+          "ssaStatements": 0
+        },
+        "resources": {
+          "wallMilliseconds": 80.99379199999998,
+          "cpuUserMilliseconds": 58.426,
+          "cpuSystemMilliseconds": 7.468,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 118800384,
+          "queries": 0,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "numericAttack": {
+        "kind": "blackbox-learning",
+        "status": "error",
+        "reason": "Error: RUAM_BPRF_SCALAR_INPUT_GUARD",
+        "transformations": {},
+        "resources": {
+          "wallMilliseconds": 0.7777089999999589,
+          "cpuUserMilliseconds": 1.655,
+          "cpuSystemMilliseconds": 0.177,
+          "retainedHeapDeltaBytes": 0,
+          "peakRssBytes": 119259136,
+          "queries": 1,
+          "analystMinutes": null,
+          "modelTokens": 0
+        },
+        "verifiedStandaloneRecovery": false
+      },
+      "equallyProtectedCoverageConfirmed": false,
+      "domainProbe": "Adapted PR7 source-transform.test.ts crown relation, one numeric input with owner-declared domain1..20; 20 distinct values repeated five times, not 100 independent cases. Oracle learner may query outside domain and report error.",
+      "comparativeStrength": "inconclusive: no historical VM lifting and no complete-coverage equality proof"
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "recurrence-1",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 692.0211249999993,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "recurrence-1",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 747.9942919999885,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "fixed-configuration-1",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 779.1548750000075,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "fixed-configuration-1",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 743.8032919999969,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "independent-control-1",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 1041.2324579999986,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "independent-control-1",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 1018.5512079999899,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "independent-control-4",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 1268.322417000003,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "independent-control-4",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 3296.121708999999,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 0,
+      "seedIsDeterministic": true,
+      "wallMs": 1935.4324580000102,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    },
+    {
+      "baseline": "september-local",
+      "specimen": "pr7-declared-domain-probe",
+      "seed": 1,
+      "seedIsDeterministic": true,
+      "wallMs": 1650.530666999999,
+      "status": "compiler-or-execution-error",
+      "error": "IsoglossSourceTransformError: RUAM_ISOGLOSS_EMISSION_FAILED: buildStructuredLoopLayouts is not defined",
+      "equallyProtectedCoverageConfirmed": false
+    }
+  ]
+}

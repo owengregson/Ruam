@@ -9,6 +9,8 @@
 
 export { obfuscateCode } from "./transform.js";
 export { PRESETS } from "./presets.js";
+export { compileRegionalCode, compileRegionalGraph } from "./regional/index.js";
+export type { RegionalGraphOptions, RegionalPackageBuild } from "./regional/index.js";
 export type {
 	VmObfuscationOptions,
 	PresetName,
