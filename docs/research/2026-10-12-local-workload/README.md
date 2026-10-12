@@ -80,6 +80,14 @@ Native class and async shells are a possible correctness foundation for that com
 
 A successor still needs a substantive whole-component algorithm/state transformation that survives the existing history-sidecar control, works on held-out application roots, and improves both comprehension and partial-edit cost without merely making execution larger or slower. None of the controls in this PR meets that bar. These modules are opt-in research entry points; no public default, preset or production backend enables them.
 
+An independent follow-up assessment ranked three directions. These are implementation decisions inferred from the papers and local evidence, not claims made by those papers about Ruam:
+
+| Direction | Evidence and decision |
+| --- | --- |
+| Joint incremental state and output synthesis | [DBSP](https://arxiv.org/abs/2203.16684) supplies an algorithmic basis for incremental views over rich query languages. It provides no obfuscation guarantee. Keep A1 conditional on an existing owned component surviving admission and the initial partial-change control. The current controls do not justify a general compiler. |
+| Compile-time interpreter specialization | [weval, PLDI 2025](https://cfallin.org/pubs/pldi2025_weval.pdf) derives ahead-of-time compilation from interpreters for a WebAssembly target. This motivates a bounded JavaScript-emission feasibility experiment, not a protection claim. A candidate must erase the admitted region's runtime program representation, preserve effects and suspension, and then beat both current max and ordinary optimized code on the protection tasks. The earlier native-lowering recovery control remains a counterexample to treating direct code generation itself as protection. |
+| Cryptographic circuit obfuscation | [Jain–Lin–Sahai](https://arxiv.org/abs/2008.09317) establishes a theoretical construction under stated assumptions. There is no applicable, resource-qualified ordinary-JavaScript implementation in this project. Reject it for the current replacement effort until a real bounded kernel and practical costs are demonstrated. It cannot silently replace arbitrary host effects or unbounded histories with a fixed circuit. |
+
 ## Research basis and claim limits
 
 [Loki](https://www.usenix.org/conference/usenixsecurity22/presentation/schloegel) motivates evaluating synthesis and multiple attack families rather than assuming that complex arithmetic suffices. [Syntia](https://www.usenix.org/conference/usenixsecurity17/technical-sessions/presentation/blazytko) motivates semantics recovery from observations. Neither is a general JavaScript or AI-resistance certificate. The [general virtual-black-box impossibility result](https://www.boazbarak.org/papers/obfuscate) rules out that strongest universal guarantee; it does not prove every particular program easy to reverse engineer. Acceptance must use explicit scope, measured attacker cost and legitimate execution cost.
