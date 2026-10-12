@@ -34,6 +34,8 @@ Obfuscation does not guarantee secrecy or prevent reconstruction by an attacker 
 
 The experimental offline regional compiler is available through explicit research APIs and `ruam --regional-research`. Its protection strength is unqualified; it does not replace the production VM. See the [implementation and evidence](docs/research/2026-10-09-protection-swarm/implementation/README.md) and the [selected design](docs/research/2026-10-09-protection-swarm/50-integrated-design.md).
 
+The [algorithm/state replacement preflight](docs/research/2026-10-12-algorithm-state/README.md) tests the newer design and full-scope combined alternatives. Its current decision is NO-GO: a replacement must preserve current Ruam's JavaScript scope and demonstrate protection against executable attacks before changing the production compiler.
+
 <h2 id="why-ruam">Why Ruam?</h2>
 
 <p>

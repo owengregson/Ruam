@@ -1,0 +1,1004 @@
+{
+  "schema": "ruam-algorithm-state-preflight-v1",
+  "generatedAt": "2026-10-12T09:44:51.474Z",
+  "decision": {
+    "status": "NO-GO",
+    "stage": "admission",
+    "eligibleRoots": 0,
+    "requiredRoots": 3,
+    "compilerConstructionAuthorizedByEvidence": false,
+    "replaceProductionVm": false,
+    "claimsAiResistance": false,
+    "claimsCloneResistance": false,
+    "requiredJavascriptScope": "current-ruam",
+    "subsetCompilerCanReplaceVm": false,
+    "reasons": [
+      {
+        "root": "mutation-state",
+        "reasonCodes": [
+          "UNPROVED_DOMAIN",
+          "UNPROVED_OWNERSHIP",
+          "UNPROVED_ALGORITHM_FAMILIES"
+        ]
+      },
+      {
+        "root": "name-registry",
+        "reasonCodes": [
+          "ESCAPING_STATE",
+          "UNKNOWN_EFFECTS",
+          "UNPROVED_DOMAIN",
+          "UNPROVED_ALGORITHM_FAMILIES"
+        ]
+      },
+      {
+        "root": "emitter",
+        "reasonCodes": [
+          "ESCAPING_STATE",
+          "UNKNOWN_EFFECTS",
+          "UNPROVED_ALGORITHM_FAMILIES"
+        ]
+      }
+    ],
+    "unmetGates": [
+      "same JavaScript scope and protected selection as current Ruam",
+      "source-derived whole-component admission",
+      "surviving partial-edit and explanation pilot",
+      "three applicable algorithm families",
+      "exact final-byte history correctness",
+      "functional historical baseline intersection",
+      "resource budgets",
+      "held-out AI-assisted recovery and edit trials"
+    ]
+  },
+  "provenance": {
+    "gitHead": "f47f2783c5cbbc792910de85ba9c48a66cb1eb2c",
+    "baselineCommit": "f47f2783c5cbbc792910de85ba9c48a66cb1eb2c",
+    "baselineSourceBlobsVerified": true,
+    "experimentId": "algorithm-state-a1-2026-10-12",
+    "qualificationFiles": {
+      "docs/research/2026-10-12-algorithm-state/roots.json": "f908ef15b2bb869a87810b11ba2c9c850e1d01a48d70fdcc5ebf9ef210999652",
+      "packages/ruam/src/algorithm-state/qualification/preflight.ts": "fa657873a2272bb9612509ca1865ef45b8b4309d7d870d0698ff05ec8f44e5c8",
+      "packages/ruam/src/algorithm-state/qualification/sidecar.ts": "53d7d0f30a7f1445fd82e1ff9aae544395e8d2e96590c37da5f4cb253787fdb0",
+      "packages/ruam/scripts/algorithm-state-qualify.ts": "4c10c1d62f2f81e7e42b32d7705577675966906ffbe5d9d17021773e5bd923e5",
+      "packages/ruam/test/algorithm-state/preflight.test.ts": "994de85d197af3fd5148b9de0cd93767589743511447722c4c7193680009d465",
+      "packages/ruam/test/algorithm-state/sidecar.test.ts": "0011f6229a38dd66e5238d1ab3d5808686d66e71bb01926a6c7a9888a4ad700e"
+    },
+    "frozenSources": [
+      {
+        "path": "packages/ruam/src/compiler/opcode-mutation.ts",
+        "sha256": "5c6e370fb71d046e1ed3c2c7d41d57a23c512483ebd3215122ab51feb24b3713",
+        "bytes": 14816
+      },
+      {
+        "path": "packages/ruam/src/compiler/opcodes.ts",
+        "sha256": "f9d228e9c971cdb3d6677769a8d8477946c04f3e68b0b678ae1acbc77c2fd7ac",
+        "bytes": 45497
+      },
+      {
+        "path": "packages/ruam/src/constants.ts",
+        "sha256": "29b11cdc6b4fb4ac9e412ccf8b83925a2ffe7026d928b245edd3fc86df1847ae",
+        "bytes": 5614
+      },
+      {
+        "path": "packages/ruam/src/naming/scope.ts",
+        "sha256": "781a61862fd55e167846215084f535261988f3faed348d6e3cdbe51bbf87f204",
+        "bytes": 3277
+      },
+      {
+        "path": "packages/ruam/src/naming/token.ts",
+        "sha256": "32ff6ceb0683c89711c651f2f05ad0568d69cef02b4d1999133dff26f7eb6b41",
+        "bytes": 1829
+      },
+      {
+        "path": "packages/ruam/src/naming/registry.ts",
+        "sha256": "6ea2f8318c50ab846ed1e7a4864471363fdb9f02f758ed418fb0f6cabf476779",
+        "bytes": 7546
+      },
+      {
+        "path": "packages/ruam/src/naming/reserved.ts",
+        "sha256": "731c93a61074a6a0aa40d071f11a0e4400d89b22e55c2a722919075d9f211b01",
+        "bytes": 1238
+      },
+      {
+        "path": "packages/ruam/src/compiler/emitter.ts",
+        "sha256": "2dc31a00525084291caf78acc61505035efca5075adc87d3477d97b1ea6d28af",
+        "bytes": 3485
+      },
+      {
+        "path": "packages/ruam/src/types.ts",
+        "sha256": "e2b6b77d3fdb112c14c6532ab2c14b93030a8a7586d45bbe54a44872eebddcce",
+        "bytes": 11233
+      },
+      {
+        "path": "packages/ruam/src/transform.ts",
+        "sha256": "3b7c0ea6d638f5c42d680629c8c0fde5e8973a13047bbf7c3a541bbda87ed94a",
+        "bytes": 42567
+      },
+      {
+        "path": "packages/ruam/src/compiler/index.ts",
+        "sha256": "45d21fdc1f49fe1c1356b0a98ca3198b2bcea3589b1295cfb8d2848868fe90ea",
+        "bytes": 18907
+      },
+      {
+        "path": "packages/ruam/src/regional/qualification/specimens.ts",
+        "sha256": "b8ab53d7483c96018e54ec0e16750e9d4ad4f78f7765ee5f088aab5c8800d119",
+        "bytes": 3646
+      },
+      {
+        "path": "packages/ruam/scripts/bench.mjs",
+        "sha256": "8d01ef496407be8080ab5aeb065bd849996cb28d597934aa11322a0fd47aaf95",
+        "bytes": 6885
+      },
+      {
+        "path": "packages/ruam/src/browser-worker.ts",
+        "sha256": "75a977332c7ff22f40c7f37e382696fcb356ea5bc1fa9c121e1b74b4fffada9b",
+        "bytes": 2078
+      },
+      {
+        "path": "apps/web/components/Playground.tsx",
+        "sha256": "4b223b1487d3b9bdba10c923d1f31c58d75fba324c293b2ccf50f054c188cafe",
+        "bytes": 23251
+      }
+    ],
+    "sourcesUnchangedDuringRun": true
+  },
+  "runtime": {
+    "executable": "/Users/owengregson/.bun/bin/bun",
+    "versions": {
+      "node": "24.3.0",
+      "bun": "1.3.11",
+      "boringssl": "4f4f5ef8ebc6e23cbf393428f0ab1b526773f7ac",
+      "openssl": "1.1.0",
+      "llhttp": "9.3.0",
+      "libarchive": "9525f90ca4bd14c7b335e2f8c84a4607b0af6bdf",
+      "mimalloc": "1beadf9651a7bfdec6b5367c380ecc3fe1c40d1a",
+      "picohttpparser": "066d2b1e9ab820703db0837a7255d92d30f0c9f5",
+      "uwebsockets": "af24e281ebacd6ac77c0f14b4206599cf4ae1c9f",
+      "webkit": "00e825523d549a556d75985f486e4954af6ab8c7",
+      "zig": "c031cbebf5b063210473ff5204a24ebfb2492c72",
+      "zlib": "886098f3f339617b4243b286f5ed364b9989e245",
+      "tinycc": "12882eee073cfe5c7621bcfadf679e1372d4537b",
+      "lolhtml": "e3aa54798602dd27250fafde1b5a66f080046252",
+      "ares": "3ac47ee46edd8ea40370222f91613fc16c434853",
+      "libdeflate": "c8c56a20f8f621e6a966b716b31f1dedab6a41e3",
+      "usockets": "af24e281ebacd6ac77c0f14b4206599cf4ae1c9f",
+      "lshpack": "8905c024b6d052f083a3d11d0a169b3c2735c8a1",
+      "zstd": "f8745da6ff1ad1e7bab384bd1f9d742439278e99",
+      "v8": "13.6.233.10-node.18",
+      "uv": "1.48.0",
+      "napi": "10",
+      "icu": "74.2",
+      "unicode": "15.1",
+      "modules": "137"
+    },
+    "platform": "darwin",
+    "architecture": "arm64",
+    "realBrowserEnginesTested": []
+  },
+  "admission": {
+    "method": "manual-source-audit-with-verified-provenance",
+    "sourceDerivedAdmissionProverImplemented": false,
+    "roots": [
+      {
+        "id": "mutation-state",
+        "order": 1,
+        "entry": {
+          "path": "packages/ruam/src/compiler/opcode-mutation.ts",
+          "symbol": "MutationState"
+        },
+        "dependencyPaths": [
+          "packages/ruam/src/compiler/opcode-mutation.ts",
+          "packages/ruam/src/compiler/opcodes.ts",
+          "packages/ruam/src/constants.ts",
+          "packages/ruam/src/naming/scope.ts",
+          "packages/ruam/src/naming/token.ts"
+        ],
+        "evidence": [
+          {
+            "path": "packages/ruam/src/compiler/opcode-mutation.ts",
+            "lines": [
+              65,
+              99
+            ]
+          },
+          {
+            "path": "packages/ruam/src/compiler/opcodes.ts",
+            "lines": [
+              1068,
+              1082
+            ]
+          },
+          {
+            "path": "packages/ruam/src/compiler/opcode-mutation.ts",
+            "lines": [
+              59,
+              76
+            ]
+          },
+          {
+            "path": "packages/ruam/src/compiler/opcode-mutation.ts",
+            "lines": [
+              80,
+              99
+            ]
+          }
+        ],
+        "admission": {
+          "status": "rejected",
+          "reasonCodes": [
+            "UNPROVED_DOMAIN",
+            "UNPROVED_OWNERSHIP",
+            "UNPROVED_ALGORITHM_FAMILIES"
+          ]
+        },
+        "families": [
+          {
+            "id": "decision-dataflow",
+            "status": "unproven",
+            "reason": "Unrolling the four swaps would keep the source algorithm. No distinct exact specialization for the unbounded full class contract has been demonstrated."
+          },
+          {
+            "id": "indexed-relational",
+            "status": "unproven",
+            "reason": "A bijection relation indexed both ways resembles the source and requires false assumptions for duplicate, sparse and out-of-range inputs. An exact full-contract relation is not established."
+          },
+          {
+            "id": "incremental-views",
+            "status": "inapplicable",
+            "reason": "The source itself incrementally maintains forward and reverse maps. Calling the same maintenance scheme a new algorithm would not satisfy A1; no additional necessary shared outputs exist in the named API."
+          }
+        ]
+      },
+      {
+        "id": "name-registry",
+        "order": 2,
+        "entry": {
+          "path": "packages/ruam/src/naming/registry.ts",
+          "symbol": "NameRegistry"
+        },
+        "dependencyPaths": [
+          "packages/ruam/src/naming/registry.ts",
+          "packages/ruam/src/naming/scope.ts",
+          "packages/ruam/src/naming/token.ts",
+          "packages/ruam/src/naming/reserved.ts",
+          "packages/ruam/src/constants.ts"
+        ],
+        "evidence": [
+          {
+            "path": "packages/ruam/src/naming/registry.ts",
+            "lines": [
+              62,
+              78
+            ]
+          },
+          {
+            "path": "packages/ruam/src/naming/scope.ts",
+            "lines": [
+              56,
+              98
+            ]
+          },
+          {
+            "path": "packages/ruam/src/naming/token.ts",
+            "lines": [
+              10,
+              43
+            ]
+          },
+          {
+            "path": "packages/ruam/src/naming/registry.ts",
+            "lines": [
+              50,
+              104
+            ]
+          },
+          {
+            "path": "packages/ruam/src/naming/registry.ts",
+            "lines": [
+              158,
+              248
+            ]
+          },
+          {
+            "path": "packages/ruam/src/naming/registry.ts",
+            "lines": [
+              217,
+              248
+            ]
+          }
+        ],
+        "admission": {
+          "status": "rejected",
+          "reasonCodes": [
+            "ESCAPING_STATE",
+            "UNKNOWN_EFFECTS",
+            "UNPROVED_DOMAIN",
+            "UNPROVED_ALGORITHM_FAMILIES"
+          ]
+        },
+        "families": [
+          {
+            "id": "decision-dataflow",
+            "status": "unproven",
+            "reason": "No bounded, closed effect-free graph permits exact specialization; replay must preserve observable PRNG and external method effects."
+          },
+          {
+            "id": "indexed-relational",
+            "status": "unproven",
+            "reason": "Membership indexes could preserve some name checks, but retaining scope/token identities, arbitrary mutations and traversal order has no exact relation model."
+          },
+          {
+            "id": "incremental-views",
+            "status": "unproven",
+            "reason": "The existing used-name set is already maintained incrementally. An alternative shared view cannot silently replace or ignore exposed graph mutations and generator interleaving."
+          }
+        ]
+      },
+      {
+        "id": "emitter",
+        "order": 3,
+        "entry": {
+          "path": "packages/ruam/src/compiler/emitter.ts",
+          "symbol": "Emitter"
+        },
+        "dependencyPaths": [
+          "packages/ruam/src/compiler/emitter.ts"
+        ],
+        "evidence": [
+          {
+            "path": "packages/ruam/src/compiler/emitter.ts",
+            "lines": [
+              23,
+              70
+            ]
+          },
+          {
+            "path": "packages/ruam/src/compiler/emitter.ts",
+            "lines": [
+              64,
+              70
+            ]
+          },
+          {
+            "path": "packages/ruam/src/compiler/emitter.ts",
+            "lines": [
+              108,
+              112
+            ]
+          },
+          {
+            "path": "packages/ruam/src/compiler/emitter.ts",
+            "lines": [
+              64,
+              70
+            ]
+          }
+        ],
+        "admission": {
+          "status": "rejected",
+          "reasonCodes": [
+            "ESCAPING_STATE",
+            "UNKNOWN_EFFECTS",
+            "UNPROVED_ALGORITHM_FAMILIES"
+          ]
+        },
+        "families": [
+          {
+            "id": "decision-dataflow",
+            "status": "unproven",
+            "reason": "Unbounded keys and effects lack a proved specialization domain. Changing branches/keys alone is a local recipe."
+          },
+          {
+            "id": "indexed-relational",
+            "status": "inapplicable",
+            "reason": "The source already uses an indexed historical key-to-first-index relation. Renaming or re-encoding that Map is not an algorithm-family replacement."
+          },
+          {
+            "id": "incremental-views",
+            "status": "unproven",
+            "reason": "An incrementally maintained relation would have to retain the public arrays, entry aliases and stale historical key mappings. No additional necessary shared view with an exact full contract has been demonstrated."
+          }
+        ]
+      }
+    ]
+  },
+  "sidecar": {
+    "schema": "ruam-a1-sidecar-control-v1",
+    "status": "pass-control",
+    "ticket": "For an unfrozen NameScope, claim(key) on an existing string key returns the identical existing token. Preserve frozen errors, claimMany ordering, every other return/error/identity and future generated names.",
+    "admittedCompleteRoot": false,
+    "claimsSecurityAdvantage": false,
+    "actualAiTrial": false,
+    "standaloneRecovery": false,
+    "a1Artifact": false,
+    "harnessSha256": "53d7d0f30a7f1445fd82e1ff9aae544395e8d2e96590c37da5f4cb253787fdb0",
+    "sourceHashes": {
+      "bun.lock": "e2f98fc13b0dbd4b6b34671fadc2e98d52572259f7dceaab80240d53714741f9",
+      "packages/ruam/package-lock.json": "ab8aaeabafd3a564149ea49f84f8c6bfa479efc6b9dc5b007650b6aed9702e91",
+      "packages/ruam/package.json": "65d14698153330ec0d324ad5e4f40d444815b45cf703e7955cdcb5b1263a9a49",
+      "packages/ruam/src/babel-compat.ts": "5258e863dd396fc912f5d4c8ecfc8c13af81269244afee8bbe83e744313bb429",
+      "packages/ruam/src/browser-crypto-shim.ts": "3e2800b22096a2dd7f04adf33f9687aa76e8dfb4c3385d6e44f4e3881ad0bc9d",
+      "packages/ruam/src/browser-entry.ts": "648eb97db0e49e78e876ea23d745c492a827dd4291d2026c314f59a40740234f",
+      "packages/ruam/src/browser-worker.ts": "75a977332c7ff22f40c7f37e382696fcb356ea5bc1fa9c121e1b74b4fffada9b",
+      "packages/ruam/src/cli.ts": "d2422e0b914786d55f87f989e7f7b0f553eff60830bf9ee4cfc3b6066aea2018",
+      "packages/ruam/src/compiler/basic-blocks.ts": "951d831159fae07b964de7fb440b3d1dae0b5ac29c1a3ae16876826633968e2b",
+      "packages/ruam/src/compiler/block-permutation.ts": "54654af06c93a2f5a791e8fa4556728e9fb60795fd28f4928fc4c40dca9e0c05",
+      "packages/ruam/src/compiler/capture-analysis.ts": "2b67f8e722b37303085052dcd36bcf69f71204bbfac3be91c37d9c9aa007f73a",
+      "packages/ruam/src/compiler/crypto.ts": "ef13dc528ac07761e2b44af4fb407eef4f381a2687867dbe86c05ba8934376a3",
+      "packages/ruam/src/compiler/emitter.ts": "2dc31a00525084291caf78acc61505035efca5075adc87d3477d97b1ea6d28af",
+      "packages/ruam/src/compiler/encode.ts": "c43aed719c0076ce25305978644d75a68cfa21d9b3c82661eaf4b954e3d8bf30",
+      "packages/ruam/src/compiler/fingerprint.ts": "8ebbf01a8a0ee1d5ea4a719610124b7bd6b3ad113b8b648bcb62fa8001102d64",
+      "packages/ruam/src/compiler/incremental-cipher.ts": "ceb6fea2ad87cd72177b08cb7df34f11ddd1937144d7ef20ef5d569aa6478938",
+      "packages/ruam/src/compiler/index.ts": "45d21fdc1f49fe1c1356b0a98ca3198b2bcea3589b1295cfb8d2848868fe90ea",
+      "packages/ruam/src/compiler/opcode-mutation.ts": "5c6e370fb71d046e1ed3c2c7d41d57a23c512483ebd3215122ab51feb24b3713",
+      "packages/ruam/src/compiler/opcodes.ts": "f9d228e9c971cdb3d6677769a8d8477946c04f3e68b0b678ae1acbc77c2fd7ac",
+      "packages/ruam/src/compiler/optimizer.ts": "3fa74489f7c4ca32788abfde0b9989f7e08f1194b5b21bab29b92d8faeccd741",
+      "packages/ruam/src/compiler/rolling-cipher.ts": "96e2c0bbbe39423de652085ed86c037085ddc9ebd94d76a5d45196d97a003f87",
+      "packages/ruam/src/compiler/scope.ts": "dd79ca103b0cf021bc024bdd323b2fbf728427edc0919bd7698f223b9e901555",
+      "packages/ruam/src/compiler/slot-analysis.ts": "e38874de878f7a5add5fa43b37451488ae79d9a4ce82d870d5f504151a2cda14",
+      "packages/ruam/src/compiler/visitors/classes.ts": "ab1856f76ccfb04b1939a030b274b17b329347aab29fa320955dd98637306cce",
+      "packages/ruam/src/compiler/visitors/expressions.ts": "ef36e9f4c641088c06143fac9109139e4bdd55ecfa153f19c8c5510e440911eb",
+      "packages/ruam/src/compiler/visitors/index.ts": "848e8debf69d48fc28c43d8d2b82f0e4843b1ca4e6ae56fa73dd5e73edb8a2b7",
+      "packages/ruam/src/compiler/visitors/statements.ts": "81384f4940506bdba58d38bbd1a76bd6a520cb048b716b6db6ef03ba68a82ed2",
+      "packages/ruam/src/constants.ts": "29b11cdc6b4fb4ac9e412ccf8b83925a2ffe7026d928b245edd3fc86df1847ae",
+      "packages/ruam/src/index.ts": "f9be6fb1de49c67eb13b21a43c8328926942cdb09e985bb7dd2506a211cfa50d",
+      "packages/ruam/src/naming/claims.ts": "cd272b712958bf48152ed902c35dcd96a58115c7c07fdc298531e47c2e969749",
+      "packages/ruam/src/naming/compat-types.ts": "3f817ca8395d8b9f19152942066fa8f1379d5ddc6f4716f558f0b206d8bd2fa0",
+      "packages/ruam/src/naming/index.ts": "597b39d87bb1cdbac9a1066a3df86a3e969566410432c4dc3d1759f47f282b77",
+      "packages/ruam/src/naming/registry.ts": "6ea2f8318c50ab846ed1e7a4864471363fdb9f02f758ed418fb0f6cabf476779",
+      "packages/ruam/src/naming/reserved.ts": "731c93a61074a6a0aa40d071f11a0e4400d89b22e55c2a722919075d9f211b01",
+      "packages/ruam/src/naming/scope.ts": "781a61862fd55e167846215084f535261988f3faed348d6e3cdbe51bbf87f204",
+      "packages/ruam/src/naming/setup.ts": "50b555dee8d9411c9e0669a48bb59f46d292fceb11c194e89e8b888b89186a05",
+      "packages/ruam/src/naming/token.ts": "32ff6ceb0683c89711c651f2f05ad0568d69cef02b4d1999133dff26f7eb6b41",
+      "packages/ruam/src/option-meta.ts": "24a139cc80b354c5b9eed946ecf55d2a2b8280af3844355a3405d3af902bb74f",
+      "packages/ruam/src/preprocess.ts": "5eaa56efed4ef3bbd364ce1e4be173e19dba5ac3228dbc9cc518adb8e3743da0",
+      "packages/ruam/src/presets.ts": "dd5fcb9868692ed5a6215c0baf2c134cee87ed4e7c5feda41aa78a1f21847a8d",
+      "packages/ruam/src/regional/cli.ts": "b2bfb65298de6396d010da94f023c36acd6bfe625668e4bd3d02785ae181e58f",
+      "packages/ruam/src/regional/compiler/analysis.ts": "c5a31387e51205458d96dd3d2905d46aa0ae3acb1b8877854260bb7b8abc38f5",
+      "packages/ruam/src/regional/compiler/index.ts": "d03c86a985d8f4f1106c37bd34d454b8e4eb590abbc67a0d409cc326b1a3eb81",
+      "packages/ruam/src/regional/compiler/transforms.ts": "44e91880ac31ac7cc74793a3bb0142e96bb50335abc453fd28c50113d1ece952",
+      "packages/ruam/src/regional/compiler/types.ts": "21be9e0e2f763a2978d37970d58096d8ba3fe3d6489a1981efa5f2d5d12fc4fc",
+      "packages/ruam/src/regional/contracts.ts": "12030f0aa79f5c948b350f0e4c7dfaa1975fc013c65c7bf2e9a49a2c912e1ff7",
+      "packages/ruam/src/regional/cost.ts": "1e3503e3eaebc6ab7522d8a0ba76dde470cc34e8ba923832028949ef9746fb61",
+      "packages/ruam/src/regional/files.ts": "4ef9ff1462aee3f3fd5f12f4c71c12265aa8a80e845047baf53c20f7722b7e66",
+      "packages/ruam/src/regional/graph.ts": "3dfe6d55ab1fbe4dbf87b2e0999db44cf31e4ee7dacf429298e35cc458c1e598",
+      "packages/ruam/src/regional/index.ts": "e73cb98b048f59c8369a02525d91860be524404a027c33f6b0a68b5f3ef3f2c9",
+      "packages/ruam/src/regional/publication.ts": "be5b6300ec05c515997e4a52b33fd47d84e52402ec532d8dfed30ab35d96f06f",
+      "packages/ruam/src/regional/qualification/attacker.ts": "9b985d01bd3d8f253bdbbf5498b4fd6d890823e4f2958391b03e57bb4f1730fa",
+      "packages/ruam/src/regional/qualification/scorer.ts": "62fef2497b5c26661e09b1a1aa2afe0d779ebfa240ad6dc115478ba3517953c0",
+      "packages/ruam/src/regional/qualification/specimens.ts": "b8ab53d7483c96018e54ec0e16750e9d4ad4f78f7765ee5f088aab5c8800d119",
+      "packages/ruam/src/regional/qualification/types.ts": "96446e966a3876007c33661e5f1963859a15bf2e69b87b354298ff11e3873247",
+      "packages/ruam/src/regional/validation.ts": "5f20bfac28501207faaa4ca000b43b7de984ddd130e9cd7bb050b06f4249f04c",
+      "packages/ruam/src/ruamvm/assembler.ts": "2597778265684dcf9657c56215ec405cd32275590183612d32cec91cb4ba196b",
+      "packages/ruam/src/ruamvm/builders/debug-logging.ts": "59596d89b5524fefa63f5c42bb6f355abd2341666a03cef55897753b86fe5256",
+      "packages/ruam/src/ruamvm/builders/debug-protection.ts": "85e07bb35f626c9b55e02275259f2230b4a06c2674837dd9023963df3c9e73f4",
+      "packages/ruam/src/ruamvm/builders/decoder.ts": "b470c16f83e0a4d994fde7c600e7072feaf47e93e4ad0fafbd788ee2907d4e35",
+      "packages/ruam/src/ruamvm/builders/deserializer.ts": "15bd014b00f70c90369aeda789317ca24ed16133a84f5d915020f4be397159eb",
+      "packages/ruam/src/ruamvm/builders/fingerprint.ts": "f89bb105d1d35f5ba5956dc78383ded059c631646ef71e97f240e077ffe44b91",
+      "packages/ruam/src/ruamvm/builders/globals.ts": "e593b062eeaf538cc05d6ceb645044886e087807ab3c31eca8f638cad7131876",
+      "packages/ruam/src/ruamvm/builders/incremental-cipher.ts": "13355ba5db4737e098ef9483b4554b6f0afab9d18111dbd7365eac892d75dcfc",
+      "packages/ruam/src/ruamvm/builders/interpreter.ts": "49e2955c2d26e6762575a4e434308457d76e9848abf8cfcb80617fe7f63f6273",
+      "packages/ruam/src/ruamvm/builders/loader.ts": "8d3ff2fdfc2d96363864fdb7f972be274a30699aa0b62d2c5317c1f5476f8ad9",
+      "packages/ruam/src/ruamvm/builders/rolling-cipher.ts": "7181ffd0a2cc5e106f88a692af46b02f41cec650be5495ae4d4c473ac27269b9",
+      "packages/ruam/src/ruamvm/builders/runners.ts": "2625fbd0cbd371d5ec0fb658b18ac6fd92d3950acbbcf7a0f13e3722a6609d9b",
+      "packages/ruam/src/ruamvm/builders/unpack.ts": "9884949684d574270c96130de392cae82a77534693a0236602b3191142d65acd",
+      "packages/ruam/src/ruamvm/bytecode-scatter.ts": "dc9bfe0ca668ef408b00509e4df80202aae218e101b06eda6819969b3fe2b999",
+      "packages/ruam/src/ruamvm/constant-splitting.ts": "0d822e75de09be4b980418c83b88a64e965ad513ad33648ed37afb022a5aaa80",
+      "packages/ruam/src/ruamvm/emit.ts": "9838292f682f4ca456a98e5584b71e0571a34d3415be5db6061600cf950c49a6",
+      "packages/ruam/src/ruamvm/handler-aliasing.ts": "0b5ed51b696655a4468e4ab78bafae6594bb59ac06d04ef2355f5a89a0bac447",
+      "packages/ruam/src/ruamvm/handler-fragmentation.ts": "2388ff7ad2640b6fb9c4eb7e85b4a90f17729f8febc94bd95e80fa307390150a",
+      "packages/ruam/src/ruamvm/handlers/arithmetic.ts": "efb0bc08a786bc1dd66ea8e0b93871783f8caafa6f2ced1e7261cca32e6bf910",
+      "packages/ruam/src/ruamvm/handlers/calls.ts": "4d4ba4fd4a3093fea42d4ea544caa980477da5a3343ffb6baabc9aedfd73782e",
+      "packages/ruam/src/ruamvm/handlers/classes.ts": "5b865bfc7c803874748385f2ea09a380d6106063ed0bad38ae63c5dd236124de",
+      "packages/ruam/src/ruamvm/handlers/comparison.ts": "6b6cbab8deb51b2d738add6fb168e5fe4ff8ded47718e301a407343671d6d984",
+      "packages/ruam/src/ruamvm/handlers/compound-scoped.ts": "e30d2adacc16bfa07b5d63d9fa27ad91d003444a03c831313fc3ddcdb48168fd",
+      "packages/ruam/src/ruamvm/handlers/control-flow.ts": "40c6e8650d9990b3b7666f416c1a5db7153c5bd87a7b1719e279239ce965a58b",
+      "packages/ruam/src/ruamvm/handlers/destructuring.ts": "18e2d4016ee3115497287a1720af6722e080d89da0b0fa75fd95c77f8fd7bd7f",
+      "packages/ruam/src/ruamvm/handlers/exceptions.ts": "1e92d32d37455b39b52b7850faefee2d648d9a6a08f826dd8d3f4c265cff08f6",
+      "packages/ruam/src/ruamvm/handlers/functions.ts": "0283926c325ec571986eb1f1badd67f0614206e3cc59f207144bef837cadf29d",
+      "packages/ruam/src/ruamvm/handlers/generators.ts": "757a425cc35c836693976c7a6a6e35aa1a6d1148f705cc58bf9d8c7eaabacbca",
+      "packages/ruam/src/ruamvm/handlers/helpers.ts": "6d063cb08fa6ca5d099d433f8a234df140ee6b84f147d0b69f55bb765b0f0b4f",
+      "packages/ruam/src/ruamvm/handlers/index.ts": "076912aef1605ea59c80ace4521d6c1a7acfb856e0a33d4548ab1a8861853dbf",
+      "packages/ruam/src/ruamvm/handlers/iterators.ts": "593ef409d76dca91090a6ec0556c8c9c2777327c64ddf5d44cbcd78bd8706919",
+      "packages/ruam/src/ruamvm/handlers/logical.ts": "1bbfa025e3beec2d0b68a2c7b8b834c8e3b5c0d014c712c10a1908b90f0a63c3",
+      "packages/ruam/src/ruamvm/handlers/mutation.ts": "e68070ff1b034bac061e30706343523b74f3018f5a0fc65592295559263f0004",
+      "packages/ruam/src/ruamvm/handlers/objects.ts": "527424407da7b106a15d82c3706e38b6aa871640226b8f237ec00dc6ebe20d4d",
+      "packages/ruam/src/ruamvm/handlers/registers.ts": "968463be6a5fd4cc744ac6b7a8cbb5461b58773ba4672e66dd923318ddee3b57",
+      "packages/ruam/src/ruamvm/handlers/registry.ts": "410825c4d29470a1723dc1589f97e6bf8636177616f752dbe039ce7ad49b93af",
+      "packages/ruam/src/ruamvm/handlers/scope.ts": "76e700f2ee1aa85084882bfa025ea38d9a815822aa6adedc373e95ef7d476111",
+      "packages/ruam/src/ruamvm/handlers/special.ts": "003f3ce57f70b5821a06b9069ada8aca10a74ee177b60edf355e1cff0c78eb9f",
+      "packages/ruam/src/ruamvm/handlers/stack.ts": "0a7cf0147ff093b68df0b8369b5c2cf8d4feecc39570b1a4bb80c299576a812d",
+      "packages/ruam/src/ruamvm/handlers/superinstructions.ts": "0a4251409cdbc84681dbc0d8818fc43ecd78297f4acfcd0edada5ee422d62126",
+      "packages/ruam/src/ruamvm/handlers/type-ops.ts": "1ca50d652a5c409b5d0c59c326230110674ed9f594c2ca0e16b86491f5d647da",
+      "packages/ruam/src/ruamvm/mba.ts": "40a529cb472e9fd4eeed08d9457d17399d7f662c1085cb73ca40495cd403d562",
+      "packages/ruam/src/ruamvm/nodes.ts": "6e35abd2f98c4fa519774fd6f0bb9341384471e27e9c7151e7998ed9046239e5",
+      "packages/ruam/src/ruamvm/observation-resistance.ts": "7646e2fcb21d0b45c05faa7edd55b47b5cd8e4b2e7eff60beda215bf550d9f90",
+      "packages/ruam/src/ruamvm/opaque-predicates.ts": "9d61cccf86b263ffd41add20b57a870563abffab4b2962105aa35f2502060e9b",
+      "packages/ruam/src/ruamvm/polymorphic-decoder.ts": "b4e15e3e737c4f215e0096636786949833df33153052891cf84d749a4a6e1175",
+      "packages/ruam/src/ruamvm/scattered-keys.ts": "94e9ef9904f410d75a6429b64f41729c0a2ba03f4f79426188308ca5b24aa4d7",
+      "packages/ruam/src/ruamvm/string-atomization.ts": "fcdf914f4e8d2285203cdd6307f146769351ae6b1f847d71bfeb86624f85e5c6",
+      "packages/ruam/src/ruamvm/structural-transforms.ts": "94f90f221970acbd35ef113b91d1ffb27027b549d9c7b1ed1189f504835d1b84",
+      "packages/ruam/src/ruamvm/transforms.ts": "fae37704e5c51ddf78151fb5d6aef6fc534204bebed73ade578bbb16a0b6f426",
+      "packages/ruam/src/structural-choices.ts": "ab97c5af42d81826b8a790479a94f913e392b35c85d9e2b3e2a66256a5ce3fc4",
+      "packages/ruam/src/transform.ts": "3b7c0ea6d638f5c42d680629c8c0fde5e8973a13047bbf7c3a541bbda87ed94a",
+      "packages/ruam/src/tuning.ts": "df975e1b02a07614ca367e6b275254adaafbadf332441ff1fdf0b5cc5364c824",
+      "packages/ruam/src/types.ts": "e2b6b77d3fdb112c14c6532ab2c14b93030a8a7586d45bbe54a44872eebddcce"
+    },
+    "sourcesUnchangedDuringRun": true,
+    "attacker": {
+      "codeSha256": "bd066fe072d0d518bd0fce1bce3d7a7d6e059dce6ffdb704b87c2ab3db266cda",
+      "codeBytes": 471,
+      "reusesOriginalArtifact": true,
+      "removedImplementationMachinery": false,
+      "input": "Only loaded public NameScope constructor/prototype; no owner source, oracle, source map, cases or private fields.",
+      "authoringVisibility": "The human-directed model author inspected repository source and public tests while writing this fixed script. No source-blind AI trial or measured model recovery effort took place.",
+      "oracleQueries": 0,
+      "evaluationModelTokens": 0,
+      "authoringModelTokens": null,
+      "analystWorkSeconds": null,
+      "reusableSetupSeconds": null
+    },
+    "corpus": {
+      "visibility": "Public deterministic authored controls; not hidden, held out, blinded or an actual AI attack trial.",
+      "cases": 12,
+      "coverage": [
+        "cold constructors and reset by fresh instances",
+        "all public methods of NameRegistry, NameScope and NameToken",
+        "duplicate and batch claims",
+        "freeze error precedence",
+        "token identity, parent links and prototypes",
+        "public token-map deletion and reinsertion",
+        "PRNG observations and future dynamic names",
+        "seed Number boundaries including signed zero, NaN and infinities"
+      ],
+      "limitations": [
+        "The root exposes mutable collections and has no source-enforced global size bound; it is not admitted for A1.",
+        "Finite traces are partial correctness evidence, not equivalence over arbitrary JavaScript values, hostile accessors or monkeypatched builtins.",
+        "The sidecar intentionally retains the original implementation: edit bypass only, no standalone recovery credit.",
+        "No A1 transformed artifact exists in this control; a functional current-VM baseline is not proof of equal protected coverage or a protection multiplier.",
+        "CPU and heap-used measurements are noisy process-level deltas, not retained-memory measurements. Esbuild service CPU and memory are omitted; build timing includes owner-oracle compilation. Analyst/model authoring effort is unknown.",
+        "Source hashes bind files present when the run starts; newly added files during the run are not inventoried."
+      ]
+    },
+    "variants": [
+      {
+        "id": "ordinary-bundled",
+        "buildResources": {
+          "wallMs": 41.60050000000001,
+          "cpuUserMicros": 18217,
+          "cpuSystemMicros": 5219,
+          "heapUsedDeltaBytes": 6890619,
+          "processPeakRssBytes": 92225536
+        },
+        "compilerOptions": {
+          "bundle": true,
+          "minify": false,
+          "keepNames": true,
+          "target": "es2022"
+        },
+        "optionDifferences": [],
+        "compilerWarnings": [],
+        "codeSha256": "a118bc8e508274f70db2c9871d2487aa01a385e4c69f3f012506f0a2e492be49",
+        "codeBytes": 15604,
+        "ownerOracleSha256": "9c4839b60431284660838aafbae7e94724caa1e4d3786f83e7080b7c3c246b85",
+        "compilerWarningsComplete": true,
+        "resourceMeasurement": "Calling process; esbuild service CPU and memory are not included in these process-level deltas.",
+        "correctness": {
+          "status": "pass",
+          "cases": 12,
+          "mismatches": 0,
+          "firstFailure": null
+        },
+        "functionalBaseline": true,
+        "protectedCoverageEstablished": false,
+        "error": null,
+        "uneditedTicketValidation": {
+          "status": "mismatch",
+          "cases": 12,
+          "mismatches": 12,
+          "firstFailure": "Public case 0, observation 8: duplicate.identity"
+        },
+        "attackValidation": {
+          "status": "pass",
+          "cases": 12,
+          "mismatches": 0,
+          "firstFailure": null
+        },
+        "naiveAttackValidation": {
+          "status": "mismatch",
+          "cases": 12,
+          "mismatches": 12,
+          "firstFailure": "Public case 0, observation 113: direct.frozen.duplicate"
+        },
+        "attackInstallationResources": [
+          {
+            "wallMs": 0.05979200000001583,
+            "cpuUserMicros": 53,
+            "cpuSystemMicros": 6,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 94535680
+          },
+          {
+            "wallMs": 0.1715830000000551,
+            "cpuUserMicros": 17,
+            "cpuSystemMicros": 10,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 98369536
+          },
+          {
+            "wallMs": 0.15299999999979264,
+            "cpuUserMicros": 18,
+            "cpuSystemMicros": 35,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 102645760
+          },
+          {
+            "wallMs": 0.017166999999972177,
+            "cpuUserMicros": 10,
+            "cpuSystemMicros": 6,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 107167744
+          },
+          {
+            "wallMs": 0.03337499999997817,
+            "cpuUserMicros": 15,
+            "cpuSystemMicros": 10,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 111738880
+          },
+          {
+            "wallMs": 0.15208400000005895,
+            "cpuUserMicros": 14,
+            "cpuSystemMicros": 28,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 116326400
+          },
+          {
+            "wallMs": 0.05641600000012659,
+            "cpuUserMicros": 12,
+            "cpuSystemMicros": 20,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 120799232
+          },
+          {
+            "wallMs": 0.018917000000101325,
+            "cpuUserMicros": 11,
+            "cpuSystemMicros": 5,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 126697472
+          },
+          {
+            "wallMs": 0.049790999999913765,
+            "cpuUserMicros": 17,
+            "cpuSystemMicros": 17,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 129892352
+          },
+          {
+            "wallMs": 0.014042000000017651,
+            "cpuUserMicros": 8,
+            "cpuSystemMicros": 5,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 130875392
+          },
+          {
+            "wallMs": 0.05733300000019881,
+            "cpuUserMicros": 14,
+            "cpuSystemMicros": 15,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 131432448
+          },
+          {
+            "wallMs": 0.020582999999987805,
+            "cpuUserMicros": 12,
+            "cpuSystemMicros": 7,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 135135232
+          }
+        ],
+        "evaluationResources": {
+          "wallMs": 278.577,
+          "cpuUserMicros": 212444,
+          "cpuSystemMicros": 47132,
+          "heapUsedDeltaBytes": 2879676,
+          "processPeakRssBytes": 135462912
+        }
+      },
+      {
+        "id": "optimized-bundled",
+        "buildResources": {
+          "wallMs": 38.66833299999985,
+          "cpuUserMicros": 6390,
+          "cpuSystemMicros": 1629,
+          "heapUsedDeltaBytes": 1373541,
+          "processPeakRssBytes": 135610368
+        },
+        "compilerOptions": {
+          "bundle": true,
+          "minify": true,
+          "keepNames": true,
+          "target": "es2022"
+        },
+        "optionDifferences": [],
+        "compilerWarnings": [],
+        "codeSha256": "ed1375bdd6de3c5378707c24f48fc663b7f08cccecb2b4c47d4dac1c33ee04e8",
+        "codeBytes": 6898,
+        "ownerOracleSha256": "57b3c46ca60caca83169c53e1ee8a194a5cb034d0ddf86cef40e586b909cce0e",
+        "compilerWarningsComplete": true,
+        "resourceMeasurement": "Calling process; esbuild service CPU and memory are not included in these process-level deltas.",
+        "correctness": {
+          "status": "pass",
+          "cases": 12,
+          "mismatches": 0,
+          "firstFailure": null
+        },
+        "functionalBaseline": true,
+        "protectedCoverageEstablished": false,
+        "error": null,
+        "uneditedTicketValidation": {
+          "status": "mismatch",
+          "cases": 12,
+          "mismatches": 12,
+          "firstFailure": "Public case 0, observation 8: duplicate.identity"
+        },
+        "attackValidation": {
+          "status": "pass",
+          "cases": 12,
+          "mismatches": 0,
+          "firstFailure": null
+        },
+        "naiveAttackValidation": {
+          "status": "mismatch",
+          "cases": 12,
+          "mismatches": 12,
+          "firstFailure": "Public case 0, observation 113: direct.frozen.duplicate"
+        },
+        "attackInstallationResources": [
+          {
+            "wallMs": 0.16341600000009748,
+            "cpuUserMicros": 85,
+            "cpuSystemMicros": 19,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 135741440
+          },
+          {
+            "wallMs": 0.024292000000059488,
+            "cpuUserMicros": 18,
+            "cpuSystemMicros": 4,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 135905280
+          },
+          {
+            "wallMs": 0.014167000000043117,
+            "cpuUserMicros": 8,
+            "cpuSystemMicros": 4,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 136069120
+          },
+          {
+            "wallMs": 0.03745899999989888,
+            "cpuUserMicros": 20,
+            "cpuSystemMicros": 9,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 136216576
+          },
+          {
+            "wallMs": 0.07458300000007512,
+            "cpuUserMicros": 15,
+            "cpuSystemMicros": 5,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 136642560
+          },
+          {
+            "wallMs": 0.04275000000006912,
+            "cpuUserMicros": 15,
+            "cpuSystemMicros": 14,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 137216000
+          },
+          {
+            "wallMs": 0.016415999999935593,
+            "cpuUserMicros": 9,
+            "cpuSystemMicros": 6,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 137674752
+          },
+          {
+            "wallMs": 0.020125000000007276,
+            "cpuUserMicros": 12,
+            "cpuSystemMicros": 6,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 139395072
+          },
+          {
+            "wallMs": 0.02295800000001691,
+            "cpuUserMicros": 9,
+            "cpuSystemMicros": 6,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 141459456
+          },
+          {
+            "wallMs": 0.029124999999794454,
+            "cpuUserMicros": 16,
+            "cpuSystemMicros": 10,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 141836288
+          },
+          {
+            "wallMs": 0.02304099999992104,
+            "cpuUserMicros": 12,
+            "cpuSystemMicros": 8,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 142196736
+          },
+          {
+            "wallMs": 0.24820900000008805,
+            "cpuUserMicros": 103,
+            "cpuSystemMicros": 29,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 143605760
+          }
+        ],
+        "evaluationResources": {
+          "wallMs": 281.51933399999984,
+          "cpuUserMicros": 226146,
+          "cpuSystemMicros": 36290,
+          "heapUsedDeltaBytes": 2713184,
+          "processPeakRssBytes": 143704064
+        }
+      },
+      {
+        "id": "current-vm-max",
+        "buildResources": {
+          "wallMs": 736.7807080000001,
+          "cpuUserMicros": 735041,
+          "cpuSystemMicros": 110901,
+          "heapUsedDeltaBytes": 21863550,
+          "processPeakRssBytes": 191496192
+        },
+        "compilerOptions": {
+          "preset": "max",
+          "debugProtection": false
+        },
+        "compilerWarnings": [],
+        "optionDifferences": [
+          "debugProtection:false disables periodic anti-debugging; all other max preset options use their current defaults.",
+          "Current VM uses random build entropy; this is one actual build, not a fixed-seed repeated sample."
+        ],
+        "codeSha256": "6344447863142ff803ffd18ba8e2f8a1595e9715b4e807f5e5837281cc3ab125",
+        "codeBytes": 116615,
+        "ownerOracleSha256": "9c4839b60431284660838aafbae7e94724caa1e4d3786f83e7080b7c3c246b85",
+        "compilerWarningsComplete": true,
+        "resourceMeasurement": "Isolated VM worker process; process-level CPU and heap, excluding parent setup.",
+        "correctness": {
+          "status": "pass",
+          "cases": 12,
+          "mismatches": 0,
+          "firstFailure": null
+        },
+        "functionalBaseline": true,
+        "protectedCoverageEstablished": false,
+        "error": null,
+        "uneditedTicketValidation": {
+          "status": "mismatch",
+          "cases": 12,
+          "mismatches": 12,
+          "firstFailure": "Public case 0, observation 8: duplicate.identity"
+        },
+        "attackValidation": {
+          "status": "pass",
+          "cases": 12,
+          "mismatches": 0,
+          "firstFailure": null
+        },
+        "naiveAttackValidation": {
+          "status": "mismatch",
+          "cases": 12,
+          "mismatches": 12,
+          "firstFailure": "Public case 0, observation 113: direct.frozen.duplicate"
+        },
+        "attackInstallationResources": [
+          {
+            "wallMs": 0.10962500000005093,
+            "cpuUserMicros": 89,
+            "cpuSystemMicros": 18,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 202391552
+          },
+          {
+            "wallMs": 1.2859999999998308,
+            "cpuUserMicros": 248,
+            "cpuSystemMicros": 51,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 209289216
+          },
+          {
+            "wallMs": 0.0779579999998532,
+            "cpuUserMicros": 40,
+            "cpuSystemMicros": 16,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 213401600
+          },
+          {
+            "wallMs": 0.0671669999999267,
+            "cpuUserMicros": 136,
+            "cpuSystemMicros": 23,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 217202688
+          },
+          {
+            "wallMs": 0.046291999999994005,
+            "cpuUserMicros": 41,
+            "cpuSystemMicros": 5,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 222429184
+          },
+          {
+            "wallMs": 0.24274999999988722,
+            "cpuUserMicros": 76,
+            "cpuSystemMicros": 37,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 223297536
+          },
+          {
+            "wallMs": 0.0808340000003227,
+            "cpuUserMicros": 58,
+            "cpuSystemMicros": 15,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 225771520
+          },
+          {
+            "wallMs": 0.04087500000014188,
+            "cpuUserMicros": 33,
+            "cpuSystemMicros": 5,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 226934784
+          },
+          {
+            "wallMs": 0.08895899999970425,
+            "cpuUserMicros": 59,
+            "cpuSystemMicros": 12,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 230588416
+          },
+          {
+            "wallMs": 0.1608329999999114,
+            "cpuUserMicros": 57,
+            "cpuSystemMicros": 12,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 231604224
+          },
+          {
+            "wallMs": 0.12349999999969441,
+            "cpuUserMicros": 62,
+            "cpuSystemMicros": 29,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 234979328
+          },
+          {
+            "wallMs": 0.2298329999998714,
+            "cpuUserMicros": 176,
+            "cpuSystemMicros": 58,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 240238592
+          }
+        ],
+        "evaluationResources": {
+          "wallMs": 2180.8653750000003,
+          "cpuUserMicros": 2397919,
+          "cpuSystemMicros": 340305,
+          "heapUsedDeltaBytes": 26944941,
+          "processPeakRssBytes": 244793344
+        }
+      }
+    ]
+  },
+  "limitations": [
+    "The complete requested replacement is not implemented. Full existing JavaScript and protected-selection scope remains required.",
+    "The frozen A1 pilot stops at admission; no A1 artifact, algorithm compiler, explanation trial or partial-edit protection result exists.",
+    "Sidecar controls test a negative-control ticket on a rejected root; they do not score the frozen candidate ticket or measure A1 resistance.",
+    "This is not a blinded AI campaign or proof that every future combined design fails. Unknown authoring and analyst effort remain unknown.",
+    "Source hashes and exact Git blobs bind this manual audit to code; they do not prove the audit's semantic conclusions.",
+    "Passing correctness controls cannot override a failed admission, full-scope compatibility, cost or protection gate."
+  ]
+}

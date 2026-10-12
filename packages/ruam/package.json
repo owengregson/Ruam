@@ -51,6 +51,7 @@
 		"test:watch": "bun test --watch",
 		"qualify:regional": "bun scripts/regional-qualify.ts",
 		"qualify:regional:baselines": "bun scripts/regional-baselines.ts",
+		"qualify:algorithm-state": "bun scripts/algorithm-state-qualify.ts",
 		"stats": "node scripts/collect-stats.mjs",
 		"stats:test": "node scripts/collect-stats.mjs --test"
 	},
