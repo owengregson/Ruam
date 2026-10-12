@@ -19,6 +19,7 @@ import { isName, resolveName, RestParam } from "../naming/token.js";
 import { ALL_JUMP_OPS, PACKED_JUMP_OPS, Op } from "../compiler/opcodes.js";
 import { registry as handlers, makeHandlerCtx, type HandlerCtx } from "./handlers/index.js";
 import { obfuscateLocals } from "./transforms.js";
+import { tryBuildNativeAcyclicBody } from "./native-acyclic.js";
 import { tryBuildNativeScalarBody } from "./native-scalar.js";
 import { emit } from "./emit.js";
 import {
@@ -38,6 +39,8 @@ export interface NativeSpecializationResult {
 		scalarUnits: number; scalarInstructions: number; scalarRegisterSlotsElided: number;
 		/** Declined units grouped by positive-grammar reason (and opcode when applicable). */
 		scalarDeclines: Record<string, number>;
+		acyclicUnits: number; acyclicInstructions: number; acyclicJoinLocals: number; acyclicEdgeCopies: number;
+		acyclicCalls: number; acyclicScopeReads: number; acyclicDeclines: Record<string, number>;
 		sharedFactories: number; factoredFactoryCalls: number;
 		sharedSemanticHelpers: number; semanticHelperCalls: number;
 		semanticHelperOpcodes: string[];
@@ -81,7 +84,7 @@ export function buildNativeSpecialization(
 	temps: TempNames,
 	nameRegistry: NameRegistry,
 	seed: number,
-	options: { scalarLowering?: boolean } = {},
+	options: { scalarLowering?: boolean; acyclicLowering?: boolean } = {},
 ): NativeSpecializationResult {
 	const units = flattenUnits(roots);
 	const reserved = new Set([
@@ -108,17 +111,28 @@ export function buildNativeSpecialization(
 	let scalarInstructions = 0;
 	let scalarRegisterSlotsElided = 0;
 	const scalarDeclines: Record<string, number> = {};
+	const acyclicDeclines: Record<string, number> = {};
+	let acyclicUnits = 0, acyclicInstructions = 0, acyclicJoinLocals = 0, acyclicEdgeCopies = 0;
+	let acyclicCalls = 0, acyclicScopeReads = 0;
 	for (const unit of units) {
 		validateUnit(unit);
-		const scalar = options.scalarLowering !== false
+		const straight = options.scalarLowering !== false
 			? tryBuildNativeScalarBody(unit, names, nameRegistry)
 			: { admitted: false as const, reason: "disabled", opcode: undefined };
+		const acyclic = !straight.admitted && options.scalarLowering !== false && options.acyclicLowering === true
+			? tryBuildNativeAcyclicBody(unit, names, temps, nameRegistry) : undefined;
+		const scalar = acyclic?.admitted ? acyclic : straight;
+		if (acyclic && !acyclic.admitted) {
+			const key = acyclic.opcode ? `${acyclic.reason}:${acyclic.opcode}` : acyclic.reason;
+			acyclicDeclines[key] = (acyclicDeclines[key] ?? 0) + 1;
+		}
 		if (scalar.admitted) {
 			// These names were allocated by the same registry but belong to the
 			// scalar builder's stream. Preserve every binding during module-wide
 			// handler renaming, just as for the native backend's own allocations.
 			const reserveBindings = (node: JsNode): JsNode => {
 				if (node.type === "VarDecl" || node.type === "FnDecl") reserved.add(resolveName(node.name));
+				if (node.type === "LabeledStmt") reserved.add(resolveName(node.label));
 				return mapChildren(node, reserveBindings);
 			};
 			scalar.body.forEach(reserveBindings);
@@ -128,7 +142,12 @@ export function buildNativeSpecialization(
 			scalarRegisterSlotsElided += scalar.stats.registerSlotsElided;
 			instructionCount += unit.instructions.length;
 			structuredUnits++;
-			basicBlockCount++;
+			if (acyclic?.admitted) {
+				acyclicUnits++; acyclicInstructions += acyclic.stats.instructionCount;
+				acyclicJoinLocals += acyclic.stats.joinLocals; acyclicEdgeCopies += acyclic.stats.edgeCopies;
+				acyclicCalls += acyclic.stats.callInstructions; acyclicScopeReads += acyclic.stats.scopeReadInstructions;
+				basicBlockCount += acyclic.stats.basicBlocks;
+			} else basicBlockCount++;
 			continue;
 		}
 		const declineKey = scalar.opcode ? `${scalar.reason}:${scalar.opcode}` : scalar.reason;
@@ -181,6 +200,7 @@ export function buildNativeSpecialization(
 			unitCount: units.length, instructionCount, basicBlockCount,
 			structuredUnits, dispatchedUnits: units.length - structuredUnits,
 			scalarUnits, scalarInstructions, scalarRegisterSlotsElided, scalarDeclines,
+			acyclicUnits, acyclicInstructions, acyclicJoinLocals, acyclicEdgeCopies, acyclicCalls, acyclicScopeReads, acyclicDeclines,
 			sharedFactories: factories.declarations.length,
 			factoredFactoryCalls: factories.calls(), handlerFootprint,
 			sharedSemanticHelpers: semantics.declarations.length,

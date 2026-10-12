@@ -150,6 +150,8 @@ export function emit(node: JsNode): string {
 			return emit(node.expr) + ";";
 		case "Block":
 			return `{${emitBody(node.body)}}`;
+		case "LabeledStmt":
+			return `${resolveName(node.label)}:{${emitBody(node.body)}}`;
 		case "IfStmt":
 			return `if(${emit(node.test)}){${emitBody(node.then)}}${
 				node.else ? `else{${emitBody(node.else)}}` : ""
@@ -173,7 +175,7 @@ export function emit(node: JsNode): string {
 				? `default:{${emitBody(node.body)}}`
 				: `case ${emit(node.label)}:{${emitBody(node.body)}}`;
 		case "BreakStmt":
-			return "break;";
+			return node.label === undefined ? "break;" : `break ${resolveName(node.label)};`;
 		case "ContinueStmt":
 			return "continue;";
 		case "ReturnStmt":
@@ -320,6 +322,7 @@ function emitStmt(node: JsNode): string {
 			return emit(node) + ";";
 		case "FnDecl":
 		case "Block":
+		case "LabeledStmt":
 		case "IfStmt":
 		case "WhileStmt":
 		case "ForStmt":

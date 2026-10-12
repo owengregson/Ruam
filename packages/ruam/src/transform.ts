@@ -385,6 +385,8 @@ export function compileNativeCandidateCode(
 		requireCompleteSelection?: boolean;
 		/** Disable only to compare the residual backend on identical inputs. */
 		scalarLowering?: boolean;
+		/** Opt in to the bounded acyclic read/call tier; scalarLowering:false disables both tiers. */
+		acyclicLowering?: boolean;
 	} = {}
 ) {
 	const seed = options.seed ?? generateCryptoSeed();
@@ -413,6 +415,7 @@ export function compileNativeCandidateCode(
 	}
 	const native = buildNativeSpecialization([...compiled.values()].map(item => item.unit), names, temps, registry, seed, {
 		scalarLowering: options.scalarLowering,
+		acyclicLowering: options.acyclicLowering,
 	});
 	const runtime = [
 		varDecl(names.hop, member(member(id("Object"), "prototype"), "hasOwnProperty")),

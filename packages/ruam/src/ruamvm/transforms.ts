@@ -399,6 +399,11 @@ function collectNamesFromNode(node: JsNode, out: Set<string>): void {
 				if (shouldRename(clean)) out.add(clean);
 			}
 			break;
+		case "LabeledStmt": {
+			const label = resolveName(node.label);
+			if (shouldRename(label)) out.add(label);
+			break;
+		}
 		case "ForInStmt": {
 			const decl = resolveName(node.decl);
 			if (shouldRename(decl)) out.add(decl);
@@ -446,6 +451,11 @@ function renameNode(node: JsNode, map: Map<string, string>): JsNode {
 			case "ArrowFn": {
 				const newParams = renameParams(n.params as string[], map);
 				return newParams ? { ...n, params: newParams } : null;
+			}
+			case "LabeledStmt":
+			case "BreakStmt": {
+				const renamed = n.label === undefined ? undefined : map.get(resolveName(n.label));
+				return renamed ? { ...n, label: renamed } : null;
 			}
 			case "ForInStmt": {
 				const renamed = map.get(resolveName(n.decl));

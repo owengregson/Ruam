@@ -8,6 +8,8 @@ The emitted artifact has no serialized instruction stream, binary decoder or opc
 
 An additional positive grammar lowers synchronous, scopeless straight-line units into scalar locals. Stack and register maps exist only at build time in that slice; effectful reads and operators are materialized in their original order, including getters, proxies, coercions and abrupt completion. Unsupported instructions retain the residual backend. `scalarLowering: false` provides an explicit comparison control, and the report counts admitted units/instructions and residual reasons. The initial service-worker inventory admits only 70 of 1,103 units and 171 of 58,934 instructions (0.29%); the feature does not establish substantial application performance gains.
 
+An additional, explicitly enabled [acyclic scalar tier](2026-10-12-native-acyclic.md) extends the build-time value representation to bounded branch graphs, inherited reads and fixed-arity calls. Its separate report documents admission, validation and remaining limits.
+
 This retains the compiler's stack/register/scope representations and much of its computational decomposition. Factored helpers can retain operand-dependent branches. It is not full SSA lowering, not the selected A1 algorithm/state compiler and not evidence that an AI cannot recover the computation. Removing a decoder can also make direct semantics easier to inspect.
 
 ## Implementation evidence

@@ -42,6 +42,8 @@ jobs:
       - run: bun run build:lib
       - run: bun run typecheck
       - run: bun run test
+      - name: Test opt-in acyclic native backend
+        run: RUAM_TEST_BACKEND=native-acyclic bun test packages/ruam/test/core
       - run: bun run stats
 
       - uses: actions/upload-artifact@v4
