@@ -12,7 +12,10 @@ import { resolveName } from "../src/naming/token.js";
 import { buildNativeSpecialization } from "../src/ruamvm/native-specialization.js";
 import { registry as handlers } from "../src/ruamvm/handlers/index.js";
 import { emit } from "../src/ruamvm/emit.js";
-import { call, exprStmt, fnExpr, id, lit, returnStmt } from "../src/ruamvm/nodes.js";
+import {
+	arr, arrowFn, assign, call, exprStmt, fnExpr, getter, id, lit, member,
+	method, newExpr, obj, returnStmt, setter, un, UOp,
+} from "../src/ruamvm/nodes.js";
 import { mapChildren, type JsNode } from "../src/ruamvm/nodes.js";
 
 const CASES: Record<string, string> = {
@@ -79,6 +82,54 @@ async function execute(source: string): Promise<string> {
 }
 
 describe("experimental native specialization", () => {
+	it("declines ambient function context in handlers, lexical arrows and computed method keys", () => {
+		for (const context of ["this", "arguments", "new.target"]) {
+			for (const shape of ["direct", "arrow", "computed-key"]) {
+				const read = id(context);
+				const key = context === "this" ? member(read, "p")
+					: context === "arguments" ? member(read, "length") : un(UOp.Typeof, read);
+				const expression = shape === "arrow" ? call(arrowFn([], [returnStmt(read)]), [])
+					: shape === "computed-key" ? obj(method(key, [], [])) : read;
+				const { built, prefix, names } = buildFakeHandler(expression, context === "new.target");
+				expect(built.stats.sharedSemanticHelpers).toBe(0);
+				const check = shape === "computed-key"
+					? `Object.keys(_reviewValue)[0]===${JSON.stringify(context === "this" ? "0" : context === "arguments" ? "6" : "function")}`
+					: context === "this" ? `_reviewValue===${names.unit}`
+						: context === "arguments" ? `_reviewValue.length===6&&_reviewValue[0]===${names.unit}`
+							: `_reviewValue===${names.unit}.f`;
+				expect(vm.runInNewContext(prefix + check)).toBe(true);
+			}
+		}
+	});
+
+	it("retains context owned by regular factories, methods and accessors when sharing", () => {
+		const observation = () => arr(id("this"), member(id("arguments"), "length"), un(UOp.Typeof, id("new.target")));
+		const arrowObservation = () => call(arrowFn([], [returnStmt(observation())]), []);
+		for (const construct of [false, true]) {
+			const ownFunction = fnExpr(undefined, [], [returnStmt(arrowObservation())]);
+			const expression = construct ? newExpr(ownFunction, []) : call(ownFunction, []);
+			const { built, prefix } = buildFakeHandler(expression);
+			expect(built.stats.sharedSemanticHelpers).toBe(1);
+			if (!construct) expect(built.stats.sharedFactories).toBeGreaterThan(0);
+			const check = construct
+				? `typeof _reviewValue[0]==='object'&&_reviewValue[1]===0&&_reviewValue[2]==='function'`
+				: `_reviewValue[0]===undefined&&_reviewValue[1]===0&&_reviewValue[2]==='undefined'`;
+			expect(vm.runInNewContext(prefix + check)).toBe(true);
+		}
+		for (const kind of ["method", "get", "set"]) {
+			const body = [exprStmt(assign(member(id("this"), "seen"), arrowObservation()))];
+			const entry = kind === "method" ? method("value", [], body)
+				: kind === "get" ? getter("value", body) : setter("value", "input", body);
+			const { built, prefix } = buildFakeHandler(obj(entry));
+			expect(built.stats.sharedSemanticHelpers).toBe(1);
+			const invocation = kind === "method" ? "_reviewValue.value(7,8);"
+				: kind === "get" ? "_reviewValue.value;" : "_reviewValue.value=7;";
+			const argumentCount = kind === "method" ? 2 : kind === "get" ? 0 : 1;
+			expect(vm.runInNewContext(prefix + invocation +
+				`_reviewValue.seen[0]===_reviewValue&&_reviewValue.seen[1]===${argumentCount}&&_reviewValue.seen[2]==='undefined'`)).toBe(true);
+		}
+	});
+
 	it("keeps direct eval in its original frame instead of sharing its helper or factory", () => {
 		const original = handlers.get(Op.NOP)!;
 		try {
@@ -201,15 +252,19 @@ describe("experimental native specialization", () => {
 		const fixtures = Object.values(CASES).map((source) => ({
 			source, candidate: compileNativeCandidateCode(source, { seed: 765 }).code,
 		}));
-		const driver = `const vm=require('node:vm');(async()=>{for(const pair of JSON.parse(process.argv[1])){
+		const driver = `const vm=require('node:vm');const fixtures=JSON.parse(require('node:fs').readFileSync(0,'utf8'));(async()=>{for(const pair of fixtures){
 			const results=[];for(const code of [pair.source,pair.candidate]){const ctx=vm.createContext({});
 			new vm.Script(code).runInContext(ctx,{timeout:10000});results.push(JSON.stringify(await ctx.result));}
 			if(results[0]!==results[1])throw new Error(JSON.stringify(results));}process.stdout.write('matched')})().catch(e=>{console.error(e);process.exitCode=1})`;
-		const result = spawnSync("node", ["-e", driver, JSON.stringify(fixtures)], { encoding: "utf8", timeout: 30_000 });
+		// Full generated artifacts exceed single-argument limits on some hosts.
+		// Stream the fixtures to Node so the oracle runs on Linux as well as macOS.
+		const result = spawnSync("node", ["-e", driver], { input: JSON.stringify(fixtures), encoding: "utf8", timeout: 30_000 });
+		expect(result.error).toBeUndefined();
 		expect(result.stderr).toBe("");
 		expect(result.status).toBe(0);
 		expect(result.stdout).toBe("matched");
-	});
+	// Permit fixture compilation plus the existing 30-second child deadline.
+	}, 45_000);
 
 	it("rejects unsupported or malformed logical units explicitly", () => {
 		const unit = compileUnit("function value(){return 4}");
@@ -228,6 +283,24 @@ describe("experimental native specialization", () => {
 		expect(build).toThrow("rejects generator unit");
 	});
 });
+
+/** Exercise admission through the public builder without exposing its private proof. */
+function buildFakeHandler(expression: JsNode, construct = false) {
+	const original = handlers.get(Op.NOP)!;
+	try {
+		handlers.set(Op.NOP, ctx => [exprStmt(lit("padding".repeat(40))), exprStmt(ctx.push(expression))]);
+		const unit = compileUnit("function value(){return 4}");
+		unit.instructions = [{ opcode: Op.NOP, operand: 0 }, { opcode: Op.RETURN, operand: 0 }];
+		const { runtime: names, temps, registry } = setupRegistry(52);
+		const built = buildNativeSpecialization([unit], names, temps, registry, 52, { scalarLowering: false });
+		const invoke = construct ? `new ${names.unit}.f(${names.unit},[],null)` : `${names.exec}(${names.unit},[],null)`;
+		const prefix = `"use strict";var ${names.globalRef}=globalThis;${built.declarations.map(node => emit(node)).join("\n")}
+			var ${names.unit}=${names.load}(${JSON.stringify(unit.id)});var _reviewValue=${invoke};`;
+		return { built, prefix, names };
+	} finally {
+		handlers.set(Op.NOP, original);
+	}
+}
 
 function compileUnit(source: string): BytecodeUnit {
 	resetUnitCounter(9);

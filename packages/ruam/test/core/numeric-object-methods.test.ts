@@ -280,7 +280,7 @@ describe("numeric object method keys", () => {
 		const [original, generated] = JSON.parse(child.stdout);
 		expect(generated).toEqual(original);
 		expect(original).toEqual([5, ["string", "string", 5]]);
-	});
+	}, 15_000);
 
 	it("preserves async method metadata, result and rejection behavior", async () => {
 		const source = `

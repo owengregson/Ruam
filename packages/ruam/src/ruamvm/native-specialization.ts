@@ -506,7 +506,8 @@ function makeSemanticFactorer(n: RuntimeNames, nextName: () => string, reserved:
 			const frameNames: Name[] = [ctx.S, ctx.R, ctx.C, ctx.O, ctx.SC, ctx.U, ctx.A, ctx.OS, ctx.TV, ctx.NT, ctx.HO, ctx.t("_g")];
 			const frames = new Set(frameNames);
 			const used = new Set<Name>();
-			let admitted = body.reduce((size, node) => size + emit(node).length, 0) >= 200;
+			let admitted = body.reduce((size, node) => size + emit(node).length, 0) >= 200
+				&& !body.some(referencesEnclosingFunctionContext);
 			const inspect = (node: JsNode, nestedFunction = false): void => {
 				if (node.type === "Id" && frames.has(node.name)) used.add(node.name);
 				if (node.type === "StackPush" || node.type === "StackPop" || node.type === "StackPeek") used.add(node.S);
@@ -536,6 +537,27 @@ function makeSemanticFactorer(n: RuntimeNames, nextName: () => string, reserved:
 		return [exprStmt(call(id(helper.name), helper.params.map((name) => name === ctx.O ? lit(operand) : id(name))))];
 	};
 	return { declarations, factor, calls: () => calls, opcodes: () => [...admittedOpcodes].sort((a, b) => a - b).map((opcode) => Op[opcode]) };
+}
+
+/** A new semantic helper must not replace the handler's implicit function frame. */
+function referencesEnclosingFunctionContext(node: JsNode): boolean {
+	if (node.type === "Id") return ["this", "arguments", "new.target"].includes(resolveName(node.name));
+	// Regular functions own these bindings, including for arrows nested inside
+	// them. Arrows alone inherit the enclosing frame and must be traversed.
+	if (node.type === "FnExpr" || node.type === "FnDecl") return false;
+	if (node.type === "ObjectExpr") {
+		return node.entries.some(entry => {
+			if (Array.isArray(entry)) return (!isName(entry[0]) && referencesEnclosingFunctionContext(entry[0]))
+				|| referencesEnclosingFunctionContext(entry[1]);
+			if (entry.kind === "spread") return referencesEnclosingFunctionContext(entry.arg);
+			// Method/accessor bodies own their frame, but a computed method key
+			// is evaluated outside that body in the enclosing handler's frame.
+			return entry.kind === "method" && !isName(entry.name) && referencesEnclosingFunctionContext(entry.name);
+		});
+	}
+	let found = false;
+	mapChildren(node, child => { found ||= referencesEnclosingFunctionContext(child); return child; });
+	return found;
 }
 
 function localizeBreaks(node: JsNode): JsNode {

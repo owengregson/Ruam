@@ -106,17 +106,19 @@ describe("experimental straight-line scalar lowering", () => {
 			const unit = compile(source);
 			return { source, exercise, scalar: build(unit, 307).expression, constants: unit.constants.map(value) };
 		});
-		const driver = `const vm=require('node:vm');for(const f of JSON.parse(process.argv[1])){
+		const driver = `const vm=require('node:vm');const fixtures=JSON.parse(require('node:fs').readFileSync(0,'utf8'));for(const f of fixtures){
 			const observed=[];for(const scalar of [false,true]){const c=vm.createContext({constants:f.constants});
 			const invocation=scalar?'const generated=('+f.scalar+');const invoke=(...args)=>generated({c:constants},args,null);':'const invoke=('+f.source+');';
 			observed.push(JSON.stringify(vm.runInContext('(function(){'+invocation+f.exercise+'})()',c,{timeout:1000})));}
 			if(observed[0]!==observed[1])throw new Error(JSON.stringify({source:f.source,observed}));
-		}process.stdout.write('matched:'+JSON.parse(process.argv[1]).length);`;
-		const result = spawnSync("node", ["-e", driver, JSON.stringify(fixtures)], { encoding: "utf8", timeout: 10_000 });
+		}process.stdout.write('matched:'+fixtures.length);`;
+		const result = spawnSync("node", ["-e", driver], { input: JSON.stringify(fixtures), encoding: "utf8", timeout: 10_000 });
+		expect(result.error).toBeUndefined();
 		expect(result.status).toBe(0);
 		expect(result.stderr).toBe("");
 		expect(result.stdout).toBe(`matched:${cases.length}`);
-	});
+	// The enclosing test must outlive its existing 10-second Node deadline.
+	}, 15_000);
 
 	it("erases runtime stack/register containers while keeping a duplicate getter evaluated once", () => {
 		const source = "function f(o){const v=o.value;return v+v}";

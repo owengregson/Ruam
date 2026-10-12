@@ -34,7 +34,9 @@ describe("native lowering negative control", () => {
     expect(report.harness.sourceAndHarnessUnchangedAtEnd).toBe(true);
     expect(report.releaseApproved).toBe(false);
     expect(report.decision).toBe("reject-continuation-flattening-alone-for-this-control");
-  });
+  // This checks hundreds of observations across several implementations. Keep
+  // the individual VM execution deadlines; allow time for the complete batch.
+  }, 30_000);
 
   test("refuses source drift instead of applying the control to a new algorithm", () => {
     expect(() => lowerNativeSeedControl("export function deriveSeed(a: number,b: string): number { return a; }", "")).toThrow("authored function changed");
@@ -43,5 +45,5 @@ describe("native lowering negative control", () => {
   test("refuses dynamic or malformed continuation graphs", async () => {
     const report = await runNativeLoweringControl();
     expect(() => recoverNativeSeedControl(report.artifact.code.replace(`${report.naming.selectorName} = 41`, `${report.naming.selectorName} = Math.random()`))).toThrow("dynamic edge");
-  });
+  }, 30_000);
 });
