@@ -69,6 +69,9 @@ import { getTuningProfile, presetToIntensity } from "./tuning.js";
 import type { TuningProfile } from "./tuning.js";
 
 import { randomBytes } from "node:crypto";
+import { buildNativeSpecialization } from "./ruamvm/native-specialization.js";
+import { buildRunners } from "./ruamvm/builders/runners.js";
+import { id, lit, varDecl, member, call } from "./ruamvm/nodes.js";
 
 /**
  * Generate a cryptographically strong 32-bit seed.
@@ -365,6 +368,81 @@ export function obfuscateCodeWithReport(
 	};
 	if (qualification.requireCompleteSelection !== false && !report.completeSelection) throw new IncompleteCompilationError(report);
 	return { code, report };
+}
+
+/**
+ * Experimental ahead-of-time specialization. Deliberately absent from public
+ * presets: removing instruction decoding is a compiler experiment, not evidence
+ * of source protection. Uses the same frontend and selected-root scope as the VM.
+ */
+export function compileNativeCandidateCode(
+	source: string,
+	options: {
+		targetMode?: "root" | "comment";
+		target?: "node" | "browser" | "browser-extension";
+		/** Reproducible research builds; not a secret or protection parameter. */
+		seed?: number;
+		requireCompleteSelection?: boolean;
+		/** Disable only to compare the residual backend on identical inputs. */
+		scalarLowering?: boolean;
+	} = {}
+) {
+	const seed = options.seed ?? generateCryptoSeed();
+	if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
+		throw new RangeError("Native candidate seed must be a uint32");
+	}
+	const targetMode = options.targetMode ?? "root";
+	const ast = parse(source, { sourceType: "unambiguous", plugins: [...BABEL_PARSER_PLUGINS] });
+	const wrap = options.target === "browser-extension";
+	if (wrap && ast.program.body.some(node => t.isImportDeclaration(node) || t.isExportDeclaration(node))) {
+		throw new Error("Bundle modules before wrapping a browser-extension candidate");
+	}
+	const { registry, runtime: names, temps } = setupRegistry(seed, collectIdentifiers(source));
+	resetUnitCounter(seed);
+	const targets = collectTargetFunctions(ast, targetMode, 1);
+	const recorder: CompilationRecorder = { selectedRoots: targets.length, outcomes: [] };
+	const compiled = compileTargetsOnly(targets, names, false, seed, temps["_ps"], false, false, undefined, recorder);
+	const compilation: CompilationReport = {
+		schema: "ruam-compilation-report-v1", targetMode,
+		selectedRoots: recorder.selectedRoots, outcomes: recorder.outcomes,
+		completeSelection: recorder.selectedRoots > 0 && recorder.outcomes.length === recorder.selectedRoots && recorder.outcomes.every(item => item.status === "compiled"),
+		wholeSourceProtection: false, protectionQualified: false, locationSpace: "after-optional-preprocessing",
+	};
+	if (options.requireCompleteSelection !== false && !compilation.completeSelection) {
+		throw new IncompleteCompilationError(compilation);
+	}
+	const native = buildNativeSpecialization([...compiled.values()].map(item => item.unit), names, temps, registry, seed, {
+		scalarLowering: options.scalarLowering,
+	});
+	const runtime = [
+		varDecl(names.hop, member(member(id("Object"), "prototype"), "hasOwnProperty")),
+		varDecl(names.spreadSym, call(id("Symbol"), [])),
+		varDecl(names.tdzSentinel, call(member(id("Object"), "create"), [lit(null)])),
+		varDecl(names.globalRef, id("globalThis")),
+		varDecl(names.defineProperty, member(id("Object"), "defineProperty")),
+		...native.declarations,
+		...buildRunners(false, names, temps),
+	];
+	const runtimeStatements = parse(runtime.map(node => emit(node)).join("\n"), { sourceType: "script" }).program.body;
+	const bindings = collectTopLevelBindings(ast.program.body);
+	const scopeStatements = parse(buildScopeSetupCode(temps["_ps"]!, bindings), { sourceType: "script" }).program.body;
+	if (wrap) {
+		const body = t.blockStatement([...runtimeStatements, ...scopeStatements, ...ast.program.body] as t.Statement[]);
+		body.directives = [t.directive(t.directiveLiteral("use strict"))];
+		ast.program.body = [t.expressionStatement(t.callExpression(t.functionExpression(null, [], body), []))];
+		ast.program.directives = [];
+	} else {
+		ast.program.body.unshift(...runtimeStatements, ...scopeStatements);
+		ast.program.directives = [t.directive(t.directiveLiteral("use strict"))];
+	}
+	return {
+		code: generate(ast, { comments: false }).code,
+		report: {
+			schema: "ruam-native-candidate-v1" as const, seed, compilation,
+			...native.stats,
+			protectionQualified: false as const,
+		},
+	};
 }
 
 function hasAsyncIteration(fnPath: NodePath<t.Function>): boolean {
