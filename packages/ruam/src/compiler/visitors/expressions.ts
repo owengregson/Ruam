@@ -636,6 +636,19 @@ function compileUpdateExpression(
 	}
 }
 
+/** Capture a super reference before RHS effects can replace the home prototype. */
+function compileSuperReference(
+	path: NodePath<t.MemberExpression>, emitter: Emitter,
+	scope: ScopeAnalyzer, ctx: CompileContext
+): void {
+	if (path.node.computed) {
+		compileExpression(path.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
+	} else {
+		emitter.emit(Op.PUSH_CONST, emitter.addStringConstant((path.node.property as t.Identifier).name));
+	}
+	emitter.emit(Op.GET_SUPER_PROP, -2);
+}
+
 function compileMemberExpressionForUpdate(
 	path: NodePath<t.MemberExpression>,
 	emitter: Emitter,
@@ -646,37 +659,15 @@ function compileMemberExpressionForUpdate(
 ): void {
 	// super.prop++ / super[expr]++ — use dedicated super opcodes
 	if (path.get("object").isSuper()) {
-		if (path.node.computed) {
-			const rKey = scope.registerAllocator.alloc();
-			compileExpression(
-				path.get("property") as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-			emitter.emit(Op.DUP, 0);
-			emitter.emit(Op.STORE_REG, rKey);
-			emitter.emit(Op.GET_SUPER_PROP, -1);
-			if (!prefix) emitter.emit(Op.DUP, 0);
-			emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
-			emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
-			if (prefix) emitter.emit(Op.DUP, 0);
-			emitter.emit(Op.LOAD_REG, rKey);
-			emitter.emit(Op.SWAP, 0);
-			emitter.emit(Op.SET_SUPER_PROP, -1);
-			emitter.emit(Op.POP, 0);
-		} else {
-			const nameIdx = emitter.addStringConstant(
-				(path.node.property as t.Identifier).name
-			);
-			emitter.emit(Op.GET_SUPER_PROP, nameIdx);
-			if (!prefix) emitter.emit(Op.DUP, 0);
-			emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
-			emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
-			if (prefix) emitter.emit(Op.DUP, 0);
-			emitter.emit(Op.SET_SUPER_PROP, nameIdx);
-			emitter.emit(Op.POP, 0);
-		}
+		compileSuperReference(path, emitter, scope, ctx);
+		emitter.emit(Op.DUP, 0);
+		emitter.emit(Op.GET_SUPER_PROP, -3);
+		const oldValue = prefix ? -1 : scope.registerAllocator.alloc();
+		if (!prefix) { emitter.emit(Op.DUP, 0); emitter.emit(Op.STORE_REG, oldValue); }
+		emitter.emit(Op.PUSH_CONST, emitter.addNumberConstant(1));
+		emitter.emit(operator === "++" ? Op.ADD : Op.SUB, 0);
+		emitter.emit(Op.SET_SUPER_PROP, -2);
+		if (!prefix) { emitter.emit(Op.POP, 0); emitter.emit(Op.LOAD_REG, oldValue); }
 		return;
 	}
 
@@ -788,34 +779,14 @@ function compileAssignmentExpression(
 		}
 	} else if (left.isMemberExpression() && left.get("object").isSuper()) {
 		// super.prop = val / super[expr] = val
+		compileSuperReference(left, emitter, scope, ctx);
 		compileExpression(
 			path.get("right") as NodePath<t.Expression>,
 			emitter,
 			scope,
 			ctx
 		);
-		emitter.emit(Op.DUP, 0); // expression result stays on stack
-		if (left.node.computed) {
-			const rKey = scope.registerAllocator.alloc();
-			const rVal = scope.registerAllocator.alloc();
-			compileExpression(
-				left.get("property") as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-			emitter.emit(Op.STORE_REG, rKey);
-			emitter.emit(Op.STORE_REG, rVal);
-			emitter.emit(Op.LOAD_REG, rKey);
-			emitter.emit(Op.LOAD_REG, rVal);
-			emitter.emit(Op.SET_SUPER_PROP, -1);
-		} else {
-			const nameIdx = emitter.addStringConstant(
-				(left.node.property as t.Identifier).name
-			);
-			emitter.emit(Op.SET_SUPER_PROP, nameIdx);
-		}
-		emitter.emit(Op.POP, 0);
+		emitter.emit(Op.SET_SUPER_PROP, -2);
 	} else if (left.isMemberExpression()) {
 		if (left.node.computed) {
 			// Use registers for computed member to avoid deep-stack ROT3 issues
@@ -963,47 +934,12 @@ function compileCompoundAssignment(
 		}
 	} else if (left.isMemberExpression() && left.get("object").isSuper()) {
 		// super.prop += val / super[expr] += val
-		if (left.node.computed) {
-			const rKey = scope.registerAllocator.alloc();
-			const rNewVal = scope.registerAllocator.alloc();
-			compileExpression(
-				left.get("property") as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-			emitter.emit(Op.DUP, 0);
-			emitter.emit(Op.STORE_REG, rKey);
-			emitter.emit(Op.GET_SUPER_PROP, -1);
-			compileExpression(
-				path.get("right") as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-			emitter.emit(arithmeticOp, 0);
-			emitter.emit(Op.DUP, 0);
-			emitter.emit(Op.STORE_REG, rNewVal);
-			emitter.emit(Op.LOAD_REG, rKey);
-			emitter.emit(Op.LOAD_REG, rNewVal);
-			emitter.emit(Op.SET_SUPER_PROP, -1);
-			emitter.emit(Op.POP, 0);
-		} else {
-			const nameIdx = emitter.addStringConstant(
-				(left.node.property as t.Identifier).name
-			);
-			emitter.emit(Op.GET_SUPER_PROP, nameIdx);
-			compileExpression(
-				path.get("right") as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-			emitter.emit(arithmeticOp, 0);
-			emitter.emit(Op.DUP, 0);
-			emitter.emit(Op.SET_SUPER_PROP, nameIdx);
-			emitter.emit(Op.POP, 0);
-		}
+		compileSuperReference(left, emitter, scope, ctx);
+		emitter.emit(Op.DUP, 0);
+		emitter.emit(Op.GET_SUPER_PROP, -3);
+		compileExpression(path.get("right") as NodePath<t.Expression>, emitter, scope, ctx);
+		emitter.emit(arithmeticOp, 0);
+		emitter.emit(Op.SET_SUPER_PROP, -2);
 	} else if (left.isMemberExpression()) {
 		if (left.node.computed) {
 			// Use registers for computed member to avoid deep-stack ROT3 issues
@@ -1134,25 +1070,11 @@ function compileCallExpression(
 	const args = path.get("arguments");
 
 	if (callee.isMemberExpression() && callee.get("object").isSuper()) {
-		// super.method(args) / super[expr](args)
-		const hasSpread = args.some((a) => a.isSpreadElement());
-
-		if (!callee.node.computed && !hasSpread) {
-			// Optimised path: static name, no spread → CALL_SUPER_METHOD
-			const nameIdx = emitter.addStringConstant(
-				(callee.node.property as t.Identifier).name
-			);
-			for (const arg of args) {
-				compileExpression(
-					arg as NodePath<t.Expression>,
-					emitter,
-					scope,
-					ctx
-				);
-			}
-			emitter.emit(Op.CALL_SUPER_METHOD, (nameIdx << 16) | args.length);
-		} else {
-			// Fallback: push this as receiver, get super method, then CALL_METHOD
+		// Resolve the method before evaluating arguments: a getter may observe
+		// the receiver or throw, and even a static super key can be an accessor.
+		// CALL_METHOD also preserves the normal error for a missing callee.
+		const hasSpread = args.some((arg) => arg.isSpreadElement());
+		{
 			emitter.emit(Op.PUSH_THIS, 0);
 			if (callee.node.computed) {
 				compileExpression(
@@ -1188,26 +1110,35 @@ function compileCallExpression(
 				hasSpread ? -args.length : args.length
 			);
 		}
-	} else if (callee.isMemberExpression()) {
-		compileExpression(callee.get("object"), emitter, scope, ctx);
-		emitter.emit(Op.DUP, 0);
-
-		if (callee.node.computed) {
-			compileExpression(
-				callee.get("property") as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-			emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+	} else if (callee.isMemberExpression() || callee.isOptionalMemberExpression()) {
+		if (callee.isOptionalMemberExpression()) {
+			// A parenthesized chain ends its null short circuit, but the
+			// resulting member reference still supplies this to a normal call.
+			const receiver = scope.registerAllocator.alloc();
+			compileOptionalChain(callee, emitter, scope, ctx, receiver);
+			emitter.emit(Op.LOAD_REG, receiver);
 		} else {
-			const nameIdx = emitter.addStringConstant(
-				(callee.node.property as t.Identifier).name
-			);
-			emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-		}
+			compileExpression(callee.get("object"), emitter, scope, ctx);
+			emitter.emit(Op.DUP, 0);
 
-		emitter.emit(Op.SWAP, 0);
+			if (callee.node.computed) {
+				compileExpression(
+					callee.get("property") as NodePath<t.Expression>,
+					emitter,
+					scope,
+					ctx
+				);
+				emitter.emit(Op.GET_PROP_DYNAMIC, 0);
+			} else {
+				const nameIdx = emitter.addStringConstant(
+					(callee.node.property as t.Identifier).name
+				);
+				emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+			}
+
+			emitter.emit(Op.SWAP, 0);
+
+		}
 
 		let hasSpread = false;
 		for (const arg of args) {
@@ -1288,163 +1219,88 @@ function compileOptionalCallExpression(
 	scope: ScopeAnalyzer,
 	ctx: CompileContext
 ): void {
-	const callee = path.get("callee");
-	const args = path.get("arguments");
+	compileOptionalChain(path, emitter, scope, ctx);
+}
 
-	// If callee is a member expression, we need CALL_METHOD to preserve `this`
-	if (callee.isMemberExpression() || callee.isOptionalMemberExpression()) {
-		const obj = callee.get("object") as NodePath<t.Expression>;
-		compileExpression(obj, emitter, scope, ctx);
-
-		// If the member access is optional (obj?.method), check obj first
-		if ((callee.node as t.OptionalMemberExpression).optional) {
-			emitter.emit(Op.DUP, 0);
-			const objNullJump = emitter.emit(Op.JMP_NULLISH, 0);
-			const objOkJump = emitter.emit(Op.JMP, 0);
-
-			emitter.patchJump(objNullJump, emitter.ip);
-			emitter.emit(Op.POP, 0); // pop obj
-			emitter.emit(Op.PUSH_UNDEFINED, 0);
-			const objSkipEnd = emitter.emit(Op.JMP, 0);
-
-			emitter.patchJump(objOkJump, emitter.ip);
-			// obj is not null — get the method
-			emitter.emit(Op.DUP, 0);
-			if (callee.node.computed) {
-				compileExpression(
-					callee.get("property") as NodePath<t.Expression>,
-					emitter,
-					scope,
-					ctx
-				);
+/**
+ * Every ?. in one continuous chain exits the entire chain. Keep method
+ * receivers in compiler-owned registers so all exits have one stack value;
+ * arguments and computed keys remain after their corresponding null checks.
+ * Parentheses end the short-circuit scope but retain a member's receiver.
+ */
+function compileOptionalChain(
+	path: NodePath<t.OptionalMemberExpression | t.OptionalCallExpression>,
+	emitter: Emitter,
+	scope: ScopeAnalyzer,
+	ctx: CompileContext,
+	receiver?: number
+): void {
+	const nullExits: number[] = [];
+	const checkNull = () => {
+		emitter.emit(Op.DUP, 0);
+		nullExits.push(emitter.emit(Op.JMP_NULLISH, 0));
+	};
+	const segment = (part: NodePath<t.Expression>, captureReceiver?: number, root = false): void => {
+		const optional = part.isOptionalMemberExpression() || part.isOptionalCallExpression();
+		if (optional && !root && part.node.extra?.parenthesized) {
+			compileOptionalChain(part as NodePath<t.OptionalMemberExpression | t.OptionalCallExpression>, emitter, scope, ctx, captureReceiver);
+			return;
+		}
+		if (part.isOptionalMemberExpression() || (part.isMemberExpression() && captureReceiver !== undefined)) {
+			const object = part.get("object") as NodePath<t.Expression>;
+			if (object.isSuper()) {
+				if (captureReceiver !== undefined) {
+					emitter.emit(Op.PUSH_THIS, 0);
+					emitter.emit(Op.STORE_REG, captureReceiver);
+				}
+				compileMemberExpression(part as NodePath<t.MemberExpression>, emitter, scope, ctx);
+				return;
+			}
+			segment(object);
+			if (part.isOptionalMemberExpression() && part.node.optional) checkNull();
+			if (captureReceiver !== undefined) {
+				emitter.emit(Op.DUP, 0);
+				emitter.emit(Op.STORE_REG, captureReceiver);
+			}
+			if (part.node.computed) {
+				compileExpression(part.get("property") as NodePath<t.Expression>, emitter, scope, ctx);
 				emitter.emit(Op.GET_PROP_DYNAMIC, 0);
 			} else {
-				const nameIdx = emitter.addStringConstant(
-					(callee.node.property as t.Identifier).name
-				);
-				emitter.emit(Op.GET_PROP_STATIC, nameIdx);
+				emitter.emit(Op.GET_PROP_STATIC, emitter.addStringConstant((part.node.property as t.Identifier).name));
 			}
-
-			// Check if fn is nullish (for the ?. call part)
-			emitter.emit(Op.DUP, 0);
-			const fnNullJump = emitter.emit(Op.JMP_NULLISH, 0);
-			const fnOkJump = emitter.emit(Op.JMP, 0);
-
-			emitter.patchJump(fnNullJump, emitter.ip);
-			emitter.emit(Op.POP, 0); // pop fn
-			emitter.emit(Op.POP, 0); // pop obj
-			emitter.emit(Op.PUSH_UNDEFINED, 0);
-			const fnSkipEnd = emitter.emit(Op.JMP, 0);
-
-			emitter.patchJump(fnOkJump, emitter.ip);
-			emitter.emit(Op.SWAP, 0); // [fn, obj] for CALL_METHOD
-			let hasSpread = false;
-			for (const arg of args) {
-				if (arg.isSpreadElement()) {
-					hasSpread = true;
-					compileExpression(arg.get("argument"), emitter, scope, ctx);
+			return;
+		}
+		if (part.isOptionalCallExpression()) {
+			const callee = part.get("callee") as NodePath<t.Expression>;
+			const memberCall = callee.isMemberExpression() || callee.isOptionalMemberExpression();
+			const callReceiver = memberCall ? scope.registerAllocator.alloc() : undefined;
+			segment(callee, callReceiver);
+			if (part.node.optional) checkNull();
+			if (callReceiver !== undefined) emitter.emit(Op.LOAD_REG, callReceiver);
+			let spread = false;
+			for (const argument of part.get("arguments")) {
+				if (argument.isSpreadElement()) {
+					spread = true;
+					compileExpression(argument.get("argument"), emitter, scope, ctx);
 					emitter.emit(Op.SPREAD_ARGS, 0);
 				} else {
-					compileExpression(
-						arg as NodePath<t.Expression>,
-						emitter,
-						scope,
-						ctx
-					);
+					compileExpression(argument as NodePath<t.Expression>, emitter, scope, ctx);
 				}
 			}
-			emitter.emit(
-				Op.CALL_METHOD,
-				hasSpread ? -args.length : args.length
-			);
-
-			emitter.patchJump(objSkipEnd, emitter.ip);
-			emitter.patchJump(fnSkipEnd, emitter.ip);
-		} else {
-			// Non-optional member (e.g., obj.method?.()), just get the method
-			emitter.emit(Op.DUP, 0);
-			if (callee.node.computed) {
-				compileExpression(
-					callee.get("property") as NodePath<t.Expression>,
-					emitter,
-					scope,
-					ctx
-				);
-				emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-			} else {
-				const nameIdx = emitter.addStringConstant(
-					(callee.node.property as t.Identifier).name
-				);
-				emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-			}
-
-			// Check if fn is nullish
-			emitter.emit(Op.DUP, 0);
-			const fnNullJump = emitter.emit(Op.JMP_NULLISH, 0);
-			const fnOkJump = emitter.emit(Op.JMP, 0);
-
-			emitter.patchJump(fnNullJump, emitter.ip);
-			emitter.emit(Op.POP, 0); // pop fn
-			emitter.emit(Op.POP, 0); // pop obj
-			emitter.emit(Op.PUSH_UNDEFINED, 0);
-			const fnSkipEnd = emitter.emit(Op.JMP, 0);
-
-			emitter.patchJump(fnOkJump, emitter.ip);
-			emitter.emit(Op.SWAP, 0); // [fn, obj] for CALL_METHOD
-			let hasSpread = false;
-			for (const arg of args) {
-				if (arg.isSpreadElement()) {
-					hasSpread = true;
-					compileExpression(arg.get("argument"), emitter, scope, ctx);
-					emitter.emit(Op.SPREAD_ARGS, 0);
-				} else {
-					compileExpression(
-						arg as NodePath<t.Expression>,
-						emitter,
-						scope,
-						ctx
-					);
-				}
-			}
-			emitter.emit(
-				Op.CALL_METHOD,
-				hasSpread ? -args.length : args.length
-			);
-
-			emitter.patchJump(fnSkipEnd, emitter.ip);
+			const count = part.node.arguments.length;
+			emitter.emit(memberCall ? Op.CALL_METHOD : Op.CALL, spread ? -count : count);
+			return;
 		}
-		return;
+		compileExpression(part, emitter, scope, ctx);
+	};
+	segment(path as NodePath<t.Expression>, receiver, true);
+	if (nullExits.length) {
+		const end = emitter.emit(Op.JMP, 0);
+		for (const jump of nullExits) emitter.patchJump(jump, emitter.ip);
+		emitter.emit(Op.POP, 0);
+		emitter.emit(Op.PUSH_UNDEFINED, 0);
+		emitter.patchJump(end, emitter.ip);
 	}
-
-	// Standalone optional call: fn?.(args)
-	compileExpression(callee as NodePath<t.Expression>, emitter, scope, ctx);
-	emitter.emit(Op.DUP, 0);
-	const skipJump = emitter.emit(Op.JMP_NULLISH, 0);
-	const proceedJump = emitter.emit(Op.JMP, 0);
-
-	emitter.patchJump(skipJump, emitter.ip);
-	emitter.emit(Op.POP, 0);
-	emitter.emit(Op.PUSH_UNDEFINED, 0);
-	const endJump = emitter.emit(Op.JMP, 0);
-
-	emitter.patchJump(proceedJump, emitter.ip);
-
-	for (const arg of args) {
-		if (arg.isSpreadElement()) {
-			compileExpression(arg.get("argument"), emitter, scope, ctx);
-			emitter.emit(Op.SPREAD_ARGS, 0);
-		} else {
-			compileExpression(
-				arg as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-		}
-	}
-	emitter.emit(Op.CALL, args.length);
-
-	emitter.patchJump(endJump, emitter.ip);
 }
 
 function compileNewExpression(
@@ -1527,50 +1383,7 @@ function compileOptionalMemberExpression(
 	scope: ScopeAnalyzer,
 	ctx: CompileContext
 ): void {
-	compileExpression(path.get("object"), emitter, scope, ctx);
-
-	if (path.node.optional) {
-		emitter.emit(Op.DUP, 0);
-		const nullJump = emitter.emit(Op.JMP_NULLISH, 0);
-		const proceedJump = emitter.emit(Op.JMP, 0);
-
-		emitter.patchJump(nullJump, emitter.ip);
-		emitter.emit(Op.POP, 0);
-		emitter.emit(Op.PUSH_UNDEFINED, 0);
-		const endJump = emitter.emit(Op.JMP, 0);
-
-		emitter.patchJump(proceedJump, emitter.ip);
-		if (path.node.computed) {
-			compileExpression(
-				path.get("property") as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-			emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-		} else {
-			const nameIdx = emitter.addStringConstant(
-				(path.node.property as t.Identifier).name
-			);
-			emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-		}
-		emitter.patchJump(endJump, emitter.ip);
-	} else {
-		if (path.node.computed) {
-			compileExpression(
-				path.get("property") as NodePath<t.Expression>,
-				emitter,
-				scope,
-				ctx
-			);
-			emitter.emit(Op.GET_PROP_DYNAMIC, 0);
-		} else {
-			const nameIdx = emitter.addStringConstant(
-				(path.node.property as t.Identifier).name
-			);
-			emitter.emit(Op.GET_PROP_STATIC, nameIdx);
-		}
-	}
+	compileOptionalChain(path, emitter, scope, ctx);
 }
 
 function compileConditionalExpression(
@@ -1638,22 +1451,48 @@ function compileObjectExpression(
 				emitter.emit(Op.SET_PROP_STATIC, nameIdx);
 			}
 		} else if (prop.isObjectMethod()) {
-			emitter.emit(Op.DUP, 0);
 			const method = prop as NodePath<t.ObjectMethod>;
-			ctx.compileNestedFunction(
-				method as unknown as NodePath<t.Function>,
-				emitter,
-				scope
-			);
-
 			const key = method.node.key;
+			if (method.node.computed && key.type !== "StringLiteral" && key.type !== "NumericLiteral") {
+				throw new Error(`Unsupported computed object method key: ${key.type}`);
+			}
 			let keyName: string;
 			if (key.type === "Identifier") keyName = key.name;
 			else if (key.type === "StringLiteral") keyName = key.value;
+			else if (key.type === "NumericLiteral" && method.node.kind === "method" && !method.node.generator)
+				keyName = String(key.value);
 			else throw new Error(`Unsupported method key type: ${key.type}`);
-
 			const nameIdx = emitter.addStringConstant(keyName);
 
+			if (method.node.kind === "method" && !method.node.generator) {
+				// A native concise-method wrapper has no [[Construct]] or own
+				// prototype. Capture this object as its home for super access.
+				ctx.compileNestedFunction(method, emitter, scope, true);
+				emitter.emit(Op.SET_FUNC_NAME, nameIdx);
+				const firstOptional = method.node.params.findIndex(
+					param => param.type === "AssignmentPattern" || param.type === "RestElement"
+				);
+				emitter.emit(Op.SET_FUNC_LENGTH, firstOptional < 0 ? method.node.params.length : firstOptional);
+
+				// Literal definitions create own data properties, even when an
+				// inherited setter or an earlier accessor uses the same key.
+				emitter.emit(Op.NEW_OBJECT, 1); // Null-prototype descriptor, no inherited setters.
+				emitter.emit(Op.SWAP, 0);
+				emitter.emit(Op.SET_PROP_STATIC, emitter.addStringConstant("value"));
+				for (const flag of ["writable", "enumerable", "configurable"]) {
+					emitter.emit(Op.PUSH_TRUE, 0);
+					emitter.emit(Op.SET_PROP_STATIC, emitter.addStringConstant(flag));
+				}
+				emitter.emit(Op.PUSH_CONST, nameIdx);
+				emitter.emit(Op.SWAP, 0);
+				emitter.emit(Op.DEFINE_OWN_PROPERTY, 0);
+				continue;
+			}
+
+			// Preserve the existing accessor/generator path. Numeric accessors
+			// remain unsupported until object-specific descriptors are handled.
+			emitter.emit(Op.DUP, 0);
+			ctx.compileNestedFunction(method, emitter, scope);
 			if (method.node.kind === "get") {
 				emitter.emit(Op.DEFINE_GETTER, nameIdx);
 			} else if (method.node.kind === "set") {

@@ -132,13 +132,13 @@ export function superKey(ctx: HandlerCtx): JsNode {
 // --- Closure IIFE builders ---
 
 /**
- * Build an arrow-function closure IIFE (captures outer this + scope).
+ * Build an arrow-function closure IIFE (captures scope, this, new.target and home).
  *
  * ```js
- * (function(u,cs,ct){
- *   if(u.s) return async function(..._a){ return execAsync(u,_a,cs,ct); };
- *   return function(..._a){ return exec(u,_a,cs,ct); };
- * })(_cu, SC, TV)
+ * (function(u,cs,ct,nt,ho){
+ *   if(u.s) return async function(..._a){ return execAsync(u,_a,cs,ct,nt,ho); };
+ *   return function(..._a){ return exec(u,_a,cs,ct,nt,ho); };
+ * })(_cu, SC, TV, NT, HO)
  * ```
  *
  * @param ctx - Handler context with exec/execAsync names and SC/TV
@@ -152,12 +152,14 @@ export function buildArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 				id(ctx.t("_a")),
 				id("cs"),
 				id("ct"),
+				id("nt"),
+				id("ho"),
 			])
 		);
 	return call(
 		fnExpr(
 			undefined,
-			["u", "cs", "ct"],
+			["u", "cs", "ct", "nt", "ho"],
 			[
 				ifStmt(member(id("u"), "s"), [
 					returnStmt(
@@ -176,7 +178,7 @@ export function buildArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 				),
 			]
 		),
-		[id(ctx.t("_cu")), id(ctx.SC), id(ctx.TV)]
+		[id(ctx.t("_cu")), id(ctx.SC), id(ctx.TV), id(ctx.NT), id(ctx.HO)]
 	);
 }
 

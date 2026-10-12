@@ -35,6 +35,7 @@ import {
 	obj,
 	arr,
 	newExpr,
+	throwStmt,
 	ternary,
 	update,
 	BOp,
@@ -211,23 +212,41 @@ function INSTANCEOF(ctx: HandlerCtx): JsNode[] {
  * ```
  * var sp2=HO?Object.getPrototypeOf(HO):Object.getPrototypeOf(Object.getPrototypeOf(TV));
  * var key=O>=0?C[O]:X();
- * W(sp2?sp2[key]:void 0);break;
+ * W(Reflect.get(sp2,key,TV));break;
  * ```
  */
 function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
+		// A super Reference retains its raw key: GetValue and PutValue each
+		// perform ToPropertyKey, with plain assignment coercing after the RHS.
+		ifStmt(bin(BOp.Seq, id(ctx.O), lit(-2)), [
+			varDecl(ctx.local("superProto"), superProto(ctx)),
+			varDecl(ctx.local("propKey"), ctx.pop()),
+			exprStmt(ctx.push(arr(
+				id(ctx.local("superProto")),
+				id(ctx.local("propKey")),
+				id(ctx.TV)
+			))),
+			breakStmt(),
+		]),
+		ifStmt(bin(BOp.Seq, id(ctx.O), lit(-3)), [
+			varDecl(ctx.local("superReference"), ctx.pop()),
+			exprStmt(ctx.push(call(member(id("Reflect"), "get"), [
+				index(id(ctx.local("superReference")), lit(0)),
+				index(id(ctx.local("superReference")), lit(1)),
+				index(id(ctx.local("superReference")), lit(2)),
+			]))),
+			breakStmt(),
+		]),
 		varDecl(ctx.local("superProto"), superProto(ctx)),
 		varDecl(ctx.local("propKey"), superKey(ctx)),
 		exprStmt(
 			ctx.push(
-				ternary(
+				call(member(id("Reflect"), "get"), [
 					id(ctx.local("superProto")),
-					index(
-						id(ctx.local("superProto")),
-						id(ctx.local("propKey"))
-					),
-					un(UOp.Void, lit(0))
-				)
+					id(ctx.local("propKey")),
+					id(ctx.TV),
+				])
 			)
 		),
 		breakStmt(),
@@ -241,24 +260,22 @@ function GET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
  * var val=X();
  * var sp2=HO?Object.getPrototypeOf(HO):Object.getPrototypeOf(Object.getPrototypeOf(TV));
  * var key=O>=0?C[O]:X();
- * if(sp2)sp2[key]=val;W(val);break;
+ * var ok=Reflect.set(sp2,key,val,TV);if(!ok&&U.st)throw new TypeError(...);W(val);break;
  * ```
  */
 function SET_SUPER_PROP(ctx: HandlerCtx): JsNode[] {
 	return [
 		varDecl(ctx.local("value"), ctx.pop()),
-		varDecl(ctx.local("superProto"), superProto(ctx)),
-		varDecl(ctx.local("propKey"), superKey(ctx)),
-		ifStmt(id(ctx.local("superProto")), [
-			exprStmt(
-				assign(
-					index(
-						id(ctx.local("superProto")),
-						id(ctx.local("propKey"))
-					),
-					id(ctx.local("value"))
-				)
-			),
+		varDecl(ctx.local("superReference"), ternary(
+			bin(BOp.Seq, id(ctx.O), lit(-2)), ctx.pop(),
+			arr(superProto(ctx), superKey(ctx), id(ctx.TV))
+		)),
+		varDecl(ctx.local("setSucceeded"), call(member(id("Reflect"), "set"), [
+			index(id(ctx.local("superReference")), lit(0)), index(id(ctx.local("superReference")), lit(1)),
+			id(ctx.local("value")), index(id(ctx.local("superReference")), lit(2)),
+		])),
+		ifStmt(bin(BOp.And, un(UOp.Not, id(ctx.local("setSucceeded"))), member(id(ctx.U), "st")), [
+			throwStmt(newExpr(id("TypeError"), [lit("Cannot set super property")])),
 		]),
 		exprStmt(ctx.push(id(ctx.local("value")))),
 		breakStmt(),
@@ -330,9 +347,13 @@ function DEFINE_OWN_PROPERTY(ctx: HandlerCtx): JsNode[] {
 	];
 }
 
-/** `W({});break;` */
+/** Operand 1 creates a null-prototype internal record without calling mutable intrinsics. */
 function NEW_OBJECT(ctx: HandlerCtx): JsNode[] {
-	return [exprStmt(ctx.push(obj())), breakStmt()];
+	return [exprStmt(ctx.push(ternary(
+		bin(BOp.Seq, id(ctx.O), lit(1)),
+		obj(["__proto__", lit(null)]),
+		obj()
+	))), breakStmt()];
 }
 
 /** `W([]);break;` */

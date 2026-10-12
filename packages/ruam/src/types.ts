@@ -126,12 +126,12 @@ export interface VmObfuscationOptions {
 	 * Replace arithmetic and bitwise operations in the interpreter with
 	 * equivalent mixed boolean-arithmetic (MBA) expressions.
 	 *
-	 * Infrastructure operations (stack pointer, IP, indices) are transformed
-	 * directly. User-value arithmetic (`+`, `-`) is wrapped with a runtime
-	 * int32 guard that uses the MBA path for integers and falls back to
-	 * the clean operator for floats, strings, etc.
+	 * Repeated operands are limited to handler-local identifiers and numeric
+	 * literals. Both arithmetic and bitwise identities use a primitive Number
+	 * int32 guard, falling back to the original operator for other values.
+	 * Arithmetic with zero also falls back to preserve signed zero.
 	 *
-	 * MBA expressions are nested to depth 2 for additional obfuscation.
+	 * A single pass avoids repeatedly expanding generated guards.
 	 */
 	mixedBooleanArithmetic?: boolean;
 

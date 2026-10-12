@@ -345,6 +345,12 @@ const output = obfuscateCode(source, {
   targetMode: "root",
 });</code></pre>
 
+<h3><code>obfuscateCodeWithReport(source, options?, qualification?)</code></h3>
+
+<p>Returns <code>{ code, report }</code> with selected-root compilation outcomes and bytecode-unit counts. By default it throws <code>IncompleteCompilationError</code> if no roots are selected, a selected root falls back to ordinary JavaScript, or its units depend on known unsupported generator-resumption handlers. The error carries its report. Use <code>{ requireCompleteSelection: false }</code> as the third argument only when intentionally inspecting partial builds. Locations refer to the source after optional identifier preprocessing.</p>
+
+<p>A complete selection means the selected roots compiled; it does not certify all source behavior, native stubs, unselected code, or resistance to recovery. The existing <code>obfuscateCode</code> API retains its warning-and-fallback behavior.</p>
+
 <h3><code>obfuscateFile(inputPath, outputPath, options?)</code></h3>
 
 <p>Reads a file, obfuscates it, and writes the result. Returns a <code>Promise&lt;void&gt;</code>.</p>

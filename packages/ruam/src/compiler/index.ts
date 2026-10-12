@@ -83,6 +83,7 @@ const SCOPE_DEPENDENT_OPS: ReadonlySet<Op> = new Set<Op>([
 	Op.DELETE_SCOPED,
 	// Capture the scope into a closure (forwarded as the child's outer scope).
 	Op.NEW_CLOSURE,
+	Op.MAKE_METHOD,
 	Op.NEW_FUNCTION,
 	Op.NEW_ARROW,
 	Op.NEW_ASYNC,
@@ -165,7 +166,8 @@ export interface CompileContext {
 	compileNestedFunction(
 		fnPath: NodePath<t.Function>,
 		emitter: Emitter,
-		parentScope: ScopeAnalyzer
+		parentScope: ScopeAnalyzer,
+		method?: boolean
 	): void;
 	compileClassExpression(
 		classPath: NodePath<t.ClassExpression>,
@@ -315,11 +317,11 @@ function compileFunctionInner(
 		slotMap,
 		blockDepth: 0,
 
-		compileNestedFunction(innerFnPath, parentEmitter, _parentScope) {
+		compileNestedFunction(innerFnPath, parentEmitter, _parentScope, method = false) {
 			const childUnit = compileFunctionInner(innerFnPath, allUnits);
 			allUnits.push(childUnit);
 			const idIdx = parentEmitter.addStringConstant(childUnit.id);
-			parentEmitter.emit(Op.NEW_CLOSURE, idIdx);
+			parentEmitter.emit(method ? Op.MAKE_METHOD : Op.NEW_CLOSURE, idIdx);
 		},
 
 		compileClassExpression(classPath, parentEmitter, parentScope) {
@@ -565,21 +567,11 @@ function compileRestParam(
 // Utility helpers
 // ---------------------------------------------------------------------------
 
-/** Detect whether the function body starts with `"use strict"`. */
+/** Include Babel directives and strictness inherited from functions/classes/modules. */
 function detectStrict(fnPath: NodePath<t.Function>): boolean {
-	const body = fnPath.get("body");
-	if (!body.isBlockStatement()) return false;
-	const stmts = body.get("body");
-	if (stmts.length > 0) {
-		const first = stmts[0]!;
-		if (first.isExpressionStatement()) {
-			const expr = first.node.expression;
-			if (expr.type === "StringLiteral" && expr.value === "use strict") {
-				return true;
-			}
-		}
-	}
-	return false;
+	// Starting at the body includes this function's own directive prologue;
+	// querying the function path itself starts at its parent in Babel.
+	return fnPath.get("body").isInStrictMode();
 }
 
 /** Ensure the instruction stream ends with a return instruction. */
