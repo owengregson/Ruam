@@ -1,5 +1,5 @@
 import { describe, it, expect } from "bun:test";
-import { obfuscateCode } from "../src/transform.js";
+import { obfuscateCode, compileNativeCandidateCode } from "../src/transform.js";
 import type { VmObfuscationOptions } from "../src/types.js";
 import vm from "node:vm";
 
@@ -91,7 +91,14 @@ export function evalObfuscated(
 	source: string,
 	options?: VmObfuscationOptions
 ): unknown {
-	const obfuscated = obfuscateCode(source, {
+	// The same behavioral corpus can exercise the experimental backend. Only
+	// tests calling this helper participate; direct production API tests keep
+	// testing the VM. VM protection flags do not apply to this compiler experiment.
+	const backend = process.env.RUAM_TEST_BACKEND ?? "vm";
+	if (backend !== "vm" && backend !== "native-candidate") throw new Error(`Unknown test backend: ${backend}`);
+	const obfuscated = backend === "native-candidate"
+		? compileNativeCandidateCode(source, { targetMode: options?.targetMode, target: options?.target, seed: 41 }).code
+		: obfuscateCode(source, {
 		targetMode: "root",
 		encryptBytecode: false,
 		preprocessIdentifiers: false,
