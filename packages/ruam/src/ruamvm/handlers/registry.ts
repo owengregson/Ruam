@@ -68,6 +68,7 @@ export interface HandlerCtx {
 	load: Name; // loader function name
 	spreadSym: Name; // spread marker Symbol name
 	hop: Name; // cached Object.prototype.hasOwnProperty reference
+	defineProperty: Name; // cached intrinsic for language-level definitions
 	depth: Name; // recursion depth counter
 	callStack: Name; // call stack for error messages
 	dbg: Name; // debug log function name
@@ -224,6 +225,7 @@ export function makeHandlerCtx(
 		load: names.load,
 		spreadSym: names.spreadSym,
 		hop: names.hop,
+		defineProperty: names.defineProperty,
 		depth: names.depth,
 		callStack: names.callStack,
 		dbg: names.dbg,

@@ -335,13 +335,11 @@ function DEFINE_OWN_PROPERTY(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.local("descriptor"), ctx.pop()),
 		varDecl(ctx.local("propKey"), ctx.pop()),
 		varDecl(ctx.local("object"), ctx.pop()),
-		exprStmt(
-			call(member(id("Object"), "defineProperty"), [
-				id(ctx.local("object")),
-				id(ctx.local("propKey")),
-				id(ctx.local("descriptor")),
-			])
-		),
+		ifStmt(bin(BOp.Seq, id(ctx.O), lit(1)), [
+			exprStmt(call(id(ctx.defineProperty), [id(ctx.local("object")), id(ctx.local("propKey")), id(ctx.local("descriptor"))])),
+		], [
+			exprStmt(call(member(id("Object"), "defineProperty"), [id(ctx.local("object")), id(ctx.local("propKey")), id(ctx.local("descriptor"))])),
+		]),
 		exprStmt(ctx.push(id(ctx.local("object")))),
 		breakStmt(),
 	];
