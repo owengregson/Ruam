@@ -16,12 +16,18 @@ The runner evaluates identical public deterministic histories against ordinary b
 
 The [checked-in report](preflight-report.json) records the actual results. Passing this control is not evidence of equal protected coverage, a protection multiplier, a successful A1 transformation, or a source-blind AI trial. The model author saw repository source while creating the attack. Script execution uses no model; authoring tokens and analyst effort remain unknown. The frozen candidate tickets in the root inventory have not advanced past admission and are not replaced by this easy control.
 
+A second control implements a bounded version of the proposed native backend: the existing `deriveSeed` function is emitted as four continuation blocks. An artifact-only attacker reconstructs the natural loop, removes the continuation machinery and applies a partial character-mixing edit. The report includes the exact generated and recovered code. Ordinary, lowered, recovered and edited variants are checked on boundary values, generated UTF-16 strings, coercion hooks, exceptions, proxies and reentrant calls. An actual imported-module oracle independently checks the source extraction; wrong recovery and unedited candidates must fail.
+
+This control rejects continuation flattening alone as protection for this function. It does not implement a general backend or qualify A1. Source-text reflection has a recorded compatibility failure; removing a VM does not automatically establish full JavaScript equivalence. Local AST operation timings exclude unknown authoring/setup costs and are not an AI-resistance multiplier.
+
+The reflection mismatch is against original source semantics. Current Ruam also rewrites selected function bodies, so this case alone does not establish a regression against its existing contract. The protection rejection independently rests on recovery within the tested non-source-reflective control. The compatibility requirement remains parity with current Ruam.
+
 ## Reproduce
 
 From `packages/ruam`:
 
 ```sh
-bun test test/algorithm-state/preflight.test.ts test/algorithm-state/sidecar.test.ts
+bun test test/algorithm-state
 bun run qualify:algorithm-state --report-only
 ```
 

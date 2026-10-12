@@ -14,4 +14,14 @@ The coordinator implemented the frozen-audit verifier and report runner. Separat
 
 The unchanged baseline passed 2,397 tests with zero failures. Focused preflight tests exercise stale/malformed evidence, provenance, output safety and the refusal to turn rejected roots into release approval. The executable sidecar tests compare public histories and require a plausible but incorrect patch to fail. Library build and monorepo typechecking are run before PR publication; GitHub CI must pass on the reviewed PR revision before merge.
 
-No production VM implementation is replaced by this change. The reports explicitly retain NO-GO, full-current-JavaScript scope, unqualified protection, and no actual AI-trial credit. The separate native-lowering experiment is reviewed and published independently.
+No production VM implementation is replaced by this change. The reports explicitly retain NO-GO, full-current-JavaScript scope, unqualified protection, and no actual AI-trial credit. PR #14 passed CI, CodeQL and dependency review on its reviewed revision before merge.
+
+## Native-lowering control review
+
+The follow-up experiment was reviewed separately by two agents and the coordinator. A plain XOR-to-addition rewrite changed numeric coercion semantics for nonstandard character providers. The edit now explicitly preserves Number coercion, and its owner oracle is constructed independently of the attack edit.
+
+A second finding showed that extracting an ESM function into an ordinary script silently removed strict-mode behavior. Both the lowered code and its initial extracted oracle shared the defect. The control now emits strict scripts and checks the actual imported ESM function independently. The review reproducer using a sloppy callback's `arguments.callee.caller` agrees across imported, extracted, lowered and recovered versions.
+
+The reviewers also demonstrated a callback that inspects `deriveSeed.toString()` and distinguishes the continuation realization. This is retained as a known compatibility failure and a regression test, rather than excluded silently or described as full-scope equivalence. These controls justify rejecting simple continuation flattening as the replacement's protection mechanism; they do not certify the broader G1 proposal.
+
+The combined qualification tests pass 14 tests and 125 assertions. Monorepo typechecking passes. The regenerated report validates lowering, recovery and the partial edit on 378 scenarios each, records the separate reflection counterexample, and binds all eight qualification inputs to their current hashes. A default qualification run writes its report and exits 2 for NO-GO; `--report-only` exits 0 without authorizing release.

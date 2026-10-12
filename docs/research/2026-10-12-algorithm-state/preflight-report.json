@@ -1,6 +1,6 @@
 {
   "schema": "ruam-algorithm-state-preflight-v1",
-  "generatedAt": "2026-10-12T09:44:51.474Z",
+  "generatedAt": "2026-10-12T09:59:36.283Z",
   "decision": {
     "status": "NO-GO",
     "stage": "admission",
@@ -51,7 +51,7 @@
     ]
   },
   "provenance": {
-    "gitHead": "f47f2783c5cbbc792910de85ba9c48a66cb1eb2c",
+    "gitHead": "239149502dcea9d03d763e5e5dbf6e7751a2f6a0",
     "baselineCommit": "f47f2783c5cbbc792910de85ba9c48a66cb1eb2c",
     "baselineSourceBlobsVerified": true,
     "experimentId": "algorithm-state-a1-2026-10-12",
@@ -59,9 +59,11 @@
       "docs/research/2026-10-12-algorithm-state/roots.json": "f908ef15b2bb869a87810b11ba2c9c850e1d01a48d70fdcc5ebf9ef210999652",
       "packages/ruam/src/algorithm-state/qualification/preflight.ts": "fa657873a2272bb9612509ca1865ef45b8b4309d7d870d0698ff05ec8f44e5c8",
       "packages/ruam/src/algorithm-state/qualification/sidecar.ts": "53d7d0f30a7f1445fd82e1ff9aae544395e8d2e96590c37da5f4cb253787fdb0",
-      "packages/ruam/scripts/algorithm-state-qualify.ts": "4c10c1d62f2f81e7e42b32d7705577675966906ffbe5d9d17021773e5bd923e5",
+      "packages/ruam/scripts/algorithm-state-qualify.ts": "741ad280d203cd22842a8eab1752655ef0aa55b16f3c95f247c63c8b2e6d4b93",
       "packages/ruam/test/algorithm-state/preflight.test.ts": "994de85d197af3fd5148b9de0cd93767589743511447722c4c7193680009d465",
-      "packages/ruam/test/algorithm-state/sidecar.test.ts": "0011f6229a38dd66e5238d1ab3d5808686d66e71bb01926a6c7a9888a4ad700e"
+      "packages/ruam/test/algorithm-state/sidecar.test.ts": "0011f6229a38dd66e5238d1ab3d5808686d66e71bb01926a6c7a9888a4ad700e",
+      "packages/ruam/src/algorithm-state/qualification/native-lowering.ts": "0d611f1d620d3fce5d1710d261d4e40bb487e50de978a261cdfc8ea8568f7cd9",
+      "packages/ruam/test/algorithm-state/native-lowering.test.ts": "e871d9987312d40b82420b7571f6ebe5d64a6161733488ea96a280e97c5a3c86"
     },
     "frozenSources": [
       {
@@ -564,11 +566,11 @@
       {
         "id": "ordinary-bundled",
         "buildResources": {
-          "wallMs": 41.60050000000001,
-          "cpuUserMicros": 18217,
-          "cpuSystemMicros": 5219,
-          "heapUsedDeltaBytes": 6890619,
-          "processPeakRssBytes": 92225536
+          "wallMs": 62.71287499999994,
+          "cpuUserMicros": 25354,
+          "cpuSystemMicros": 8389,
+          "heapUsedDeltaBytes": 1804543,
+          "processPeakRssBytes": 90406912
         },
         "compilerOptions": {
           "bundle": true,
@@ -612,106 +614,106 @@
         },
         "attackInstallationResources": [
           {
-            "wallMs": 0.05979200000001583,
-            "cpuUserMicros": 53,
-            "cpuSystemMicros": 6,
+            "wallMs": 0.21762499999999818,
+            "cpuUserMicros": 113,
+            "cpuSystemMicros": 30,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 94535680
+            "processPeakRssBytes": 92930048
           },
           {
-            "wallMs": 0.1715830000000551,
-            "cpuUserMicros": 17,
-            "cpuSystemMicros": 10,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 98369536
-          },
-          {
-            "wallMs": 0.15299999999979264,
-            "cpuUserMicros": 18,
-            "cpuSystemMicros": 35,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 102645760
-          },
-          {
-            "wallMs": 0.017166999999972177,
-            "cpuUserMicros": 10,
-            "cpuSystemMicros": 6,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 107167744
-          },
-          {
-            "wallMs": 0.03337499999997817,
-            "cpuUserMicros": 15,
-            "cpuSystemMicros": 10,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 111738880
-          },
-          {
-            "wallMs": 0.15208400000005895,
-            "cpuUserMicros": 14,
-            "cpuSystemMicros": 28,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 116326400
-          },
-          {
-            "wallMs": 0.05641600000012659,
-            "cpuUserMicros": 12,
-            "cpuSystemMicros": 20,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 120799232
-          },
-          {
-            "wallMs": 0.018917000000101325,
-            "cpuUserMicros": 11,
-            "cpuSystemMicros": 5,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 126697472
-          },
-          {
-            "wallMs": 0.049790999999913765,
-            "cpuUserMicros": 17,
-            "cpuSystemMicros": 17,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 129892352
-          },
-          {
-            "wallMs": 0.014042000000017651,
-            "cpuUserMicros": 8,
-            "cpuSystemMicros": 5,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 130875392
-          },
-          {
-            "wallMs": 0.05733300000019881,
-            "cpuUserMicros": 14,
-            "cpuSystemMicros": 15,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 131432448
-          },
-          {
-            "wallMs": 0.020582999999987805,
-            "cpuUserMicros": 12,
+            "wallMs": 0.07466699999986304,
+            "cpuUserMicros": 23,
             "cpuSystemMicros": 7,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 135135232
+            "processPeakRssBytes": 96845824
+          },
+          {
+            "wallMs": 0.09075000000007094,
+            "cpuUserMicros": 14,
+            "cpuSystemMicros": 14,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 100941824
+          },
+          {
+            "wallMs": 0.02316700000005767,
+            "cpuUserMicros": 13,
+            "cpuSystemMicros": 8,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 105332736
+          },
+          {
+            "wallMs": 0.02729100000010476,
+            "cpuUserMicros": 17,
+            "cpuSystemMicros": 8,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 109936640
+          },
+          {
+            "wallMs": 0.031584000000066226,
+            "cpuUserMicros": 17,
+            "cpuSystemMicros": 12,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 114425856
+          },
+          {
+            "wallMs": 0.04462499999999636,
+            "cpuUserMicros": 15,
+            "cpuSystemMicros": 13,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 118882304
+          },
+          {
+            "wallMs": 0.058749999999918145,
+            "cpuUserMicros": 17,
+            "cpuSystemMicros": 22,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 124026880
+          },
+          {
+            "wallMs": 0.024499999999989086,
+            "cpuUserMicros": 14,
+            "cpuSystemMicros": 7,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 127270912
+          },
+          {
+            "wallMs": 0.019333000000187894,
+            "cpuUserMicros": 11,
+            "cpuSystemMicros": 6,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 128090112
+          },
+          {
+            "wallMs": 0.07349999999996726,
+            "cpuUserMicros": 18,
+            "cpuSystemMicros": 66,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 129531904
+          },
+          {
+            "wallMs": 0.020375000000058208,
+            "cpuUserMicros": 12,
+            "cpuSystemMicros": 5,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 132562944
           }
         ],
         "evaluationResources": {
-          "wallMs": 278.577,
-          "cpuUserMicros": 212444,
-          "cpuSystemMicros": 47132,
-          "heapUsedDeltaBytes": 2879676,
-          "processPeakRssBytes": 135462912
+          "wallMs": 404.3932500000001,
+          "cpuUserMicros": 286363,
+          "cpuSystemMicros": 74737,
+          "heapUsedDeltaBytes": 2662378,
+          "processPeakRssBytes": 132775936
         }
       },
       {
         "id": "optimized-bundled",
         "buildResources": {
-          "wallMs": 38.66833299999985,
-          "cpuUserMicros": 6390,
-          "cpuSystemMicros": 1629,
-          "heapUsedDeltaBytes": 1373541,
-          "processPeakRssBytes": 135610368
+          "wallMs": 30.455833999999868,
+          "cpuUserMicros": 12515,
+          "cpuSystemMicros": 4626,
+          "heapUsedDeltaBytes": 1378450,
+          "processPeakRssBytes": 132907008
         },
         "compilerOptions": {
           "bundle": true,
@@ -755,106 +757,106 @@
         },
         "attackInstallationResources": [
           {
-            "wallMs": 0.16341600000009748,
-            "cpuUserMicros": 85,
-            "cpuSystemMicros": 19,
+            "wallMs": 0.022375000000010914,
+            "cpuUserMicros": 12,
+            "cpuSystemMicros": 7,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 135741440
+            "processPeakRssBytes": 132956160
           },
           {
-            "wallMs": 0.024292000000059488,
-            "cpuUserMicros": 18,
-            "cpuSystemMicros": 4,
+            "wallMs": 0.029583999999886146,
+            "cpuUserMicros": 16,
+            "cpuSystemMicros": 11,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 135905280
+            "processPeakRssBytes": 133103616
           },
           {
-            "wallMs": 0.014167000000043117,
-            "cpuUserMicros": 8,
-            "cpuSystemMicros": 4,
+            "wallMs": 0.025416999999833934,
+            "cpuUserMicros": 15,
+            "cpuSystemMicros": 7,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 136069120
+            "processPeakRssBytes": 133185536
           },
           {
-            "wallMs": 0.03745899999989888,
-            "cpuUserMicros": 20,
+            "wallMs": 0.023708000000169704,
+            "cpuUserMicros": 13,
+            "cpuSystemMicros": 8,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 133251072
+          },
+          {
+            "wallMs": 0.026291999999557447,
+            "cpuUserMicros": 15,
             "cpuSystemMicros": 9,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 136216576
+            "processPeakRssBytes": 133693440
           },
           {
-            "wallMs": 0.07458300000007512,
-            "cpuUserMicros": 15,
-            "cpuSystemMicros": 5,
+            "wallMs": 0.027625000000170985,
+            "cpuUserMicros": 18,
+            "cpuSystemMicros": 7,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 136642560
+            "processPeakRssBytes": 134217728
           },
           {
-            "wallMs": 0.04275000000006912,
-            "cpuUserMicros": 15,
-            "cpuSystemMicros": 14,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 137216000
-          },
-          {
-            "wallMs": 0.016415999999935593,
-            "cpuUserMicros": 9,
-            "cpuSystemMicros": 6,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 137674752
-          },
-          {
-            "wallMs": 0.020125000000007276,
-            "cpuUserMicros": 12,
-            "cpuSystemMicros": 6,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 139395072
-          },
-          {
-            "wallMs": 0.02295800000001691,
-            "cpuUserMicros": 9,
-            "cpuSystemMicros": 6,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 141459456
-          },
-          {
-            "wallMs": 0.029124999999794454,
+            "wallMs": 0.027999999999792635,
             "cpuUserMicros": 16,
             "cpuSystemMicros": 10,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 141836288
+            "processPeakRssBytes": 134840320
           },
           {
-            "wallMs": 0.02304099999992104,
+            "wallMs": 0.03949999999986176,
+            "cpuUserMicros": 18,
+            "cpuSystemMicros": 16,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 136790016
+          },
+          {
+            "wallMs": 0.017291999999997643,
+            "cpuUserMicros": 10,
+            "cpuSystemMicros": 5,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 139100160
+          },
+          {
+            "wallMs": 0.023083000000042375,
             "cpuUserMicros": 12,
             "cpuSystemMicros": 8,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 142196736
+            "processPeakRssBytes": 139509760
           },
           {
-            "wallMs": 0.24820900000008805,
-            "cpuUserMicros": 103,
-            "cpuSystemMicros": 29,
+            "wallMs": 0.022791999999753898,
+            "cpuUserMicros": 12,
+            "cpuSystemMicros": 9,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 143605760
+            "processPeakRssBytes": 140050432
+          },
+          {
+            "wallMs": 0.020666999999775726,
+            "cpuUserMicros": 13,
+            "cpuSystemMicros": 6,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 141246464
           }
         ],
         "evaluationResources": {
-          "wallMs": 281.51933399999984,
-          "cpuUserMicros": 226146,
-          "cpuSystemMicros": 36290,
-          "heapUsedDeltaBytes": 2713184,
-          "processPeakRssBytes": 143704064
+          "wallMs": 313.88425000000007,
+          "cpuUserMicros": 269353,
+          "cpuSystemMicros": 61634,
+          "heapUsedDeltaBytes": 2788804,
+          "processPeakRssBytes": 141344768
         }
       },
       {
         "id": "current-vm-max",
         "buildResources": {
-          "wallMs": 736.7807080000001,
-          "cpuUserMicros": 735041,
-          "cpuSystemMicros": 110901,
-          "heapUsedDeltaBytes": 21863550,
-          "processPeakRssBytes": 191496192
+          "wallMs": 1162.912875,
+          "cpuUserMicros": 1102140,
+          "cpuSystemMicros": 211852,
+          "heapUsedDeltaBytes": 20837611,
+          "processPeakRssBytes": 189726720
         },
         "compilerOptions": {
           "preset": "max",
@@ -865,8 +867,8 @@
           "debugProtection:false disables periodic anti-debugging; all other max preset options use their current defaults.",
           "Current VM uses random build entropy; this is one actual build, not a fixed-seed repeated sample."
         ],
-        "codeSha256": "6344447863142ff803ffd18ba8e2f8a1595e9715b4e807f5e5837281cc3ab125",
-        "codeBytes": 116615,
+        "codeSha256": "8272f9c0220c8aea0a354edc284b9b5a4dad1e442b391d4d711c3db99d3aac9b",
+        "codeBytes": 122794,
         "ownerOracleSha256": "9c4839b60431284660838aafbae7e94724caa1e4d3786f83e7080b7c3c246b85",
         "compilerWarningsComplete": true,
         "resourceMeasurement": "Isolated VM worker process; process-level CPU and heap, excluding parent setup.",
@@ -899,104 +901,332 @@
         },
         "attackInstallationResources": [
           {
-            "wallMs": 0.10962500000005093,
-            "cpuUserMicros": 89,
-            "cpuSystemMicros": 18,
+            "wallMs": 0.71550000000002,
+            "cpuUserMicros": 541,
+            "cpuSystemMicros": 166,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 202391552
+            "processPeakRssBytes": 198443008
           },
           {
-            "wallMs": 1.2859999999998308,
-            "cpuUserMicros": 248,
-            "cpuSystemMicros": 51,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 209289216
-          },
-          {
-            "wallMs": 0.0779579999998532,
-            "cpuUserMicros": 40,
-            "cpuSystemMicros": 16,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 213401600
-          },
-          {
-            "wallMs": 0.0671669999999267,
-            "cpuUserMicros": 136,
+            "wallMs": 0.13025000000016007,
+            "cpuUserMicros": 95,
             "cpuSystemMicros": 23,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 217202688
+            "processPeakRssBytes": 206110720
           },
           {
-            "wallMs": 0.046291999999994005,
-            "cpuUserMicros": 41,
-            "cpuSystemMicros": 5,
+            "wallMs": 0.06524999999965075,
+            "cpuUserMicros": 94,
+            "cpuSystemMicros": 23,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 222429184
+            "processPeakRssBytes": 207552512
           },
           {
-            "wallMs": 0.24274999999988722,
-            "cpuUserMicros": 76,
-            "cpuSystemMicros": 37,
+            "wallMs": 0.24974999999994907,
+            "cpuUserMicros": 101,
+            "cpuSystemMicros": 42,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 223297536
+            "processPeakRssBytes": 215728128
           },
           {
-            "wallMs": 0.0808340000003227,
-            "cpuUserMicros": 58,
+            "wallMs": 0.10525000000006912,
+            "cpuUserMicros": 231,
             "cpuSystemMicros": 15,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 225771520
+            "processPeakRssBytes": 216907776
           },
           {
-            "wallMs": 0.04087500000014188,
-            "cpuUserMicros": 33,
-            "cpuSystemMicros": 5,
+            "wallMs": 0.09529199999997218,
+            "cpuUserMicros": 123,
+            "cpuSystemMicros": 22,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 226934784
+            "processPeakRssBytes": 218021888
           },
           {
-            "wallMs": 0.08895899999970425,
-            "cpuUserMicros": 59,
+            "wallMs": 0.07179199999973207,
+            "cpuUserMicros": 61,
+            "cpuSystemMicros": 7,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 219136000
+          },
+          {
+            "wallMs": 0.09245900000041729,
+            "cpuUserMicros": 159,
+            "cpuSystemMicros": 25,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 221593600
+          },
+          {
+            "wallMs": 0.2957909999995536,
+            "cpuUserMicros": 103,
+            "cpuSystemMicros": 42,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 223920128
+          },
+          {
+            "wallMs": 0.4763329999996131,
+            "cpuUserMicros": 244,
+            "cpuSystemMicros": 110,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 225050624
+          },
+          {
+            "wallMs": 0.06212500000037835,
+            "cpuUserMicros": 129,
+            "cpuSystemMicros": 18,
+            "heapUsedDeltaBytes": 0,
+            "processPeakRssBytes": 227065856
+          },
+          {
+            "wallMs": 0.10637500000029831,
+            "cpuUserMicros": 64,
             "cpuSystemMicros": 12,
             "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 230588416
-          },
-          {
-            "wallMs": 0.1608329999999114,
-            "cpuUserMicros": 57,
-            "cpuSystemMicros": 12,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 231604224
-          },
-          {
-            "wallMs": 0.12349999999969441,
-            "cpuUserMicros": 62,
-            "cpuSystemMicros": 29,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 234979328
-          },
-          {
-            "wallMs": 0.2298329999998714,
-            "cpuUserMicros": 176,
-            "cpuSystemMicros": 58,
-            "heapUsedDeltaBytes": 0,
-            "processPeakRssBytes": 240238592
+            "processPeakRssBytes": 228032512
           }
         ],
         "evaluationResources": {
-          "wallMs": 2180.8653750000003,
-          "cpuUserMicros": 2397919,
-          "cpuSystemMicros": 340305,
-          "heapUsedDeltaBytes": 26944941,
-          "processPeakRssBytes": 244793344
+          "wallMs": 3421.0694169999997,
+          "cpuUserMicros": 3523129,
+          "cpuSystemMicros": 643098,
+          "heapUsedDeltaBytes": 21771865,
+          "processPeakRssBytes": 230113280
         }
       }
     ]
+  },
+  "nativeLowering": {
+    "format": "ruam-native-lowering-control-v1",
+    "status": "negative-control",
+    "releaseApproved": false,
+    "scope": "one existing deriveSeed function with tested non-source-reflective inputs/effects and an explicit known reflection failure; not an application, full-semantic compatibility or full-JavaScript qualification",
+    "source": {
+      "path": "packages/ruam/src/naming/scope.ts",
+      "sha256": "781a61862fd55e167846215084f535261988f3faed348d6e3cdbe51bbf87f204",
+      "constantsPath": "packages/ruam/src/constants.ts",
+      "constantsSha256": "29b11cdc6b4fb4ac9e412ccf8b83925a2ffe7026d928b245edd3fc86df1847ae",
+      "extractedFunctionSha256": "a3e3233aa28b99bf206f9a0e4a08c1e92a94e6188cd7c0a7c9ce93c722a8cbe1"
+    },
+    "harness": {
+      "path": "packages/ruam/src/algorithm-state/qualification/native-lowering.ts",
+      "sha256": "0d611f1d620d3fce5d1710d261d4e40bb487e50de978a261cdfc8ea8568f7cd9",
+      "sourceAndHarnessUnchangedAtEnd": true
+    },
+    "controlScope": {
+      "controlShapeRecognized": true,
+      "recognizedShape": "exact authored deriveSeed AST and literal imported FNV constants",
+      "runtimeInputsFiltered": false,
+      "sourceReflection": "not-preserved",
+      "fullSemanticCompatibility": false,
+      "generalCompiler": false,
+      "a1Admission": "not-evaluated"
+    },
+    "naming": {
+      "system": "NameRegistry",
+      "publicSeed": 0,
+      "selectorName": "qJM7",
+      "dependencies": [
+        {
+          "path": "packages/ruam/src/naming/registry.ts",
+          "sha256": "6ea2f8318c50ab846ed1e7a4864471363fdb9f02f758ed418fb0f6cabf476779"
+        },
+        {
+          "path": "packages/ruam/src/naming/token.ts",
+          "sha256": "32ff6ceb0683c89711c651f2f05ad0568d69cef02b4d1999133dff26f7eb6b41"
+        },
+        {
+          "path": "packages/ruam/src/naming/reserved.ts",
+          "sha256": "731c93a61074a6a0aa40d071f11a0e4400d89b22e55c2a722919075d9f211b01"
+        }
+      ],
+      "dependenciesUnchangedAtEnd": true,
+      "sourceAndConstantsDependencies": "hashed in source record",
+      "protectionCredit": false
+    },
+    "artifact": {
+      "sha256": "57aea0e3e97b6aa3cd350514bbfd7f1d76ce69b59f3bfec3c6ca2a91e4dbd34f",
+      "bytes": 695,
+      "code": "\"use strict\";\n\nconst FNV_OFFSET_BASIS = 2166136261;\nconst FNV_PRIME = 16777619;\nfunction deriveSeed(parentSeed, scopeId) {\n  let h, i;\n  let qJM7 = 17;\n  for (;;) {\n    switch (qJM7) {\n      case 17:\n        h = (parentSeed ^ FNV_OFFSET_BASIS) >>> 0;\n        i = 0;\n        qJM7 = 41;\n        break;\n      case 41:\n        if (i < scopeId.length) {\n          qJM7 = 83;\n        } else {\n          qJM7 = 109;\n        }\n        break;\n      case 83:\n        h = (h ^ scopeId.charCodeAt(i)) >>> 0;\n        h = Math.imul(h, FNV_PRIME) >>> 0;\n        i++;\n        qJM7 = 41;\n        break;\n      case 109:\n        return h;\n      default:\n        throw new Error(\"invalid continuation\");\n    }\n  }\n}"
+    },
+    "recovery": {
+      "kind": "artifact-only-static-natural-loop-reconstruction",
+      "sha256": "7aefc038ee8ac28a103bc3a79c6729c2c01aad1868bebe8a52513a9f28ab891d",
+      "bytes": 328,
+      "code": "\"use strict\";\n\nconst FNV_OFFSET_BASIS = 2166136261;\nconst FNV_PRIME = 16777619;\nfunction deriveSeed(parentSeed, scopeId) {\n  let h, i;\n  h = (parentSeed ^ FNV_OFFSET_BASIS) >>> 0;\n  i = 0;\n  while (i < scopeId.length) {\n    h = (h ^ scopeId.charCodeAt(i)) >>> 0;\n    h = Math.imul(h, FNV_PRIME) >>> 0;\n    i++;\n  }\n  return h;\n}",
+      "visitedBlocks": 4,
+      "validation": {
+        "status": "pass",
+        "cases": 378,
+        "mismatches": 0,
+        "failures": []
+      },
+      "resources": {
+        "wallMilliseconds": 11.058541000000332,
+        "cpuUserMilliseconds": 11.597,
+        "cpuSystemMilliseconds": 2.93
+      }
+    },
+    "partialEdit": {
+      "ticket": "Add each UTF-16 code unit modulo 2^32 instead of XOR at character mixing; preserve seed initialization, multiplication and observable effects.",
+      "classification": "easy-partial-edit-negative-control",
+      "sha256": "3100dedea431dcd14c1d813d8b6625fbce7373695634a21957bfb24e5eef6c2a",
+      "code": "\"use strict\";\n\nconst FNV_OFFSET_BASIS = 2166136261;\nconst FNV_PRIME = 16777619;\nfunction deriveSeed(parentSeed, scopeId) {\n  let h, i;\n  h = (parentSeed ^ FNV_OFFSET_BASIS) >>> 0;\n  i = 0;\n  while (i < scopeId.length) {\n    h = h + (scopeId.charCodeAt(i) | 0) >>> 0;\n    h = Math.imul(h, FNV_PRIME) >>> 0;\n    i++;\n  }\n  return h;\n}",
+      "validation": {
+        "status": "pass",
+        "cases": 378,
+        "mismatches": 0,
+        "failures": []
+      },
+      "resources": {
+        "wallMilliseconds": 7.8727080000007845,
+        "cpuUserMilliseconds": 9.529,
+        "cpuSystemMilliseconds": 2.24
+      }
+    },
+    "ordinaryBaseline": {
+      "sha256": "a3e3233aa28b99bf206f9a0e4a08c1e92a94e6188cd7c0a7c9ce93c722a8cbe1",
+      "bytes": 316,
+      "partialEdit": {
+        "validation": {
+          "status": "pass",
+          "cases": 378,
+          "mismatches": 0,
+          "failures": []
+        },
+        "resources": {
+          "wallMilliseconds": 4.214915999999903,
+          "cpuUserMilliseconds": 5.127,
+          "cpuSystemMilliseconds": 1.231
+        }
+      }
+    },
+    "correctness": {
+      "status": "pass",
+      "cases": 378,
+      "mismatches": 0,
+      "failures": []
+    },
+    "knownCompatibilityFailures": [
+      {
+        "id": "source-text-reflection",
+        "reason": "A callback observes generated function text. Lowering and recovery alter that text; unrestricted source reflection is not preserved, and current-VM reflection parity is not established.",
+        "validation": {
+          "status": "mismatch",
+          "cases": 1,
+          "mismatches": 1,
+          "failures": [
+            "source-text-reflection"
+          ]
+        },
+        "recoveryAgainstLowered": {
+          "status": "mismatch",
+          "cases": 1,
+          "mismatches": 1,
+          "failures": [
+            "source-text-reflection"
+          ]
+        },
+        "observations": {
+          "importedOriginal": {
+            "kind": "return",
+            "value": 3305896031,
+            "trace": []
+          },
+          "lowered": {
+            "kind": "return",
+            "value": 3322673650,
+            "trace": []
+          },
+          "recovered": {
+            "kind": "return",
+            "value": 3305896031,
+            "trace": []
+          }
+        }
+      }
+    ],
+    "importedModuleOracle": {
+      "original": {
+        "status": "pass",
+        "cases": 377,
+        "mismatches": 0,
+        "failures": []
+      },
+      "lowered": {
+        "status": "pass",
+        "cases": 377,
+        "mismatches": 0,
+        "failures": []
+      },
+      "excludes": [
+        {
+          "id": "native-imul-lookup",
+          "reason": "This scenario intentionally instruments realm-local Math; an imported module uses its own realm."
+        }
+      ]
+    },
+    "negativeControls": {
+      "uneditedAgainstEditOracle": {
+        "status": "mismatch",
+        "cases": 378,
+        "mismatches": 306,
+        "failures": [
+          "boundary-1",
+          "boundary-2",
+          "boundary-3",
+          "boundary-5",
+          "boundary-6",
+          "boundary-7",
+          "boundary-8",
+          "boundary-9"
+        ]
+      },
+      "wrongRecovery": {
+        "sha256": "a1ea566bda24bd39e71df941b5ebfd65b6aa4fbe84f132bb337261396d2e508e",
+        "validation": {
+          "status": "mismatch",
+          "cases": 378,
+          "mismatches": 347,
+          "failures": [
+            "boundary-0",
+            "boundary-1",
+            "boundary-2",
+            "boundary-3",
+            "boundary-4",
+            "boundary-5",
+            "boundary-6",
+            "boundary-7"
+          ]
+        }
+      }
+    },
+    "compilerResources": {
+      "wallMilliseconds": 149.68033300000025,
+      "cpuUserMilliseconds": 123.533,
+      "cpuSystemMilliseconds": 31.546
+    },
+    "effort": {
+      "authoringAnalystMinutes": null,
+      "modelAssistedAuthoringTokens": null,
+      "attackModelTokens": 0,
+      "reusableSetupMilliseconds": null,
+      "peakMemoryBytes": null,
+      "note": "Only automated local AST lowering/recovery/edit operation CPU and wall time were measured. Authoring/setup effort and peak memory remain unknown."
+    },
+    "evidenceLimits": [
+      "Public deterministic scenarios, not a blind campaign or universal equivalence proof.",
+      "Known source-reflection failure disqualifies unrestricted semantic compatibility; both lowering and recovery expose different function text.",
+      "Resource measurements exclude analyst implementation effort, which is unknown; no model attack was run.",
+      "This rejects continuation flattening alone as an adequate defense for this non-source-reflective control; it does not measure full-scope G1 or A1 resistance.",
+      "The node:vm runner executes trusted compiler and local attacker output; it is not a hostile-code sandbox."
+    ],
+    "decision": "reject-continuation-flattening-alone-for-this-control"
   },
   "limitations": [
     "The complete requested replacement is not implemented. Full existing JavaScript and protected-selection scope remains required.",
     "The frozen A1 pilot stops at admission; no A1 artifact, algorithm compiler, explanation trial or partial-edit protection result exists.",
     "Sidecar controls test a negative-control ticket on a rejected root; they do not score the frozen candidate ticket or measure A1 resistance.",
+    "The native-lowering control is one hand-specialized existing function with known observation limits, not a general backend or full-scope compatibility result.",
     "This is not a blinded AI campaign or proof that every future combined design fails. Unknown authoring and analyst effort remain unknown.",
     "Source hashes and exact Git blobs bind this manual audit to code; they do not prove the audit's semantic conclusions.",
     "Passing correctness controls cannot override a failed admission, full-scope compatibility, cost or protection gate."
