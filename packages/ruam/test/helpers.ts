@@ -95,9 +95,9 @@ export function evalObfuscated(
 	// tests calling this helper participate; direct production API tests keep
 	// testing the VM. VM protection flags do not apply to this compiler experiment.
 	const backend = process.env.RUAM_TEST_BACKEND ?? "vm";
-	if (backend !== "vm" && backend !== "native-candidate") throw new Error(`Unknown test backend: ${backend}`);
-	const obfuscated = backend === "native-candidate"
-		? compileNativeCandidateCode(source, { targetMode: options?.targetMode, target: options?.target, seed: 41 }).code
+	if (backend !== "vm" && backend !== "native-candidate" && backend !== "native-acyclic") throw new Error(`Unknown test backend: ${backend}`);
+	const obfuscated = backend !== "vm"
+		? compileNativeCandidateCode(source, { targetMode: options?.targetMode, target: options?.target, seed: 41, acyclicLowering: backend === "native-acyclic" }).code
 		: obfuscateCode(source, {
 		targetMode: "root",
 		encryptBytecode: false,

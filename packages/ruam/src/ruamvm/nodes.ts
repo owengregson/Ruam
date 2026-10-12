@@ -142,6 +142,7 @@ export type JsNode =
 	| FnDecl
 	| ExprStmt
 	| Block
+	| LabeledStmt
 	| IfStmt
 	| WhileStmt
 	| ForStmt
@@ -207,6 +208,11 @@ export interface Block {
 	type: "Block";
 	body: JsNode[];
 }
+export interface LabeledStmt {
+	type: "LabeledStmt";
+	label: Name;
+	body: JsNode[];
+}
 export interface IfStmt {
 	type: "IfStmt";
 	test: JsNode;
@@ -243,6 +249,7 @@ export interface CaseClause {
 }
 export interface BreakStmt {
 	type: "BreakStmt";
+	label?: Name;
 }
 export interface ContinueStmt {
 	type: "ContinueStmt";
@@ -470,8 +477,13 @@ export function caseClause(label: JsNode | null, body: JsNode[]): CaseClause {
 	return { type: "CaseClause", label, body };
 }
 
-export function breakStmt(): BreakStmt {
-	return { type: "BreakStmt" };
+export function breakStmt(label?: Name): BreakStmt {
+	return label === undefined ? { type: "BreakStmt" } : { type: "BreakStmt", label };
+}
+
+/** A native forward-control region; labels use the shared NameRegistry. */
+export function labeledStmt(label: Name, body: JsNode[]): LabeledStmt {
+	return { type: "LabeledStmt", label, body };
 }
 export function continueStmt(): ContinueStmt {
 	return { type: "ContinueStmt" };
@@ -652,6 +664,7 @@ export const CHILD_FIELDS: Record<JsNode["type"], Record<string, FieldKind>> = {
 	// Statements
 	ExprStmt: { expr: "node" },
 	Block: { body: "nodes" },
+	LabeledStmt: { body: "nodes" },
 	IfStmt: { test: "node", then: "nodes", else: "nodes?" },
 	WhileStmt: { test: "node", body: "nodes" },
 	ForStmt: { init: "node?", test: "node?", update: "node?", body: "nodes" },
