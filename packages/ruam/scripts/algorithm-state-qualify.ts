@@ -3,13 +3,15 @@ import { mkdtempSync, readFileSync, renameSync, rmSync, statSync, writeFileSync 
 import { dirname, join, resolve } from "node:path";
 import { parseFrozenAudit, reportDestination, sourceDigest, stoppedPreflight, verifyFrozenBaseline, verifyFrozenSources } from "../src/algorithm-state/qualification/preflight.js";
 import { runSidecarControl } from "../src/algorithm-state/qualification/sidecar.js";
+import { runNativeLoweringControl } from "../src/algorithm-state/qualification/native-lowering.js";
 
 const repository = resolve(import.meta.dir, "../../..");
 const evidenceDirectory = "docs/research/2026-10-12-algorithm-state";
 const manifestPath = `${evidenceDirectory}/roots.json`;
 const provenancePaths = [manifestPath, "packages/ruam/src/algorithm-state/qualification/preflight.ts",
 	"packages/ruam/src/algorithm-state/qualification/sidecar.ts", "packages/ruam/scripts/algorithm-state-qualify.ts",
-	"packages/ruam/test/algorithm-state/preflight.test.ts", "packages/ruam/test/algorithm-state/sidecar.test.ts"];
+	"packages/ruam/test/algorithm-state/preflight.test.ts", "packages/ruam/test/algorithm-state/sidecar.test.ts",
+	"packages/ruam/src/algorithm-state/qualification/native-lowering.ts", "packages/ruam/test/algorithm-state/native-lowering.test.ts"];
 
 async function main() {
 	const args = process.argv.slice(2);
@@ -36,9 +38,11 @@ async function main() {
 	// These attack controls concern existing ordinary implementations. No failed
 	// root is compiled or promoted to a new A1 implementation by this command.
 	const sidecar = await runSidecarControl(repository);
+	const nativeLowering = await runNativeLoweringControl(repository);
 	verifyFrozenSources(audit, repository);
 	if (JSON.stringify(startingHashes) !== JSON.stringify(readHashes())) throw new Error("Qualification inputs changed during the run");
 	if (sidecar.status !== "pass-control" || !sidecar.sourcesUnchangedDuringRun) throw new Error("Sidecar control failed; no qualification report can be completed");
+	if (nativeLowering.decision !== "reject-continuation-flattening-alone-for-this-control") throw new Error("Native lowering control failed; inspect correctness and attack validation before completing the report");
 	const decision = stoppedPreflight(audit);
 	const report = {
 		schema: "ruam-algorithm-state-preflight-v1",
@@ -56,10 +60,12 @@ async function main() {
 		runtime: { executable: process.execPath, versions: process.versions, platform: process.platform, architecture: process.arch, realBrowserEnginesTested: [] },
 		admission: { method: "manual-source-audit-with-verified-provenance", sourceDerivedAdmissionProverImplemented: false, roots: audit.roots },
 		sidecar,
+		nativeLowering,
 		limitations: [
 			"The complete requested replacement is not implemented. Full existing JavaScript and protected-selection scope remains required.",
 			"The frozen A1 pilot stops at admission; no A1 artifact, algorithm compiler, explanation trial or partial-edit protection result exists.",
 			"Sidecar controls test a negative-control ticket on a rejected root; they do not score the frozen candidate ticket or measure A1 resistance.",
+			"The native-lowering control is one hand-specialized existing function with known observation limits, not a general backend or full-scope compatibility result.",
 			"This is not a blinded AI campaign or proof that every future combined design fails. Unknown authoring and analyst effort remain unknown.",
 			"Source hashes and exact Git blobs bind this manual audit to code; they do not prove the audit's semantic conclusions.",
 			"Passing correctness controls cannot override a failed admission, full-scope compatibility, cost or protection gate.",
@@ -76,7 +82,7 @@ async function main() {
 		writeFileSync(staging, JSON.stringify(report, null, 2) + "\n", { flag: "wx" });
 		renameSync(staging, output);
 	} finally { rmSync(stagingDirectory, { force: true, recursive: true }); }
-	console.log(JSON.stringify({ output, ...decision, sidecarControl: sidecar.status }, null, 2));
+	console.log(JSON.stringify({ output, ...decision, sidecarControl: sidecar.status, nativeLoweringControl: nativeLowering.decision }, null, 2));
 	process.exitCode = reportOnly ? 0 : 2;
 }
 
