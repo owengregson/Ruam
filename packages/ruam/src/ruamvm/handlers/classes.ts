@@ -127,12 +127,7 @@ function buildPrototypeChain(clsName: string, superName: string): JsNode[] {
 				])
 			)
 		),
-		exprStmt(
-			assign(
-				member(member(id(clsName), "prototype"), "constructor"),
-				id(clsName)
-			)
-		),
+		exprStmt(assign(member(member(id(clsName), "prototype"), "constructor"), id(clsName))),
 		exprStmt(
 			call(member(id("Object"), "setPrototypeOf"), [
 				id(clsName),
@@ -140,6 +135,14 @@ function buildPrototypeChain(clsName: string, superName: string): JsNode[] {
 			])
 		),
 	];
+}
+
+/** Class methods are own, non-enumerable data properties, not assignments. */
+function defineMethodProperty(ctx: HandlerCtx, target: JsNode, key: JsNode, value: JsNode): JsNode {
+	return exprStmt(call(id(ctx.defineProperty), [
+		target, key, obj(["__proto__", lit(null)], ["value", value],
+			["writable", lit(true)], ["configurable", lit(true)], ["enumerable", lit(false)]),
+	]));
 }
 
 // --- Class creation ---
@@ -270,7 +273,7 @@ function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 			)
 		),
 		ifStmt(
-			bin(BOp.Seq, id(ctx.local("methodName")), lit("constructor")),
+			bin(BOp.And, un(UOp.Not, id(ctx.local("isStatic"))), bin(BOp.Seq, id(ctx.local("methodName")), lit("constructor"))),
 			[
 				ifStmt(member(id(ctx.local("cls")), "__setCtor"), [
 					exprStmt(
@@ -285,15 +288,7 @@ function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 						member(id(ctx.local("cls")), "prototype")
 					)
 				),
-				exprStmt(
-					assign(
-						member(
-							member(id(ctx.local("cls")), "prototype"),
-							"constructor"
-						),
-						id(ctx.local("func"))
-					)
-				),
+				exprStmt(assign(member(member(id(ctx.local("cls")), "prototype"), "constructor"), id(ctx.local("func")))),
 			],
 			[
 				ifStmt(
@@ -305,15 +300,7 @@ function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 								id(ctx.local("cls"))
 							)
 						),
-						exprStmt(
-							assign(
-								index(
-									id(ctx.local("cls")),
-									id(ctx.local("methodName"))
-								),
-								id(ctx.local("func"))
-							)
-						),
+						defineMethodProperty(ctx, id(ctx.local("cls")), id(ctx.local("methodName")), id(ctx.local("func"))),
 					],
 					[
 						varDecl(
@@ -330,15 +317,7 @@ function DEFINE_METHOD(ctx: HandlerCtx): JsNode[] {
 								id(ctx.t("_tgt"))
 							)
 						),
-						exprStmt(
-							assign(
-								index(
-									id(ctx.t("_tgt")),
-									id(ctx.local("methodName"))
-								),
-								id(ctx.local("func"))
-							)
-						),
+						defineMethodProperty(ctx, id(ctx.t("_tgt")), id(ctx.local("methodName")), id(ctx.local("func"))),
 					]
 				),
 			]
@@ -405,7 +384,7 @@ function DEFINE_GETTER(ctx: HandlerCtx): JsNode[] {
 			)
 		),
 		exprStmt(
-			call(member(id("Object"), "defineProperty"), [
+			call(id(ctx.defineProperty), [
 				id(ctx.local("target")),
 				id(ctx.local("accessorName")),
 				obj(
@@ -431,7 +410,7 @@ function DEFINE_STATIC_GETTER(ctx: HandlerCtx): JsNode[] {
 			)
 		),
 		exprStmt(
-			call(member(id("Object"), "defineProperty"), [
+			call(id(ctx.defineProperty), [
 				id(ctx.local("cls")),
 				index(id(ctx.C), id(ctx.O)),
 				obj(
@@ -480,7 +459,7 @@ function DEFINE_SETTER(ctx: HandlerCtx): JsNode[] {
 			)
 		),
 		exprStmt(
-			call(member(id("Object"), "defineProperty"), [
+			call(id(ctx.defineProperty), [
 				id(ctx.local("target")),
 				id(ctx.local("accessorName")),
 				obj(
@@ -506,7 +485,7 @@ function DEFINE_STATIC_SETTER(ctx: HandlerCtx): JsNode[] {
 			)
 		),
 		exprStmt(
-			call(member(id("Object"), "defineProperty"), [
+			call(id(ctx.defineProperty), [
 				id(ctx.local("cls")),
 				index(id(ctx.C), id(ctx.O)),
 				obj(
@@ -584,7 +563,7 @@ function DEFINE_PRIVATE_GETTER(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.local("func"), ctx.pop()),
 		varDecl(ctx.local("cls"), ctx.peek()),
 		exprStmt(
-			call(member(id("Object"), "defineProperty"), [
+			call(id(ctx.defineProperty), [
 				bin(
 					BOp.Or,
 					member(id(ctx.local("cls")), "prototype"),
@@ -607,7 +586,7 @@ function DEFINE_PRIVATE_SETTER(ctx: HandlerCtx): JsNode[] {
 		varDecl(ctx.local("func"), ctx.pop()),
 		varDecl(ctx.local("cls"), ctx.peek()),
 		exprStmt(
-			call(member(id("Object"), "defineProperty"), [
+			call(id(ctx.defineProperty), [
 				bin(
 					BOp.Or,
 					member(id(ctx.local("cls")), "prototype"),

@@ -193,6 +193,7 @@ export function generateVmRuntime(options: {
 		],
 		// 3: globalRef (detection order shuffled per build)
 		[varDecl(names.globalRef, buildGlobalRefDetection(structuralChoices))],
+		[varDecl(names.defineProperty, member(id("Object"), "defineProperty"))],
 		// 4: TDZ sentinel
 		[
 			varDecl(
@@ -615,6 +616,7 @@ export function generateShieldedVmRuntime(options: {
 		)
 	);
 	nodes.push(varDecl(sharedNames.globalRef, buildGlobalRefDetection()));
+	nodes.push(varDecl(sharedNames.defineProperty, member(id("Object"), "defineProperty")));
 
 	// TDZ sentinel — shared across all groups
 	nodes.push(

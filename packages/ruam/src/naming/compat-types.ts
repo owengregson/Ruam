@@ -66,6 +66,7 @@ export interface RuntimeNames {
 	imul: string;
 	spreadSym: string;
 	hop: string;
+	defineProperty: string;
 	globalRef: string;
 	polyDec: string;
 	polyPosSeed: string;

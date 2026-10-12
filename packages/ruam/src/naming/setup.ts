@@ -131,6 +131,7 @@ function buildRuntimeNames(tokens: Map<string, NameToken>): RuntimeNames {
 		imul: get("imul"),
 		spreadSym: get("spreadSym"),
 		hop: get("hop"),
+		defineProperty: get("defineProperty"),
 		globalRef: get("globalRef"),
 		polyDec: get("polyDec"),
 		polyPosSeed: get("polyPosSeed"),

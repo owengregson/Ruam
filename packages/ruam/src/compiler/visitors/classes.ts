@@ -231,7 +231,7 @@ function compileClassMethod(
 
 		if (isAccessor) {
 			// Build a property descriptor: {get/set: fn, configurable: true, enumerable: false}
-			emitter.emit(Op.NEW_OBJECT, 0); // [class, target, key, fn, {}]
+			emitter.emit(Op.NEW_OBJECT, 1); // Null-prototype descriptor
 			emitter.emit(Op.SWAP, 0); // [class, target, key, {}, fn]
 			const descKeyIdx = emitter.addStringConstant(member.node.kind); // "get" or "set"
 			emitter.emit(Op.SET_PROP_STATIC, descKeyIdx); // [class, target, key, {get/set: fn}]
@@ -251,11 +251,21 @@ function compileClassMethod(
 			emitter.emit(Op.POP, 0); // [class, target, key, desc]
 
 			// Object.defineProperty(target, key, desc) -> pushes target
-			emitter.emit(Op.DEFINE_OWN_PROPERTY, 0); // [class, target]
+			emitter.emit(Op.DEFINE_OWN_PROPERTY, 1); // Language definition uses cached intrinsic
 			emitter.emit(Op.POP, 0); // [class]
 		} else {
-			// Simple assignment: target[key] = fn -> pushes target
-			emitter.emit(Op.SET_PROP_DYNAMIC, 0); // [class, target]
+			// Class methods define an own data property without invoking inherited
+			// setters; ordinary assignment also incorrectly makes them enumerable.
+			emitter.emit(Op.NEW_OBJECT, 1);
+			emitter.emit(Op.SWAP, 0);
+			emitter.emit(Op.SET_PROP_STATIC, emitter.addStringConstant("value"));
+			for (const key of ["writable", "configurable", "enumerable"]) {
+				emitter.emit(Op.DUP, 0);
+				emitter.emit(key === "enumerable" ? Op.PUSH_FALSE : Op.PUSH_TRUE, 0);
+				emitter.emit(Op.SET_PROP_STATIC, emitter.addStringConstant(key));
+				emitter.emit(Op.POP, 0);
+			}
+			emitter.emit(Op.DEFINE_OWN_PROPERTY, 1);
 			emitter.emit(Op.POP, 0); // [class]
 		}
 		return;
