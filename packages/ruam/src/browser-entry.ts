@@ -7,7 +7,9 @@
  * @module browser-entry
  */
 
-export { obfuscateCode } from "./transform.js";
+export { obfuscateCode, obfuscateCodeWithReport } from "./transform.js";
+export { IncompleteCompilationError } from "./compilation-report.js";
+export type { CompilationOutcome, CompilationReport } from "./compilation-report.js";
 export { PRESETS } from "./presets.js";
 export { compileRegionalCode, compileRegionalGraph } from "./regional/index.js";
 export type { RegionalGraphOptions, RegionalPackageBuild } from "./regional/index.js";

@@ -18,6 +18,7 @@ import type { NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import { traverse, generate } from "./babel-compat.js";
 import { compileFunction, resetUnitCounter } from "./compiler/index.js";
+import { IncompleteCompilationError, type CompilationOutcome, type CompilationReport, type CompilationRecorder } from "./compilation-report.js";
 import {
 	generateShuffleMap,
 	OPCODE_COUNT,
@@ -95,6 +96,14 @@ export function obfuscateCode(
 	source: string,
 	options: VmObfuscationOptions = {}
 ): string {
+	return obfuscateCodeInternal(source, options);
+}
+
+function obfuscateCodeInternal(
+	source: string,
+	options: VmObfuscationOptions = {},
+	recorder?: CompilationRecorder
+): string {
 	const resolved = resolveOptions(options);
 	const {
 		targetMode = "root",
@@ -168,6 +177,7 @@ export function obfuscateCode(
 
 	// -- Collect target functions --------------------------------------------
 	const targetPaths = collectTargetFunctions(ast, targetMode, threshold);
+	if (recorder) recorder.selectedRoots = targetPaths.length;
 
 	// -- VM Shielding path ---------------------------------------------------
 	if (vmShielding) {
@@ -193,7 +203,7 @@ export function obfuscateCode(
 			wrapOutput,
 			preprocessUsedNames,
 			tuning,
-		});
+		}, recorder);
 	}
 
 	// -- Generate per-build cipher salt (if rolling cipher is enabled) --------
@@ -208,7 +218,8 @@ export function obfuscateCode(
 		temps["_ps"],
 		blockPermutation,
 		opcodeMutation,
-		tuning
+		tuning,
+		recorder
 	);
 
 	if (compiledUnits.size === 0) return code;
@@ -334,6 +345,52 @@ export function obfuscateCode(
 	);
 }
 
+/**
+ * Compile with explicit selected-root outcomes. Fails closed by default when
+ * no roots are selected or a selected root falls back to ordinary JavaScript.
+ * Successful selection is not whole-source coverage or protection evidence.
+ */
+export function obfuscateCodeWithReport(
+	source: string,
+	options: VmObfuscationOptions = {},
+	qualification: { requireCompleteSelection?: boolean } = {}
+): { code: string; report: CompilationReport } {
+	const recorder: CompilationRecorder = { selectedRoots: 0, outcomes: [] };
+	const code = obfuscateCodeInternal(source, options, recorder);
+	const report: CompilationReport = {
+		schema: "ruam-compilation-report-v1", targetMode: options.targetMode ?? "root",
+		selectedRoots: recorder.selectedRoots, outcomes: recorder.outcomes,
+		completeSelection: recorder.selectedRoots > 0 && recorder.outcomes.length === recorder.selectedRoots && recorder.outcomes.every(item => item.status === "compiled"),
+		wholeSourceProtection: false, protectionQualified: false, locationSpace: "after-optional-preprocessing",
+	};
+	if (qualification.requireCompleteSelection !== false && !report.completeSelection) throw new IncompleteCompilationError(report);
+	return { code, report };
+}
+
+function hasAsyncIteration(fnPath: NodePath<t.Function>): boolean {
+	let found = false;
+	fnPath.traverse({ ForOfStatement(path) { if (path.node.await) found = true; } });
+	return found;
+}
+
+function recordCompilation(recorder: CompilationRecorder | undefined, fnPath: NodePath<t.Function>, unit?: BytecodeUnit, message?: string, asyncIteration = false): void {
+	if (!recorder) return;
+	// The current runtime's generator lifecycle handlers are stubs. Emitted
+	// bytecode alone must not qualify a root containing one of those units.
+	const generatorStub = !!unit && [unit, ...unit.childUnits].some(item => item.isGenerator);
+	const runtimeLimitations: CompilationOutcome["runtimeLimitations"] = generatorStub ? ["generator-resumption"] : [];
+	// compileForOfStatement currently lowers both forms to synchronous
+	// iteration. Inspect before replacing the original function body.
+	if (unit && asyncIteration) runtimeLimitations.push("async-iteration");
+	recorder.outcomes.push({
+		name: ("id" in fnPath.node && fnPath.node.id?.name) || "<anonymous>",
+		line: fnPath.node.loc?.start.line ?? null, column: fnPath.node.loc?.start.column ?? null,
+		status: runtimeLimitations.length ? "unsupported-runtime" : unit ? "compiled" : "native-fallback", bytecodeUnits: unit ? 1 + unit.childUnits.length : 0,
+		runtimeLimitations,
+		...(runtimeLimitations.length ? { message: `Current runtime limitations: ${runtimeLimitations.join(", ")}` } : message === undefined ? {} : { message }),
+	});
+}
+
 // ---------------------------------------------------------------------------
 // FNV-1a hash (build-time, matches runtime ihashFn)
 // ---------------------------------------------------------------------------
@@ -430,11 +487,13 @@ function compileTargetsOnly(
 	scopeVarName?: string,
 	blockPermutationOpt: boolean = false,
 	opcodeMutationOpt: boolean = false,
-	tuning?: Readonly<TuningProfile>
+	tuning?: Readonly<TuningProfile>,
+	recorder?: CompilationRecorder
 ): Map<string, { unit: BytecodeUnit }> {
 	const compiledUnits: Map<string, { unit: BytecodeUnit }> = new Map();
 
 	for (const fnPath of targetPaths) {
+		const asyncIteration = !!recorder && hasAsyncIteration(fnPath);
 		try {
 			const unit = compileFunction(fnPath);
 
@@ -462,12 +521,14 @@ function compileTargetsOnly(
 			}
 
 			replaceFunctionBody(fnPath, unit.id, names, scopeVarName);
+			recordCompilation(recorder, fnPath, unit, undefined, asyncIteration);
 		} catch (err) {
 			const loc = fnPath.node.loc?.start;
 			const locStr = loc ? ` at ${loc.line}:${loc.column}` : "";
 			const fnName =
 				("id" in fnPath.node && fnPath.node.id?.name) || "<anonymous>";
 			const message = err instanceof Error ? err.message : String(err);
+			recordCompilation(recorder, fnPath, undefined, message);
 			console.warn(
 				`[ruam] Failed to compile ${fnName}${locStr}: ${message}`
 			);
@@ -921,7 +982,8 @@ function assembleShielded(
 		wrapOutput: boolean;
 		preprocessUsedNames: Set<string> | undefined;
 		tuning: Readonly<TuningProfile>;
-	}
+	},
+	recorder?: CompilationRecorder
 ): string {
 	// Generate per-group seeds (one per root function)
 	const groupSeeds = targetPaths.map(() => generateCryptoSeed());
@@ -954,6 +1016,7 @@ function assembleShielded(
 
 	for (let gi = 0; gi < targetPaths.length; gi++) {
 		const fnPath = targetPaths[gi]!;
+		const asyncIteration = !!recorder && hasAsyncIteration(fnPath);
 		const groupSeed = groupSeeds[gi]!;
 		const groupNames = groupNameSets[gi]!;
 		const groupTemps = groupTempSets[gi]!;
@@ -968,6 +1031,7 @@ function assembleShielded(
 			const fnName =
 				("id" in fnPath.node && fnPath.node.id?.name) || "<anonymous>";
 			const message = err instanceof Error ? err.message : String(err);
+			recordCompilation(recorder, fnPath, undefined, message);
 			console.warn(
 				`[ruam] Failed to compile ${fnName}${locStr}: ${message}`
 			);
@@ -1026,6 +1090,7 @@ function assembleShielded(
 			} as RuntimeNames,
 			sharedTemps["_ps"]
 		);
+		recordCompilation(recorder, fnPath, unit, undefined, asyncIteration);
 
 		groupMeta.push({
 			unit,

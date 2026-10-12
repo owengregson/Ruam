@@ -329,7 +329,7 @@ export enum Op {
 	// 11. Object / Array
 	// ═════════════════════════════════════════════════════════════════════════
 
-	/** Create empty object `{}`. */
+	/** Create empty object (operand 0: ordinary; operand 1: intrinsic null prototype). */
 	NEW_OBJECT,
 	/** Create empty array `[]`. */
 	NEW_ARRAY,
@@ -427,7 +427,7 @@ export enum Op {
 	SET_FUNC_LENGTH,
 	/** Bind `this` value for arrow functions. */
 	BIND_THIS,
-	/** Set `[[HomeObject]]` for `super` access in methods. */
+	/** Create nonconstructable method closure over the stack's home object (operand = unit-id pool index). */
 	MAKE_METHOD,
 	/** Load a captured (closure) variable. */
 	PUSH_CLOSURE_VAR,

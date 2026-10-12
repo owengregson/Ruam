@@ -4,11 +4,10 @@
  * Replaces arithmetic and bitwise operations with semantically equivalent
  * but structurally opaque mixed boolean-arithmetic expressions.
  *
- * Two application modes:
- *  - **Bitwise ops** (`^`, `&`, `|`) — safe to transform when operands
- *    are known-integer (no string literals in the sub-tree).
- *  - **Arithmetic ops** (`+`, `-`) — wrapped with a runtime int32 guard:
- *    `(a|0)===a && (b|0)===b ? MBA(a,b) : a op b`
+ * Only repeatable handler-local identifiers and numeric literals are eligible.
+ * Both bitwise and arithmetic identities require primitive int32 Numbers;
+ * all other values use the original operator without speculative coercion.
+ * Arithmetic involving zero also falls back to preserve signed zero.
  *
  * A single pass (depth 1) is applied to avoid exponential expression
  * growth from nesting — the int32 guard already introduces bitwise ops
@@ -124,8 +123,9 @@ function makeLcg(seed: number): () => number {
 // --- Int32 guard builder ---
 
 /**
- * Build a runtime int32 guard ternary:
- * `(a|0)===a && (b|0)===b ? mbaExpr : a op b`
+ * Check primitive types before performing any potentially coercive operation.
+ * The caller admits only repeatable operands, so these reads cannot duplicate
+ * calls, property accessors, stack pops or unary numeric conversions.
  */
 function int32Guard(
 	left: JsNode,
@@ -133,39 +133,26 @@ function int32Guard(
 	op: BOpKind,
 	mbaExpr: JsNode
 ): JsNode {
+	const numberCheck = bin(BOp.And,
+		bin(BOp.Seq, un(UOp.Typeof, left), lit("number")),
+		bin(BOp.Seq, un(UOp.Typeof, right), lit("number")));
 	const leftCheck = bin(BOp.Seq, bin(BOp.BitOr, left, lit(0)), left);
 	const rightCheck = bin(BOp.Seq, bin(BOp.BitOr, right, lit(0)), right);
-	const guard = bin(BOp.And, leftCheck, rightCheck);
+	let guard = bin(BOp.And, numberCheck, bin(BOp.And, leftCheck, rightCheck));
+	if (ARITH_MBA.has(op)) {
+		guard = bin(BOp.And, guard, bin(BOp.And,
+			bin(BOp.Sneq, left, lit(0)), bin(BOp.Sneq, right, lit(0))));
+	}
 	return ternary(guard, mbaExpr, bin(op, left, right));
 }
 
-// --- String / non-integer detection ---
-
 /**
- * Check if a node sub-tree may produce a non-integer value.
- *
- * Walks BinOps, UnaryOps, and ternaries to find string literals
- * or non-numeric literals that would make MBA semantically wrong
- * or produce nonsensical bitwise-on-string expressions.
+ * Identifiers in this pass refer to compiler-owned handler locals. Arbitrary
+ * expression operands are deliberately excluded: even an innocent-looking
+ * index or unary plus can read an accessor or coerce a caller-owned object.
  */
-function mayProduceNonInteger(node: JsNode): boolean {
-	if (node.type === "Literal") {
-		return typeof node.value === "string";
-	}
-	if (node.type === "BinOp") {
-		return (
-			mayProduceNonInteger(node.left) || mayProduceNonInteger(node.right)
-		);
-	}
-	if (node.type === "UnaryOp") {
-		return mayProduceNonInteger(node.expr);
-	}
-	if (node.type === "TernaryExpr") {
-		return (
-			mayProduceNonInteger(node.then) || mayProduceNonInteger(node.else)
-		);
-	}
-	return false;
+function isRepeatableOperand(node: JsNode): boolean {
+	return node.type === "Id" || (node.type === "Literal" && typeof node.value === "number");
 }
 
 // --- Core transform ---
@@ -179,26 +166,19 @@ function mayProduceNonInteger(node: JsNode): boolean {
  */
 function mbaSingle(node: BinOp, lcg: () => number): JsNode {
 	const { op, left, right } = node;
+	if (!isRepeatableOperand(left) || !isRepeatableOperand(right)) return node;
 
-	// Bitwise ops — skip when operands may contain non-integer values
+	// Bitwise operators also accept BigInt and coercive objects. Preserve those
+	// with the original operator instead of applying Number-only identities.
 	const bitwiseVariants = BITWISE_MBA.get(op);
 	if (bitwiseVariants) {
-		if (mayProduceNonInteger(left) || mayProduceNonInteger(right)) {
-			return node;
-		}
 		const variant = bitwiseVariants[lcg() % bitwiseVariants.length]!;
-		return variant(left, right);
+		return int32Guard(left, right, op, variant(left, right));
 	}
 
-	// Arithmetic ops — need int32 guard for user values.
-	// Skip when either operand may produce a non-integer (string
-	// concatenation, object coercion, etc.) — the guard always fails
-	// at runtime, producing enormous dead code for no benefit.
+	// Arithmetic identities operate on primitive int32 Numbers only.
 	const arithVariants = ARITH_MBA.get(op);
 	if (arithVariants) {
-		if (mayProduceNonInteger(left) || mayProduceNonInteger(right)) {
-			return node;
-		}
 		const variant = arithVariants[lcg() % arithVariants.length]!;
 		const mbaExpr = variant(left, right);
 		return int32Guard(left, right, op, mbaExpr);

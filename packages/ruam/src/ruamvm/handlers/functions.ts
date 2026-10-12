@@ -5,7 +5,8 @@
  *  - Closures:    NEW_CLOSURE, NEW_FUNCTION, NEW_ARROW, NEW_ASYNC,
  *                 NEW_GENERATOR, NEW_ASYNC_GENERATOR
  *  - Metadata:    SET_FUNC_NAME, SET_FUNC_LENGTH
- *  - Stubs:       BIND_THIS, MAKE_METHOD
+ *  - Methods:     MAKE_METHOD
+ *  - Stubs:       BIND_THIS
  *  - Closure vars: PUSH_CLOSURE_VAR, STORE_CLOSURE_VAR
  *
  * All handlers use pure AST nodes — no raw() escape hatch.
@@ -32,6 +33,7 @@ import {
 	tryCatch,
 	breakStmt,
 	obj,
+	method,
 	BOp,
 	UOp,
 } from "../nodes.js";
@@ -74,13 +76,15 @@ function buildDebugArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 				id(ctx.t("_a")),
 				id("cs"),
 				id("ct"),
+				id("nt"),
+				id("ho"),
 			])
 		),
 	];
 	return call(
 		fnExpr(
 			undefined,
-			["u", "uid", "cs", "ct"],
+			["u", "uid", "cs", "ct", "nt", "ho"],
 			[
 				ifStmt(member(id("u"), "s"), [
 					returnStmt(
@@ -99,7 +103,7 @@ function buildDebugArrowClosureIIFE(ctx: HandlerCtx): JsNode {
 				),
 			]
 		),
-		[id(ctx.t("_cu")), id(ctx.t("_cuid")), id(ctx.SC), id(ctx.TV)]
+		[id(ctx.t("_cu")), id(ctx.t("_cuid")), id(ctx.SC), id(ctx.TV), id(ctx.NT), id(ctx.HO)]
 	);
 }
 
@@ -488,9 +492,38 @@ function SET_FUNC_LENGTH(ctx: HandlerCtx): JsNode[] {
 	];
 }
 
+// --- Method closures ---
+
+/**
+ * MAKE_METHOD: load a unit and create a native concise-method wrapper over
+ * its lexical scope and the object on the stack. Like NEW_CLOSURE, the
+ * operand is a unit-id constant; unlike a function wrapper, it cannot be
+ * constructed. The compiler assigns the actual property name and length.
+ */
+function MAKE_METHOD(ctx: HandlerCtx): JsNode[] {
+	const body = (isAsync: boolean): JsNode[] => [
+		...buildThisBoxing(ctx),
+		returnStmt(call(id(isAsync ? ctx.execAsync : ctx.exec), [
+			id("u"), id(ctx.t("_a")), id("cs"), id(ctx.t("_tv")),
+			un(UOp.Void, lit(0)), id("ho"),
+		])),
+	];
+	const wrapper = (isAsync: boolean): JsNode => member(
+		obj(method("m", ["..." + ctx.t("_a")], body(isAsync), { async: isAsync })),
+		"m"
+	);
+	return [
+		exprStmt(ctx.push(call(fnExpr(undefined, ["u", "cs", "ho"], [
+			ifStmt(member(id("u"), "s"), [returnStmt(wrapper(true))]),
+			returnStmt(wrapper(false)),
+		]), [call(id(ctx.load), [index(id(ctx.C), id(ctx.O))]), id(ctx.SC), ctx.peek()]))),
+		breakStmt(),
+	];
+}
+
 // --- Stub handlers ---
 
-/** BIND_THIS / MAKE_METHOD: no-op stubs. */
+/** BIND_THIS: no-op stub. */
 function BIND_STUB(_ctx: HandlerCtx): JsNode[] {
 	return [breakStmt()];
 }
@@ -548,6 +581,6 @@ registry.set(Op.NEW_ASYNC_GENERATOR, NEW_GENERATOR_HANDLER);
 registry.set(Op.SET_FUNC_NAME, SET_FUNC_NAME);
 registry.set(Op.SET_FUNC_LENGTH, SET_FUNC_LENGTH);
 registry.set(Op.BIND_THIS, BIND_STUB);
-registry.set(Op.MAKE_METHOD, BIND_STUB);
+registry.set(Op.MAKE_METHOD, MAKE_METHOD);
 registry.set(Op.PUSH_CLOSURE_VAR, PUSH_CLOSURE_VAR);
 registry.set(Op.STORE_CLOSURE_VAR, STORE_CLOSURE_VAR);

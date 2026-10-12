@@ -9,6 +9,10 @@ import fs from "fs-extra";
 import path from "path";
 import { globby } from "globby";
 
+export { obfuscateCodeWithReport } from "./transform.js";
+export { IncompleteCompilationError } from "./compilation-report.js";
+export type { CompilationOutcome, CompilationReport } from "./compilation-report.js";
+
 // Explicit experimental API. Production VM defaults are retained until the
 // regional candidate passes the published recovery and compatibility gates.
 export { compileRegionalCode, compileRegionalGraph } from "./regional/index.js";

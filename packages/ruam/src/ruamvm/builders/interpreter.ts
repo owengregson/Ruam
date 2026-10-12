@@ -225,9 +225,8 @@ export function buildInterpreterFunctions(
 		};
 	}
 
-	// Async units exist — build the async interpreter with structural
-	// differentiation: different group count than sync to avoid the
-	// "two identical interpreter" signature.
+	// Async units execute handlers inline so dispatch adds no suspension
+	// points before or between source-level awaits.
 	const asyncCases = buildCasesForMode(
 		names,
 		temps,
@@ -248,15 +247,11 @@ export function buildInterpreterFunctions(
 		interpOpts: effectiveOpts,
 		split,
 		fragmentLabelMap: asyncCases.fragmentLabelMap,
-		// Structural differentiation: async uses a different group count
-		// so it doesn't look like a carbon copy of the sync interpreter
-		asyncGroupOffset: 1,
 		structuralChoices,
 		registry,
 	});
 
-	// Async iifeDecls are the same sentinel/return-value vars — already declared
-	// by sync, so we don't re-emit them (they share the same temp names).
+	// Inline async dispatch has no IIFE-scope handler declarations.
 
 	return {
 		interpreters: [syncResult.fnNode, asyncResult.fnNode],
@@ -873,7 +868,23 @@ function buildExecFunction(
 		dispatchNodes: JsNode[];
 	};
 
-	if (dispatchStyle === "direct-array") {
+	if (opts.isAsync) {
+		// Awaiting a handler function for every opcode makes even ordinary
+		// loads/stores yield. Besides moving effects past the caller's next
+		// statement, that lets concurrent calls pass a shared single-flight
+		// guard before its store. A conditional await mask would still add an
+		// extra Promise boundary around authored awaits. Keep those awaits in
+		// this interpreter frame; all async state already lives in call-local
+		// variables. Original case bodies return directly from this frame.
+		ftResult = {
+			preLoopDecls: [],
+			iifeDecls: [],
+			dispatchNodes: [switchStmt(
+				decodeCache ? id(ctx.PH) : index(id(htName), id(ctx.PH)),
+				cases
+			)],
+		};
+	} else if (dispatchStyle === "direct-array") {
 		ftResult = buildDirectArrayDispatch(
 			cases,
 			temps,
