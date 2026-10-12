@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "experimentId": "algorithm-state-a1-2026-10-12",
+  "requiredProductScope": "The completed replacement must preserve the full JavaScript scope and protected selection supported by current Ruam. This three-component A1 experiment is a preflight for one candidate architecture, not permission to ship a subset compiler or silently leave declined code unprotected.",
+  "baselineCommit": "f47f2783c5cbbc792910de85ba9c48a66cb1eb2c",
+  "selection": {
+    "frozenBeforeRealizations": true,
+    "order": ["mutation-state", "name-registry", "emitter"],
+    "rationale": "Freeze three pre-existing, synchronous compiler components with distinct maintained-state roles: permutation tracking, identifier allocation, and instruction/constant collection. MutationState is first because its named event/observation surface is smallest; NameRegistry and Emitter exercise ownership and identity obligations. Selection does not assert admission or production application representativeness. No replacement root is permitted after rejection.",
+    "excludedSources": [
+      {"path": "packages/ruam/src/regional/qualification/specimens.ts", "reason": "The source explicitly labels RECOVERY_SPECIMENS as qualification-authored synthetic calibration, not application roots. REPOSITORY_ADMISSION_ROOTS is an older source-admission inventory, not A1 qualification."},
+      {"path": "packages/ruam/scripts/bench.mjs", "reason": "WORKLOADS are authored one-shot arithmetic, recursion, string, collection, and class kernels, without an existing persistent event/observation component contract."},
+      {"path": "packages/ruam/src/browser-worker.ts", "reason": "The worker has host message delivery, performance.now, compilation dependencies, and postMessage effects; it is not a closed synchronous private-state evaluator."},
+      {"path": "apps/web/components/Playground.tsx", "reason": "React, CodeMirror, DOM, asynchronous module loading, and Worker effects make the full component ineligible for the initial A1 domain."}
+    ]
+  },
+  "dependencySources": [
+    {"path": "packages/ruam/src/compiler/opcode-mutation.ts", "sha256": "5c6e370fb71d046e1ed3c2c7d41d57a23c512483ebd3215122ab51feb24b3713"},
+    {"path": "packages/ruam/src/compiler/opcodes.ts", "sha256": "f9d228e9c971cdb3d6677769a8d8477946c04f3e68b0b678ae1acbc77c2fd7ac"},
+    {"path": "packages/ruam/src/constants.ts", "sha256": "29b11cdc6b4fb4ac9e412ccf8b83925a2ffe7026d928b245edd3fc86df1847ae"},
+    {"path": "packages/ruam/src/naming/scope.ts", "sha256": "781a61862fd55e167846215084f535261988f3faed348d6e3cdbe51bbf87f204"},
+    {"path": "packages/ruam/src/naming/token.ts", "sha256": "32ff6ceb0683c89711c651f2f05ad0568d69cef02b4d1999133dff26f7eb6b41"},
+    {"path": "packages/ruam/src/naming/registry.ts", "sha256": "6ea2f8318c50ab846ed1e7a4864471363fdb9f02f758ed418fb0f6cabf476779"},
+    {"path": "packages/ruam/src/naming/reserved.ts", "sha256": "731c93a61074a6a0aa40d071f11a0e4400d89b22e55c2a722919075d9f211b01"},
+    {"path": "packages/ruam/src/compiler/emitter.ts", "sha256": "2dc31a00525084291caf78acc61505035efca5075adc87d3477d97b1ea6d28af"},
+    {"path": "packages/ruam/src/types.ts", "sha256": "e2b6b77d3fdb112c14c6532ab2c14b93030a8a7586d45bbe54a44872eebddcce"},
+    {"path": "packages/ruam/src/transform.ts", "sha256": "3b7c0ea6d638f5c42d680629c8c0fde5e8973a13047bbf7c3a541bbda87ed94a"},
+    {"path": "packages/ruam/src/compiler/index.ts", "sha256": "45d21fdc1f49fe1c1356b0a98ca3198b2bcea3589b1295cfb8d2848868fe90ea"},
+    {"path": "packages/ruam/src/regional/qualification/specimens.ts", "sha256": "b8ab53d7483c96018e54ec0e16750e9d4ad4f78f7765ee5f088aab5c8800d119"},
+    {"path": "packages/ruam/scripts/bench.mjs", "sha256": "8d01ef496407be8080ab5aeb065bd849996cb28d597934aa11322a0fd47aaf95"},
+    {"path": "packages/ruam/src/browser-worker.ts", "sha256": "75a977332c7ff22f40c7f37e382696fcb356ea5bc1fa9c121e1b74b4fffada9b"},
+    {"path": "apps/web/components/Playground.tsx", "sha256": "4b223b1487d3b9bdba10c923d1f31c58d75fba324c293b2ccf50f054c188cafe"}
+  ],
+  "roots": [
+    {
+      "id": "mutation-state",
+      "order": 1,
+      "entry": {"path": "packages/ruam/src/compiler/opcode-mutation.ts", "symbol": "MutationState", "kind": "class", "wholeModule": false},
+      "dependencyPaths": ["packages/ruam/src/compiler/opcode-mutation.ts", "packages/ruam/src/compiler/opcodes.ts", "packages/ruam/src/constants.ts", "packages/ruam/src/naming/scope.ts", "packages/ruam/src/naming/token.ts"],
+      "typeOnlyDependencyPaths": ["packages/ruam/src/types.ts"],
+      "callSiteEvidencePaths": ["packages/ruam/src/transform.ts"],
+      "provenance": "Existing compiler-side cumulative opcode permutation tracker; not an application policy evaluator and not the whole opcode-mutation module. insertMutationOpcodes and adjustEncodingForMutations are neighboring exports, not omitted methods of this class.",
+      "contract": {
+        "initialization": "constructor(shuffleMap: number[]): copy the iterable into forwardMap; allocate a zero-filled reverseMap of shuffleMap.length; assign reverseMap[shuffleMap[i]]=i in increasing i order. No permutation or range validation occurs.",
+        "events": ["applyMutation(mutSeed: number, tableSize: number): void; coerce seed with >>> 0, advance the canonical LCG eight times, attempt four selected reverse-map swaps, skip equal indices and nullish reverse entries, and write both corresponding forward entries in source order."],
+        "observations": ["getPhysical(logical: number): number; return forwardMap[logical] unless nullish, then return the original logical value."],
+        "reset": "No reset method. Constructing another instance creates new identity and reinitializes from its input; an adapter must not invent a reset operation on the old instance.",
+        "deletion": "No delete event or collection export method. Runtime field reflection/mutation is possible because TypeScript private is not JavaScript #private; it has not been proved absent at a whole-graph boundary.",
+        "duplicates": "Duplicate shuffle-map values are accepted: later reverse assignments replace earlier assignments, while forward duplicates remain until updates. Zero-filled reverse holes are active entries; replacing them with absent entries changes behavior.",
+        "identity": "The constructor copies values rather than retaining the input array as forwardMap. Both internal arrays are ordinary instance properties at runtime. Instance, method, prototype, property-descriptor, and array identity cannot silently be removed from a whole JavaScript class contract.",
+        "effects": "Ordinary numeric-array inputs yield synchronous local updates. Array iteration/property reads during initialization and property/coercion behavior of unconstrained JavaScript inputs can execute caller code or throw. Module imports evaluate opcodes, constants, scope and token; class extraction has not established a closed runtime graph.",
+        "errors": "No authored precondition errors. Native iterator, property access, allocation, receiver, coercion and assignment errors remain observable, including partial initialization/update effects. Runtime semantics outside declared TypeScript inputs are not proved and cannot be silently narrowed.",
+        "numericSemantics": "Only the seed is explicitly uint32. Each LCG uses Math.imul(state,1664525)+1013904223 followed by >>>0. Selected indices are (seed>>>16)%tableSize with JavaScript remainder, so arbitrary numbers, zero, negative, fractional, NaN and infinite tableSize are not rejected. logical has no coercion/validation and the fallback preserves NaN, infinities and negative zero. Ordinary array length follows native JavaScript bounds; no smaller resource bound or valid permutation/tableSize domain is established, and event histories are unbounded. Actual compiler call sites use a generated OPCODE_COUNT permutation but do not narrow this frozen class API."
+      },
+      "ticket": {
+        "id": "mutation-pin-logical-zero",
+        "request": "During applyMutation, skip a selected transposition whenever either selected reverse-map entry is logical opcode 0. Preserve all other transitions, getPhysical results, fallback behavior, initialization behavior and errors over every later event history.",
+        "unspecifiedBehavior": ["The ticket does not disclose the existing swap count, seed derivation, LCG parameters, transposition order, nullish-entry rules or malformed-map behavior; these must come from the same artifact/public information supplied for every baseline.", "Skipping a transposition must not skip the underlying PRNG advances or change selection of later transpositions."],
+        "negativeControls": ["A guard that makes tableSize===0 a no-op is a fully described local edit, not evidence of comprehension protection.", "A ticket giving the entire replacement mutation algorithm is a replacement control."],
+        "status": "frozen-candidate-not-executed"
+      },
+      "admission": {
+        "status": "rejected",
+        "reasonCodes": ["UNPROVED_DOMAIN", "UNPROVED_OWNERSHIP", "UNPROVED_ALGORITHM_FAMILIES"],
+        "reasons": [
+          {"code": "UNPROVED_DOMAIN", "detail": "Dense bijective permutation, finite positive table size and index bounds are not class preconditions. A permutation-only relation model would reject or change existing accepted histories.", "evidence": [{"path": "packages/ruam/src/compiler/opcode-mutation.ts", "lines": [65, 99]}, {"path": "packages/ruam/src/compiler/opcodes.ts", "lines": [1068, 1082]}]},
+          {"code": "UNPROVED_OWNERSHIP", "detail": "The named methods return primitives, but TS-private maps remain ordinary exposed instance properties. No whole-graph analysis proves reflection, external mutation, custom input iteration and coercion absent for this class boundary.", "evidence": [{"path": "packages/ruam/src/compiler/opcode-mutation.ts", "lines": [59, 76]}]},
+          {"code": "UNPROVED_ALGORITHM_FAMILIES", "detail": "The source already maintains both directions incrementally. Fixed swap unrolling or changing seeds is not an alternative family. No exact three-family realization set exists for the full frozen contract.", "evidence": [{"path": "packages/ruam/src/compiler/opcode-mutation.ts", "lines": [80, 99]}]}
+        ]
+      },
+      "families": [
+        {"id": "decision-dataflow", "status": "unproven", "reason": "Unrolling the four swaps would keep the source algorithm. No distinct exact specialization for the unbounded full class contract has been demonstrated."},
+        {"id": "indexed-relational", "status": "unproven", "reason": "A bijection relation indexed both ways resembles the source and requires false assumptions for duplicate, sparse and out-of-range inputs. An exact full-contract relation is not established."},
+        {"id": "incremental-views", "status": "inapplicable", "reason": "The source itself incrementally maintains forward and reverse maps. Calling the same maintenance scheme a new algorithm would not satisfy A1; no additional necessary shared outputs exist in the named API."}
+      ],
+      "pilot": {"selected": true, "status": "stopped-at-admission"}
+    },
+    {
+      "id": "name-registry",
+      "order": 2,
+      "entry": {"path": "packages/ruam/src/naming/registry.ts", "symbol": "NameRegistry", "kind": "class", "wholeModule": false},
+      "dependencyPaths": ["packages/ruam/src/naming/registry.ts", "packages/ruam/src/naming/scope.ts", "packages/ruam/src/naming/token.ts", "packages/ruam/src/naming/reserved.ts", "packages/ruam/src/constants.ts"],
+      "typeOnlyDependencyPaths": [],
+      "callSiteEvidencePaths": ["packages/ruam/src/transform.ts"],
+      "provenance": "Existing randomized-name allocator, including its returned NameScope/NameToken graph and dynamic generator closures. Freezing NameRegistry does not permit hiding those objects behind a newly authored primitive-only adapter.",
+      "contract": {
+        "initialization": "constructor(seed: number): seed>>>0; initialize empty scope list, unresolved flag, null alphabet and used-name Set populated from reserved/excluded/global names.",
+        "events": ["exclude(names: Iterable<string>): void", "createScope(id: string, opts?: {parent?: NameScope; lengthTier?: short|medium|long}): NameScope", "resolveAll(): void", "createDynamicGenerator(scopeId: string, lengthTier=medium): () => string; each returned closure invocation mutates its own PRNG/length bump and the shared global-used Set", "Returned NameScope: claim(key), claimMany(keys), freeze(), nextPrng(), generateCandidate(); tokens Map and children array are mutable", "Returned NameToken: resolve(value) is callable despite its @internal documentation; token.name and token.toString() observe its state"],
+        "observations": ["isResolved getter", "getAlphabet(): string", "dumpAll(): Map<string,string> with a new Map on each call", "tokenCount getter", "NameScope.id, parent, tokens, children, lengthTier; NameToken.key, scope, name, toString(); object identity and graph relationships", "All event return values, including stable scope/token identities and generated strings"],
+        "reset": "No reset method on registry/scope/token/generator. A new registry is a distinct graph. resolveAll is one-shot only after a completed call; an exception can leave partial resolution while _resolved is false.",
+        "deletion": "No named delete event, but callers can delete/clear returned tokens Maps and splice/replace contents of children arrays; tokenCount, dumpAll and traversal observe these changes. These existing mutation capabilities must remain in the contract.",
+        "duplicates": "exclude uses Set semantics. createScope does not reject duplicate ids or foreign parents. claim rejects a duplicate key in that scope; claimMany is sequential and may leave earlier claims when a later key throws. dumpAll uses scopeId:key and later colliding entries overwrite values without changing first-key Map order.",
+        "identity": "createScope returns the very scope retained by the registry; parent.children retains it too. claim returns the exact token stored in scope.tokens; token.scope links back. These are externally mutable aliases, not immutable projections. Generator closures share _globalUsed and their interleaving is observable.",
+        "effects": "exclude executes an arbitrary caller iterable. opts property reads, caller-supplied parent objects, returned mutable graph nodes, overridable methods and cyclic children permit external effects and recursion. resolveAll visits roots in registration order and children depth-first in array order, initializes alphabet before resolving tokens, freezes each successfully processed scope before visiting its children, and publishes _resolved only at the end.",
+        "errors": "Authored errors: exclude/createScope after resolved; repeated successful resolveAll; getAlphabet before alphabet generation; createDynamicGenerator before resolved; claim on a frozen scope; duplicate claim; unresolved token name/toString; repeated NameToken.resolve. A failed resolveAll may already expose its alphabet and earlier resolved/frozen tokens. Native iterable/getter/receiver/invalid-tier/recursion errors and arbitrary caller-thrown values are not excluded.",
+        "numericSemantics": "Seed and PRNG results are uint32 with authored >>>0/Math.imul. Alphabet has 64 characters. Nominal short/medium/long candidate lengths start at [2,3]/[3,4]/[4,5]; collisions can increase length without a proven bound. Retry limits are 50 before a bump when retries>50. Scope/token/generator counts, scope-id lengths, recursion depth, iterable length and total collision work have no source-derived finite bound. Typed readonly fields do not enforce runtime immutability."
+      },
+      "ticket": {
+        "id": "registry-keep-preresolved-token",
+        "request": "A token resolved explicitly before resolveAll must retain its assigned name and must no longer make resolveAll fail. It must still consume and reserve the candidate that ordinary resolution would have generated for that token, so later unresolved tokens and generators preserve their existing sequence. Preserve all other error, identity, traversal and future-history behavior.",
+        "unspecifiedBehavior": ["The existing candidate stream, collision handling, traversal order, retry bump rules, alphabet generation and effects of graph mutations remain unspecified by the ticket.", "The ticket does not authorize making resolveAll transactional, changing duplicate claims, filtering graph mutations or changing name uniqueness rules."],
+        "negativeControls": ["Making duplicate claim return the existing token is a small wrapper/local-edit control.", "Replacing all naming with a fully specified counter format is a replacement control."],
+        "status": "frozen-candidate-not-executed"
+      },
+      "admission": {
+        "status": "rejected",
+        "reasonCodes": ["ESCAPING_STATE", "UNKNOWN_EFFECTS", "UNPROVED_DOMAIN", "UNPROVED_ALGORITHM_FAMILIES"],
+        "reasons": [
+          {"code": "ESCAPING_STATE", "detail": "Returned scopes, public mutable token Maps/children arrays, tokens and shared closures expose the actual maintained graph; replacing it with private relations would change existing identities and mutation behavior.", "evidence": [{"path": "packages/ruam/src/naming/registry.ts", "lines": [62, 78]}, {"path": "packages/ruam/src/naming/scope.ts", "lines": [56, 98]}, {"path": "packages/ruam/src/naming/token.ts", "lines": [10, 43]}]},
+          {"code": "UNKNOWN_EFFECTS", "detail": "Caller iterables and an externally mutable method/graph surface allow arbitrary synchronous effects; a pure event model has not captured their order, exceptions or partial state.", "evidence": [{"path": "packages/ruam/src/naming/registry.ts", "lines": [50, 104]}]},
+          {"code": "UNPROVED_DOMAIN", "detail": "No finite bounds for collection size, recursive graph structure, caller iterator termination or collision retry growth are established.", "evidence": [{"path": "packages/ruam/src/naming/registry.ts", "lines": [158, 248]}]},
+          {"code": "UNPROVED_ALGORITHM_FAMILIES", "detail": "No three distinct exact algorithms preserve the external graph, effects and output sequence; replacing a Set with a trie or reseeding would not establish A1.", "evidence": [{"path": "packages/ruam/src/naming/registry.ts", "lines": [217, 248]}]}
+        ]
+      },
+      "families": [
+        {"id": "decision-dataflow", "status": "unproven", "reason": "No bounded, closed effect-free graph permits exact specialization; replay must preserve observable PRNG and external method effects."},
+        {"id": "indexed-relational", "status": "unproven", "reason": "Membership indexes could preserve some name checks, but retaining scope/token identities, arbitrary mutations and traversal order has no exact relation model."},
+        {"id": "incremental-views", "status": "unproven", "reason": "The existing used-name set is already maintained incrementally. An alternative shared view cannot silently replace or ignore exposed graph mutations and generator interleaving."}
+      ],
+      "pilot": {"selected": false, "status": "stopped-at-admission"}
+    },
+    {
+      "id": "emitter",
+      "order": 3,
+      "entry": {"path": "packages/ruam/src/compiler/emitter.ts", "symbol": "Emitter", "kind": "class", "wholeModule": false},
+      "dependencyPaths": ["packages/ruam/src/compiler/emitter.ts"],
+      "typeOnlyDependencyPaths": ["packages/ruam/src/types.ts"],
+      "callSiteEvidencePaths": ["packages/ruam/src/compiler/index.ts"],
+      "provenance": "Existing instruction writer and constant-pool de-duplicator. The class is the full root; constantKey is a same-file implementation dependency. Its public mutable arrays are retained by compiled BytecodeUnit results.",
+      "contract": {
+        "initialization": "Implicit zero-argument constructor: create empty instructions and constants arrays and a private constantMap Map.",
+        "events": ["emit(opcode: number, operand=0): number; append fresh instruction object and return prior instructions.length", "patchJump(instrIndex: number, target: number): void", "patchOperand(instrIndex: number, operand: number): void", "addConstant(entry: ConstantPoolEntry): number", "addStringConstant(value), addNumberConstant(value), addBooleanConstant(value), addNullConstant(), addUndefinedConstant(), addRegexConstant(pattern,flags), addBigIntConstant(value): number", "All native mutations through public instructions/constants arrays and retained input-entry aliases remain observable"],
+        "observations": ["instructions: Instruction[] and its retained instruction objects", "constants: ConstantPoolEntry[] and its retained entry objects", "ip getter returns instructions.length", "Every event return value and any native error/partial effect"],
+        "reset": "No reset method. Clearing public arrays does not reset constantMap; adding a previously indexed key can still return its stale prior index. A new Emitter has distinct arrays and independent empty map.",
+        "deletion": "No named deletion method, but public arrays support splice, delete, length truncation and replacement of elements; constantMap is not synchronized with such mutations.",
+        "duplicates": "De-duplication uses a snapshot string key and earliest stored index, not live entry equality. Type:number keys conflate +0/-0 and all NaNs. Regex pattern/flags use colon concatenation and can collide. Duplicate additions return the stored index without storing the new input object, even if the public array or earlier entry has since changed.",
+        "identity": "New entries are pushed by reference. Public arrays and instruction/entry objects escape; patch methods mutate retained instruction objects in place. Convenience adders construct an entry first, then use the same de-dup path.",
+        "effects": "constantKey reads entry.type and entry.value and uses String(value), or reads regex pattern/flags and template coercions; caller getters, proxies and coercion hooks can execute effects or throw. Public array mutations are external state transitions. addConstant computes the key before lookup and pushes before inserting the key in constantMap.",
+        "errors": "No authored validation errors. Missing instruction patch targets throw on assigning operand; invalid receivers, entry getters, coercion, frozen/non-writable public arrays and objects produce native or caller-thrown errors with observable partial effects. Regex and bigint convenience adders do not validate syntax.",
+        "numericSemantics": "Opcode/operand/index/number constants are not range-checked or coerced by their named methods. Property indexing uses JavaScript keys. Number key conversion uses String, including negative-zero conflation, NaN and infinities. Array growth follows native array limits; no smaller source bound or event-history bound is established."
+      },
+      "ticket": {
+        "id": "emitter-distinguish-negative-zero",
+        "request": "Numeric constant de-duplication must distinguish -0 from +0. Preserve all other de-duplication keys, first-index behavior, retained entry/array identities, ordering, errors and future behavior after public array and entry mutations.",
+        "unspecifiedBehavior": ["The ticket does not disclose other type keys, regex key serialization, stale-index behavior, coercion order or retained-entry alias behavior.", "A change only to addNumberConstant is insufficient because addConstant also accepts number entries."],
+        "negativeControls": ["This is a deliberately small partial-edit control and cannot alone establish strong comprehension or edit protection.", "A fully specified replacement constant-pool format is a replacement control."],
+        "status": "frozen-candidate-not-executed"
+      },
+      "admission": {
+        "status": "rejected",
+        "reasonCodes": ["ESCAPING_STATE", "UNKNOWN_EFFECTS", "UNPROVED_ALGORITHM_FAMILIES"],
+        "reasons": [
+          {"code": "ESCAPING_STATE", "detail": "Public mutable arrays and input entries retained by reference are essential observable state; array/entry mutations can intentionally diverge the private key index from visible contents.", "evidence": [{"path": "packages/ruam/src/compiler/emitter.ts", "lines": [23, 70]}]},
+          {"code": "UNKNOWN_EFFECTS", "detail": "Entry property access and string coercion may call user code. A pure relation model would erase effects or change ordering, while rebuilding indexes from current arrays changes historical behavior.", "evidence": [{"path": "packages/ruam/src/compiler/emitter.ts", "lines": [64, 70]}, {"path": "packages/ruam/src/compiler/emitter.ts", "lines": [108, 112]}]},
+          {"code": "UNPROVED_ALGORITHM_FAMILIES", "detail": "No exact three-family set is established; native Map indexing is already the source algorithm, and current collection contents alone do not recover the historic key-index relation.", "evidence": [{"path": "packages/ruam/src/compiler/emitter.ts", "lines": [64, 70]}]}
+        ]
+      },
+      "families": [
+        {"id": "decision-dataflow", "status": "unproven", "reason": "Unbounded keys and effects lack a proved specialization domain. Changing branches/keys alone is a local recipe."},
+        {"id": "indexed-relational", "status": "inapplicable", "reason": "The source already uses an indexed historical key-to-first-index relation. Renaming or re-encoding that Map is not an algorithm-family replacement."},
+        {"id": "incremental-views", "status": "unproven", "reason": "An incrementally maintained relation would have to retain the public arrays, entry aliases and stale historical key mappings. No additional necessary shared view with an exact full contract has been demonstrated."}
+      ],
+      "pilot": {"selected": false, "status": "stopped-at-admission"}
+    }
+  ],
+  "decision": {
+    "admittedRoots": 0,
+    "frozenRoots": 3,
+    "applicableFamiliesProved": 0,
+    "replacementReady": false,
+    "reason": "All three existing frozen roots fail current A1 admission. The first root cannot advance to realization or protection qualification. This outcome does not prove all future roots impossible, and does not justify replacing the current VM or substituting favorable synthetic roots."
+  }
+}
