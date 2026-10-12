@@ -18,7 +18,7 @@ import type { NodePath } from "@babel/traverse";
 import * as t from "@babel/types";
 import { traverse, generate } from "./babel-compat.js";
 import { compileFunction, resetUnitCounter } from "./compiler/index.js";
-import { IncompleteCompilationError, type CompilationReport, type CompilationRecorder } from "./compilation-report.js";
+import { IncompleteCompilationError, type CompilationOutcome, type CompilationReport, type CompilationRecorder } from "./compilation-report.js";
 import {
 	generateShuffleMap,
 	OPCODE_COUNT,
@@ -367,17 +367,27 @@ export function obfuscateCodeWithReport(
 	return { code, report };
 }
 
-function recordCompilation(recorder: CompilationRecorder | undefined, fnPath: NodePath<t.Function>, unit?: BytecodeUnit, message?: string): void {
+function hasAsyncIteration(fnPath: NodePath<t.Function>): boolean {
+	let found = false;
+	fnPath.traverse({ ForOfStatement(path) { if (path.node.await) found = true; } });
+	return found;
+}
+
+function recordCompilation(recorder: CompilationRecorder | undefined, fnPath: NodePath<t.Function>, unit?: BytecodeUnit, message?: string, asyncIteration = false): void {
 	if (!recorder) return;
 	// The current runtime's generator lifecycle handlers are stubs. Emitted
 	// bytecode alone must not qualify a root containing one of those units.
 	const generatorStub = !!unit && [unit, ...unit.childUnits].some(item => item.isGenerator);
+	const runtimeLimitations: CompilationOutcome["runtimeLimitations"] = generatorStub ? ["generator-resumption"] : [];
+	// compileForOfStatement currently lowers both forms to synchronous
+	// iteration. Inspect before replacing the original function body.
+	if (unit && asyncIteration) runtimeLimitations.push("async-iteration");
 	recorder.outcomes.push({
 		name: ("id" in fnPath.node && fnPath.node.id?.name) || "<anonymous>",
 		line: fnPath.node.loc?.start.line ?? null, column: fnPath.node.loc?.start.column ?? null,
-		status: generatorStub ? "unsupported-runtime" : unit ? "compiled" : "native-fallback", bytecodeUnits: unit ? 1 + unit.childUnits.length : 0,
-		runtimeLimitations: generatorStub ? ["generator-resumption"] : [],
-		...(generatorStub ? { message: "Generator resumption is not implemented by the current runtime" } : message === undefined ? {} : { message }),
+		status: runtimeLimitations.length ? "unsupported-runtime" : unit ? "compiled" : "native-fallback", bytecodeUnits: unit ? 1 + unit.childUnits.length : 0,
+		runtimeLimitations,
+		...(runtimeLimitations.length ? { message: `Current runtime limitations: ${runtimeLimitations.join(", ")}` } : message === undefined ? {} : { message }),
 	});
 }
 
@@ -483,6 +493,7 @@ function compileTargetsOnly(
 	const compiledUnits: Map<string, { unit: BytecodeUnit }> = new Map();
 
 	for (const fnPath of targetPaths) {
+		const asyncIteration = !!recorder && hasAsyncIteration(fnPath);
 		try {
 			const unit = compileFunction(fnPath);
 
@@ -510,7 +521,7 @@ function compileTargetsOnly(
 			}
 
 			replaceFunctionBody(fnPath, unit.id, names, scopeVarName);
-			recordCompilation(recorder, fnPath, unit);
+			recordCompilation(recorder, fnPath, unit, undefined, asyncIteration);
 		} catch (err) {
 			const loc = fnPath.node.loc?.start;
 			const locStr = loc ? ` at ${loc.line}:${loc.column}` : "";
@@ -1005,6 +1016,7 @@ function assembleShielded(
 
 	for (let gi = 0; gi < targetPaths.length; gi++) {
 		const fnPath = targetPaths[gi]!;
+		const asyncIteration = !!recorder && hasAsyncIteration(fnPath);
 		const groupSeed = groupSeeds[gi]!;
 		const groupNames = groupNameSets[gi]!;
 		const groupTemps = groupTempSets[gi]!;
@@ -1078,7 +1090,7 @@ function assembleShielded(
 			} as RuntimeNames,
 			sharedTemps["_ps"]
 		);
-		recordCompilation(recorder, fnPath, unit);
+		recordCompilation(recorder, fnPath, unit, undefined, asyncIteration);
 
 		groupMeta.push({
 			unit,

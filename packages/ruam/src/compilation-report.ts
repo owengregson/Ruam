@@ -5,7 +5,7 @@ export interface CompilationOutcome {
 	column: number | null;
 	status: "compiled" | "native-fallback" | "unsupported-runtime";
 	bytecodeUnits: number;
-	runtimeLimitations: Array<"generator-resumption">;
+	runtimeLimitations: Array<"generator-resumption" | "async-iteration">;
 	message?: string;
 }
 

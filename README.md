@@ -347,7 +347,7 @@ const output = obfuscateCode(source, {
 
 <h3><code>obfuscateCodeWithReport(source, options?, qualification?)</code></h3>
 
-<p>Returns <code>{ code, report }</code> with selected-root compilation outcomes and bytecode-unit counts. By default it throws <code>IncompleteCompilationError</code> if no roots are selected, a selected root falls back to ordinary JavaScript, or its units depend on known unsupported generator-resumption handlers. The error carries its report. Use <code>{ requireCompleteSelection: false }</code> as the third argument only when intentionally inspecting partial builds. Locations refer to the source after optional identifier preprocessing.</p>
+<p>Returns <code>{ code, report }</code> with selected-root compilation outcomes and bytecode-unit counts. By default it throws <code>IncompleteCompilationError</code> if no roots are selected, a selected root falls back to ordinary JavaScript, or its units depend on known unsupported generator-resumption or <code>for await</code> iteration behavior. The error carries its report. Use <code>{ requireCompleteSelection: false }</code> as the third argument only when intentionally inspecting partial builds. Locations refer to the source after optional identifier preprocessing.</p>
 
 <p>A complete selection means the selected roots compiled; it does not certify all source behavior, native stubs, unselected code, or resistance to recovery. The existing <code>obfuscateCode</code> API retains its warning-and-fallback behavior.</p>
 
@@ -522,22 +522,24 @@ await runVmObfuscation("dist/", {
 
 <h2 id="supported-syntax">Supported Syntax</h2>
 
-<p>Ruam compiles the full range of modern JavaScript:</p>
+<p>Ruam targets the following modern JavaScript syntax. This list is not a complete semantic-conformance guarantee; use the compilation report and tests against your generated application artifacts.</p>
 
 <ul>
-  <li>Functions (declarations, expressions, arrows, generators, async, async generators)</li>
+  <li>Functions (declarations, expressions, arrows, async)</li>
   <li>Classes (inheritance, constructors, methods, getters/setters, computed properties, static members, <code>super</code>)</li>
   <li>Control flow (<code>if</code>, <code>for</code>, <code>for-in</code>, <code>for-of</code>, <code>while</code>, <code>do-while</code>, <code>switch</code>, labeled statements)</li>
   <li>Exception handling (<code>try</code>/<code>catch</code>/<code>finally</code>, <code>throw</code>)</li>
   <li>Destructuring (array and object patterns, defaults, rest elements, nested)</li>
   <li>Spread/rest (<code>...args</code> in calls, arrays, and object literals)</li>
   <li>Closures and lexical scoping (<code>let</code>/<code>const</code> with proper TDZ, per-iteration bindings)</li>
-  <li>Async/await, generators (<code>yield</code>, <code>yield*</code>), async generators</li>
+  <li>Async/await (known limitations below)</li>
   <li>Template literals, tagged templates, optional chaining, nullish coalescing</li>
   <li>Computed property names, shorthand properties/methods, symbol keys</li>
 </ul>
 
 <hr>
+
+<p><strong>Known runtime limitations:</strong> generator resumption and <code>for await</code> iteration are not implemented correctly and cannot pass complete-selection reporting. Async bodies preserve their authored suspension points, but wrapper Promise adoption can add jobs before final settlement. Reflection on transformed source and some native function metadata can also differ. Successful bytecode emission alone does not establish application parity.</p>
 
 <h2 id="target-environments">Target Environments</h2>
 

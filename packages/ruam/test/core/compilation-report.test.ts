@@ -54,6 +54,19 @@ describe("selected-root compilation report", () => {
 		}
 	});
 
+	for (const vmShielding of [false, true]) test(`known async-iteration lowering cannot qualify a selected root or its descendants with shielding=${vmShielding}`, () => {
+		for (const source of [
+			"async function selected(xs) { for await (const x of xs) { if (x) return x; } }",
+			"function outer() { return async function child(xs) { for await (const x of xs) { if (x) return x; } }; }",
+		]) {
+			const { report } = obfuscateCodeWithReport(source, { vmShielding }, { requireCompleteSelection: false });
+			expect(report.outcomes[0]!.status).toBe("unsupported-runtime");
+			expect(report.outcomes[0]!.runtimeLimitations).toEqual(["async-iteration"]);
+			expect(report.completeSelection).toBe(false);
+			expect(() => obfuscateCodeWithReport(source, { vmShielding })).toThrow(IncompleteCompilationError);
+		}
+	});
+
 	test("a build with no selected functions is not complete selection", () => {
 		expect(() => obfuscateCodeWithReport("globalThis.value = 42;")).toThrow(IncompleteCompilationError);
 		const { report } = obfuscateCodeWithReport("function plain() { return 1; }", { targetMode: "comment" }, { requireCompleteSelection: false });
