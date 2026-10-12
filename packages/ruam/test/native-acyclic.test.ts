@@ -181,6 +181,73 @@ describe("opt-in native acyclic scalar lowering", () => {
 		const context = vm.createContext({}); vm.runInContext(bootstrap + ";" + source, context); expect(context.result).toBe(4);
 	});
 
+	it("keeps invalid uninitialized and primitive callees as runtime errors in Node", () => {
+		const sources = [
+			"function target(){let x;return new x()}",
+			"function target(){var x;return x()}",
+			"function target(){const x=-1;return x()}",
+			"function target(){const x=1;return new x()}",
+		].map(source => source + ";try{target()}catch(e){globalThis.result=e.name}");
+		const fixtures = sources.map(source => {
+			const lowered = compileNativeCandidateCode(source, { seed: 71, acyclicLowering: true });
+			expect(lowered.report.acyclicUnits).toBe(1);
+			return [source, compileNativeCandidateCode(source, { seed: 71, scalarLowering: false }).code, lowered.code];
+		});
+		const driver = `const vm=require('node:vm'),rows=JSON.parse(require('node:fs').readFileSync(0,'utf8'));for(const row of rows)for(const code of row){const context=vm.createContext({});vm.runInContext(code,context,{timeout:1000});if(context.result!=='TypeError')throw Error(String(context.result))}process.stdout.write('matched:'+rows.length)`;
+		const child = spawnSync("node", ["-e", driver], { input: JSON.stringify(fixtures), encoding: "utf8", timeout: 15_000 });
+		expect(child.error).toBeUndefined(); expect(child.status).toBe(0); expect(child.stderr).toBe("");
+		expect(child.stdout).toBe("matched:4");
+	}, 30_000);
+
+	it("preserves missing property receiver errors and computed-key order in Node", () => {
+		const sources = [
+			"function target(){let x;return x.y}",
+			"function target(flag,k){let x;return x[k()]}",
+			"function target(flag){let x;if(flag)return x.y;return 4}",
+			"function target(flag,k){let x;return x[k]}",
+			"function target(flag,k){if(flag)return (-1)[k];return (void 0)[k]}",
+		].map(source => source + `;var log=[];var key={toString(){log.push('key-coercion');return 'y'}};try{globalThis.result=target(true,()=>{log.push('key-eval');return key})}catch(e){globalThis.result=e.name};globalThis.result=[globalThis.result,log]`);
+		const fixtures = sources.map(source => [source,
+			compileNativeCandidateCode(source, { seed: 71, scalarLowering: false }).code,
+			compileNativeCandidateCode(source, { seed: 71 }).code,
+			compileNativeCandidateCode(source, { seed: 71, acyclicLowering: true }).code,
+		]);
+		const driver = `const vm=require('node:vm'),rows=JSON.parse(require('node:fs').readFileSync(0,'utf8'));for(const row of rows){const values=row.map(code=>{const context=vm.createContext({});vm.runInContext(code,context,{timeout:1000});return JSON.stringify(context.result)});if(values.some(v=>v!==values[0]))throw Error(JSON.stringify(values))}process.stdout.write('matched:'+rows.length)`;
+		const child = spawnSync("node", ["-e", driver], { input: JSON.stringify(fixtures), encoding: "utf8", timeout: 15_000 });
+		expect(child.error).toBeUndefined(); expect(child.status).toBe(0); expect(child.stderr).toBe("");
+		expect(child.stdout).toBe("matched:5");
+	}, 30_000);
+
+	it("preserves unary and exponentiation syntax for non-identifier scalar operands", () => {
+		const base = { ...compile("function target(){return 0}"), registerCount: 1,
+			constants: [{ type: "number" as const, value: 2 }] };
+		for (const [instructions, expected] of [
+			[[Op.PUSH_NEG_ONE, Op.NEG], 1],
+			[[Op.PUSH_ONE, Op.PUSH_NEG_ONE, Op.SUB], 2],
+			[[Op.PUSH_NEG_ONE, Op.PUSH_CONST, Op.POW], 1],
+			[[Op.LOAD_REG, Op.PUSH_CONST, Op.POW], NaN],
+		] as const) {
+			const unit = { ...base, instructions: [...instructions, Op.RETURN].map(opcode => ({ opcode, operand: 0 })) };
+			const expression = build(unit).expression;
+			expect(Object.is(vm.runInNewContext(`(${expression})`)({ c: [2] }, []), expected)).toBe(true);
+		}
+		const sources = [
+			"function target(){let x;return x**2}",
+			"function target(a){let x;if(a)return x**2;return 0}",
+			"function target(a){const x=-1;if(a)return x**2;return -x}",
+			"function target(a){const x=-1;return 2-x}",
+		].map(source => source + ";var value=target(true);globalThis.result=Number.isNaN(value)?'NaN':Object.is(value,-0)?'-0':String(value)");
+		const fixtures = sources.map(source => [source,
+			compileNativeCandidateCode(source, { seed: 71, scalarLowering: false }).code,
+			compileNativeCandidateCode(source, { seed: 71 }).code,
+			compileNativeCandidateCode(source, { seed: 71, acyclicLowering: true }).code,
+		]);
+		const driver = `const vm=require('node:vm'),rows=JSON.parse(require('node:fs').readFileSync(0,'utf8'));for(const row of rows){const values=row.map(code=>{const context=vm.createContext({});vm.runInContext(code,context,{timeout:1000});return context.result});if(values.some(v=>v!==values[0]))throw Error(JSON.stringify(values))}process.stdout.write('matched:'+rows.length)`;
+		const child = spawnSync("node", ["-e", driver], { input: JSON.stringify(fixtures), encoding: "utf8", timeout: 15_000 });
+		expect(child.error).toBeUndefined(); expect(child.status).toBe(0); expect(child.stderr).toBe("");
+		expect(child.stdout).toBe("matched:4");
+	}, 30_000);
+
 	it("keeps the extension opt-in and lets scalarLowering:false disable all scalar tiers", () => {
 		const source = "function f(x,g){if(x)return g(x);return 2};globalThis.result=f(3,x=>x+1)";
 		const baseline = compileNativeCandidateCode(source, { seed: 9 });

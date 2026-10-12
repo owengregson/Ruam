@@ -155,7 +155,11 @@ export function tryBuildNativeAcyclicBody(
 				const count = FIXED_CALLS.get(op) ?? operand;
 				const args = stack.splice(stack.length - count, count);
 				const receiver = op === Op.CALL_METHOD ? pop() : undefinedValue;
-				const callee = pop();
+				// An uninitialized register is the expression `void 0`, and
+				// literal callees can also have non-member-expression syntax.
+				// Give CallExpr/NewExpr an identifier without reevaluating any
+				// source read or moving the call ahead of its arguments.
+				const callee = save(pop());
 				// All value-producing reads have already been materialized. The
 				// callee/receiver are never re-read after argument evaluation.
 				const value = op === Op.CALL_NEW ? newExpr(callee, args)

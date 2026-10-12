@@ -130,6 +130,12 @@ export function emitNativeScalarInstruction(
 	const reg = (number: number): JsNode => registers.get(number) ?? undefinedValue();
 	const push = (value: JsNode): void => { stack.push(save(value)); };
 	const pop = (): JsNode => stack.pop()!;
+	// Build-time bindings can still be literal/unary expressions (void 0, -1).
+	// Materialize them in operand/reference positions: member access otherwise
+	// changes void's grouping, exponentiation rejects an ungrouped unary left
+	// operand, and adjacent minus tokens can become a decrement token. Captured
+	// identifiers need no extra local. These copies perform no source operation.
+	const valueRef = (value: JsNode): JsNode => value.type === "Id" ? value : save(value);
 	const op = opcode as Op;
 	const binary = BINARY.get(op);
 	const unary = UNARY.get(op);
@@ -140,12 +146,12 @@ export function emitNativeScalarInstruction(
 	const hi = operand >>> 16;
 	if (binary !== undefined) {
 		const right = pop(); const left = pop();
-		push(bin(binary, left, right));
-	} else if (unary !== undefined) push(un(unary, pop()));
-	else if (registerBinary !== undefined) push(bin(registerBinary, reg(lo), reg(hi)));
-	else if (registerConstant !== undefined) push(bin(registerConstant, reg(lo), constant(hi)));
+		push(bin(binary, valueRef(left), valueRef(right)));
+	} else if (unary !== undefined) push(un(unary, valueRef(pop())));
+	else if (registerBinary !== undefined) push(bin(registerBinary, valueRef(reg(lo)), valueRef(reg(hi))));
+	else if (registerConstant !== undefined) push(bin(registerConstant, valueRef(reg(lo)), valueRef(constant(hi))));
 	else if (registerAssign !== undefined) {
-		const value = save(bin(registerAssign, reg(operand), pop()));
+		const value = save(bin(registerAssign, valueRef(reg(operand)), valueRef(pop())));
 		registers.set(operand, value);
 		if (ASSIGN_REGISTER.has(op)) stack.push(value);
 	} else switch (op) {
@@ -178,12 +184,12 @@ export function emitNativeScalarInstruction(
 		case Op.ROT3: { const c = pop(); const b = pop(); const a = pop(); stack.push(c, a, b); break; }
 		case Op.ROT4: { const d = pop(); const c = pop(); const b = pop(); const a = pop(); stack.push(d, a, b, c); break; }
 		case Op.PICK: stack.push(stack[stack.length - 1 - operand]!); break;
-		case Op.REG_ADD_CONST: registers.set(lo, save(bin(BOp.Add, reg(lo), constant(hi)))); break;
-		case Op.GET_PROP_STATIC: push(index(pop(), constant(operand))); break;
-		case Op.GET_PROP_DYNAMIC: { const key = pop(); push(index(pop(), key)); break; }
-		case Op.REG_GET_PROP: push(index(reg(lo), constant(hi))); break;
-		case Op.REG_GET_PROP_DYN: push(index(reg(lo), reg(hi))); break;
-		case Op.IDX_REG: push(index(pop(), reg(operand))); break;
+		case Op.REG_ADD_CONST: registers.set(lo, save(bin(BOp.Add, valueRef(reg(lo)), valueRef(constant(hi))))); break;
+		case Op.GET_PROP_STATIC: push(index(valueRef(pop()), constant(operand))); break;
+		case Op.GET_PROP_DYNAMIC: { const key = pop(); push(index(valueRef(pop()), key)); break; }
+		case Op.REG_GET_PROP: push(index(valueRef(reg(lo)), constant(hi))); break;
+		case Op.REG_GET_PROP_DYN: push(index(valueRef(reg(lo)), reg(hi))); break;
+		case Op.IDX_REG: push(index(valueRef(pop()), reg(operand))); break;
 		case Op.RETURN: body.push(returnStmt(pop())); break;
 		case Op.RETURN_VOID: body.push(returnStmt(undefinedValue())); break;
 		default: throw new Error(`Scalar admission/lowering disagreement: ${op}`);

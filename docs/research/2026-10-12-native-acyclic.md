@@ -2,7 +2,7 @@
 
 Status: experimental compiler infrastructure. This extends the [native specialization candidate](2026-10-12-native-specialization.md); it does not replace the production VM or qualify source protection.
 
-`compileNativeCandidateCode(source, { acyclicLowering: true })` enables an additional positive grammar. The default stays unchanged. `scalarLowering: false` disables both the existing straight-line tier and this extension, providing a complete comparison control. The candidate remains absent from the public package index and presets.
+`compileNativeCandidateCode(source, { acyclicLowering: true })` enables an additional positive grammar. Default options and admission remain unchanged. `scalarLowering: false` disables both the existing straight-line tier and this extension, providing a complete comparison control. The candidate remains absent from the public package index and presets.
 
 ## Admitted operations
 
@@ -23,6 +23,8 @@ A private inventory exercised the actual body builder on the previously frozen f
 These counts describe static emitted-body admission, not execution frequency, full artifact size, application latency or protection. A full source/artifact build and unchanged application gates remain pending for this extension.
 
 Focused checks cover branch/register joins, nullish and short-circuit paths, a DAG with backward numerical instruction targets, all 18 fused comparison forms, primitive/BigInt/error cases, ordered scope reads and TDZ, callback reentry, label renaming, explicit residual decisions and complete opt-out. Actual Node comparisons exercise 24 source/new-tier/residual observations across three seeds, including callee capture before argument mutation, strict/sloppy external callees, native constructor proxies and new.target, coercion order, argument throws and recursion. The inherited mutable-apply discrepancy is asserted separately: a source call does not consult an own `apply` property, while the existing backend and this tier do.
+
+Independent review caught uninitialized/literal values entering AST positions that require stronger grouping. A missing callee generated invalid syntax; a missing property receiver could suppress a required TypeError; unary operands of exponentiation and adjacent minus tokens exposed related syntax errors. The scalar emitter now materializes non-identifier operator operands and receivers, and the new call path materializes its callee. This repairs shared straight-line scalar output as well as the new tier without widening admission. Thirteen additional Node cases compare source, residual and corrected scalar variants; numeric outcomes distinguish NaN and negative zero. Direct logical-unit cases cover negative literal negation, subtraction and exponentiation. These regressions passed after repair.
 
 Focused tests passed across separate targeted runs. The first aggregate attempt exceeded an outer test deadline under heavy host contention; the Node batch's outer deadline now includes compilation plus its unchanged 15-second subprocess limit. Its individual VM observations retain a one-second limit. Two local typecheck attempts were stopped after prolonged contention without diagnostics, so no local typecheck pass is claimed. Clean CI must establish build/typecheck and broader regression status. Application deadlines are unchanged.
 
