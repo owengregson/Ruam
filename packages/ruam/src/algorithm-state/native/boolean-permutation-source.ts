@@ -25,25 +25,41 @@ interface Region {
 }
 
 /** Literal truthiness and local formal reads do not invoke user coercion hooks. */
-function formula(node: t.Node, params: Map<string, number>, budget: { nodes: number }, depth = 0): BooleanFormula | null {
+interface CaptureContext { params: Set<string>; values: t.Expression[]; inputs: Map<t.Node | string, number>; }
+
+function capture(node: t.Expression, context: CaptureContext, key: t.Node | string): BooleanFormula | null {
+	let index = context.inputs.get(key);
+	if (index === undefined) {
+		if (context.values.length >= 32) return null;
+		index = context.values.length; context.inputs.set(key, index); context.values.push(t.cloneNode(node, true));
+	}
+	return { kind: "input", index };
+}
+
+function inertValue(node: t.Node, context: CaptureContext): boolean {
+	return (t.isIdentifier(node) && context.params.has(node.name)) || t.isBooleanLiteral(node) || t.isNumericLiteral(node) || t.isStringLiteral(node) || t.isNullLiteral(node)
+		|| (t.isUnaryExpression(node, { operator: "typeof" }) && t.isIdentifier(node.argument) && context.params.has(node.argument.name));
+}
+
+function formula(node: t.Node, context: CaptureContext, budget: { nodes: number }, depth = 0): BooleanFormula | null {
 	if (++budget.nodes > 4096 || depth > 64) return null;
 	if (t.isIdentifier(node)) {
-		const index = params.get(node.name);
-		return index === undefined ? null : { kind: "input", index };
+		return context.params.has(node.name) ? capture(node, context, node.name) : null;
 	}
 	if (t.isBooleanLiteral(node) || t.isNumericLiteral(node) || t.isStringLiteral(node)) return { kind: "constant", value: !!node.value };
 	if (t.isNullLiteral(node)) return { kind: "constant", value: false };
+	if (t.isBinaryExpression(node) && (node.operator === "===" || node.operator === "!==") && inertValue(node.left, context) && inertValue(node.right, context)) return capture(node, context, node);
 	if (t.isUnaryExpression(node, { operator: "!" })) {
-		const operand = formula(node.argument, params, budget, depth + 1);
+		const operand = formula(node.argument, context, budget, depth + 1);
 		return operand && { kind: "not", operand };
 	}
 	if (t.isLogicalExpression(node) && (node.operator === "&&" || node.operator === "||")) {
-		const left = formula(node.left, params, budget, depth + 1), right = formula(node.right, params, budget, depth + 1);
+		const left = formula(node.left, context, budget, depth + 1), right = formula(node.right, context, budget, depth + 1);
 		return left && right && { kind: node.operator === "&&" ? "and" : "or", left, right };
 	}
 	if (t.isConditionalExpression(node)) {
-		const test = formula(node.test, params, budget, depth + 1);
-		const consequent = formula(node.consequent, params, budget, depth + 1), alternate = formula(node.alternate, params, budget, depth + 1);
+		const test = formula(node.test, context, budget, depth + 1);
+		const consequent = formula(node.consequent, context, budget, depth + 1), alternate = formula(node.alternate, context, budget, depth + 1);
 		return test && consequent && alternate && { kind: "or", left: { kind: "and", left: test, right: consequent }, right: { kind: "and", left: { kind: "not", operand: test }, right: alternate } };
 	}
 	return null;
@@ -52,6 +68,7 @@ function formula(node: t.Node, params: Map<string, number>, budget: { nodes: num
 function returnsBoolean(node: t.Node, depth = 0): boolean {
 	if (depth > 64) return false;
 	if (t.isBooleanLiteral(node) || t.isUnaryExpression(node, { operator: "!" })) return true;
+	if (t.isBinaryExpression(node) && (node.operator === "===" || node.operator === "!==")) return true;
 	if (t.isLogicalExpression(node) && (node.operator === "&&" || node.operator === "||")) return returnsBoolean(node.left, depth + 1) && returnsBoolean(node.right, depth + 1);
 	return t.isConditionalExpression(node) && returnsBoolean(node.consequent, depth + 1) && returnsBoolean(node.alternate, depth + 1);
 }
@@ -88,19 +105,19 @@ export function compileBooleanPermutationCode(source: string, options: BooleanPe
 			if (node.params.length > 32 || node.params.some(param => !t.isIdentifier(param))) { decline("non-simple-parameters"); return; }
 			const names = node.params.map(param => (param as t.Identifier).name);
 			if (new Set(names).size !== names.length) { decline("duplicate-parameters"); return; }
-			const params = new Map(names.map((name, index) => [name, index]));
+			const context: CaptureContext = { params: new Set(names), values: [], inputs: new Map() };
 			let expression: t.Expression | null = null;
 			if (t.isBlockStatement(node.body)) {
 				if (node.body.body.length === 1 && t.isReturnStatement(node.body.body[0]) && t.isExpression(node.body.body[0].argument)) expression = node.body.body[0].argument;
 			} else expression = node.body;
 			if (!expression || !returnsBoolean(expression)) { decline("not-single-boolean-return"); return; }
-			const relation = formula(expression, params, { nodes: 0 });
+			const relation = formula(expression, context, { nodes: 0 });
 			if (!relation) { decline("effectful-or-unsupported-expression"); return; }
 			if (names.some(name => path.scope.getBinding(name)?.kind !== "param")) { decline("unproved-parameter-binding"); return; }
 			if (regions.length >= maxFunctions) { decline("aggregate-function-budget"); return; }
 			let compiled;
 			try {
-				compiled = compilePermutationFormula(relation, { ...compilerOptions, inputCount: names.length, seed: deriveSeed(options.seed ?? 0, `boolean-source:${node.start ?? -1}`) });
+				compiled = compilePermutationFormula(relation, { ...compilerOptions, inputCount: context.values.length, seed: deriveSeed(options.seed ?? 0, `boolean-source:${node.start ?? -1}`) });
 			} catch (error) {
 				if (!(error instanceof PermutationBudgetError)) throw error;
 				decline(`formula-budget:${error.message}`); return;
@@ -108,13 +125,13 @@ export function compileBooleanPermutationCode(source: string, options: BooleanPe
 			// The runtime body is the typed JsNode emitter's output, parsed into the
 			// outer Babel tree. It is never evaluated dynamically at runtime.
 			const implementation = parseExpression(compiled.code);
-			const call = t.callExpression(implementation, names.map(name => t.unaryExpression("!", t.unaryExpression("!", t.identifier(name)))));
+			const call = t.callExpression(implementation, context.values.map(value => t.unaryExpression("!", t.unaryExpression("!", value))));
 			const bytes = Buffer.byteLength(generate(call).code, "utf8");
 			if (generatedBytes + bytes > maxTotalGeneratedBytes) { decline("aggregate-output-budget"); return; }
 			if (t.isBlockStatement(node.body)) node.body.body = [t.returnStatement(call)];
 			else node.body = call;
 			generatedBytes += bytes;
-			regions.push({ sourceStart: node.start ?? -1, name: "id" in node && t.isIdentifier(node.id) ? node.id.name : null, inputCount: names.length, steps: compiled.report.steps, generatedBytes: bytes });
+			regions.push({ sourceStart: node.start ?? -1, name: "id" in node && t.isIdentifier(node.id) ? node.id.name : null, inputCount: context.values.length, steps: compiled.report.steps, generatedBytes: bytes });
 			path.skip();
 		},
 	});
@@ -122,7 +139,7 @@ export function compileBooleanPermutationCode(source: string, options: BooleanPe
 		code: generate(ast).code,
 		regions, declined, generatedBytes,
 		scope: {
-			experimental: true, inputProof: "effect-free-formal-truthiness-and-boolean-return", runtimeInputFiltering: false,
+			experimental: true, inputProof: "effect-free-formal-predicates-and-boolean-return", runtimeInputFiltering: false,
 			residualBackend: "current-vm", wholeProgramReplacement: false, protectionQualified: false,
 			sourceReflection: "not-preserved", resourceEquivalence: "not-proved",
 		} as const,

@@ -52,6 +52,22 @@ describe("experimental Boolean permutation source admission", () => {
 		expect(load(compileBooleanPermutationCode(`function choose(a,b){return a&&b;}`).code)(true, identity)).toBe(identity);
 	});
 
+	test("captures only noncoercive strict comparisons and local typeof checks", () => {
+		const source = `function choose(a,b){return typeof a==="string" || (a === b && a !== null);}`;
+		const result = compileBooleanPermutationCode(source);
+		expect(result.regions).toHaveLength(1);
+		const original = load(source), candidate = load(result.code);
+		let hooks = 0;
+		const object = { [Symbol.toPrimitive]() { hooks++; throw Error("coercion"); } };
+		const revoked = Proxy.revocable({}, {}); revoked.revoke();
+		const values = [undefined, null, NaN, -0, 0, 1, "", "x", 0n, 1n, true, false, Symbol(), object, revoked.proxy];
+		for (const a of values) for (const b of values) expect(candidate(a, b)).toBe(original(a, b));
+		expect(hooks).toBe(0);
+		for (const expr of ["a==b", "a!=b", "typeof a.value === 'string'", "a.value===b", "typeof external === 'string'"]) {
+			expect(compileBooleanPermutationCode(`function choose(a,b){return ${expr};}`).regions).toHaveLength(0);
+		}
+	});
+
 	test("supports pure conditional and concise arrows, preserving metadata and construction", () => {
 		const source = `const choose=(a,b,c)=>a ? !b : !!c; function build(a){return !a;}`;
 		const result = compileBooleanPermutationCode(source);
