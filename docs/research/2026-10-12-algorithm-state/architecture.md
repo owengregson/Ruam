@@ -2,6 +2,8 @@
 
 Date: 2026-10-12. This is a source-backed implementation proposal and research review, not a protection result. It strengthens the [selected A1 design](../2026-10-09-ambitious-swarm/20-selected-design.md). No application root, new algorithm realization, AI attack campaign, or VM replacement is qualified by this document.
 
+The [2026-10-13 follow-up](../2026-10-13-novel-directions/README.md) records independent algorithm, heap and relation-synthesis proposals, bounded owner-side specimens, and resumed native application gates. It preserves this document's scope and qualification requirements.
+
 ## Decision
 
 The required replacement must handle the same JavaScript scope as current Ruam. A narrow A1 compiler alone is not an acceptable final product. The strongest concrete combined candidate is a general effect-preserving native compiler, augmented by algorithm/state replacement for complete source-qualified components and separately measured protection for the remaining selected functions. It must prove the relationship between source and generated state, preserve the entire existing API, and reject missing release evidence. A public source-to-source compiler cannot presently promise to prevent all AI-assisted deobfuscation. A useful measurable goal is to increase the cost of understanding private rule interactions and implementing partial semantic changes, subject to fixed legitimate cost limits.
