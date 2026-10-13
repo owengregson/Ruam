@@ -140,7 +140,7 @@ export function compileBooleanPermutationCode(source: string, options: BooleanPe
 		regions, declined, generatedBytes,
 		scope: {
 			experimental: true, inputProof: "effect-free-formal-predicates-and-boolean-return", runtimeInputFiltering: false,
-			residualBackend: "current-vm", wholeProgramReplacement: false, protectionQualified: false,
+			residualBackend: "caller-selected", wholeProgramReplacement: false, protectionQualified: false,
 			sourceReflection: "not-preserved", resourceEquivalence: "not-proved",
 		} as const,
 	};

@@ -19,6 +19,7 @@ describe("experimental Boolean permutation source admission", () => {
 			const result = compileBooleanPermutationCode(fixture, { seed });
 			expect(result.regions).toHaveLength(1);
 			expect(result.scope.runtimeInputFiltering).toBe(false);
+			expect(result.scope.residualBackend).toBe("caller-selected");
 			expect(result.scope.protectionQualified).toBe(false);
 			expect(result.code).toContain('"use strict"');
 			const candidate = load(result.code);
