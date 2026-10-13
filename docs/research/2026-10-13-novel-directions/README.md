@@ -30,7 +30,7 @@ An independent reviewer additionally checked 464 whole-search cases, 87,902 outp
 
 ## Coupled-relation eligibility specimen
 
-A separate owner-side specimen evaluated an actual producer/consumer window before attempting synthesis. It checked 640 source scenarios and 7,562 assertions over ten encoded controls in Node 25.2.1. This is a finite source-conformance sample, not an exhaustive model of the JavaScript API or candidate equivalence evidence.
+A separate owner-side specimen evaluated an actual producer/consumer window before attempting synthesis. It checked 640 source scenarios and 7,562 assertions in Node 25.2.1. This is a finite source-conformance sample, not an exhaustive model of the JavaScript API or candidate equivalence evidence.
 
 The specimen confirms that conditional property reads, provider calls and state/output observations constrain the proposed relation. An eager extraction of branch inputs was rejected even when its output values matched, because its observable read trace differed. A zero-output path still performs a required provider call. Omitting that call is not a valid optimization.
 
